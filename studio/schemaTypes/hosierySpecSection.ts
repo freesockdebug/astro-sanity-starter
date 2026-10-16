@@ -303,6 +303,13 @@ export default defineType({
       fieldset: 'buttons',
     }),
     defineField({
+      name: 'swatchSku',
+      title: 'Custom Swatch Kit SKU (本区块专属样卡编号)',
+      description: '指定本规格版块主按钮申领时装载的样卡 SKU（留空则默认继承 RFQ Settings 中的官方通用 SKU）',
+      type: 'string',
+      fieldset: 'buttons',
+    }),
+    defineField({
       name: 'showSecondaryButton',
       title: 'Show Secondary Button (是否显示副按钮)',
       description: '控制 Bento 规格矩阵底部的副按钮（如 Download PDF）是否显示',

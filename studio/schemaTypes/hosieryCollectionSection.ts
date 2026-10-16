@@ -67,6 +67,13 @@ export default defineType({
       fieldset: 'buttons',
     }),
     defineField({
+      name: 'swatchSku',
+      title: 'Custom Swatch Kit SKU (本区块专属样卡编号)',
+      description: '指定本产品系列展示版块按钮申领时装载的样卡 SKU（留空则默认继承 RFQ Settings 中的官方通用 SKU）',
+      type: 'string',
+      fieldset: 'buttons',
+    }),
+    defineField({
       name: 'showCardQuoteButton',
       title: 'Show Card Quote Button (是否显示卡片 Quote 询价按钮)',
       description: '控制每个款式卡片右下角的黑色“+ Quote”询价按钮是否显示',

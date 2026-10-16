@@ -66,6 +66,7 @@ const cleanBrandTitle = (brandTitle || "Gwenvenni").split(/\s*\|\s*/)[0].trim().
       {showNavActionButton && actionButton && (
         <a
           href={actionButton.url || "#inquiry"}
+          data-swatch-sku={rfqSettings?.swatchKitSku}
           class="hidden md:inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm"
         >
           <span>{actionButton.label}</span>
@@ -91,7 +92,11 @@ const cleanBrandTitle = (brandTitle || "Gwenvenni").split(/\s*\|\s*/)[0].trim().
       <a href={link.url} class="block py-1 text-zinc-700 hover:text-black">{link.label}</a>
     ))}
     {showNavActionButton && actionButton && (
-      <a href={actionButton.url || "#inquiry"} class="inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white">
+      <a
+        href={actionButton.url || "#inquiry"}
+        data-swatch-sku={rfqSettings?.swatchKitSku}
+        class="inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white"
+      >
         <span>{actionButton.label}</span>
       </a>
     )}

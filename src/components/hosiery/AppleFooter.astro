@@ -1,8 +1,10 @@
 ---
 // src/components/hosiery/AppleFooter.astro
 import { fetchData } from '@data/siteConfig';
+import { fetchRfqSettings } from '@data/rfqSettings';
 
 const config = Astro.props.config ?? await fetchData();
+const rfqSettings = await fetchRfqSettings();
 const header = config?.header;
 const footer = config?.footer;
 
@@ -119,7 +121,11 @@ const legalLinks = rawLegalLinks.map((l: any) => ({
           <ul class="pt-2 pb-1 space-y-1.5 md:space-y-1 text-[#424245] md:pt-1.5">
             {col.links?.map((link: any) => (
               <li>
-                <a href={link.url || "#"} class="hover:text-[#1d1d1f] hover:underline transition-colors block py-0.5 md:py-0">
+                <a
+                  href={link.url || "#"}
+                  data-swatch-sku={(link.url === '#inquiry' || (link.label || '').toLowerCase().includes('swatch')) ? rfqSettings?.swatchKitSku : undefined}
+                  class="hover:text-[#1d1d1f] hover:underline transition-colors block py-0.5 md:py-0"
+                >
                   {link.label}
                 </a>
               </li>

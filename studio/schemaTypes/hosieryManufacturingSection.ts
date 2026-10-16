@@ -98,6 +98,13 @@ export default defineType({
       initialValue: '#inquiry',
       fieldset: 'buttons',
     }),
+    defineField({
+      name: 'swatchSku',
+      title: 'Custom Swatch Kit SKU (本区块专属样卡编号)',
+      description: '指定本制造基础设施版块按钮申领时装载的样卡 SKU（留空则默认继承 RFQ Settings 中的官方通用 SKU）',
+      type: 'string',
+      fieldset: 'buttons',
+    }),
   ],
   preview: {
     select: {

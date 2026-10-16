@@ -55,6 +55,7 @@ interface Props {
   badge?: string;
   title?: string;
   subtitle?: string;
+  swatchSku?: string;
   showActionButton?: boolean;
   actionButtonText?: string;
   actionButtonUrl?: string;
@@ -68,6 +69,7 @@ const {
   badge = "Capsule Catalog 2026",
   title = "Ready-to-Order Line Sheets",
   subtitle = "Proprietary silhouettes developed for white-labeling, brand customization, and low-MOQ rapid wholesale reordering.",
+  swatchSku,
   showActionButton: propShowAction,
   actionButtonText: propActionText,
   actionButtonUrl = "#inquiry",
@@ -141,6 +143,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
         {showHeaderActionButton && (
           <a
             href={actionButtonUrl}
+            data-swatch-sku={swatchSku}
             class="px-5 py-2 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm inline-flex items-center gap-1.5"
           >
             <span>{actionButtonText}</span>

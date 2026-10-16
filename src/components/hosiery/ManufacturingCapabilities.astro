@@ -36,6 +36,7 @@ const {
   ],
   actionButtonText: propActionText,
   actionButtonUrl = "#inquiry",
+  swatchSku,
   showActionButton: propShowAction
 } = Astro.props;
 
@@ -117,6 +118,7 @@ const footers = [
       <div class="mt-5 sm:mt-6 lg:mt-7 text-center">
         <a
           href={actionButtonUrl || "#inquiry"}
+          data-swatch-sku={swatchSku}
           class="inline-flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm group"
         >
           <span>{actionButtonText}</span>

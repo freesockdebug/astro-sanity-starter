@@ -64,6 +64,13 @@ export default defineType({
       fieldset: 'buttons',
     }),
     defineField({
+      name: 'swatchSku',
+      title: 'Custom Swatch Kit SKU (本区块专属样卡编号)',
+      description: '指定本版块主按钮申领时装载的样卡 SKU（留空则默认继承 RFQ Settings 中的官方通用 SKU）',
+      type: 'string',
+      fieldset: 'buttons',
+    }),
+    defineField({
       name: 'showSecondaryButton',
       title: 'Show Secondary Button (是否显示次按钮)',
       description: '控制浅灰色次按钮（如 Explore Capsule Lines）是否显示',
