@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "astro-sanity-starter",
+  "compatibility_date": "2026-10-06",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "keep_vars": true,
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "dist/client"
+  },
+  "vars": {
+    "SANITY_PROJECT_ID": "xvhhd8u0",
+    "SANITY_DATASET": "production",
+    "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFXbqPn5Jkh6bMhV",
+    "TURNSTILE_HOSTNAMES": "localhost,127.0.0.1,gwenvenni.com"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

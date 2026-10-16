@@ -1,0 +1,430 @@
+---
+// src/components/QuoteDrawer.astro
+import { fetchRfqSettings } from '@data/rfqSettings';
+
+interface Props {
+  settings?: any;
+}
+
+const { settings } = Astro.props;
+const rfqSettings = settings ?? (await fetchRfqSettings());
+
+const drawerTitle = rfqSettings?.drawerTitle || "Quote Basket";
+const drawerSubtitle = rfqSettings?.drawerSubtitle || "Wholesale RFQ & Sample Dispatch";
+const drawerStatus = rfqSettings?.drawerStatus || "48h Express Dispatch";
+const drawerEmptyTitle = rfqSettings?.drawerEmptyTitle || "Your Quote Basket is empty";
+const drawerEmptyDesc = rfqSettings?.drawerEmptyDesc || "Browse our ready-to-order capsule lines and add styles to request formal wholesale quotes, custom branding, and physical samples.";
+const submitButtonText = rfqSettings?.drawerSubmitButtonText || "Submit Request for Quote";
+const successFeedbackMessage = rfqSettings?.drawerSuccessMessage || "✓ Quote request received! Our B2B specialist will reply within 24 hours.";
+const swatchKitTitle = rfqSettings?.swatchKitTitle || "Curated Hosiery Swatch Kit & Color Book";
+const swatchKitDesc = rfqSettings?.swatchKitDesc || "Physical fabric swatches & yarn color dossier via DHL Express";
+
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAAFXbqPn5Jkh6bMhV";
+---
+
+<!-- Cloudflare Turnstile Client Script -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer is:inline></script>
+
+<div
+  id="quote-drawer-root"
+  class="drawer drawer-end z-50"
+  data-swatch-title={swatchKitTitle}
+  data-swatch-desc={swatchKitDesc}
+>
+  <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" />
+  
+  <div class="drawer-side">
+    <!-- Click backdrop to close -->
+    <label for="quote-drawer-toggle" aria-label="close sidebar" class="drawer-overlay bg-black/40 backdrop-blur-xs"></label>
+    
+    <div class="bg-white text-[#1d1d1f] min-h-full w-full max-w-md sm:max-w-lg p-5 sm:p-6 flex flex-col justify-between shadow-2xl overflow-y-auto">
+      
+      <!-- Top Section: Header & Items List -->
+      <div class="space-y-4">
+        <!-- Drawer Header -->
+        <div class="flex items-center justify-between pb-3.5 border-b border-black/10">
+          <div class="flex items-center gap-2">
+            <h3 class="text-base sm:text-lg font-semibold tracking-tight text-[#1d1d1f]">
+              {drawerTitle}
+            </h3>
+            <span id="quote-badge-count" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#1d1d1f] text-white">
+              0
+            </span>
+          </div>
+          
+          <div class="flex items-center gap-3">
+            <button
+              id="btn-clear-cart"
+              type="button"
+              class="text-xs text-[#86868b] hover:text-rose-600 transition-colors hidden"
+            >
+              Clear all
+            </button>
+            <label
+              for="quote-drawer-toggle"
+              class="w-7 h-7 rounded-full bg-[#f5f5f7] hover:bg-black/10 flex items-center justify-center text-[#1d1d1f] cursor-pointer transition-colors"
+              aria-label="Close quote drawer"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </label>
+          </div>
+        </div>
+
+        <!-- Items Container -->
+        <div id="quote-items-container" class="space-y-3 max-h-[36vh] overflow-y-auto pr-1">
+          <!-- Dynamically populated from quoteCart nanostore -->
+        </div>
+
+        <!-- Empty Basket Placeholder -->
+        <div id="quote-empty-state" class="py-10 text-center space-y-2">
+          <div class="w-12 h-12 mx-auto rounded-2xl bg-[#f5f5f7] flex items-center justify-center text-[#86868b]">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+          </div>
+          <p class="text-sm font-semibold text-[#1d1d1f]">{drawerEmptyTitle}</p>
+          <p class="text-xs text-[#86868b] max-w-xs mx-auto leading-relaxed">
+            {drawerEmptyDesc}
+          </p>
+        </div>
+      </div>
+
+      <!-- Bottom Section: Buyer Info Form -->
+      <div id="quote-form-section" class="border-t border-black/10 pt-4 mt-4 space-y-3">
+        <div class="flex items-center justify-between text-xs text-[#86868b]">
+          <span>{drawerSubtitle}</span>
+          <span class="text-emerald-700 font-medium">{drawerStatus}</span>
+        </div>
+
+        <form id="rfq-form" class="space-y-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              type="text"
+              name="company"
+              required
+              placeholder="Company / Brand Name *"
+              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+            />
+            <input
+              type="text"
+              name="buyer_name"
+              placeholder="Buyer Name"
+              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+            />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder="Work Email Address *"
+              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+            />
+            <input
+              type="text"
+              name="whatsapp"
+              placeholder="WhatsApp / Phone"
+              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+            />
+          </div>
+
+          <input
+            type="text"
+            name="destination"
+            placeholder="Shipping Country & City (for freight estimate)"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+          />
+
+          <textarea
+            name="message"
+            rows="2"
+            placeholder="Customization requirements (Custom logo, Pantone color, packaging, target price)..."
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b] resize-none"
+          ></textarea>
+
+          <!-- Turnstile Container (Canonical Action: quote_cart) -->
+          {turnstileSiteKey && (
+            <div
+              class="cf-turnstile my-1.5"
+              data-sitekey={turnstileSiteKey}
+              data-action="quote_cart"
+              data-theme="light"
+              data-size="flexible"
+            ></div>
+          )}
+
+          <button
+            type="submit"
+            id="rfq-submit-btn"
+            data-default-text={submitButtonText}
+            data-success-message={successFeedbackMessage}
+            class="w-full py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <span id="rfq-submit-text">{submitButtonText}</span>
+            <svg id="rfq-submit-icon" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </button>
+        </form>
+
+        <!-- Feedback Alert Box -->
+        <div id="rfq-alert" class="hidden p-3 rounded-xl text-xs transition-all"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '../stores/quoteCart';
+
+  // Expose global drawer opener
+  (window as any).openQuoteDrawer = () => {
+    const toggle = document.getElementById('quote-drawer-toggle') as HTMLInputElement | null;
+    if (toggle) toggle.checked = true;
+  };
+
+  (window as any).closeQuoteDrawer = () => {
+    const toggle = document.getElementById('quote-drawer-toggle') as HTMLInputElement | null;
+    if (toggle) toggle.checked = false;
+  };
+
+  // Expose global Swatch Kit Request handler
+  (window as any).requestSwatchKit = (customItem?: any) => {
+    const root = document.getElementById('quote-drawer-root');
+    const swatchTitle = root?.dataset.swatchTitle || 'Curated Hosiery Swatch Kit & Color Book';
+    const swatchDesc = root?.dataset.swatchDesc || 'Physical fabric swatches & yarn color dossier via DHL Express';
+
+    addToQuote({
+      id: customItem?.id || 'swatch-kit-sample',
+      title: customItem?.title || swatchTitle,
+      sku: customItem?.sku || 'SWATCH-KIT',
+      imageUrl: customItem?.imageUrl || '/images/spec-light.jpg',
+      variant: customItem?.variant || swatchDesc,
+      quantity: 1,
+      moq: '1 Set (Priority Dispatch)',
+    });
+
+    (window as any).openQuoteDrawer();
+  };
+
+  // Intercept all legacy "#inquiry" links and buttons to trigger the unified Quote Drawer
+  document.addEventListener('click', (e) => {
+    const target = (e.target as HTMLElement).closest<HTMLElement>(
+      'a[href="#inquiry"], a[href$="/#inquiry"], [data-open-swatch-kit], [data-open-quote-drawer]'
+    );
+    if (!target) return;
+
+    e.preventDefault();
+    if (target.matches('[data-open-quote-drawer]')) {
+      (window as any).openQuoteDrawer();
+    } else {
+      (window as any).requestSwatchKit();
+    }
+  });
+
+  const container = document.getElementById('quote-items-container');
+  const emptyState = document.getElementById('quote-empty-state');
+  const badgeCount = document.getElementById('quote-badge-count');
+  const btnClear = document.getElementById('btn-clear-cart');
+  const formSection = document.getElementById('quote-form-section');
+  const rfqForm = document.getElementById('rfq-form') as HTMLFormElement | null;
+  const submitBtn = document.getElementById('rfq-submit-btn') as HTMLButtonElement | null;
+  const submitText = document.getElementById('rfq-submit-text');
+  const alertBox = document.getElementById('rfq-alert');
+
+  function renderCart() {
+    const items = quoteCart.get() || [];
+    const totalCount = items.reduce((sum, i) => sum + i.quantity, 0);
+
+    // Update Badges across page
+    if (badgeCount) badgeCount.textContent = totalCount.toString();
+    const navBadges = document.querySelectorAll('.nav-quote-badge');
+    navBadges.forEach((el) => {
+      el.textContent = totalCount.toString();
+      if (totalCount > 0) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+
+    if (!container || !emptyState || !btnClear || !formSection) return;
+
+    if (items.length === 0) {
+      container.innerHTML = '';
+      emptyState.classList.remove('hidden');
+      btnClear.classList.add('hidden');
+      const submit = formSection.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+      if (submit) submit.disabled = true;
+      return;
+    }
+
+    emptyState.classList.add('hidden');
+    btnClear.classList.remove('hidden');
+    const submit = formSection.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+    if (submit) submit.disabled = false;
+
+    container.innerHTML = items
+      .map(
+        (item) => `
+      <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 text-xs">
+        <img
+          src="${item.imageUrl || '/images/hero-light.jpg'}"
+          alt="${item.title}"
+          class="w-12 h-12 rounded-lg object-cover bg-white border border-black/5 shrink-0"
+        />
+        <div class="flex-1 min-w-0">
+          <h4 class="font-semibold text-[#1d1d1f] truncate">${item.title}</h4>
+          <p class="text-[11px] text-[#86868b] truncate mt-0.5">
+            ${item.sku ? `<span class="font-mono">${item.sku}</span> · ` : ''}${item.variant || 'Standard'}
+          </p>
+          <div class="flex items-center justify-between mt-1.5">
+            <div class="flex items-center border border-black/15 rounded-md bg-white overflow-hidden text-[11px]">
+              <button
+                type="button"
+                data-action="dec"
+                data-id="${item.id}"
+                data-variant="${item.variant}"
+                class="px-2 py-0.5 hover:bg-black/5 transition-colors text-[#1d1d1f]"
+              >−</button>
+              <span class="px-2 font-mono font-medium">${item.quantity}</span>
+              <button
+                type="button"
+                data-action="inc"
+                data-id="${item.id}"
+                data-variant="${item.variant}"
+                class="px-2 py-0.5 hover:bg-black/5 transition-colors text-[#1d1d1f]"
+              >+</button>
+            </div>
+            <button
+              type="button"
+              data-action="remove"
+              data-id="${item.id}"
+              data-variant="${item.variant}"
+              class="text-[11px] text-[#86868b] hover:text-rose-600 transition-colors"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      </div>`
+      )
+      .join('');
+  }
+
+  // Subscribe to changes
+  quoteCart.subscribe(() => {
+    renderCart();
+  });
+
+  // Handle Cart item actions (Delegation)
+  container?.addEventListener('click', (e) => {
+    const target = (e.target as HTMLElement).closest('button');
+    if (!target) return;
+    const action = target.dataset.action;
+    const id = target.dataset.id;
+    const variant = target.dataset.variant || '';
+    if (!id) return;
+
+    const items = quoteCart.get() || [];
+    const item = items.find((i) => i.id === id && i.variant === variant);
+
+    if (action === 'remove') {
+      removeFromQuote(id, variant);
+    } else if (action === 'inc' && item) {
+      updateQuoteQuantity(id, variant, item.quantity + 50); // B2B step increments
+    } else if (action === 'dec' && item) {
+      updateQuoteQuantity(id, variant, item.quantity - 50);
+    }
+  });
+
+  btnClear?.addEventListener('click', () => {
+    if (confirm('Clear all items from your quote basket?')) {
+      clearQuote();
+    }
+  });
+
+  // Handle Form Submission
+  rfqForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const items = quoteCart.get() || [];
+    if (items.length === 0) {
+      alert('Your quote basket is empty.');
+      return;
+    }
+
+    const formData = new FormData(rfqForm);
+    const turnstileToken = formData.get('cf-turnstile-response')?.toString() || '';
+
+    const payload = {
+      buyerInfo: {
+        company: formData.get('company'),
+        name: formData.get('buyer_name'),
+        email: formData.get('email'),
+        whatsapp: formData.get('whatsapp'),
+        destination: formData.get('destination'),
+        message: formData.get('message'),
+      },
+      items,
+      turnstileToken,
+      inquiryType: 'quote_cart',
+    };
+
+    if (submitBtn && submitText) {
+      submitBtn.disabled = true;
+      submitText.textContent = 'Submitting Quote Request...';
+    }
+
+    try {
+      const res = await fetch('/api/submit-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        if (alertBox) {
+          alertBox.className = 'p-3 rounded-xl text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 block';
+          alertBox.textContent = submitBtn?.dataset.successMessage || '✓ Quote request received! Our B2B specialist will reply within 24 hours.';
+        }
+        rfqForm.reset();
+        clearQuote();
+
+        // Hide Turnstile container on success so it does not re-verify or distract
+        const turnstileContainer = rfqForm.querySelector('.cf-turnstile') as HTMLElement;
+        if (turnstileContainer) turnstileContainer.style.display = 'none';
+
+        setTimeout(() => {
+          (window as any).closeQuoteDrawer();
+          if (alertBox) alertBox.className = 'hidden';
+          if (turnstileContainer) turnstileContainer.style.display = '';
+        }, 3000);
+      } else {
+        throw new Error(data.error || 'Submission failed');
+      }
+    } catch (err: any) {
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs bg-rose-50 text-rose-800 border border-rose-200 block';
+        alertBox.textContent = `Submission failed: ${err.message || 'Please check your connection and try again.'}`;
+      }
+      // Only reset Turnstile on submission failure so user can re-verify and retry
+      if (typeof (window as any).turnstile !== 'undefined') {
+        try {
+          (window as any).turnstile.reset();
+        } catch {
+          // ignore
+        }
+      }
+    } finally {
+      if (submitBtn && submitText) {
+        submitBtn.disabled = false;
+        submitText.textContent = submitBtn.dataset.defaultText || 'Submit Request for Quote';
+      }
+    }
+  });
+</script>

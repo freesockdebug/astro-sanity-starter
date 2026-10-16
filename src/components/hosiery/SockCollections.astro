@@ -1,0 +1,310 @@
+---
+// src/components/hosiery/SockCollections.astro
+const collections = [
+  {
+    id: "silk-loafer",
+    title: "Mulberry Silk Loafer Sock",
+    tagline: "Invisible Comfort for Luxury Footwear",
+    image: "/images/sock-silk-loafer.jpg",
+    composition: "88% Grade 6A Mulberry Silk, 12% Spandex",
+    gauge: "200-Needle Ultra-Thin",
+    moq: "200 Pairs",
+    features: ["360° Non-Slip Silicone Heel", "Breathable Mesh Sole", "Deep Cut Invisible Fit"],
+    colors: ["#f5edd8", "#1c1917", "#e7e5e4"]
+  },
+  {
+    id: "cashmere-crew",
+    title: "Ribbed Cashmere-Silk Crew",
+    tagline: "The Everyday Signature Slouch",
+    image: "/images/sock-cashmere-crew.jpg",
+    composition: "70% Inner Mongolian Cashmere, 30% Silk",
+    gauge: "176-Needle Derby Rib",
+    moq: "150 Pairs",
+    features: ["Zero-Pressure Ribbed Welt", "Hand-Linked Seamless Toe", "Cloud-Soft Brushed Loft"],
+    colors: ["#d6d3d1", "#78716c", "#a8a29e", "#e7e5e4"]
+  },
+  {
+    id: "sheer-tights",
+    title: "15D Invisible Sheer Tights",
+    tagline: "Second-Skin Compression & Durability",
+    image: "/images/hero-light.jpg",
+    composition: "80% Italian Bi-Component Nylon, 20% Elastane",
+    gauge: "400-Needle Seamless Circular",
+    moq: "300 Pairs",
+    features: ["Run-Resistant Fusion Yarn", "Ergonomic Control Top", "Cotton Hygiene Gusset"],
+    colors: ["#18181b", "#d4b996", "#a18262"]
+  },
+  {
+    id: "merino-slouch",
+    title: "Superfine 18.5µ Merino Boot Sock",
+    tagline: "All-Day Thermal Temperature Regulation",
+    image: "/images/spec-light.jpg",
+    composition: "85% Australian Merino Wool, 15% Nylon",
+    gauge: "144-Needle Terry Loop",
+    moq: "200 Pairs",
+    features: ["Natural Odor Neutralization", "Cushioned Arch Support", "Pre-Shrunk Machine Washable"],
+    colors: ["#44403c", "#a8a29e", "#f5f5f4"]
+  }
+];
+
+import { fetchAllProducts } from '@data/products';
+import { fetchData as fetchSiteConfig } from '@data/siteConfig';
+import { fetchRfqSettings } from '@data/rfqSettings';
+
+interface Props {
+  badge?: string;
+  title?: string;
+  subtitle?: string;
+  showActionButton?: boolean;
+  actionButtonText?: string;
+  actionButtonUrl?: string;
+  showCardQuoteButton?: boolean;
+  cardDetailsButtonText?: string;
+  cardQuoteButtonText?: string;
+  products?: any[];
+}
+
+const {
+  badge = "Capsule Catalog 2026",
+  title = "Ready-to-Order Line Sheets",
+  subtitle = "Proprietary silhouettes developed for white-labeling, brand customization, and low-MOQ rapid wholesale reordering.",
+  showActionButton: propShowAction,
+  actionButtonText: propActionText,
+  actionButtonUrl = "#inquiry",
+  showCardQuoteButton: propShowCardQuote,
+  cardDetailsButtonText = "View Gallery & Specs",
+  cardQuoteButtonText,
+  products: propProducts
+} = Astro.props;
+
+const siteConfig = await fetchSiteConfig();
+const rfqSettings = await fetchRfqSettings();
+const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
+const resolvedCardQuoteText = cardQuoteButtonText || rfqSettings?.cardQuoteBtnText || "Quote";
+
+const rawProducts = propProducts && propProducts.length > 0 ? propProducts : await fetchAllProducts();
+const hasSanityProducts = rawProducts && rawProducts.length > 0;
+// User requirement: "可以不用限制只显示3个产品了" -> Display all available products
+const sanityProducts = hasSanityProducts ? rawProducts : [];
+
+function resolveTitle(item: any) {
+  if (item?.shortTitle && item.shortTitle.trim()) {
+    return item.shortTitle.trim();
+  }
+  const title = item?.title || "Curated Knit";
+  const cleaned = title.replace(/\([^)]*\)/g, '').trim();
+  return cleaned || title;
+}
+
+const activeCollections = hasSanityProducts
+  ? sanityProducts.map((p: any) => ({
+      id: p.slug || p._id,
+      title: resolveTitle(p),
+      fullTitle: p.title,
+      tagline: p.tagline,
+      image: p.mainImage || (p.gallery && p.gallery[0]?.src) || "/images/hero-light.jpg",
+      composition: (p.specifications && p.specifications[0]?.value) || "Luxury Knit Blend",
+      gauge: (p.specifications && p.specifications[1]?.value) || "200-Needle Fine Knit",
+      moq: p.moq || "200 Pairs",
+      colors: p.colors?.map((c: any) => c.hex) || ["#1c1917", "#e7e5e4"]
+    }))
+  : collections.map((c: any) => ({
+      ...c,
+      title: resolveTitle(c),
+      fullTitle: c.title
+    }));
+
+const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
+const showHeaderActionButton = propShowAction !== undefined
+  ? Boolean(propShowAction && actionButtonText?.trim())
+  : (rfqSettings?.showCollectionsHeaderButton !== undefined
+      ? Boolean(rfqSettings.showCollectionsHeaderButton && actionButtonText?.trim())
+      : (isSwatchAction ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(actionButtonText?.trim())) : Boolean(actionButtonText?.trim())));
+
+const showCardQuoteButton = propShowCardQuote !== undefined
+  ? Boolean(propShowCardQuote)
+  : (rfqSettings?.showCardQuoteButton ?? true);
+---
+
+<section id="collections" class="bg-white text-[#1d1d1f] border-t border-black/5 lg:min-h-[calc(100svh-44px)] lg:flex lg:flex-col lg:justify-center" style="padding-block: var(--section-py);">
+  <div class="apple-rail-bento w-full">
+    <!-- Section Header (Centered) -->
+    <div class="apple-rail-narrow text-center mb-6 sm:mb-7 space-y-1.5">
+      <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b] block">{badge}</span>
+      <h2 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
+        {title}
+      </h2>
+      <p class="text-[#86868b] text-sm sm:text-base max-w-xl mx-auto font-normal leading-relaxed">
+        {subtitle}
+      </p>
+      <div class="pt-1.5 flex items-center justify-center gap-3">
+        {showHeaderActionButton && (
+          <a
+            href={actionButtonUrl}
+            class="px-5 py-2 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm inline-flex items-center gap-1.5"
+          >
+            <span>{actionButtonText}</span>
+            <span aria-hidden="true">›</span>
+          </a>
+        )}
+        <!-- Desktop Carousel Navigation Buttons -->
+        <div class="hidden sm:inline-flex items-center gap-1.5">
+          <button
+            id="collections-prev-btn"
+            type="button"
+            aria-label="Previous products"
+            class="w-8 h-8 rounded-full bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] flex items-center justify-center transition-all border border-black/5 cursor-pointer shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            id="collections-next-btn"
+            type="button"
+            aria-label="Next products"
+            class="w-8 h-8 rounded-full bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] flex items-center justify-center transition-all border border-black/5 cursor-pointer shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collection Shelf: Horizontal Scroll on Both Mobile and Desktop -->
+    <div
+      id="collections-shelf"
+      class="flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-5 pb-5 pt-1 no-scrollbar scroll-smooth"
+    >
+      {activeCollections.map((item: any) => (
+        <div class="group shrink-0 w-[82vw] max-w-[320px] sm:w-[320px] lg:w-[340px] snap-start rounded-2xl sm:rounded-3xl bg-[#f5f5f7] border border-black/5 hover:border-black/15 hover:shadow-lg transition-all duration-300 p-5 flex flex-col justify-between">
+          <div class="space-y-3">
+            <!-- Card Header: Title & Specs Subtitle -->
+            <div>
+              <a href={`/products/${item.id}`} class="block">
+                <h3 class="text-lg font-semibold text-[#1d1d1f] tracking-tight group-hover:text-black transition-colors">
+                  {item.title}
+                </h3>
+              </a>
+              <p class="text-xs text-[#86868b] mt-0.5 line-clamp-1">{item.composition}</p>
+            </div>
+
+            <!-- Card Image Box (Refined 4:3 Proportion) -->
+            <a href={`/products/${item.id}`} class="block relative aspect-[4/3] rounded-xl overflow-hidden bg-white shadow-inner">
+              <img
+                src={item.image}
+                alt={item.title}
+                class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
+                loading="lazy"
+              />
+            </a>
+
+            <!-- Color Palette Dots with Expanded Mobile Tap Target -->
+            <div class="flex items-center justify-between pt-0.5">
+              <div class="flex items-center gap-0.5 -ml-1">
+                {item.colors.map((colorHex: string) => (
+                  <span
+                    class="w-6 h-6 flex items-center justify-center rounded-full hover:scale-110 active:scale-95 transition-transform cursor-pointer select-none"
+                    title={`Color: ${colorHex}`}
+                  >
+                    <span
+                      class="w-3.5 h-3.5 rounded-full border border-black/15 shadow-2xs block"
+                      style={`background-color: ${colorHex}`}
+                    ></span>
+                  </span>
+                ))}
+              </div>
+              <span class="text-[11px] font-mono text-[#86868b]">MOQ {item.moq}</span>
+            </div>
+          </div>
+
+          <!-- Bottom Action: Refined Apple Clean Pill -->
+          <div class="mt-4 pt-3 border-t border-black/5 flex items-center justify-between">
+            <a
+              href={`/products/${item.id}`}
+              class="text-xs font-semibold text-[#1d1d1f] hover:underline inline-flex items-center gap-1"
+            >
+              <span>{cardDetailsButtonText}</span>
+              <span aria-hidden="true">›</span>
+            </a>
+            {showCardQuoteButton && (
+              <button
+                type="button"
+                class="btn-card-add-quote px-3 py-1 rounded-full text-[11px] font-medium bg-white hover:bg-[#1d1d1f] hover:text-white text-[#1d1d1f] border border-black/10 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                data-id={item.id}
+                data-title={item.title}
+                data-image={item.image}
+                data-moq={item.moq}
+                title="Add to Quote Basket (RFQ)"
+              >
+                <span aria-hidden="true">+</span>
+                <span>{resolvedCardQuoteText}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <!-- Swipe / Scroll Visual Hint -->
+    <div class="flex items-center justify-center gap-1.5 pt-2 text-[11px] font-medium text-[#86868b]">
+      <span class="sm:hidden">Swipe to explore all silhouettes</span>
+      <span class="hidden sm:inline">Scroll horizontally or use arrows to explore all silhouettes</span>
+      <span aria-hidden="true">→</span>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { addToQuote } from '../../stores/quoteCart';
+
+  // Desktop horizontal shelf scroll arrows
+  const shelf = document.getElementById('collections-shelf');
+  const prevBtn = document.getElementById('collections-prev-btn') as HTMLButtonElement | null;
+  const nextBtn = document.getElementById('collections-next-btn') as HTMLButtonElement | null;
+
+  function updateArrowStates() {
+    if (!shelf || !prevBtn || !nextBtn) return;
+    const { scrollLeft, scrollWidth, clientWidth } = shelf;
+    prevBtn.disabled = scrollLeft <= 10;
+    nextBtn.disabled = scrollLeft + clientWidth >= scrollWidth - 10;
+  }
+
+  prevBtn?.addEventListener('click', () => {
+    shelf?.scrollBy({ left: -360, behavior: 'smooth' });
+  });
+
+  nextBtn?.addEventListener('click', () => {
+    shelf?.scrollBy({ left: 360, behavior: 'smooth' });
+  });
+
+  shelf?.addEventListener('scroll', updateArrowStates, { passive: true });
+  updateArrowStates();
+
+  document.querySelectorAll('.btn-card-add-quote').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute('data-id') || '';
+      const title = btn.getAttribute('data-title') || '';
+      const imageUrl = btn.getAttribute('data-image') || '';
+      const rawMoq = btn.getAttribute('data-moq') || '200';
+      const moqNum = parseInt(rawMoq.replace(/\D/g, ''), 10) || 200;
+
+      addToQuote({
+        id,
+        title,
+        sku: 'CAPSULE',
+        imageUrl,
+        variant: 'Curated Sample',
+        quantity: moqNum,
+        moq: rawMoq,
+      });
+
+      if ((window as any).openQuoteDrawer) {
+        (window as any).openQuoteDrawer();
+      }
+    });
+  });
+</script>

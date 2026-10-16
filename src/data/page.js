@@ -1,0 +1,29 @@
+import { client } from '@utils/sanity-client';
+import { SECTIONS } from './blocks';
+
+const PAGE_QUERY_OBJ = `{
+  _id,
+  slug,
+  title,
+  metaTitle,
+  metaDescription,
+  "socialImage": {
+    "src": socialImage.asset->url
+  },
+  sections[] ${SECTIONS}
+}`;
+
+export async function fetchData() {
+    return await client.fetch(`*[_type == "page"] ${PAGE_QUERY_OBJ}`);
+}
+
+export async function getPageById(id) {
+    return await client.fetch(`*[_type == "page" && _id == "${id}"] ${PAGE_QUERY_OBJ}`);
+}
+
+export async function getPageBySlug(slug) {
+    const formattedSlug = !slug || slug === '/' ? '/' : (slug.startsWith('/') ? slug : `/${slug}`);
+    const unslashed = formattedSlug.replace(/^\//, '');
+    return await client.fetch(`*[_type == "page" && (slug.current == "${formattedSlug}" || slug.current == "${unslashed}")] ${PAGE_QUERY_OBJ}`);
+}
+

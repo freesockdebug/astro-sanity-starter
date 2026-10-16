@@ -1,0 +1,79 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy-web:
+    runs-on: ubuntu-latest
+    name: Deploy Web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Astro SSR
+        env:
+          SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID || 'xvhhd8u0' }}
+          SANITY_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
+          SANITY_TOKEN: ${{ secrets.SANITY_TOKEN }}
+          PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFXbqPn5Jkh6bMhV' }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          TURNSTILE_HOSTNAMES: ${{ secrets.TURNSTILE_HOSTNAMES || 'localhost,127.0.0.1,gwenvenni.com' }}
+        run: npm run build
+
+      - name: Deploy Web to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --keep-vars
+
+  deploy-studio:
+    runs-on: ubuntu-latest
+    name: Deploy Studio
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'studio/package-lock.json'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Studio dependencies
+        working-directory: studio
+        run: npm ci
+
+      - name: Build Sanity Studio
+        working-directory: studio
+        env:
+          SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID || 'xvhhd8u0' }}
+          SANITY_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
+          SANITY_STUDIO_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID || 'xvhhd8u0' }}
+          SANITY_STUDIO_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
+        run: npm run build
+
+      - name: Deploy Studio to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: 'studio'
+          command: deploy --config wrangler.jsonc --keep-vars

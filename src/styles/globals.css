@@ -1,0 +1,232 @@
+@import 'tailwindcss';
+@plugin "daisyui";
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", -apple-system, sans-serif;
+  --font-mono: 'SF Mono', Consolas, monospace;
+  --apple-bg-white: #ffffff;
+  --apple-bg-gray: #f5f5f7;
+  --apple-text-primary: #1d1d1f;   /* Primary titles and key metrics */
+  --apple-text-secondary: #86868b; /* Subtitles, body copy and specs */
+  --apple-border: rgba(0, 0, 0, 0.08);
+  --color-canvas: #ffffff;
+  --color-canvas-inset: #f5f5f7;
+  --color-text-main: #1d1d1f;
+  --color-text-subtle: #86868b;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--apple-bg-white);
+  color: var(--apple-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  letter-spacing: -0.015em;
+}
+
+/* Apple 48px pure frosted glass nav */
+.apple-nav {
+  height: 48px;
+  background: #fffffff0;
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid #00000014;
+}
+
+.glass-nav-light {
+  height: 48px;
+  background: #fffffff0; /* 从 82% 提升至 94% 不透明度，彻底阻隔滚动透字重影 */
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid #00000014;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.02);
+}
+
+/* Apple solid pill button (Unified Request Swatch Kit Style) */
+.btn-apple-black {
+  background: #1d1d1f;
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-apple-black:hover {
+  background: #000000;
+  transform: translateY(-1.5px);
+  box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.3);
+}
+
+.btn-apple-outline {
+  background: #ffffff;
+  color: #1d1d1f;
+  border: 1px solid #d2d2d7;
+  font-weight: 500;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+}
+
+.btn-apple-outline:hover {
+  background: #f5f5f7;
+  border-color: #86868b;
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.06);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #ffffff;
+}
+::-webkit-scrollbar-thumb {
+  background: #d2d2d7;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #86868b;
+}
+
+/* ==========================================================================
+   Apple 三级容器轨制（窄轨文字 + 中轨网格 + 宽轨大图）与流式间距
+   ========================================================================== */
+:root {
+  /* 随屏幕宽度丝滑缩放的流式区块上下间距（紧凑精致设计：手机 36px -> 笔记本 52px -> 大屏 68px） */
+  --section-py: clamp(2.25rem, 3.8vw, 4.25rem);
+  /* 流式网格间距（手机 14px -> 笔记本 20px -> 大屏 28px） */
+  --grid-gap: clamp(0.875rem, 1.5vw, 1.75rem);
+  /* 流式卡片内边距（手机 18px -> 笔记本 24px -> 大屏 32px） */
+  --card-pad: clamp(1.125rem, 1.8vw, 2rem);
+}
+
+/* ==========================================================================
+   Apple 容器轨制（小屏统一 16px/24px 边距等宽对齐，大屏分级宽窄轨）
+   ========================================================================== */
+
+/* 1. 小屏幕统一基线（手机端 <640px）：所有区块严格采用 16px 边距 (min(100% - 2rem))，左右完美对齐 */
+.apple-rail-header,
+.apple-rail-footer,
+.apple-rail-narrow,
+.apple-rail-bento,
+.apple-rail-showcase,
+.apple-rail-wide {
+  width: min(100% - 2rem, 100%);
+  margin-inline: auto;
+}
+
+/* 当 .apple-rail-narrow 嵌套在 .apple-rail-bento 内部时，小屏宽度自动填满父级 (100%)，避免产生二次嵌套边距偏差 */
+.apple-rail-bento .apple-rail-narrow {
+  width: 100%;
+  max-width: 980px;
+  margin-inline: auto;
+}
+
+/* 2. 平板端 (640px ~ 1023px)：统一采用 24px 边距 (min(100% - 3rem))，保持整齐 */
+@media (min-width: 640px) {
+  .apple-rail-header,
+  .apple-rail-footer,
+  .apple-rail-narrow,
+  .apple-rail-bento,
+  .apple-rail-showcase,
+  .apple-rail-wide {
+    width: min(100% - 3rem, 100%);
+  }
+}
+
+/* 3. 桌面端 (1024px+)：严格遵循苹果官网设计（Header/Footer 1024px，导语文本 980px，主体内容展开至 1440px） */
+@media (min-width: 1024px) {
+  .apple-rail-header,
+  .apple-rail-footer {
+    width: min(100% - 3rem, 1024px);
+  }
+  .apple-rail-narrow {
+    width: min(100% - 3rem, 980px);
+  }
+  .apple-rail-bento,
+  .apple-rail-showcase,
+  .apple-rail-wide {
+    width: min(100% - 3rem, 1440px);
+  }
+}
+
+/* 4. 超大屏 (1440px+) 与 4K 宽屏 (1920px+) 视觉沉浸 */
+@media (min-width: 1440px) {
+  .apple-rail-bento,
+  .apple-rail-showcase,
+  .apple-rail-wide {
+    width: min(100% - 4rem, 1600px);
+  }
+}
+@media (min-width: 1920px) {
+  .apple-rail-bento,
+  .apple-rail-showcase,
+  .apple-rail-wide {
+    width: min(100% - 5rem, 1680px);
+  }
+}
+
+/* 首屏主标题：36px -> 随屏幕宽度平滑过渡 -> 最大 72px */
+.fluid-hero-title {
+  font-size: clamp(2.25rem, 4.2vw + 0.5rem, 4.5rem);
+  line-height: 1.06;
+  letter-spacing: -0.028em;
+}
+
+/* 板块主标题（如 Crafted to the micron.）：28px -> 52px */
+.fluid-section-title {
+  font-size: clamp(1.75rem, 3vw + 0.4rem, 3.25rem);
+  line-height: 1.1;
+  letter-spacing: -0.022em;
+}
+
+/* Bento 卡片核心数字：紧凑克制，避免空大失衡（28px -> 40px） */
+.fluid-bento-metric {
+  font-size: clamp(1.75rem, 2.2vw + 0.25rem, 2.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+/* 当屏幕是笔记本/桌面端（宽 >= 1024px），但垂直高度较矮（高 <= 820px）时自动收紧首屏间距，露出至少 35% 产品大图 */
+@media (min-width: 1024px) and (max-height: 820px) {
+  .hero-section {
+    padding-top: 4.5rem !important;
+    padding-bottom: 2rem !important;
+  }
+  .fluid-hero-title {
+    font-size: clamp(2.1rem, 3.4vw, 3.4rem);
+  }
+  .hero-showcase-box {
+    margin-top: 1.25rem !important;
+  }
+  .hero-showcase-img {
+    height: 44vh !important;
+    max-height: 48vh !important;
+    object-fit: cover;
+  }
+}
+
+
+

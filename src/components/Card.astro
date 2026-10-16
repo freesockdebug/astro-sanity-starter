@@ -1,0 +1,49 @@
+---
+import { marked } from 'marked';
+import { type Card } from 'types';
+import Action from '@components/Action.astro';
+import Badge from '@components/Badge.astro';
+import ResponsiveImage from '@components/ResponsiveImage.astro';
+
+interface Props extends Card {
+    class?: string;
+}
+
+const { badge, heading, body, cta, image, theme, textAlign, hasBorder, class: className } = Astro.props;
+---
+
+<div
+    class:list={['card', hasBorder !== false && 'card-border', 'w-full max-w-2xl', className]}
+    {...theme && theme !== 'transparent' && { 'data-theme': theme }}
+>
+    {
+        image && image.src && (
+            <figure>
+                <ResponsiveImage _id={image._id} src={image.src} width={image.dimensions?.width} height={image.dimensions?.height} alt={image.alt} />
+            </figure>
+        )
+    }
+    <div class:list={['card-body gap-4', textAlign === 'center' ? 'items-center text-center' : 'text-left']}>
+        {badge && badge.label && <Badge {...badge} />}
+        {
+            heading && (
+                <h3 class="font-black card-title sm:text-2xl">
+                    {heading}
+                </h3>
+            )
+        }
+        {body && <div class="markdown" set:html={marked.parse(body)} />}
+        {
+            cta && cta.length > 0 && (
+                <div class="card-actions items-center">
+                    {cta.map((item) => (
+                        <Action
+                            action={item}
+                            class:list={[item._type === 'actionLink' ? 'font-bold underline hover:no-underline' : 'px-4 py-2.5 h-auto min-h-0']}
+                        />
+                    ))}
+                </div>
+            )
+        }
+    </div>
+</div>

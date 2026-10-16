@@ -1,0 +1,104 @@
+---
+// src/components/hosiery/SockHero.astro
+import { fetchRfqSettings } from '@data/rfqSettings';
+
+interface Props {
+  superTitle?: string;
+  headline?: string;
+  subline?: string;
+  heroImage?: string;
+  showPrimaryButton?: boolean;
+  primaryButtonText?: string;
+  primaryButtonUrl?: string;
+  showSecondaryButton?: boolean;
+  secondaryButtonText?: string;
+  secondaryButtonUrl?: string;
+}
+
+const {
+  superTitle = "B2B Hosiery Manufacturing & Private Label",
+  headline = "Engineered Elegance. 140-Needle Micro Weave.",
+  subline = "Knitted on Italian Lonati machinery with 100% artisan hand-linked seamless toes. Built for modern private-label brands and luxury retail.",
+  heroImage: propHeroImage,
+  showPrimaryButton: propShowPrimary,
+  primaryButtonText: propPrimaryText,
+  primaryButtonUrl = "#inquiry",
+  showSecondaryButton: propShowSecondary,
+  secondaryButtonText = "Explore Line Sheets",
+  secondaryButtonUrl = "#collections"
+} = Astro.props;
+
+const rfqSettings = await fetchRfqSettings();
+const heroImage = propHeroImage?.trim() || "/images/hero-light.jpg";
+const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
+
+// Split headline into primary title and secondary contrast subtitle
+const headlineParts = headline.split(/(?<=\.)\s+/);
+const headlinePrimary = headlineParts[0] || "Engineered Elegance.";
+const headlineSecondary = headlineParts.slice(1).join(" ") || "140-Needle Micro Weave.";
+
+const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";
+const showPrimaryButton = propShowPrimary !== undefined
+  ? Boolean(propShowPrimary && primaryButtonText?.trim())
+  : (rfqSettings?.showHeroPrimaryButton !== undefined
+      ? Boolean(rfqSettings.showHeroPrimaryButton && primaryButtonText?.trim())
+      : (isSwatchButton ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(primaryButtonText?.trim())) : Boolean(primaryButtonText?.trim())));
+
+const showSecondaryButton = propShowSecondary !== undefined
+  ? Boolean(propShowSecondary && secondaryButtonText?.trim())
+  : (rfqSettings?.showHeroSecondaryButton !== undefined
+      ? Boolean(rfqSettings.showHeroSecondaryButton && secondaryButtonText?.trim())
+      : Boolean(secondaryButtonText?.trim()));
+---
+
+<section id="hero" class="hero-section pt-14 sm:pt-16 pb-6 sm:pb-8 bg-white text-center overflow-hidden lg:min-h-[calc(100svh-44px)] lg:flex lg:flex-col lg:justify-between">
+  <!-- Narrow Rail (980px): Text Content Focus -->
+  <div class="apple-rail-narrow">
+    <!-- Category Super-title -->
+    <p class="text-xs font-semibold tracking-widest uppercase text-[#86868b] mb-2 sm:mb-2.5">
+      {superTitle}
+    </p>
+
+    <!-- Apple-style Grand Headline with Fluid Font Size & Gray Contrast -->
+    <h1 class="fluid-hero-title font-semibold tracking-tight text-[#1d1d1f]">
+      {headlinePrimary}<br />
+      <span class="text-[#86868b] font-normal">{headlineSecondary}</span>
+    </h1>
+
+    <!-- Subtitle Description -->
+    <p class="mt-2.5 sm:mt-3 text-sm sm:text-base text-[#86868b] max-w-2xl mx-auto font-normal leading-relaxed">
+      {subline}
+    </p>
+
+    <!-- Centered Action Buttons -->
+    <div class="mt-4 sm:mt-5 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
+      {showPrimaryButton && (
+        <a
+          href={primaryButtonUrl}
+          class="w-full sm:w-auto px-6 py-2.5 rounded-full bg-[#1d1d1f] text-white text-xs sm:text-sm font-medium hover:bg-black transition-all shadow-sm"
+        >
+          {primaryButtonText}
+        </a>
+      )}
+      {showSecondaryButton && (
+        <a
+          href={secondaryButtonUrl}
+          class="w-full sm:w-auto px-5 py-2.5 rounded-full text-[#1d1d1f] text-xs sm:text-sm font-medium hover:text-black hover:bg-zinc-100 transition-all inline-flex items-center justify-center gap-1"
+        >
+          <span>{secondaryButtonText}</span>
+          <span aria-hidden="true">›</span>
+        </a>
+      )}
+    </div>
+  </div>
+
+  <!-- Showcase Rail (up to 1520px): Full-width Immersive Product Macro Visual -->
+  <div class="apple-rail-showcase hero-showcase-box mt-4 sm:mt-5 rounded-2xl sm:rounded-3xl overflow-hidden bg-[#f5f5f7] border border-black/5 shadow-xl group lg:flex-1 lg:min-h-[260px] lg:max-h-[500px]">
+    <img
+      src={heroImage}
+      alt={headlinePrimary}
+      class="hero-showcase-img w-full h-56 sm:h-72 md:h-80 lg:h-full object-cover transform transition-transform duration-1000 group-hover:scale-[1.02]"
+      loading="eager"
+    />
+  </div>
+</section>

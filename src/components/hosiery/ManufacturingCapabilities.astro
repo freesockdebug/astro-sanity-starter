@@ -1,0 +1,102 @@
+---
+// src/components/hosiery/ManufacturingCapabilities.astro
+import { fetchRfqSettings } from '@data/rfqSettings';
+
+interface Props {
+  badge?: string;
+  headline?: string;
+  subline?: string;
+  capabilities?: Array<{ title: string; description: string }>;
+  actionButtonText?: string;
+  actionButtonUrl?: string;
+  showActionButton?: boolean;
+}
+
+const {
+  badge = "OEM / ODM & Private Label",
+  headline = "Vertical Knitting Infrastructure",
+  subline = "From spinning fiber selection to finished packaging, our smart manufacturing line delivers bespoke hosiery solutions with rapid prototyping and global export compliance.",
+  capabilities = [
+    {
+      title: "350+ Lonati Cylinders",
+      description: "State-of-the-art Italian single and double cylinder electronic machines capable of 96N to 200N gauge high-density knitting."
+    },
+    {
+      title: "72h Sample Prototyping",
+      description: "CAD digital patterning to custom physical sample dispatched within 72 hours with yarn lab dip verification."
+    },
+    {
+      title: "Full Private Labeling",
+      description: "Jacquard logos, micro embroidery, silicone sole grippers, custom Pantone dyeing, and FSC certified retail packaging."
+    },
+    {
+      title: "Zero-Defect Audit",
+      description: "100% optical camera inspection and manual hand stretch testing. Fully Sedex, BSCI, and ISO9001 compliant."
+    }
+  ],
+  actionButtonText: propActionText,
+  actionButtonUrl = "#inquiry",
+  showActionButton: propShowAction
+} = Astro.props;
+
+const rfqSettings = await fetchRfqSettings();
+const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
+
+const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
+const showActionButton = propShowAction !== undefined
+  ? Boolean(propShowAction && actionButtonText?.trim())
+  : (rfqSettings?.showManufacturingActionButton !== undefined
+    ? Boolean(rfqSettings.showManufacturingActionButton && actionButtonText?.trim())
+    : (isSwatchAction ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(actionButtonText?.trim())) : Boolean(actionButtonText?.trim())));
+---
+
+<section id="manufacturing" class="bg-white text-[#1d1d1f] border-t border-black/5 lg:min-h-[calc(100svh-44px)] lg:flex lg:flex-col lg:justify-center" style="padding-block: var(--section-py);">
+  <div class="apple-rail-bento w-full">
+    <div class="apple-rail-narrow text-center mb-6 sm:mb-8 space-y-1.5">
+      <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">{badge}</span>
+      <h2 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
+        {headline}
+      </h2>
+      <p class="text-[#86868b] text-sm sm:text-base font-normal leading-relaxed max-w-2xl mx-auto mt-1.5">
+        {subline}
+      </p>
+    </div>
+
+    <!-- Feature Cards: Horizontal Scroll on Mobile, Grid on Desktop -->
+    <div class="flex overflow-x-auto snap-x snap-mandatory gap-3.5 pb-4 pt-1 no-scrollbar md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible md:p-0" style="gap: var(--grid-gap);">
+      {capabilities.map((cap: any) => (
+        <div class="shrink-0 w-[78vw] max-w-[280px] snap-start md:w-full md:max-w-none md:shrink md:snap-align-none p-5 sm:p-6 rounded-2xl bg-[#f5f5f7] border border-black/5 space-y-2.5 hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+          <div class="space-y-2.5">
+            <div class="w-9 h-9 rounded-xl bg-white border border-black/5 shadow-2xs flex items-center justify-center text-[#1d1d1f]">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+            </div>
+            <h3 class="text-base font-semibold text-[#1d1d1f]">{cap.title}</h3>
+            <p class="text-xs text-[#86868b] leading-relaxed">
+              {cap.description}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <!-- Mobile Swipe Visual Hint -->
+    <div class="flex md:hidden items-center justify-center gap-1.5 pt-3 text-[11px] font-medium text-[#86868b]">
+      <span>Swipe to view capabilities</span>
+      <span aria-hidden="true">→</span>
+    </div>
+
+    {showActionButton && (
+      <div class="mt-8 sm:mt-10 text-center">
+        <a
+          href={actionButtonUrl || "#inquiry"}
+          class="inline-flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm group"
+        >
+          <span>{actionButtonText}</span>
+          <span aria-hidden="true">›</span>
+        </a>
+      </div>
+    )}
+  </div>
+</section>

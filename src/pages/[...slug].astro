@@ -1,0 +1,71 @@
+---
+// src/pages/[...slug].astro
+import type { Page } from 'types';
+import Layout from '@layouts/Layout.astro';
+import Cards from '@components/Cards.astro';
+import Cta from '@components/Cta.astro';
+import Hero from '@components/Hero.astro';
+import Logos from '@components/Logos.astro';
+import Testimonials from '@components/Testimonials.astro';
+import SockHero from '@components/hosiery/SockHero.astro';
+import SockSpecMatrix from '@components/hosiery/SockSpecMatrix.astro';
+import SockCollections from '@components/hosiery/SockCollections.astro';
+import ManufacturingCapabilities from '@components/hosiery/ManufacturingCapabilities.astro';
+import SwatchInquiry from '@components/hosiery/SwatchInquiry.astro';
+import { fetchData, getPageById, getPageBySlug } from '@data/page';
+
+export async function getStaticPaths() {
+    const data = await fetchData();
+    return data.map((page: Page) => {
+        const slug = page.slug.current === '/' ? undefined : page.slug.current;
+        return {
+            params: { slug },
+            props: { id: page._id }
+        };
+    });
+}
+
+const { id } = Astro.props;
+const { slug } = Astro.params;
+
+let pages = [];
+if (id) {
+    pages = await getPageById(id);
+} else {
+    pages = await getPageBySlug(slug);
+}
+const page: Page = pages && pages.length ? pages[0] : null;
+
+if (!page) {
+    return new Response("404 Not Found", { status: 404, statusText: "Not Found" });
+}
+
+const { title, sections, metaTitle, metaDescription, socialImage } = page;
+
+const componentMap: Record<string, any> = {
+    hosieryHeroSection: SockHero,
+    hosierySpecSection: SockSpecMatrix,
+    hosieryCollectionSection: SockCollections,
+    hosieryManufacturingSection: ManufacturingCapabilities,
+    hosieryInquirySection: SwatchInquiry,
+    cardsSection: Cards,
+    ctaSection: Cta,
+    heroSection: Hero,
+    logosSection: Logos,
+    testimonialsSection: Testimonials
+};
+---
+
+{
+    page && (
+        <Layout title={metaTitle ?? title} description={metaDescription} image={socialImage}>
+            <Fragment>
+                {sections?.length &&
+                    sections.map((section: any) => {
+                        const Component = componentMap[section._type];
+                        return Component ? <Component {...section} /> : null;
+                    })}
+            </Fragment>
+        </Layout>
+    )
+}

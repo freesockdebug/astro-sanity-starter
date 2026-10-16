@@ -1,0 +1,109 @@
+---
+// src/components/hosiery/AppleNav.astro
+import { fetchData } from '@data/siteConfig';
+import { fetchRfqSettings } from '@data/rfqSettings';
+
+const config = Astro.props.config ?? await fetchData();
+const rfqSettings = await fetchRfqSettings();
+const header = config?.header;
+const brandTitle = header?.title || "Nordic Knit";
+const logoImage = header?.logo?.src;
+const allLinks = header?.navLinks || [];
+const actionButton = allLinks.find((l: any) => l._type === 'actionButton');
+const isSwatchNav = (actionButton?.label || "").toLowerCase().includes("swatch") || actionButton?.url === "#inquiry";
+const showNavActionButton = actionButton
+  ? (header?.showActionButton !== undefined
+      ? Boolean(header.showActionButton && actionButton.label)
+      : (rfqSettings?.showNavActionButton !== undefined
+          ? Boolean(rfqSettings.showNavActionButton && actionButton.label)
+          : (isSwatchNav ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(actionButton.label)) : Boolean(actionButton.label))))
+  : false;
+const navLinks = allLinks.filter((l: any) => l._type === 'actionLink' || l._type === undefined);
+
+// Apple-standard clean brand name: always prioritize pure brand identity
+const cleanBrandTitle = (brandTitle || "Gwenvenni").split(/\s*\|\s*/)[0].trim().toUpperCase();
+---
+
+<header class="fixed top-0 left-0 right-0 z-50 apple-nav glass-nav-light transition-all duration-300">
+  <div class="apple-rail-header h-12 flex items-center justify-between">
+    <!-- Brand / Logo (Pure Apple Minimalism) -->
+    <a href="/" class="flex items-center gap-2 group flex-shrink-0">
+      {logoImage ? (
+        <img src={logoImage} alt={cleanBrandTitle} class="h-6 w-auto object-contain" />
+      ) : (
+        <span class="text-sm font-semibold tracking-tight text-[#1d1d1f] hover:opacity-70 transition-opacity">
+          {cleanBrandTitle}
+        </span>
+      )}
+    </a>
+
+    <!-- Nav Links (Desktop - Apple Centered Style) -->
+    <nav class="hidden md:flex items-center gap-7 text-xs font-normal text-[#1d1d1f]/75 tracking-normal">
+      {navLinks.map((link: any) => (
+        <a href={link.url} class="hover:text-[#1d1d1f] transition-colors">{link.label}</a>
+      ))}
+    </nav>
+
+    <!-- B2B Actions & RFQ Quote Basket -->
+    <div class="flex items-center gap-2">
+      <!-- Quote Basket Drawer Trigger (Apple Style Shopping Bag Icon) -->
+      <button
+        type="button"
+        id="nav-quote-cart-btn"
+        onclick="window.openQuoteDrawer && window.openQuoteDrawer()"
+        class="relative p-2 rounded-full hover:bg-black/5 text-[#1d1d1f] transition-all flex items-center justify-center cursor-pointer"
+        aria-label="Open Quote Basket"
+        title="Quote Basket (RFQ)"
+      >
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+        </svg>
+        <span class="nav-quote-badge hidden absolute -top-0.5 -right-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#1d1d1f] text-white min-w-[16px] text-center shadow-xs">
+          0
+        </span>
+      </button>
+
+      {showNavActionButton && actionButton && (
+        <a
+          href={actionButton.url || "#inquiry"}
+          class="hidden md:inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm"
+        >
+          <span>{actionButton.label}</span>
+        </a>
+      )}
+
+      <!-- Mobile Menu Toggle Button -->
+      <button
+        id="mobile-menu-toggle"
+        class="md:hidden p-1.5 rounded-md text-zinc-700 hover:text-black"
+        aria-label="Toggle navigation"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Dropdown -->
+  <div id="mobile-menu" class="hidden md:hidden px-6 pt-3 pb-6 bg-white/95 backdrop-blur-xl border-b border-black/5 space-y-3 text-sm">
+    {navLinks.map((link: any) => (
+      <a href={link.url} class="block py-1 text-zinc-700 hover:text-black">{link.label}</a>
+    ))}
+    {showNavActionButton && actionButton && (
+      <a href={actionButton.url || "#inquiry"} class="inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white">
+        <span>{actionButton.label}</span>
+      </a>
+    )}
+  </div>
+</header>
+
+<script>
+  const toggle = document.getElementById('mobile-menu-toggle');
+  const menu = document.getElementById('mobile-menu');
+  if (toggle && menu) {
+    toggle.addEventListener('click', () => {
+      menu.classList.toggle('hidden');
+    });
+  }
+</script>

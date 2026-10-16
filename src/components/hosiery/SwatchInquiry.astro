@@ -1,0 +1,89 @@
+---
+// src/components/hosiery/SwatchInquiry.astro
+import { fetchRfqSettings } from '@data/rfqSettings';
+
+interface Props {
+  badge?: string;
+  headline?: string;
+  subline?: string;
+  buttonText?: string;
+  categories?: string[];
+  showSection?: boolean;
+  showButton?: boolean;
+}
+
+const {
+  badge = "B2B Sample Room",
+  headline = "Request Your Curated Swatch Kit",
+  subline = "Feel the micron-level hand feel in person. Verified fashion labels, buying offices, and independent designers receive curated swatch books dispatched within 48 hours.",
+  buttonText: propButtonText,
+  categories = [
+    "Double Ruffle Lace",
+    "Mulberry Silk",
+    "Cashmere-Silk",
+    "15D Sheer Tights"
+  ],
+  showSection: propShowSection,
+  showButton: propShowButton,
+} = Astro.props;
+
+const rfqSettings = await fetchRfqSettings();
+const showInquirySection = propShowSection !== undefined ? propShowSection : (rfqSettings?.showInquirySection ?? true);
+const showSwatchButton = propShowButton !== undefined
+  ? Boolean(propShowButton)
+  : (rfqSettings?.showInquirySectionButton !== undefined
+      ? Boolean(rfqSettings.showInquirySectionButton)
+      : Boolean(rfqSettings?.showSwatchKitButton));
+const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
+---
+
+{showInquirySection && (
+<section id="inquiry" class="bg-white text-[#1d1d1f] border-t border-black/5 lg:min-h-[calc(100svh-44px)] lg:flex lg:flex-col lg:justify-center" style="padding-block: var(--section-py);">
+  <div class="apple-rail-bento w-full">
+    <div class="bg-[#f5f5f7] rounded-2xl sm:rounded-3xl border border-black/5 p-6 sm:p-10 lg:p-14 text-center shadow-xs">
+      <div class="max-w-xl mx-auto space-y-1.5 mb-4 sm:mb-5">
+        {badge && (
+          <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b] block">
+            {badge}
+          </span>
+        )}
+        <h2 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
+          {headline}
+        </h2>
+        <p class="text-xs sm:text-sm text-[#86868b] font-normal leading-relaxed mt-1">
+          {subline}
+        </p>
+      </div>
+
+      <!-- Feature Pill Badges -->
+      <div class="flex flex-wrap items-center justify-center gap-2 mb-5 max-w-lg mx-auto">
+        {categories.map((cat: string) => (
+          <span class="px-3 py-1 rounded-full bg-white text-zinc-800 text-[11px] font-medium border border-black/5 shadow-2xs">
+            ✓ {cat}
+          </span>
+        ))}
+      </div>
+
+      <!-- Unified Action: Triggers Quote Drawer directly -->
+      {showSwatchButton && (
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            type="button"
+            data-open-swatch-kit
+            class="w-full sm:w-auto px-7 py-3 rounded-full text-xs sm:text-sm font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm hover:shadow-md cursor-pointer inline-flex items-center justify-center gap-2"
+          >
+            <span>{displayButtonText}</span>
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      <p class="text-[11px] text-[#86868b] mt-3">
+        Fast 48h Courier Dispatch · Priority Handling for Qualified Brands & Buying Offices
+      </p>
+    </div>
+  </div>
+</section>
+)}

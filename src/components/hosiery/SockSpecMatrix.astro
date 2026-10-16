@@ -1,0 +1,275 @@
+---
+// src/components/hosiery/SockSpecMatrix.astro
+import { fetchRfqSettings } from '@data/rfqSettings';
+
+interface Props {
+  badge?: string;
+  title?: string;
+  description?: string;
+  macroImage?: string;
+  showPrimaryButton?: boolean;
+  primaryButtonText?: string;
+  primaryButtonUrl?: string;
+  showSecondaryButton?: boolean;
+  secondaryButtonText?: string;
+  secondaryButtonUrl?: string;
+  // Bento 1
+  bento1Tag?: string;
+  bento1Title?: string;
+  bento1Description?: string;
+  // Bento 2
+  bento2Tag?: string;
+  bento2Stat?: string;
+  bento2Unit?: string;
+  bento2Title?: string;
+  bento2Description?: string;
+  bento2BadgeText?: string;
+  bento2BadgeStatus?: string;
+  // Bento 3
+  bento3Tag?: string;
+  bento3Stat?: string;
+  bento3Unit?: string;
+  bento3Title?: string;
+  bento3Description?: string;
+  bento3FooterNote?: string;
+  // Bento 4
+  bento4Tag?: string;
+  bento4Stat?: string;
+  bento4Unit?: string;
+  bento4Title?: string;
+  bento4Description?: string;
+  bento4FooterNote?: string;
+  // Bento 5
+  bento5Tag?: string;
+  bento5Stat?: string;
+  bento5Unit?: string;
+  bento5Title?: string;
+  bento5Description?: string;
+  bento5FooterNote?: string;
+}
+
+const {
+  badge = "Engineered Construction",
+  title = "Specification Matrix",
+  description = "We treat the architectural construction of women's hosiery with the exactitude of horology. Every seam, tension zone, and yarn twist is calibrated for zero friction.",
+  macroImage: propMacroImage,
+  showPrimaryButton: propShowPrimary,
+  primaryButtonText: propPrimaryText,
+  primaryButtonUrl = "#inquiry",
+  showSecondaryButton: propShowSecondary,
+  secondaryButtonText = "Download B2B Line Sheet (PDF)",
+  secondaryButtonUrl = "#inquiry",
+  // Bento 1
+  bento1Tag = "Yarn Architecture",
+  bento1Title = "60s/2 Double-Ply Combed Cotton.",
+  bento1Description = "Ultra-long staple combed fibers spun for anti-pilling longevity (Grade 4.5) and a breathable, second-skin handfeel across 50+ wash cycles.",
+  // Bento 2
+  bento2Tag = "Toe Closure",
+  bento2Stat = "0",
+  bento2Unit = "mm",
+  bento2Title = "Hand-Linked Seamless",
+  bento2Description = "Individual loop-by-loop manual interlocking eliminates interior ridges for zero pressure on toes.",
+  bento2BadgeText = "OEKO-TEX® 100 Class I",
+  bento2BadgeStatus = "Certified Safe",
+  // Bento 3
+  bento3Tag = "Machine Gauge",
+  bento3Stat = "200",
+  bento3Unit = "N",
+  bento3Title = "Lonati Cylinders",
+  bento3Description = "Italian high-density circular knit delivering refined micro-rib clarity with zero distortion.",
+  bento3FooterNote = "Tolerance: ±0.5% Needle Pitch",
+  // Bento 4
+  bento4Tag = "Elasticity",
+  bento4Stat = "Zero",
+  bento4Unit = "Mark",
+  bento4Title = "Lycra Soft Stretch",
+  bento4Description = "Graduated tension welt stays upright without calf constrictions or pressure marks.",
+  bento4FooterNote = "Non-Slip Silicone Grip Compatible",
+  // Bento 5
+  bento5Tag = "Sampling Speed",
+  bento5Stat = "48",
+  bento5Unit = "h",
+  bento5Title = "Global Courier Dispatch",
+  bento5Description = "Curated fabric swatch books and custom lab dip samples dispatched via DHL Express in 48 hours.",
+  bento5FooterNote = "Bulk Lead: 14 – 18 Working Days"
+} = Astro.props;
+
+const rfqSettings = await fetchRfqSettings();
+const macroImage = propMacroImage?.trim() || "/images/spec-light.jpg";
+const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
+
+const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";
+const showPrimaryButton = propShowPrimary !== undefined
+  ? Boolean(propShowPrimary && primaryButtonText?.trim())
+  : (rfqSettings?.showSpecsPrimaryButton !== undefined
+      ? Boolean(rfqSettings.showSpecsPrimaryButton && primaryButtonText?.trim())
+      : (isSwatchButton ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(primaryButtonText?.trim())) : Boolean(primaryButtonText?.trim())));
+
+const showSecondaryButton = propShowSecondary !== undefined
+  ? Boolean(propShowSecondary && secondaryButtonText?.trim())
+  : (rfqSettings?.showSpecsSecondaryButton !== undefined
+      ? Boolean(rfqSettings.showSpecsSecondaryButton && secondaryButtonText?.trim())
+      : Boolean(secondaryButtonText?.trim()));
+
+// Clean accidental index numbers from CMS text (e.g. "Construction1", "Matrix2", "3We treat")
+const cleanBadge = (badge || "").replace(/\d+$/, "").trim();
+const cleanTitle = (title || "").replace(/\d+$/, "").trim();
+const cleanDescription = (description || "").replace(/^\d+/, "").trim();
+---
+
+<section id="specs" class="bg-[#f5f5f7] border-t border-black/5 py-8 lg:py-0 lg:h-screen lg:min-h-[620px] lg:flex lg:flex-col lg:justify-between lg:pt-14 lg:pb-4">
+  <div class="apple-rail-bento flex flex-col flex-1 min-h-0 justify-between gap-3 lg:gap-3">
+    <!-- Header: Apple Grand Typography on Narrow Rail (980px) - Centered -->
+    <div class="apple-rail-narrow text-center flex-shrink-0 pt-1 lg:pt-2 space-y-1 sm:space-y-1.5">
+      <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b] block">
+        {cleanBadge || "Technical Architecture"}
+      </span>
+      <h2 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
+        {cleanTitle || "Crafted to the micron."}
+      </h2>
+      <p class="text-sm sm:text-base font-normal text-[#86868b] max-w-xl mx-auto leading-relaxed">
+        {cleanDescription || "Every thread engineered for retail longevity & zero friction."}
+      </p>
+    </div>
+
+    <!-- Apple Bento Grid: Left Large Image + Right 4 Small Blocks on Desktop, Scroll Shelf on Mobile -->
+    <div class="flex-1 min-h-0 flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 pt-1 no-scrollbar lg:grid lg:grid-cols-12 lg:grid-rows-2 lg:gap-3.5 lg:overflow-visible lg:p-0 items-stretch">
+      <!-- Left: Large Image Card (Span 6 cols / 2 rows full height) -->
+      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-6 lg:row-span-2 lg:col-start-1 lg:row-start-1 bg-white rounded-2xl lg:rounded-3xl p-4 sm:p-5 flex flex-col justify-between border border-black/5 shadow-xs group hover:shadow-md transition-all">
+        <div class="flex-shrink-0">
+          <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b]">{bento1Tag}</span>
+          <h3 class="mt-0.5 text-base sm:text-lg lg:text-xl font-semibold tracking-tight text-[#1d1d1f]">
+            {bento1Title}
+          </h3>
+          <p class="mt-0.5 text-xs text-[#86868b] max-w-xl font-normal leading-relaxed line-clamp-2">
+            {bento1Description}
+          </p>
+        </div>
+        <div class="relative mt-2.5 rounded-xl lg:rounded-2xl overflow-hidden bg-[#f5f5f7] border border-black/5 flex-1 min-h-0 w-full">
+          <img
+            src={macroImage}
+            alt="Macro ribbed hosiery texture"
+            class="absolute inset-0 w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
+            loading="lazy"
+          />
+        </div>
+      </div>
+
+      <!-- Right Top-Left: Block 1 - 0mm Seamless Toe -->
+      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-7 lg:row-start-1 bg-white rounded-2xl lg:rounded-3xl p-4 sm:p-5 flex flex-col justify-between border border-black/5 shadow-xs hover:shadow-md transition-all">
+        <div>
+          <div class="flex items-center justify-between gap-1.5">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b]">{bento2Tag}</span>
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+              {bento2BadgeStatus}
+            </span>
+          </div>
+
+          <div class="mt-2 sm:mt-2.5 flex items-baseline gap-1">
+            <span class="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#1d1d1f]">{bento2Stat}</span>
+            <span class="text-xs sm:text-sm lg:text-base font-medium text-[#86868b]">{bento2Unit}</span>
+          </div>
+
+          <h3 class="mt-1 text-xs sm:text-sm lg:text-base font-semibold text-[#1d1d1f]">{bento2Title}</h3>
+          <p class="mt-0.5 text-xs text-[#86868b] font-normal leading-relaxed line-clamp-2">
+            {bento2Description}
+          </p>
+        </div>
+
+        <div class="mt-2 pt-2 border-t border-black/5 text-[11px] text-[#86868b] font-medium flex items-center justify-between">
+          <span>{bento2BadgeText}</span>
+          <span class="text-zinc-400 font-mono text-[10px]">0.0mm Flat</span>
+        </div>
+      </div>
+
+      <!-- Right Top-Right: Block 2 - Gauge Precision (Lonati) -->
+      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-10 lg:row-start-1 bg-white rounded-2xl lg:rounded-3xl p-4 sm:p-5 flex flex-col justify-between border border-black/5 shadow-xs hover:shadow-md transition-all">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b]">{bento3Tag}</span>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600">Lonati</span>
+          </div>
+          <div class="mt-2 sm:mt-2.5 flex items-baseline gap-1">
+            <span class="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#1d1d1f]">{bento3Stat}</span>
+            <span class="text-xs sm:text-sm lg:text-base font-medium text-[#86868b]">{bento3Unit}</span>
+          </div>
+          <h3 class="mt-1 text-xs sm:text-sm lg:text-base font-semibold text-[#1d1d1f]">{bento3Title}</h3>
+          <p class="mt-0.5 text-xs text-[#86868b] font-normal leading-relaxed line-clamp-2">
+            {bento3Description}
+          </p>
+        </div>
+        <div class="mt-2 pt-2 border-t border-black/5 text-[11px] text-[#86868b]">
+          {bento3FooterNote}
+        </div>
+      </div>
+
+      <!-- Right Bottom-Left: Block 3 - Elasticity & Welt (Lycra) -->
+      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-7 lg:row-start-2 bg-white rounded-2xl lg:rounded-3xl p-4 sm:p-5 flex flex-col justify-between border border-black/5 shadow-xs hover:shadow-md transition-all">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b]">{bento4Tag}</span>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600">Lycra®</span>
+          </div>
+          <div class="mt-2 sm:mt-2.5 flex items-baseline gap-1">
+            <span class="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#1d1d1f]">{bento4Stat}</span>
+            <span class="text-xs sm:text-sm lg:text-base font-medium text-[#86868b]">{bento4Unit}</span>
+          </div>
+          <h3 class="mt-1 text-xs sm:text-sm lg:text-base font-semibold text-[#1d1d1f]">{bento4Title}</h3>
+          <p class="mt-0.5 text-xs text-[#86868b] font-normal leading-relaxed line-clamp-2">
+            {bento4Description}
+          </p>
+        </div>
+        <div class="mt-2 pt-2 border-t border-black/5 text-[11px] text-[#86868b]">
+          {bento4FooterNote}
+        </div>
+      </div>
+
+      <!-- Right Bottom-Right: Block 4 - Rapid Dispatch (DHL Air) -->
+      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-10 lg:row-start-2 bg-white rounded-2xl lg:rounded-3xl p-4 sm:p-5 flex flex-col justify-between border border-black/5 shadow-xs hover:shadow-md transition-all">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b]">{bento5Tag}</span>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600">DHL Air</span>
+          </div>
+          <div class="mt-2 sm:mt-2.5 flex items-baseline gap-1">
+            <span class="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#1d1d1f]">{bento5Stat}</span>
+            <span class="text-xs sm:text-sm lg:text-base font-medium text-[#86868b]">{bento5Unit}</span>
+          </div>
+          <h3 class="mt-1 text-xs sm:text-sm lg:text-base font-semibold text-[#1d1d1f]">{bento5Title}</h3>
+          <p class="mt-0.5 text-xs text-[#86868b] font-normal leading-relaxed line-clamp-2">
+            {bento5Description}
+          </p>
+        </div>
+        <div class="mt-2 pt-2 border-t border-black/5 text-[11px] text-[#86868b]">
+          {bento5FooterNote}
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Swipe Visual Hint -->
+    <div class="flex lg:hidden items-center justify-center gap-1.5 pt-0.5 text-[11px] font-medium text-[#86868b]">
+      <span>Swipe to explore 5 technical specs</span>
+      <span aria-hidden="true">→</span>
+    </div>
+
+    <!-- Bottom Actions: Apple Clean Dual Pills on Narrow Rail -->
+    <div class="apple-rail-narrow flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-0.5">
+      {showPrimaryButton && (
+        <a
+          href={primaryButtonUrl}
+          class="w-full sm:w-auto px-5 py-2 rounded-full bg-[#1d1d1f] text-white text-xs font-medium hover:bg-black transition-all shadow-sm text-center"
+        >
+          {primaryButtonText}
+        </a>
+      )}
+      {showSecondaryButton && (
+        <a
+          href={secondaryButtonUrl}
+          class="w-full sm:w-auto px-4 py-2 rounded-full text-[#1d1d1f] text-xs font-medium hover:bg-white hover:shadow-sm border border-black/10 transition-all text-center"
+        >
+          {secondaryButtonText}
+        </a>
+      )}
+    </div>
+  </div>
+</section>
