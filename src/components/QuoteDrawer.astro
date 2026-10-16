@@ -16,8 +16,11 @@ const drawerEmptyTitle = rfqSettings?.drawerEmptyTitle || "Your Quote Basket is 
 const drawerEmptyDesc = rfqSettings?.drawerEmptyDesc || "Browse our ready-to-order capsule lines and add styles to request formal wholesale quotes, custom branding, and physical samples.";
 const submitButtonText = rfqSettings?.drawerSubmitButtonText || "Submit Request for Quote";
 const successFeedbackMessage = rfqSettings?.drawerSuccessMessage || "✓ Quote request received! Our B2B specialist will reply within 24 hours.";
+const swatchKitSku = rfqSettings?.swatchKitSku || "SWATCH-KIT";
 const swatchKitTitle = rfqSettings?.swatchKitTitle || "Curated Hosiery Swatch Kit & Color Book";
 const swatchKitDesc = rfqSettings?.swatchKitDesc || "Physical fabric swatches & yarn color dossier via DHL Express";
+const swatchKitImageUrl = rfqSettings?.swatchKitImage?.asset?.url || rfqSettings?.swatchKitImageUrl || "/images/spec-light.jpg";
+const swatchKitMoq = rfqSettings?.swatchKitMoq || "1 Set (Priority Dispatch)";
 
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAAFXbqPn5Jkh6bMhV";
 ---
@@ -28,8 +31,11 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
 <div
   id="quote-drawer-root"
   class="drawer drawer-end z-50"
+  data-swatch-sku={swatchKitSku}
   data-swatch-title={swatchKitTitle}
   data-swatch-desc={swatchKitDesc}
+  data-swatch-image={swatchKitImageUrl}
+  data-swatch-moq={swatchKitMoq}
 >
   <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" />
   
@@ -194,17 +200,27 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
   // Expose global Swatch Kit Request handler
   (window as any).requestSwatchKit = (customItem?: any) => {
     const root = document.getElementById('quote-drawer-root');
-    const swatchTitle = root?.dataset.swatchTitle || 'Curated Hosiery Swatch Kit & Color Book';
-    const swatchDesc = root?.dataset.swatchDesc || 'Physical fabric swatches & yarn color dossier via DHL Express';
+    const defaultSku = root?.dataset.swatchSku || 'SWATCH-KIT';
+    const defaultTitle = root?.dataset.swatchTitle || 'Curated Hosiery Swatch Kit & Color Book';
+    const defaultDesc = root?.dataset.swatchDesc || 'Physical fabric swatches & yarn color dossier via DHL Express';
+    const defaultImage = root?.dataset.swatchImage || '/images/spec-light.jpg';
+    const defaultMoq = root?.dataset.swatchMoq || '1 Set (Priority Dispatch)';
+
+    const itemSku = (customItem?.sku || defaultSku).trim();
+    const itemTitle = (customItem?.title || defaultTitle).trim();
+    const itemDesc = (customItem?.variant || defaultDesc).trim();
+    const itemImage = (customItem?.imageUrl || defaultImage).trim();
+    const itemMoq = (customItem?.moq || defaultMoq).trim();
+    const itemId = customItem?.id || `swatch-${itemSku.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 
     addToQuote({
-      id: customItem?.id || 'swatch-kit-sample',
-      title: customItem?.title || swatchTitle,
-      sku: customItem?.sku || 'SWATCH-KIT',
-      imageUrl: customItem?.imageUrl || '/images/spec-light.jpg',
-      variant: customItem?.variant || swatchDesc,
+      id: itemId,
+      title: itemTitle,
+      sku: itemSku,
+      imageUrl: itemImage,
+      variant: itemDesc,
       quantity: 1,
-      moq: '1 Set (Priority Dispatch)',
+      moq: itemMoq,
     });
 
     (window as any).openQuoteDrawer();
@@ -221,7 +237,19 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     if (target.matches('[data-open-quote-drawer]')) {
       (window as any).openQuoteDrawer();
     } else {
-      (window as any).requestSwatchKit();
+      const customSku = target.getAttribute('data-swatch-sku') || target.dataset.swatchSku;
+      const customTitle = target.getAttribute('data-swatch-title') || target.dataset.swatchTitle;
+      const customDesc = target.getAttribute('data-swatch-desc') || target.dataset.swatchDesc;
+      const customImage = target.getAttribute('data-swatch-image') || target.dataset.swatchImage;
+      const customMoq = target.getAttribute('data-swatch-moq') || target.dataset.swatchMoq;
+
+      (window as any).requestSwatchKit({
+        sku: customSku,
+        title: customTitle,
+        variant: customDesc,
+        imageUrl: customImage,
+        moq: customMoq
+      });
     }
   });
 

@@ -243,6 +243,15 @@ export default defineType({
     // 4. 样卡申领默认项 (Swatch Kit Defaults)
     // -------------------------------------------------------------
     defineField({
+      name: 'swatchKitSku',
+      title: 'Default Swatch Kit SKU (官方色卡默认料号/编号)',
+      type: 'string',
+      initialValue: 'SWATCH-KIT',
+      fieldset: 'swatch',
+      description: '当买家点击“申领色卡/样卡”时，自动加入询盘车的商品 SKU 编号（如：SWATCH-KIT、GV-SWATCH-01 等）',
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
       name: 'swatchKitTitle',
       title: 'Swatch Kit Title (样卡默认项标题)',
       type: 'string',
@@ -256,6 +265,30 @@ export default defineType({
       type: 'string',
       initialValue: 'Physical fabric swatches & yarn color dossier via DHL Express',
       fieldset: 'swatch',
+    }),
+    defineField({
+      name: 'swatchKitOptions',
+      title: 'Swatch Kit Presets / Options (多色卡系列 SKU 预设库)',
+      type: 'array',
+      fieldset: 'swatch',
+      description: '若工厂针对不同系列拥有专属色卡册，可在此登记多个 SKU，例如：SW-RUFFLE（婴童蕾丝册）、SW-CASHMERE（羊绒丝绸高奢册）等',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({ name: 'sku', title: 'SKU 料号', type: 'string', validation: (Rule) => Rule.required() }),
+            defineField({ name: 'title', title: '样卡名称', type: 'string', validation: (Rule) => Rule.required() }),
+            defineField({ name: 'desc', title: '说明内容 (Description)', type: 'string' }),
+            defineField({ name: 'moq', title: '起订量说明 (MOQ)', type: 'string', initialValue: '1 Set (Priority Dispatch)' }),
+          ],
+          preview: {
+            select: {
+              title: 'title',
+              subtitle: 'sku',
+            },
+          },
+        },
+      ],
     }),
 
     // -------------------------------------------------------------

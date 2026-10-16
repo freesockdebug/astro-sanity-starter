@@ -56,6 +56,13 @@ export default defineType({
       fieldset: 'buttons',
     }),
     defineField({
+      name: 'swatchSku',
+      title: 'Custom Swatch Kit SKU (本区块专属样卡编号)',
+      description: '指定本版块申领时装载的样卡 SKU（留空则默认继承 RFQ Settings 中的官方通用 SKU）',
+      type: 'string',
+      fieldset: 'buttons',
+    }),
+    defineField({
       name: 'categories',
       title: 'Sample Category Checkboxes (样卡可选品类勾选项 - 纯英文)',
       description: 'Apple 规范：请使用纯英文命名（如 Mulberry Silk、Cashmere-Silk），不要添加中文括号注释',

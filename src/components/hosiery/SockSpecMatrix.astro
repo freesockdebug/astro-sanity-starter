@@ -7,6 +7,7 @@ interface Props {
   title?: string;
   description?: string;
   macroImage?: string;
+  swatchSku?: string;
   showPrimaryButton?: boolean;
   primaryButtonText?: string;
   primaryButtonUrl?: string;
@@ -53,6 +54,7 @@ const {
   title = "Specification Matrix",
   description = "We treat the architectural construction of women's hosiery with the exactitude of horology. Every seam, tension zone, and yarn twist is calibrated for zero friction.",
   macroImage: propMacroImage,
+  swatchSku,
   showPrimaryButton: propShowPrimary,
   primaryButtonText: propPrimaryText,
   primaryButtonUrl = "#inquiry",
@@ -257,6 +259,7 @@ const cleanDescription = (description || "").replace(/^\d+/, "").trim();
       {showPrimaryButton && (
         <a
           href={primaryButtonUrl}
+          data-swatch-sku={swatchSku}
           class="w-full sm:w-auto px-5 py-2 rounded-full bg-[#1d1d1f] text-white text-xs font-medium hover:bg-black transition-all shadow-sm text-center"
         >
           {primaryButtonText}

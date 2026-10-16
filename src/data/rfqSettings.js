@@ -33,8 +33,10 @@ export const DEFAULT_RFQ_SETTINGS = {
   drawerEmptyDesc: "Browse our ready-to-order capsule lines and add styles to request formal wholesale quotes, custom branding, and physical samples.",
 
   // Swatch
+  swatchKitSku: "SWATCH-KIT",
   swatchKitTitle: "Curated Hosiery Swatch Kit & Color Book",
   swatchKitDesc: "Physical fabric swatches & yarn color dossier via DHL Express",
+  swatchKitImageUrl: "/images/spec-light.jpg",
 
   // Feedback
   drawerSuccessMessage: "✓ Quote request received! Our B2B specialist will reply with official wholesale quotation and PI within 24 hours.",

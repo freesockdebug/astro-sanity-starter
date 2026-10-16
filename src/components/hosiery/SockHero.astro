@@ -7,6 +7,7 @@ interface Props {
   headline?: string;
   subline?: string;
   heroImage?: string;
+  swatchSku?: string;
   showPrimaryButton?: boolean;
   primaryButtonText?: string;
   primaryButtonUrl?: string;
@@ -20,6 +21,7 @@ const {
   headline = "Engineered Elegance. 140-Needle Micro Weave.",
   subline = "Knitted on Italian Lonati machinery with 100% artisan hand-linked seamless toes. Built for modern private-label brands and luxury retail.",
   heroImage: propHeroImage,
+  swatchSku,
   showPrimaryButton: propShowPrimary,
   primaryButtonText: propPrimaryText,
   primaryButtonUrl = "#inquiry",
@@ -104,6 +106,7 @@ const showSecondaryButton = propShowSecondary !== undefined
         {showPrimaryButton && (
           <a
             href={primaryButtonUrl}
+            data-swatch-sku={swatchSku}
             class="w-full sm:w-auto px-6 py-2.5 rounded-full bg-[#1d1d1f] text-white text-xs sm:text-sm font-medium hover:bg-black transition-all shadow-sm"
           >
             {primaryButtonText}

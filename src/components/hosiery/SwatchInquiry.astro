@@ -7,6 +7,7 @@ interface Props {
   headline?: string;
   subline?: string;
   buttonText?: string;
+  swatchSku?: string;
   categories?: string[];
   showSection?: boolean;
   showButton?: boolean;
@@ -17,6 +18,7 @@ const {
   headline = "Request Your Curated Swatch Kit",
   subline = "Feel the micron-level hand feel in person. Verified fashion labels, buying offices, and independent designers receive curated swatch books dispatched within 48 hours.",
   buttonText: propButtonText,
+  swatchSku,
   categories = [
     "Double Ruffle Lace",
     "Mulberry Silk",
@@ -93,6 +95,7 @@ const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnTe
             <button
               type="button"
               data-open-swatch-kit
+              data-swatch-sku={swatchSku}
               class="px-5 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm hover:shadow-md cursor-pointer inline-flex items-center justify-center gap-2 shrink-0"
             >
               <span>{displayButtonText}</span>
