@@ -2,7 +2,7 @@ import { client } from '@utils/sanity-client';
 
 export const DEFAULT_RFQ_SETTINGS = {
   // Global Visibility Toggles
-  showSwatchKitButton: false,
+  showSwatchKitButton: true,
   showNavActionButton: false,
   showHeroPrimaryButton: false,
   showHeroSecondaryButton: true,
@@ -12,7 +12,7 @@ export const DEFAULT_RFQ_SETTINGS = {
   showCardQuoteButton: true,
   showManufacturingActionButton: false,
   showInquirySection: true,
-  showInquirySectionButton: false,
+  showInquirySectionButton: true,
   showProductBuySampleButton: true,
   showProductAddToQuoteButton: true,
   showProductSpecSheetButton: true,

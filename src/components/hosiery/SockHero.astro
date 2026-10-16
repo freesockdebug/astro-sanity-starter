@@ -51,11 +51,11 @@ const showSecondaryButton = propShowSecondary !== undefined
       : Boolean(secondaryButtonText?.trim()));
 ---
 
-<section id="hero" class="hero-section pt-14 sm:pt-16 pb-6 sm:pb-8 bg-white text-center overflow-hidden lg:min-h-[calc(100svh-44px)] lg:flex lg:flex-col lg:justify-between">
+<section id="hero" class="hero-section pt-6 sm:pt-8 lg:pt-8 pb-4 sm:pb-6 lg:pb-6 bg-white text-center overflow-hidden lg:h-[calc(100svh-48px)] lg:max-h-[850px] lg:flex lg:flex-col lg:justify-between">
   <!-- Narrow Rail (980px): Text Content Focus -->
   <div class="apple-rail-narrow">
     <!-- Category Super-title -->
-    <p class="text-xs font-semibold tracking-widest uppercase text-[#86868b] mb-2 sm:mb-2.5">
+    <p class="text-xs font-semibold tracking-widest uppercase text-[#86868b] mb-1 sm:mb-1.5">
       {superTitle}
     </p>
 
@@ -66,12 +66,12 @@ const showSecondaryButton = propShowSecondary !== undefined
     </h1>
 
     <!-- Subtitle Description -->
-    <p class="mt-2.5 sm:mt-3 text-sm sm:text-base text-[#86868b] max-w-2xl mx-auto font-normal leading-relaxed">
+    <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm lg:text-base text-[#86868b] max-w-xl mx-auto font-normal leading-relaxed">
       {subline}
     </p>
 
     <!-- Centered Action Buttons -->
-    <div class="mt-4 sm:mt-5 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
+    <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
       {showPrimaryButton && (
         <a
           href={primaryButtonUrl}
@@ -93,7 +93,7 @@ const showSecondaryButton = propShowSecondary !== undefined
   </div>
 
   <!-- Showcase Rail (up to 1520px): Full-width Immersive Product Macro Visual -->
-  <div class="apple-rail-showcase hero-showcase-box mt-4 sm:mt-5 rounded-2xl sm:rounded-3xl overflow-hidden bg-[#f5f5f7] border border-black/5 shadow-xl group lg:flex-1 lg:min-h-[260px] lg:max-h-[500px]">
+  <div class="apple-rail-showcase hero-showcase-box mt-3 sm:mt-4 rounded-2xl sm:rounded-3xl overflow-hidden bg-[#f5f5f7] border border-black/5 shadow-xl group lg:flex-1 lg:min-h-[220px] lg:max-h-[460px]">
     <img
       src={heroImage}
       alt={headlinePrimary}

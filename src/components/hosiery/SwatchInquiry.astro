@@ -29,19 +29,15 @@ const {
 
 const rfqSettings = await fetchRfqSettings();
 const showInquirySection = propShowSection !== undefined ? propShowSection : (rfqSettings?.showInquirySection ?? true);
-const showSwatchButton = propShowButton !== undefined
-  ? Boolean(propShowButton)
-  : (rfqSettings?.showInquirySectionButton !== undefined
-      ? Boolean(rfqSettings.showInquirySectionButton)
-      : Boolean(rfqSettings?.showSwatchKitButton));
+const showSwatchButton = propShowButton !== undefined ? Boolean(propShowButton) : true;
 const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
 ---
 
 {showInquirySection && (
-<section id="inquiry" class="bg-white text-[#1d1d1f] border-t border-black/5 lg:min-h-[calc(100svh-44px)] lg:flex lg:flex-col lg:justify-center" style="padding-block: var(--section-py);">
+<section id="inquiry" class="bg-white text-[#1d1d1f] border-t border-black/5 py-8 sm:py-10 lg:py-8 lg:h-[calc(100svh-48px)] lg:max-h-[850px] lg:flex lg:flex-col lg:justify-center">
   <div class="apple-rail-bento w-full">
-    <div class="bg-[#f5f5f7] rounded-2xl sm:rounded-3xl border border-black/5 p-6 sm:p-10 lg:p-14 text-center shadow-xs">
-      <div class="max-w-xl mx-auto space-y-1.5 mb-4 sm:mb-5">
+    <div class="bg-[#f5f5f7] rounded-2xl sm:rounded-3xl border border-black/5 p-6 sm:p-8 lg:p-12 text-center shadow-xs max-w-4xl mx-auto">
+      <div class="max-w-xl mx-auto space-y-1 sm:space-y-1.5 mb-3.5 sm:mb-4">
         {badge && (
           <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b] block">
             {badge}
