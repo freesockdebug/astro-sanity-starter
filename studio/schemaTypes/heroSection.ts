@@ -1,8 +1,8 @@
 import {defineField, defineType} from 'sanity'
 import {StarIcon} from '@sanity/icons/Star'
 export default defineType({
-  name: 'hosieryHeroSection',
-  title: 'Hosiery Hero Showcase (Apple 居中沉浸巨幕)',
+  name: 'heroSection',
+  title: '🌟 主视觉首屏 (Hero Showcase)',
   type: 'object',
   icon: StarIcon,
   fieldsets: [
@@ -14,10 +14,16 @@ export default defineType({
   ],
   fields: [
     defineField({
+      name: 'adminLabel',
+      title: 'Admin Label (版块管理别名 / 备注)',
+      description: '【推荐后台备注】在页面版块列表中直观显示此名字（如：首页首屏、春季品牌主图等）',
+      type: 'string',
+    }),
+    defineField({
       name: 'superTitle',
       title: 'Super Title (顶部眉标/类别胶囊文字)',
       type: 'string',
-      initialValue: 'B2B Hosiery Manufacturing & Private Label',
+      initialValue: 'B2B Atelier Manufacturing & Private Label',
     }),
     defineField({
       name: 'headline',
@@ -29,11 +35,11 @@ export default defineType({
     }),
     defineField({
       name: 'subline',
-      title: 'Subline / Tagline (核心工艺叙事副标题)',
+      title: 'Subline / Tagline (核心叙事副标题)',
       type: 'text',
       rows: 2,
       initialValue:
-        'Knitted on Italian Lonati machinery with 100% artisan hand-linked seamless toes. Built for modern private-label brands and luxury retail.',
+        'Knitted on precision machinery with 100% artisan hand-linked seamless finish. Built for modern private-label brands and luxury retail.',
     }),
     defineField({
       name: 'heroImage',
@@ -95,14 +101,17 @@ export default defineType({
   ],
   preview: {
     select: {
-      title: 'headline',
+      headline: 'headline',
+      adminLabel: 'adminLabel',
       btn: 'primaryButtonText',
+      showBtn: 'showPrimaryButton',
       media: 'heroImage',
     },
-    prepare({title, btn, media}) {
+    prepare({headline, adminLabel, btn, showBtn, media}) {
+      const name = adminLabel ? adminLabel : (headline ? headline.split('.')[0] : '未命名首屏');
       return {
-        title: title || 'Hosiery Hero Showcase',
-        subtitle: `🔘 按钮: ${btn || 'Request Swatch Kit'}`,
+        title: `🌟 [主视觉首屏] ${name}`,
+        subtitle: `类型: heroSection · 主按钮: ${showBtn ? (btn || '开启') : '隐藏'} · ${headline || ''}`,
         media,
       }
     },

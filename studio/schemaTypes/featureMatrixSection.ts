@@ -1,8 +1,8 @@
 import {defineField, defineType} from 'sanity'
 import {ThListIcon} from '@sanity/icons/ThList'
 export default defineType({
-  name: 'hosierySpecSection',
-  title: 'Hosiery Bento Grid (Apple 便当盒技术网格)',
+  name: 'featureMatrixSection',
+  title: '📐 核心特性与规格矩阵 (Feature & Spec Matrix)',
   type: 'object',
   icon: ThListIcon,
   fieldsets: [
@@ -38,6 +38,12 @@ export default defineType({
     },
   ],
   fields: [
+    defineField({
+      name: 'adminLabel',
+      title: 'Admin Label (版块管理别名 / 备注)',
+      description: '【可选后台备注】方便在页面版块列表中快速识别（如：200针工艺矩阵、桑蚕丝参数等）',
+      type: 'string',
+    }),
     defineField({
       name: 'badge',
       title: 'Badge Label (上标分类)',
@@ -335,13 +341,15 @@ export default defineType({
   preview: {
     select: {
       title: 'title',
-      btn: 'primaryButtonText',
+      adminLabel: 'adminLabel',
+      badge: 'badge',
       media: 'macroImage',
     },
-    prepare({title, btn, media}) {
+    prepare({title, adminLabel, badge, media}) {
+      const name = adminLabel ? adminLabel : (title || '核心工艺与规格');
       return {
-        title: title || 'Specification Matrix',
-        subtitle: `🔘 按钮: ${btn || 'Request Swatch Kit'}`,
+        title: `📐 [特性规格矩阵] ${name}`,
+        subtitle: `类型: featureMatrixSection · 标签: ${badge || 'Technical Specs'}`,
         media,
       }
     },

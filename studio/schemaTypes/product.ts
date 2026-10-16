@@ -250,13 +250,6 @@ export default defineType({
       initialValue: 'Download Tech Pack & Line Sheet (PDF)',
       group: 'actions',
     }),
-    defineField({
-      name: 'featured',
-      title: 'Show on Homepage (是否展示在首页胶囊系列)',
-      type: 'boolean',
-      initialValue: true,
-      group: 'basic',
-    }),
   ],
   preview: {
     select: {

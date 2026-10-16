@@ -1,7 +1,7 @@
 ---
 // src/components/hosiery/AppleNav.astro
 import { fetchData } from '@data/siteConfig';
-import { fetchRfqSettings } from '@data/rfqSettings';
+import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 
 const config = Astro.props.config ?? await fetchData();
 const rfqSettings = await fetchRfqSettings();
@@ -12,11 +12,13 @@ const allLinks = header?.navLinks || [];
 const actionButton = allLinks.find((l: any) => l._type === 'actionButton');
 const isSwatchNav = (actionButton?.label || "").toLowerCase().includes("swatch") || actionButton?.url === "#inquiry";
 const showNavActionButton = actionButton
-  ? (header?.showActionButton !== undefined
-      ? Boolean(header.showActionButton && actionButton.label)
-      : (rfqSettings?.showNavActionButton !== undefined
-          ? Boolean(rfqSettings.showNavActionButton && actionButton.label)
-          : (isSwatchNav ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(actionButton.label)) : Boolean(actionButton.label))))
+  ? RfqSettingsService.isButtonVisible({
+      propOverride: header?.showActionButton,
+      settingOverride: rfqSettings?.showNavActionButton,
+      isSwatchAction: isSwatchNav,
+      globalSwatchSetting: rfqSettings?.showSwatchKitButton,
+      buttonText: actionButton.label,
+    })
   : false;
 const navLinks = allLinks.filter((l: any) => l._type === 'actionLink' || l._type === undefined);
 
@@ -24,7 +26,7 @@ const navLinks = allLinks.filter((l: any) => l._type === 'actionLink' || l._type
 const cleanBrandTitle = (brandTitle || "Gwenvenni").split(/\s*\|\s*/)[0].trim().toUpperCase();
 ---
 
-<header class="fixed top-0 left-0 right-0 z-50 apple-nav glass-nav-light transition-all duration-300">
+<header class="fixed top-0 left-0 right-0 z-50 apple-nav transition-all duration-300">
   <div class="apple-rail-header h-12 flex items-center justify-between">
     <!-- Brand / Logo (Pure Apple Minimalism) -->
     <a href="/" class="flex items-center gap-2 group flex-shrink-0">

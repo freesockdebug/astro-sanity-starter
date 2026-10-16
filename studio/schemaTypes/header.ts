@@ -26,7 +26,7 @@ export default defineType({
       title: 'Brand Subtitle / Tagline (内部副标/无障碍描述)',
       type: 'string',
       description: '前台按照 Apple 48px 极简顶栏标准默认仅展示纯净品牌名',
-      initialValue: 'ATELIER HOSIERY · B2B',
+      initialValue: 'LUXURY ATELIER · B2B',
       group: 'content',
     }),
     defineField({

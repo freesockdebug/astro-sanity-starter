@@ -1,10 +1,21 @@
-import { StructureResolver } from 'sanity/structure'
+import { StructureResolver, DefaultDocumentNodeResolver } from 'sanity/structure'
 import { HomeIcon } from '@sanity/icons/Home'
 import { TagIcon } from '@sanity/icons/Tag'
 import { DocumentsIcon } from '@sanity/icons/Documents'
 import { CogIcon } from '@sanity/icons/Cog'
 import { ArchiveIcon } from '@sanity/icons/Archive'
 import { EnvelopeIcon } from '@sanity/icons/Envelope'
+import { PageLivePreview } from './components/PageLivePreview'
+
+export const defaultDocumentNode: DefaultDocumentNodeResolver = (S, { schemaType }) => {
+  if (schemaType === 'page') {
+    return S.document().views([
+      S.view.form().id('editor').title('📝 内容与积木编辑'),
+      S.view.component(PageLivePreview).id('visual-builder').title('🎨 可视化拖拽编排 (Visual Builder)'),
+    ])
+  }
+  return undefined
+}
 
 export const deskStructure: StructureResolver = (S) =>
   S.list()
@@ -21,15 +32,19 @@ export const deskStructure: StructureResolver = (S) =>
             .schemaType('page')
             .documentId('a59d87e4-e3ff-4929-acc1-d67b1808d36c')
             .title('Homepage 编辑')
+            .views([
+              S.view.form().id('editor').title('📝 内容与积木编辑'),
+              S.view.component(PageLivePreview).id('visual-builder').title('🎨 可视化拖拽编排 (Visual Builder)'),
+            ])
         ),
 
-      // 2. Products / Hosiery Catalog
+      // 2. Products Catalog
       S.listItem()
         .id('products')
-        .title('🧦 Products (女袜款式与订货)')
+        .title('📦 Products (产品款式与订货目录)')
         .icon(TagIcon)
         .schemaType('product')
-        .child(S.documentTypeList('product').title('全部女袜款式')),
+        .child(S.documentTypeList('product').title('全部产品款式')),
 
       // 3. All Pages (About, Contact, Private Label)
       S.listItem()
@@ -59,7 +74,7 @@ export const deskStructure: StructureResolver = (S) =>
         .schemaType('inquiry')
         .child(S.documentTypeList('inquiry').title('全部采购商询盘与打样申请')),
 
-      // 5. Site Settings (Brand, Nav, Footer)
+      // 6. Site Settings (Brand, Nav, Footer)
       S.listItem()
         .id('settings')
         .title('⚙️ Site Settings (全站品牌与导航)')

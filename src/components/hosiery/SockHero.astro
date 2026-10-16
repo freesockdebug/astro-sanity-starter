@@ -1,6 +1,7 @@
 ---
 // src/components/hosiery/SockHero.astro
-import { fetchRfqSettings } from '@data/rfqSettings';
+import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
+import { SanityImageService } from '@utils/image';
 
 interface Props {
   superTitle?: string;
@@ -31,7 +32,8 @@ const {
 } = Astro.props;
 
 const rfqSettings = await fetchRfqSettings();
-const heroImage = propHeroImage?.trim() || "/images/hero-light.jpg";
+const rawHeroImage = propHeroImage?.trim() || "/images/hero-light.jpg";
+const heroImage = SanityImageService.hero(rawHeroImage, 1600);
 const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
 
 // Super Title handling: support custom text or clean default
@@ -59,11 +61,13 @@ if (rawHeadline.includes('\n')) {
 }
 
 const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";
-const showPrimaryButton = propShowPrimary !== undefined
-  ? Boolean(propShowPrimary && primaryButtonText?.trim())
-  : (rfqSettings?.showHeroPrimaryButton !== undefined
-      ? Boolean(rfqSettings.showHeroPrimaryButton && primaryButtonText?.trim())
-      : (isSwatchButton ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(primaryButtonText?.trim())) : Boolean(primaryButtonText?.trim())));
+const showPrimaryButton = RfqSettingsService.isButtonVisible({
+  propOverride: propShowPrimary,
+  settingOverride: rfqSettings?.showHeroPrimaryButton,
+  isSwatchAction: isSwatchButton,
+  globalSwatchSetting: rfqSettings?.showSwatchKitButton,
+  buttonText: primaryButtonText,
+});
 
 const showSecondaryButton = propShowSecondary !== undefined
   ? Boolean(propShowSecondary && secondaryButtonText?.trim())

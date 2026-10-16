@@ -1,0 +1,518 @@
+---
+// src/components/hosiery/CustomSection.astro
+import { SanityImageService } from '@utils/image';
+
+interface ButtonItem {
+  label: string;
+  actionType?: 'url' | 'rfqDrawer';
+  url?: string;
+  sku?: string;
+  style?: 'primary' | 'secondary' | 'outline' | 'link';
+}
+
+interface MetricItem {
+  value: string;
+  label: string;
+  desc?: string;
+}
+
+interface BentoCardItem {
+  span?: 'span-1' | 'span-2';
+  tag?: string;
+  title: string;
+  desc?: string;
+  image?: string;
+}
+
+interface BlockItem {
+  _type: string;
+  _key?: string;
+  // headingBlock
+  badge?: string;
+  headline?: string;
+  subtitle?: string;
+  align?: 'left' | 'center' | 'right';
+  size?: 'hero' | 'section' | 'compact';
+  // mediaBlock
+  mediaType?: 'single' | 'dual';
+  image?: string;
+  secondaryImage?: string;
+  aspectRatio?: '16/9' | '4/3' | '1/1' | '21/9' | 'auto';
+  rounded?: 'none' | '2xl' | '3xl' | 'full';
+  shadow?: 'soft' | 'glow' | 'none';
+  caption?: string;
+  // buttonGroupBlock
+  buttons?: ButtonItem[];
+  // metricGridBlock
+  columns?: number;
+  metrics?: MetricItem[];
+  // bentoCardBlock
+  cards?: BentoCardItem[];
+  // quoteBlock
+  quote?: string;
+  author?: string;
+  company?: string;
+  avatar?: string;
+  // dividerBlock
+  style?: 'line' | 'spacer' | 'glow';
+  height?: 'small' | 'medium' | 'large';
+}
+
+interface Props {
+  adminLabel?: string;
+  preset?: 'dual-compare' | 'cinematic-hero' | 'split-showcase' | 'bento-grid' | 'custom-free';
+  theme?: 'light' | 'subtle' | 'dark' | 'gradient-dark';
+  containerWidth?: 'narrow' | 'standard' | 'wide' | 'full';
+  paddingY?: 'none' | 'compact' | 'standard' | 'spacious';
+  sectionHeight?: 'auto' | 'screen-fit' | 'screen-min' | 'screen-75' | 'screen-50';
+  verticalAlign?: 'center' | 'between' | 'start' | 'end';
+  preventOverflow?: boolean;
+  layoutMode?: 'flow' | 'split-50-50' | 'split-60-40' | 'split-40-60';
+  blocks?: BlockItem[];
+}
+
+const {
+  preset,
+  theme = 'light',
+  containerWidth = 'wide',
+  paddingY = 'standard',
+  sectionHeight = 'auto',
+  verticalAlign = 'center',
+  preventOverflow = true,
+  layoutMode = 'flow',
+  blocks = [],
+} = Astro.props;
+
+// 1. 智能场景预设 (Smart Screen Presets) 自动降维：彻底省去记忆复杂 CSS 参数
+// 自动推断：如果未显式传 preset，但 sectionHeight 为 screen-fit 或 blocks 包含双图对比，则自动按 dual-compare 黄金空间比例渲染
+const effectivePreset = preset || (sectionHeight === 'screen-fit' ? 'dual-compare' : 'custom-free');
+
+const isScreenFit = effectivePreset === 'dual-compare' || sectionHeight === 'screen-fit';
+const isScreenMin = effectivePreset === 'cinematic-hero' || sectionHeight === 'screen-min';
+const isScreen75 = sectionHeight === 'screen-75';
+const isScreen50 = sectionHeight === 'screen-50';
+
+const paddingMap = {
+  none: 'py-0',
+  compact: 'py-8 sm:py-10 lg:py-12',
+  standard: 'py-12 sm:py-16 lg:py-20',
+  spacious: 'py-18 sm:py-24 lg:py-28',
+};
+
+// 严谨的高度系统：顶部留足安全裕度 (pt-20 sm:pt-24 lg:pt-24)，彻底避免 Fixed Header 遮挡任何文字；去除 overflow-hidden 杜绝截断
+let heightContainerClass = '';
+if (isScreenFit) {
+  heightContainerClass = 'pt-20 sm:pt-24 lg:pt-24 pb-6 sm:pb-8 lg:pb-8 lg:min-h-[100svh] lg:max-h-[960px] flex flex-col justify-between';
+} else if (isScreenMin) {
+  heightContainerClass = 'min-h-[100svh] pt-20 sm:pt-24 lg:pt-24 pb-8 lg:pb-12 flex flex-col justify-center';
+} else if (isScreen75) {
+  heightContainerClass = 'min-h-[75svh] pt-20 sm:pt-24 lg:pt-24 pb-8 lg:pb-12 flex flex-col justify-center';
+} else if (isScreen50) {
+  heightContainerClass = 'min-h-[50svh] pt-20 sm:pt-24 lg:pt-24 pb-6 lg:pb-8 flex flex-col justify-center';
+} else {
+  heightContainerClass = paddingMap[paddingY] || paddingMap.standard;
+}
+
+// 2. 宽度轨制（打通全站原生 Apple Rail 规范）
+const railClass = containerWidth === 'narrow'
+  ? 'apple-rail-narrow'
+  : containerWidth === 'full'
+    ? 'w-full px-4 sm:px-8'
+    : 'apple-rail-bento';
+
+// 统一展台宽度：彻底杜绝图片框与指标条宽度参差不齐，确保垂直左边缘与右边缘绝对平齐
+const stageWidthClass = (effectivePreset === 'dual-compare' || containerWidth === 'wide')
+  ? 'w-full max-w-6xl mx-auto'
+  : containerWidth === 'narrow'
+    ? 'max-w-4xl mx-auto'
+    : containerWidth === 'standard'
+      ? 'max-w-5xl mx-auto'
+      : 'w-full';
+
+const mediaMaxHeightClass = isScreenFit ? 'max-h-[460px]' : '';
+
+// 3. Theme Map
+const isDark = theme === 'dark' || theme === 'gradient-dark';
+const isGradient = theme === 'gradient-dark';
+const isSubtle = theme === 'subtle';
+
+const themeContainerClass = isGradient
+  ? 'bg-gradient-to-b from-zinc-900 via-zinc-950 to-black text-white border-b border-zinc-800/80'
+  : isDark
+    ? 'bg-zinc-950 text-white border-b border-zinc-800/80'
+    : isSubtle
+      ? 'bg-[#f5f5f7] text-[#1d1d1f] border-t border-black/5'
+      : 'bg-white text-[#1d1d1f] border-t border-black/5';
+
+const kickerClass = isDark
+  ? 'text-zinc-400 border-zinc-800 bg-zinc-900/80'
+  : 'text-[#86868b]';
+
+const titleMutedClass = isDark ? 'text-zinc-500' : 'text-[#86868b]';
+const subtitleClass = isDark ? 'text-zinc-400' : 'text-[#86868b]';
+
+const cardBgClass = isDark
+  ? 'bg-zinc-900/60 border-zinc-800 text-zinc-100 hover:border-zinc-700'
+  : isSubtle
+    ? 'bg-white border-black/5 text-[#1d1d1f] hover:border-black/15 hover:shadow-md transition-all shadow-xs'
+    : 'bg-[#f5f5f7] border-black/5 text-[#1d1d1f] hover:border-black/15 hover:shadow-md transition-all';
+
+// 4. Aspect Ratio & Rounded Map
+const aspectMap: Record<string, string> = {
+  '16/9': 'aspect-video',
+  '4/3': 'aspect-[4/3]',
+  '1/1': 'aspect-square',
+  '21/9': 'aspect-[21/9]',
+  '3/4': 'aspect-[3/4]',
+  '16/10': 'aspect-[16/10]',
+};
+
+const roundedMap: Record<string, string> = {
+  none: 'rounded-none',
+  '2xl': 'rounded-2xl',
+  '3xl': 'rounded-3xl',
+  full: 'rounded-full',
+};
+
+// 辅助函数：从 Sanity 资产引用中提取物理像素尺寸与宽高比
+function getSanityDim(img: any): { w: number; h: number; ratio: number } | null {
+  const ref = typeof img === 'string' ? img : (img?.asset?._ref || img?.src || '');
+  const m = ref.match(/[-_](\d+)x(\d+)[-.]/);
+  if (!m) return null;
+  const w = parseInt(m[1], 10);
+  const h = parseInt(m[2], 10);
+  return { w, h, ratio: w / h };
+}
+---
+
+<section class={`relative w-full transition-colors duration-300 ${themeContainerClass} ${heightContainerClass}`}>
+  <div class={`${railClass} ${isScreenFit ? 'h-full flex flex-col justify-between my-auto' : 'w-full flex flex-col gap-6 sm:gap-8 lg:gap-12'}`}>
+    {/* ---------------- 模式 1: 垂直自然积木流 (Vertical Flow) ---------------- */}
+    {layoutMode === 'flow' && (
+      <div class={`w-full ${isScreenFit ? 'h-full flex flex-col justify-between gap-4 lg:gap-6' : 'flex flex-col gap-8 md:gap-12'}`}>
+        {blocks.map((block) => {
+          // --- 积木 A: 标题与叙事文本 (采用 Apple Narrow Rail 与无损中英文两段式解析) ---
+          if (block._type === 'headingBlock') {
+            const rawHeadline = block.headline || '';
+            const match = rawHeadline.match(/^(.+?[\.|\。])\s*(.+)$/);
+            const alignClass = block.align === 'center' ? 'text-center mx-auto' : block.align === 'right' ? 'text-right ml-auto' : 'text-left';
+            const sizeClass = block.size === 'hero' ? 'fluid-hero-title' : 'fluid-section-title';
+
+            return (
+              <div class={`apple-rail-narrow shrink-0 space-y-1.5 sm:space-y-2 ${alignClass}`}>
+                {block.badge && (
+                  <span class={`text-xs font-semibold uppercase tracking-wider block ${kickerClass}`}>
+                    {block.badge}
+                  </span>
+                )}
+                {match ? (
+                  <h2 class={`${sizeClass} font-semibold tracking-tight text-[#1d1d1f] dark:text-white`}>
+                    <span>{match[1]}</span> <span class={titleMutedClass}>{match[2]}</span>
+                  </h2>
+                ) : (
+                  <h2 class={`${sizeClass} font-semibold tracking-tight text-[#1d1d1f] dark:text-white`}>
+                    {rawHeadline}
+                  </h2>
+                )}
+                {block.subtitle && (
+                  <p class={`text-xs sm:text-sm lg:text-base font-normal leading-relaxed max-w-2xl mx-auto ${subtitleClass}`}>
+                    {block.subtitle}
+                  </p>
+                )}
+              </div>
+            );
+          }
+
+          // --- 积木 B: 高精多媒体框 (自适应等高展台) ---
+          if (block._type === 'mediaBlock') {
+            const userAspect = block.aspectRatio || 'auto';
+            const isAuto = userAspect === 'auto';
+            const rounded = roundedMap[block.rounded || '2xl'] || 'rounded-2xl';
+            const shadow = block.shadow === 'glow' ? 'shadow-2xl shadow-indigo-500/10 border border-zinc-700/60' : block.shadow === 'none' ? '' : 'shadow-xl';
+
+            if (block.mediaType === 'dual' && block.image && block.secondaryImage) {
+              const dim1 = getSanityDim(block.image);
+              const isLandscape = (dim1 ? dim1.ratio : 1.4) >= 1.2;
+              const isPortrait = (dim1 ? dim1.ratio : 1.4) <= 0.85;
+
+              // 核心对齐法则：双图并排无论素材尺寸如何，必须左右严格等高齐平！
+              const dualAspect = !isAuto && aspectMap[userAspect]
+                ? aspectMap[userAspect]
+                : isLandscape
+                  ? 'aspect-[16/10] sm:aspect-[3/2]'
+                  : isPortrait
+                    ? 'aspect-[3/4]'
+                    : 'aspect-[4/3]';
+
+              const img1 = SanityImageService.optimize(block.image, { width: 1200 });
+              const img2 = SanityImageService.optimize(block.secondaryImage, { width: 1200 });
+
+              return (
+                <div class={`w-full ${isScreenFit ? 'flex-1 min-h-0 flex flex-col justify-center items-center my-auto overflow-hidden' : 'flex flex-col items-center justify-center'}`}>
+                  <div class={`grid grid-cols-2 gap-3.5 sm:gap-6 w-full ${stageWidthClass} ${isScreenFit ? 'h-full max-h-[500px]' : ''} justify-center items-center`}>
+                    <div class={`overflow-hidden ${dualAspect} ${rounded} ${shadow} w-full ${isScreenFit ? 'h-full max-h-[500px]' : ''} ${isDark ? 'border border-zinc-800' : 'border border-black/5'} bg-[#f5f5f7] dark:bg-zinc-900 group`}>
+                      <img src={img1} alt="Comparison 1" loading="lazy" class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105" />
+                    </div>
+                    <div class={`overflow-hidden ${dualAspect} ${rounded} ${shadow} w-full ${isScreenFit ? 'h-full max-h-[500px]' : ''} ${isDark ? 'border border-zinc-800' : 'border border-black/5'} bg-[#f5f5f7] dark:bg-zinc-900 group`}>
+                      <img src={img2} alt="Comparison 2" loading="lazy" class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105" />
+                    </div>
+                  </div>
+                  {block.caption && <p class={`mt-2 text-xs text-center shrink-0 ${subtitleClass}`}>{block.caption}</p>}
+                </div>
+              );
+            }
+
+            if (block.image) {
+              const dim = getSanityDim(block.image);
+              const isLandscape = (dim ? dim.ratio : 1.5) >= 1.2;
+              const isPortrait = (dim ? dim.ratio : 1.5) <= 0.85;
+
+              const singleAspect = !isAuto && aspectMap[userAspect]
+                ? aspectMap[userAspect]
+                : isLandscape
+                  ? 'aspect-[16/9]'
+                  : isPortrait
+                    ? 'aspect-[3/4]'
+                    : 'aspect-[4/3]';
+
+              const singleMaxWidth = isLandscape
+                ? 'max-w-5xl lg:max-w-6xl'
+                : isPortrait
+                  ? 'max-w-2xl lg:max-w-3xl'
+                  : 'max-w-4xl';
+
+              const imgUrl = SanityImageService.optimize(block.image, { width: 1600 });
+              return (
+                <div class={`w-full ${isScreenFit ? 'flex-1 min-h-0 flex flex-col justify-center items-center my-auto overflow-hidden' : 'flex flex-col items-center justify-center'}`}>
+                  <div class={`overflow-hidden ${singleAspect} ${rounded} ${shadow} ${isScreenFit ? 'h-full max-h-[520px]' : ''} ${singleMaxWidth} w-full mx-auto ${isDark ? 'border border-zinc-800' : 'border border-black/5'} bg-[#f5f5f7] dark:bg-zinc-900 group`}>
+                    <img src={imgUrl} alt={block.caption || 'Illustration'} loading="lazy" class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105" />
+                  </div>
+                  {block.caption && <p class={`mt-2 text-xs text-center shrink-0 ${subtitleClass}`}>{block.caption}</p>}
+                </div>
+              );
+            }
+          }
+
+          // --- 积木 C: 全能操作按钮组 ---
+          if (block._type === 'buttonGroupBlock' && block.buttons && block.buttons.length > 0) {
+            const alignClass = block.align === 'center' ? 'justify-center mx-auto' : block.align === 'right' ? 'justify-end ml-auto' : 'justify-start';
+            return (
+              <div class={`apple-rail-narrow flex flex-wrap gap-3 items-center shrink-0 ${alignClass}`}>
+                {block.buttons.map((btn) => {
+                  const isRfq = btn.actionType === 'rfqDrawer';
+                  const baseClass = `px-6 py-2.5 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 active:scale-95 inline-flex items-center gap-1.5 cursor-pointer shadow-sm`;
+                  const styleClass = btn.style === 'secondary'
+                    ? (isDark ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700' : 'bg-zinc-100 text-[#1d1d1f] hover:bg-zinc-200')
+                    : btn.style === 'outline'
+                      ? (isDark ? 'border border-zinc-700 text-zinc-200 hover:border-zinc-400' : 'border border-black/15 text-[#1d1d1f] hover:border-black')
+                      : btn.style === 'link'
+                        ? 'p-0 text-xs sm:text-sm font-medium hover:underline text-current shadow-none'
+                        : (isDark ? 'bg-white text-zinc-900 hover:bg-zinc-200' : 'bg-[#1d1d1f] text-white hover:bg-black');
+
+                  if (isRfq) {
+                    return (
+                      <button
+                        type="button"
+                        data-action="rfq-drawer"
+                        data-sku={btn.sku || ''}
+                        class={`${baseClass} ${styleClass} js-custom-rfq-trigger`}
+                      >
+                        <span>{btn.label}</span>
+                        {btn.style === 'link' && <span>→</span>}
+                      </button>
+                    );
+                  }
+                  return (
+                    <a href={btn.url || '#inquiry'} class={`${baseClass} ${styleClass}`}>
+                      <span>{btn.label}</span>
+                      {btn.style === 'link' && <span>›</span>}
+                    </a>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          // --- 积木 D: 核心数据指标流 (与上方图片舞台严格保持同宽，左边线与右边线绝对齐平) ---
+          if (block._type === 'metricGridBlock' && block.metrics && block.metrics.length > 0) {
+            const cols = block.columns === 2 ? 'grid-cols-1 sm:grid-cols-2' : block.columns === 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3';
+            return (
+              <div class={`grid ${cols} gap-3 sm:gap-6 w-full ${stageWidthClass} shrink-0 ${isScreenFit ? 'pt-2 lg:pt-3 border-t border-black/5 dark:border-zinc-800' : 'py-6 border-y border-black/5 dark:border-zinc-800'}`}>
+                {block.metrics.map((m) => (
+                  <div class="flex flex-col text-center sm:text-left">
+                    <span class="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight font-mono text-[#1d1d1f] dark:text-white mb-0.5">{m.value}</span>
+                    <span class="text-[10px] sm:text-xs font-mono uppercase tracking-wider font-semibold text-[#86868b] mb-0.5">{m.label}</span>
+                    {m.desc && <span class={`text-xs leading-relaxed ${isScreenFit ? 'line-clamp-1' : ''} ${subtitleClass}`}>{m.desc}</span>}
+                  </div>
+                ))}
+              </div>
+            );
+          }
+
+          // --- 积木 E: Bento 苹果风卡片矩阵 ---
+          if (block._type === 'bentoCardBlock' && block.cards && block.cards.length > 0) {
+            const cols = block.columns === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3';
+            return (
+              <div class={`grid grid-cols-1 ${cols} gap-6`}>
+                {block.cards.map((card) => {
+                  const spanClass = card.span === 'span-2' ? 'md:col-span-2' : 'col-span-1';
+                  const cardImg = card.image ? SanityImageService.optimize(card.image, { width: 800 }) : null;
+                  return (
+                    <div class={`p-8 rounded-2xl border transition-all duration-300 hover:translate-y-[-2px] flex flex-col justify-between ${cardBgClass} ${spanClass}`}>
+                      <div>
+                        {card.tag && (
+                          <span class={`inline-block text-[11px] font-mono font-semibold px-2.5 py-1 rounded-md mb-5 ${isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200/80 text-zinc-700'}`}>
+                            {card.tag}
+                          </span>
+                        )}
+                        <h3 class="text-xl sm:text-2xl font-semibold mb-3 tracking-tight">{card.title}</h3>
+                        {card.desc && <p class={`text-sm leading-relaxed ${subtitleClass}`}>{card.desc}</p>}
+                      </div>
+                      {cardImg && (
+                        <div class="mt-6 overflow-hidden rounded-xl aspect-[16/10] border border-zinc-200/40 dark:border-zinc-800">
+                          <img src={cardImg} alt={card.title} loading="lazy" class="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          // --- 积木 F: 工坊引言与品牌评语 ---
+          if (block._type === 'quoteBlock') {
+            const avatarUrl = block.avatar ? SanityImageService.optimize(block.avatar, { width: 120 }) : null;
+            return (
+              <div class={`p-8 sm:p-12 rounded-3xl border my-4 max-w-4xl mx-auto ${cardBgClass}`}>
+                <div class="text-4xl text-zinc-400 font-serif leading-none mb-4">“</div>
+                <blockquote class="text-xl sm:text-2xl font-medium leading-relaxed mb-6 tracking-tight">
+                  {block.quote}
+                </blockquote>
+                <div class="flex items-center gap-4">
+                  {avatarUrl && <img src={avatarUrl} alt={block.author || 'Avatar'} class="w-12 h-12 rounded-full object-cover border border-zinc-300 dark:border-zinc-700" />}
+                  <div>
+                    {block.author && <div class="font-semibold text-sm">{block.author}</div>}
+                    {block.company && <div class={`text-xs ${subtitleClass}`}>{block.company}</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // --- 积木 G: 装饰分隔与留白 ---
+          if (block._type === 'dividerBlock') {
+            const hClass = block.height === 'small' ? 'h-6' : block.height === 'large' ? 'h-24' : 'h-12';
+            if (block.style === 'spacer') return <div class={hClass} />;
+            if (block.style === 'glow') return <div class={`w-full h-px my-4 bg-gradient-to-r from-transparent via-zinc-400 dark:via-zinc-600 to-transparent`} />;
+            return <hr class={`w-full border-t my-4 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`} />;
+          }
+
+          return null;
+        })}
+      </div>
+    )}
+
+    {/* ---------------- 模式 2: 双列分栏模式 (Split Grid 5:5 / 6:4 / 4:6) ---------------- */}
+    {layoutMode.startsWith('split-') && (
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-center h-full my-auto">
+        {/* 左侧列 */}
+        <div class={layoutMode === 'split-60-40' ? 'lg:col-span-7 flex flex-col gap-6' : layoutMode === 'split-40-60' ? 'lg:col-span-5 flex flex-col gap-6' : 'lg:col-span-6 flex flex-col gap-6'}>
+          {blocks.slice(0, Math.ceil(blocks.length / 2)).map((block) => (
+            <Fragment>
+              {block._type === 'headingBlock' && (
+                <div class="flex flex-col">
+                  {block.badge && (
+                    <span class={`inline-flex items-center px-3.5 py-1 text-xs font-semibold uppercase tracking-wider rounded-full border mb-4 backdrop-blur-md self-start ${kickerClass}`}>
+                      {block.badge}
+                    </span>
+                  )}
+                  <h2 class="text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.15] mb-4">
+                    {block.headline}
+                  </h2>
+                  {block.subtitle && <p class={`text-base sm:text-lg leading-relaxed ${subtitleClass}`}>{block.subtitle}</p>}
+                </div>
+              )}
+              {block._type === 'mediaBlock' && block.image && (
+                <div class={`overflow-hidden rounded-2xl shadow-xl ${aspectMap[block.aspectRatio || '4/3']} ${mediaMaxHeightClass} ${isDark ? 'border border-zinc-800' : 'border border-zinc-200/80'}`}>
+                  <img src={SanityImageService.optimize(block.image, { width: 1200 })} alt={block.caption || 'Media'} loading="lazy" class="w-full h-full object-cover" />
+                </div>
+              )}
+              {block._type === 'buttonGroupBlock' && block.buttons && (
+                <div class="flex flex-wrap gap-4 items-center">
+                  {block.buttons.map((btn) => (
+                    <a href={btn.url || '#inquiry'} class={`px-6 py-3 text-sm font-medium rounded-full shadow-sm ${btn.style === 'secondary' ? (isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-zinc-200 text-zinc-900') : (isDark ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white')}`}>
+                      {btn.label}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </Fragment>
+          ))}
+        </div>
+
+        {/* 右侧列 */}
+        <div class={layoutMode === 'split-60-40' ? 'lg:col-span-5 flex flex-col gap-6' : layoutMode === 'split-40-60' ? 'lg:col-span-7 flex flex-col gap-6' : 'lg:col-span-6 flex flex-col gap-6'}>
+          {blocks.slice(Math.ceil(blocks.length / 2)).map((block) => (
+            <Fragment>
+              {block._type === 'headingBlock' && (
+                <div class="flex flex-col">
+                  {block.badge && (
+                    <span class={`inline-flex items-center px-3.5 py-1 text-xs font-semibold uppercase tracking-wider rounded-full border mb-4 backdrop-blur-md self-start ${kickerClass}`}>
+                      {block.badge}
+                    </span>
+                  )}
+                  <h2 class="text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.15] mb-4">
+                    {block.headline}
+                  </h2>
+                  {block.subtitle && <p class={`text-base sm:text-lg leading-relaxed ${subtitleClass}`}>{block.subtitle}</p>}
+                </div>
+              )}
+              {block._type === 'mediaBlock' && block.image && (
+                <div class={`overflow-hidden rounded-2xl shadow-xl ${aspectMap[block.aspectRatio || '4/3']} ${mediaMaxHeightClass} ${isDark ? 'border border-zinc-800' : 'border border-zinc-200/80'}`}>
+                  <img src={SanityImageService.optimize(block.image, { width: 1200 })} alt={block.caption || 'Media'} loading="lazy" class="w-full h-full object-cover" />
+                </div>
+              )}
+              {block._type === 'metricGridBlock' && block.metrics && (
+                <div class="grid grid-cols-2 gap-6 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                  {block.metrics.map((m) => (
+                    <div>
+                      <div class="text-3xl sm:text-4xl font-semibold">{m.value}</div>
+                      <div class={`text-xs uppercase tracking-wider font-mono ${titleMutedClass}`}>{m.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {block._type === 'buttonGroupBlock' && block.buttons && (
+                <div class="flex flex-wrap gap-4 items-center">
+                  {block.buttons.map((btn) => (
+                    <a href={btn.url || '#inquiry'} class={`px-6 py-3 text-sm font-medium rounded-full shadow-sm ${btn.style === 'secondary' ? (isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-zinc-200 text-zinc-900') : (isDark ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white')}`}>
+                      {btn.label}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+</section>
+
+<script>
+  // 一键呼出询盘抽屉客户端事件触发器
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.js-custom-rfq-trigger').forEach((button) => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        const sku = (button as HTMLElement).dataset.sku;
+        window.dispatchEvent(
+          new CustomEvent('open-quote-drawer', {
+            detail: { sku: sku || null },
+          })
+        );
+      });
+    });
+  });
+</script>

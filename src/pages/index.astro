@@ -6,6 +6,7 @@ import SockSpecMatrix from '@components/hosiery/SockSpecMatrix.astro';
 import SockCollections from '@components/hosiery/SockCollections.astro';
 import ManufacturingCapabilities from '@components/hosiery/ManufacturingCapabilities.astro';
 import SwatchInquiry from '@components/hosiery/SwatchInquiry.astro';
+import CustomSection from '@components/hosiery/CustomSection.astro';
 import { client } from '@utils/sanity-client';
 import { SECTIONS, IMAGE } from '@data/blocks';
 
@@ -26,30 +27,31 @@ try {
 }
 
 const sections = homeData?.sections || [];
-const heroSection = sections.find((s: any) => s._type === 'hosieryHeroSection');
-const specSection = sections.find((s: any) => s._type === 'hosierySpecSection');
-const collSection = sections.find((s: any) => s._type === 'hosieryCollectionSection');
-const mfgSection = sections.find((s: any) => s._type === 'hosieryManufacturingSection');
-const inqSection = sections.find((s: any) => s._type === 'hosieryInquirySection');
 
-const metaTitle = homeData?.metaTitle || "Nordic Knit Atelier | 200-Needle Luxury Women's Hosiery B2B Wholesale";
-const metaDescription = homeData?.metaDescription || "Specialized manufacturer of 200-needle luxury women's hosiery, mulberry silk socks, cashmere ribbed crew socks, and seamless tights. Low MOQ, rapid 48h swatch dispatch, and full private label OEM/ODM customization.";
+const componentMap: Record<string, any> = {
+  heroSection: SockHero,
+  featureMatrixSection: SockSpecMatrix,
+  productShowcaseSection: SockCollections,
+  manufacturingSection: ManufacturingCapabilities,
+  inquirySection: SwatchInquiry,
+  customSection: CustomSection,
+  // Backward compatibility
+  hosieryHeroSection: SockHero,
+  hosierySpecSection: SockSpecMatrix,
+  hosieryCollectionSection: SockCollections,
+  hosieryManufacturingSection: ManufacturingCapabilities,
+  hosieryInquirySection: SwatchInquiry,
+};
+
+const heroSection = sections.find((s: any) => s._type === 'heroSection' || s._type === 'hosieryHeroSection');
+const metaTitle = homeData?.metaTitle || "Gwenvenni Luxury Atelier | 200-Needle Luxury B2B Wholesale";
+const metaDescription = homeData?.metaDescription || "Specialized manufacturer of 200-needle luxury apparel, fine silks, cashmere, and seamless essentials. Low MOQ, rapid 48h swatch dispatch, and full OEM/ODM customization.";
 const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || "/images/hero-light.jpg";
 ---
 
 <Layout title={metaTitle} description={metaDescription} image={ogImage} addTitleSuffix={false}>
-  <!-- Hero Section (Dynamic from Sanity Studio) -->
-  <SockHero {...heroSection} />
-
-  <!-- Spec Matrix Section (Dynamic from Sanity Studio) -->
-  <SockSpecMatrix {...specSection} />
-
-  <!-- Ready-to-Order Line Sheets & Capsule Collection Grid (Dynamic from Sanity Studio) -->
-  <SockCollections {...collSection} />
-
-  <!-- Vertical Knitting Manufacturing & OEM Capabilities (Dynamic from Sanity Studio) -->
-  <ManufacturingCapabilities {...mfgSection} />
-
-  <!-- B2B Swatch Request & RFQ Section (Dynamic from Sanity Studio) -->
-  <SwatchInquiry {...inqSection} />
+  {sections.map((section: any) => {
+    const Component = componentMap[section._type];
+    return Component ? <Component {...section} /> : null;
+  })}
 </Layout>

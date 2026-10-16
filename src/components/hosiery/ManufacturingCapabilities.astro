@@ -1,6 +1,6 @@
 ---
 // src/components/hosiery/ManufacturingCapabilities.astro
-import { fetchRfqSettings } from '@data/rfqSettings';
+import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 
 interface Props {
   badge?: string;
@@ -44,11 +44,13 @@ const rfqSettings = await fetchRfqSettings();
 const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
 
 const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
-const showActionButton = propShowAction !== undefined
-  ? Boolean(propShowAction && actionButtonText?.trim())
-  : (rfqSettings?.showManufacturingActionButton !== undefined
-    ? Boolean(rfqSettings.showManufacturingActionButton && actionButtonText?.trim())
-    : (isSwatchAction ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(actionButtonText?.trim())) : Boolean(actionButtonText?.trim())));
+const showActionButton = RfqSettingsService.isButtonVisible({
+  propOverride: propShowAction,
+  settingOverride: rfqSettings?.showManufacturingActionButton,
+  isSwatchAction,
+  globalSwatchSetting: rfqSettings?.showSwatchKitButton,
+  buttonText: actionButtonText,
+});
 // Helper to extract a prominent stat or badge from capability title
 function extractStat(title: string, index: number) {
   const match = (title || "").match(/^([0-9]+[a-zA-Z+]*)/);
@@ -82,7 +84,7 @@ const footers = [
     </div>
 
     <!-- Feature Cards: Horizontal Scroll on Mobile, Grid on Desktop -->
-    <div class="flex overflow-x-auto snap-x snap-mandatory gap-3.5 pb-3 pt-1 no-scrollbar md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible md:p-0" style="gap: var(--grid-gap);">
+    <div class="flex overflow-x-auto snap-x snap-mandatory gap-3.5 sm:gap-4 lg:gap-5 pb-3 pt-1 no-scrollbar md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible md:p-0">
       {capabilities.map((cap: any, idx: number) => (
         <div class="shrink-0 w-[78vw] max-w-[280px] snap-start md:w-full md:max-w-none md:shrink md:snap-align-none p-4.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-[#f5f5f7] border border-black/5 hover:border-black/15 hover:shadow-md transition-all duration-300 flex flex-col justify-between h-full group">
           <div>

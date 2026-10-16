@@ -18,7 +18,7 @@ export default defineType({
       title: 'Copyright Text (版权所有文案)',
       type: 'string',
       group: 'content',
-      initialValue: '© 2026 Nordic Knit Atelier Hosiery Co., Ltd. All rights reserved.',
+      initialValue: '© 2026 Gwenvenni Luxury Atelier Co., Ltd. All rights reserved.',
     }),
     defineField({
       name: 'description',
@@ -27,7 +27,7 @@ export default defineType({
       rows: 2,
       group: 'content',
       initialValue:
-        "Specialized manufacturer of 200-needle luxury women's hosiery, silk crew socks, and seamless second-skin tights for global fashion labels.",
+        "Specialized manufacturer of luxury knitwear, fine silks, and precision seamless essentials for global fashion labels.",
     }),
     defineField({
       name: 'statusBadge',
@@ -39,7 +39,7 @@ export default defineType({
     defineField({
       name: 'columns',
       title: 'Footer Columns (页脚分类导航列)',
-      description: 'Apple 规范：请使用 100% 纯英文单语种排版（如 Hosiery Lines），请勿添加中文括号注脚',
+      description: 'Apple 规范：请使用 100% 纯英文单语种排版（如 Product Lines），请勿添加中文括号注脚',
       type: 'array',
       group: 'content',
       of: [
@@ -48,7 +48,7 @@ export default defineType({
           fields: [
             {
               name: 'title',
-              title: 'Column Title (分类标题，如 Hosiery Lines)',
+              title: 'Column Title (分类标题，如 Product Lines)',
               type: 'string',
             },
             {

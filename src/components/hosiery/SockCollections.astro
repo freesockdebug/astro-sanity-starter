@@ -49,7 +49,8 @@ const collections = [
 
 import { fetchAllProducts } from '@data/products';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
-import { fetchRfqSettings } from '@data/rfqSettings';
+import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
+import { SanityImageService } from '@utils/image';
 
 interface Props {
   badge?: string;
@@ -84,9 +85,9 @@ const rfqSettings = await fetchRfqSettings();
 const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
 const resolvedCardQuoteText = cardQuoteButtonText || rfqSettings?.cardQuoteBtnText || "Quote";
 
-const rawProducts = propProducts && propProducts.length > 0 ? propProducts : await fetchAllProducts();
+// Only display products added to this section in Sanity Studio; unadded products are not displayed
+const rawProducts = propProducts !== undefined ? (propProducts || []) : await fetchAllProducts();
 const hasSanityProducts = rawProducts && rawProducts.length > 0;
-// User requirement: "可以不用限制只显示3个产品了" -> Display all available products
 const sanityProducts = hasSanityProducts ? rawProducts : [];
 
 function resolveTitle(item: any) {
@@ -104,7 +105,7 @@ const activeCollections = hasSanityProducts
       title: resolveTitle(p),
       fullTitle: p.title,
       tagline: p.tagline,
-      image: p.mainImage || (p.gallery && p.gallery[0]?.src) || "/images/hero-light.jpg",
+      image: SanityImageService.thumbnail(p.mainImage || (p.gallery && p.gallery[0]?.src) || "/images/hero-light.jpg", 700),
       composition: (p.specifications && p.specifications[0]?.value) || "Luxury Knit Blend",
       gauge: (p.specifications && p.specifications[1]?.value) || "200-Needle Fine Knit",
       moq: p.moq || "200 Pairs",
@@ -117,26 +118,28 @@ const activeCollections = hasSanityProducts
     }));
 
 const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
-const showHeaderActionButton = propShowAction !== undefined
-  ? Boolean(propShowAction && actionButtonText?.trim())
-  : (rfqSettings?.showCollectionsHeaderButton !== undefined
-      ? Boolean(rfqSettings.showCollectionsHeaderButton && actionButtonText?.trim())
-      : (isSwatchAction ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(actionButtonText?.trim())) : Boolean(actionButtonText?.trim())));
+const showHeaderActionButton = RfqSettingsService.isButtonVisible({
+  propOverride: propShowAction,
+  settingOverride: rfqSettings?.showCollectionsHeaderButton,
+  isSwatchAction,
+  globalSwatchSetting: rfqSettings?.showSwatchKitButton,
+  buttonText: actionButtonText,
+});
 
 const showCardQuoteButton = propShowCardQuote !== undefined
   ? Boolean(propShowCardQuote)
   : (rfqSettings?.showCardQuoteButton ?? true);
 ---
 
-<section id="collections" class="bg-white text-[#1d1d1f] border-t border-black/5 py-8 sm:py-10 lg:py-12">
-  <div class="apple-rail-bento w-full">
-    <!-- Section Header (Centered) -->
-    <div class="apple-rail-narrow text-center mb-4 sm:mb-5 lg:mb-6 space-y-1 sm:space-y-1.5">
+<section id="collections" class="bg-white text-[#1d1d1f] border-t border-black/5 py-6 sm:py-8 lg:py-4 lg:h-[calc(100svh-44px)] lg:max-h-[860px] lg:min-h-[560px] flex flex-col justify-between overflow-hidden">
+  <div class="apple-rail-bento w-full flex-1 flex flex-col justify-between min-h-0">
+    <!-- Section Header (Centered & Compact) -->
+    <div class="apple-rail-narrow text-center mb-2 sm:mb-3 lg:mb-3 space-y-0.5 sm:space-y-1 shrink-0">
       <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b] block">{badge}</span>
-      <h2 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
+      <h2 class="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-[#1d1d1f]">
         {title}
       </h2>
-      <p class="text-[#86868b] text-xs sm:text-sm lg:text-base max-w-xl mx-auto font-normal leading-relaxed">
+      <p class="text-xs sm:text-[13px] text-[#86868b] max-w-xl mx-auto font-normal leading-relaxed line-clamp-1 sm:line-clamp-2">
         {subtitle}
       </p>
       <div class="pt-1 flex items-center justify-center gap-3">
@@ -144,19 +147,19 @@ const showCardQuoteButton = propShowCardQuote !== undefined
           <a
             href={actionButtonUrl}
             data-swatch-sku={swatchSku}
-            class="px-5 py-2 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm inline-flex items-center gap-1.5"
+            class="px-4 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm inline-flex items-center gap-1.5"
           >
             <span>{actionButtonText}</span>
             <span aria-hidden="true">›</span>
           </a>
         )}
         <!-- Desktop Carousel Navigation Buttons -->
-        <div class="hidden sm:inline-flex items-center gap-1.5">
+        <div id="collections-arrows-container" class="hidden sm:inline-flex items-center gap-1.5">
           <button
             id="collections-prev-btn"
             type="button"
             aria-label="Previous products"
-            class="w-8 h-8 rounded-full bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] flex items-center justify-center transition-all border border-black/5 cursor-pointer shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed"
+            class="w-7 h-7 rounded-full bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] flex items-center justify-center transition-all border border-black/5 cursor-pointer shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7" />
@@ -166,7 +169,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
             id="collections-next-btn"
             type="button"
             aria-label="Next products"
-            class="w-8 h-8 rounded-full bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] flex items-center justify-center transition-all border border-black/5 cursor-pointer shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed"
+            class="w-7 h-7 rounded-full bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] flex items-center justify-center transition-all border border-black/5 cursor-pointer shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5l7 7-7 7" />
@@ -176,26 +179,29 @@ const showCardQuoteButton = propShowCardQuote !== undefined
       </div>
     </div>
 
-    <!-- Collection Shelf: Horizontal Scroll on Both Mobile and Desktop -->
+    <!-- Collection Shelf: Flex-1 Vertically Auto-Fitted Shelf (Never Overshoots Screen) -->
     <div
       id="collections-shelf"
-      class="flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-5 pb-5 pt-1 no-scrollbar scroll-smooth"
+      class="flex-1 min-h-0 flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-5 pb-2 pt-1 no-scrollbar scroll-smooth items-stretch lg:items-center"
     >
       {activeCollections.map((item: any) => (
-        <div class="group shrink-0 w-[82vw] max-w-[320px] sm:w-[320px] lg:w-[340px] snap-start rounded-2xl sm:rounded-3xl bg-[#f5f5f7] border border-black/5 hover:border-black/15 hover:shadow-lg transition-all duration-300 p-5 flex flex-col justify-between">
-          <div class="space-y-3">
-            <!-- Card Header: Title & Specs Subtitle -->
-            <div>
+        <div class="group shrink-0 w-[78vw] max-w-[300px] sm:w-[310px] lg:w-[320px] xl:w-[340px] h-auto lg:h-full lg:max-h-[490px] snap-start rounded-2xl sm:rounded-3xl bg-[#f5f5f7] border border-black/5 hover:border-black/15 hover:shadow-xl transition-all duration-300 p-4 sm:p-5 flex flex-col justify-between">
+          <div class="flex-1 min-h-0 flex flex-col">
+            <!-- Card Header: Title & Specs Subtitle (Standardized height to align across all cards) -->
+            <div class="shrink-0 h-[44px] flex flex-col justify-center">
               <a href={`/products/${item.id}`} class="block">
-                <h3 class="text-lg font-semibold text-[#1d1d1f] tracking-tight group-hover:text-black transition-colors">
+                <h3 class="text-base sm:text-lg font-semibold text-[#1d1d1f] tracking-tight group-hover:text-black transition-colors line-clamp-1 leading-snug">
                   {item.title}
                 </h3>
               </a>
               <p class="text-xs text-[#86868b] mt-0.5 line-clamp-1">{item.composition}</p>
             </div>
 
-            <!-- Card Image Box (Refined 4:3 Proportion) -->
-            <a href={`/products/${item.id}`} class="block relative aspect-[4/3] rounded-xl overflow-hidden bg-white shadow-inner">
+            <!-- Card Image Box: Strict 1:1 square on mobile to prevent height variance; flex-1 auto-fit on desktop -->
+            <a
+              href={`/products/${item.id}`}
+              class="block relative w-full aspect-square lg:aspect-auto lg:flex-1 lg:min-h-0 rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-inner my-2.5 group-hover:shadow-md transition-shadow shrink-0 lg:shrink"
+            >
               <img
                 src={item.image}
                 alt={item.title}
@@ -204,27 +210,34 @@ const showCardQuoteButton = propShowCardQuote !== undefined
               />
             </a>
 
-            <!-- Color Palette Dots with Expanded Mobile Tap Target -->
-            <div class="flex items-center justify-between pt-0.5">
-              <div class="flex items-center gap-0.5 -ml-1">
+            <!-- Color Palette Dots & Gauge / MOQ Spec -->
+            <div class="shrink-0 flex items-center justify-between pt-0.5">
+              <div class="flex items-center gap-1 -ml-1">
                 {item.colors.map((colorHex: string) => (
                   <span
-                    class="w-6 h-6 flex items-center justify-center rounded-full hover:scale-110 active:scale-95 transition-transform cursor-pointer select-none"
+                    class="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full hover:scale-110 active:scale-95 transition-transform cursor-pointer select-none"
                     title={`Color: ${colorHex}`}
                   >
                     <span
-                      class="w-3.5 h-3.5 rounded-full border border-black/15 shadow-2xs block"
+                      class="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full border border-black/15 shadow-2xs block"
                       style={`background-color: ${colorHex}`}
                     ></span>
                   </span>
                 ))}
               </div>
-              <span class="text-[11px] font-mono text-[#86868b]">MOQ {item.moq}</span>
+              <div class="flex items-center gap-1.5">
+                {item.gauge && (
+                  <span class="hidden sm:inline-block text-[10px] font-mono text-[#86868b] bg-white px-2 py-0.5 rounded-md border border-black/5">
+                    {item.gauge}
+                  </span>
+                )}
+                <span class="text-[10px] sm:text-[11px] font-mono font-medium text-[#1d1d1f]">MOQ {item.moq}</span>
+              </div>
             </div>
           </div>
 
           <!-- Bottom Action: Refined Apple Clean Pill -->
-          <div class="mt-4 pt-3 border-t border-black/5 flex items-center justify-between">
+          <div class="shrink-0 mt-3 pt-2.5 border-t border-black/5 flex items-center justify-between">
             <a
               href={`/products/${item.id}`}
               class="text-xs font-semibold text-[#1d1d1f] hover:underline inline-flex items-center gap-1"
@@ -235,7 +248,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
             {showCardQuoteButton && (
               <button
                 type="button"
-                class="btn-card-add-quote px-3 py-1 rounded-full text-[11px] font-medium bg-white hover:bg-[#1d1d1f] hover:text-white text-[#1d1d1f] border border-black/10 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                class="btn-card-add-quote px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] font-medium bg-white hover:bg-[#1d1d1f] hover:text-white text-[#1d1d1f] border border-black/10 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
                 data-id={item.id}
                 data-title={item.title}
                 data-image={item.image}
@@ -252,7 +265,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
     </div>
 
     <!-- Swipe / Scroll Visual Hint -->
-    <div class="flex items-center justify-center gap-1.5 pt-2 text-[11px] font-medium text-[#86868b]">
+    <div id="collections-scroll-hint" class="shrink-0 flex items-center justify-center gap-1.5 pt-1 text-[11px] font-medium text-[#86868b]">
       <span class="sm:hidden">Swipe to explore all silhouettes</span>
       <span class="hidden sm:inline">Scroll horizontally or use arrows to explore all silhouettes</span>
       <span aria-hidden="true">→</span>
@@ -263,8 +276,10 @@ const showCardQuoteButton = propShowCardQuote !== undefined
 <script>
   import { addToQuote } from '../../stores/quoteCart';
 
-  // Desktop horizontal shelf scroll arrows
+  // Desktop horizontal shelf scroll arrows & dynamic centering
   const shelf = document.getElementById('collections-shelf');
+  const arrowsContainer = document.getElementById('collections-arrows-container');
+  const scrollHint = document.getElementById('collections-scroll-hint');
   const prevBtn = document.getElementById('collections-prev-btn') as HTMLButtonElement | null;
   const nextBtn = document.getElementById('collections-next-btn') as HTMLButtonElement | null;
 
@@ -275,16 +290,57 @@ const showCardQuoteButton = propShowCardQuote !== undefined
     nextBtn.disabled = scrollLeft + clientWidth >= scrollWidth - 10;
   }
 
+  function checkShelfOverflow() {
+    if (!shelf) return;
+    const children = Array.from(shelf.children) as HTMLElement[];
+    if (children.length === 0) return;
+
+    let totalWidth = 0;
+    children.forEach((child) => {
+      totalWidth += child.offsetWidth;
+    });
+
+    const gap = parseFloat(window.getComputedStyle(shelf).gap || '24') || 24;
+    totalWidth += (children.length - 1) * gap;
+
+    // Compare total products width against container client width
+    const isOverflowing = totalWidth > shelf.clientWidth + 2;
+
+    if (isOverflowing) {
+      shelf.classList.remove('justify-center');
+      shelf.classList.add('justify-start');
+      if (arrowsContainer) arrowsContainer.style.display = '';
+      if (scrollHint) scrollHint.style.display = '';
+      updateArrowStates();
+    } else {
+      shelf.classList.remove('justify-start');
+      shelf.classList.add('justify-center');
+      if (arrowsContainer) arrowsContainer.style.display = 'none';
+      if (scrollHint) scrollHint.style.display = 'none';
+    }
+  }
+
+  // Initial check & reactive resize observer
+  checkShelfOverflow();
+
+  if (typeof ResizeObserver !== 'undefined' && shelf) {
+    const ro = new ResizeObserver(() => {
+      checkShelfOverflow();
+    });
+    ro.observe(shelf);
+  } else {
+    window.addEventListener('resize', checkShelfOverflow, { passive: true });
+  }
+
+  shelf?.addEventListener('scroll', updateArrowStates, { passive: true });
+
   prevBtn?.addEventListener('click', () => {
-    shelf?.scrollBy({ left: -360, behavior: 'smooth' });
+    shelf?.scrollBy({ left: -400, behavior: 'smooth' });
   });
 
   nextBtn?.addEventListener('click', () => {
-    shelf?.scrollBy({ left: 360, behavior: 'smooth' });
+    shelf?.scrollBy({ left: 400, behavior: 'smooth' });
   });
-
-  shelf?.addEventListener('scroll', updateArrowStates, { passive: true });
-  updateArrowStates();
 
   document.querySelectorAll('.btn-card-add-quote').forEach((btn) => {
     btn.addEventListener('click', (e) => {

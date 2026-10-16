@@ -1,8 +1,8 @@
 import {defineField, defineType} from 'sanity'
 import {EnvelopeIcon} from '@sanity/icons/Envelope'
 export default defineType({
-  name: 'hosieryInquirySection',
-  title: 'B2B Swatch & RFQ Section (样卡申领与询盘区)',
+  name: 'inquirySection',
+  title: '📩 商务咨询与行动转化 (Inquiry & Conversion)',
   type: 'object',
   icon: EnvelopeIcon,
   fieldsets: [
@@ -13,6 +13,12 @@ export default defineType({
     },
   ],
   fields: [
+    defineField({
+      name: 'adminLabel',
+      title: 'Admin Label (版块管理别名 / 备注)',
+      description: '【推荐后台备注】在页面版块列表中直观显示此名字（如：首页底部样卡申领、打样合作等）',
+      type: 'string',
+    }),
     defineField({
       name: 'badge',
       title: 'Badge (上标标签)',
@@ -92,13 +98,16 @@ export default defineType({
   ],
   preview: {
     select: {
-      title: 'headline',
+      headline: 'headline',
+      adminLabel: 'adminLabel',
+      badge: 'badge',
       btn: 'buttonText',
     },
-    prepare({title, btn}) {
+    prepare({headline, adminLabel, badge, btn}) {
+      const name = adminLabel ? adminLabel : (headline || '商务咨询与样卡');
       return {
-        title: title || 'B2B Swatch & RFQ',
-        subtitle: `🔘 提交按钮: ${btn || 'Request Swatch Kit'}`,
+        title: `📩 [商务咨询转化] ${name}`,
+        subtitle: `类型: inquirySection · 标签: ${badge || 'Sample Room'} · 按钮: ${btn || 'Request Swatch Kit'}`,
       }
     },
   },

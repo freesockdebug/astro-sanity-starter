@@ -124,22 +124,22 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                       type="button"
                       data-thumb-index={idx}
                       aria-label={`View image ${idx + 1}`}
-                      class={`carousel-thumb shrink-0 w-14 h-14 sm:w-15 sm:h-15 lg:w-[68px] lg:h-[68px] xl:w-[74px] xl:h-[74px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
+                      class={`carousel-thumb shrink-0 w-14 h-14 sm:w-15 sm:h-15 lg:w-[68px] lg:h-[68px] xl:w-[74px] xl:h-[74px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer bg-[#fafafa] flex items-center justify-center ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
                     >
-                      <img src={img.src} alt={img.alt} class="w-full h-full object-cover" />
+                      <img src={img.src} alt={img.alt} class="w-full h-full object-contain p-0.5" />
                     </button>
                   ))}
                 </div>
 
-                <!-- Main Viewport Box with Controls (Fills full height on desktop) -->
-                <div class="order-1 lg:order-2 relative w-full flex-1 min-w-0 aspect-[4/3] lg:aspect-auto h-[360px] sm:h-[440px] lg:h-full rounded-2xl overflow-hidden bg-stone-50 border border-zinc-200/80 shadow-xs group">
+                <!-- Main Viewport Box with Controls (Fills full height on desktop, 100% full image with object-contain) -->
+                <div class="order-1 lg:order-2 relative w-full flex-1 min-w-0 aspect-[4/3] lg:aspect-auto h-[360px] sm:h-[440px] lg:h-full rounded-2xl overflow-hidden bg-[#fafafa] border border-zinc-200/80 shadow-xs group flex items-center justify-center">
                   <!-- Carousel Images -->
                   <div id="carousel-track" class="w-full h-full relative">
                     {currentProduct.gallery.map((img: any, idx: number) => (
                       <img
                         src={img.src}
                         alt={img.alt}
-                        class={`carousel-slide absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-in-out ${idx === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
+                        class={`carousel-slide absolute inset-0 m-auto w-full h-full max-h-full max-w-full object-contain p-2 sm:p-4 transition-opacity duration-500 ease-in-out ${idx === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
                         data-index={idx}
                         loading={idx === 0 ? 'eager' : 'lazy'}
                       />

@@ -6,11 +6,12 @@ import header from './header'
 import page from './page'
 import siteConfig from './siteConfig'
 import product from './product'
-import hosieryHeroSection from './hosieryHeroSection'
-import hosierySpecSection from './hosierySpecSection'
-import hosieryCollectionSection from './hosieryCollectionSection'
-import hosieryManufacturingSection from './hosieryManufacturingSection'
-import hosieryInquirySection from './hosieryInquirySection'
+import heroSection from './heroSection'
+import featureMatrixSection from './featureMatrixSection'
+import productShowcaseSection from './productShowcaseSection'
+import manufacturingSection from './manufacturingSection'
+import inquirySection from './inquirySection'
+import customSection from './customSection'
 import inquiry from './inquiry'
 import rfqSettings from './rfqSettings'
 
@@ -18,11 +19,12 @@ export const schemaTypes = [
   product,
   inquiry,
   rfqSettings,
-  hosieryHeroSection,
-  hosierySpecSection,
-  hosieryCollectionSection,
-  hosieryManufacturingSection,
-  hosieryInquirySection,
+  heroSection,
+  featureMatrixSection,
+  productShowcaseSection,
+  manufacturingSection,
+  inquirySection,
+  customSection,
   actionButton,
   actionLink,
   customImage,

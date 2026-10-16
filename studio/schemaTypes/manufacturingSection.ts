@@ -1,8 +1,8 @@
 import {defineField, defineType} from 'sanity'
 import {CogIcon} from '@sanity/icons/Cog'
 export default defineType({
-  name: 'hosieryManufacturingSection',
-  title: 'Manufacturing & OEM/ODM Capabilities (垂直制造与供应链实力)',
+  name: 'manufacturingSection',
+  title: '🏭 制造实力与工坊能力 (Manufacturing & Capabilities)',
   type: 'object',
   icon: CogIcon,
   fieldsets: [
@@ -13,6 +13,12 @@ export default defineType({
     },
   ],
   fields: [
+    defineField({
+      name: 'adminLabel',
+      title: 'Admin Label (版块管理别名 / 备注)',
+      description: '【推荐后台备注】在页面版块列表中直观显示此名字（如：工厂产能介绍、BSCI验厂等）',
+      type: 'string',
+    }),
     defineField({
       name: 'badge',
       title: 'Badge (上标标签)',
@@ -31,7 +37,7 @@ export default defineType({
       type: 'text',
       rows: 2,
       initialValue:
-        'From spinning fiber selection to finished packaging, our smart manufacturing line delivers bespoke hosiery solutions with rapid prototyping and global export compliance.',
+        'From spinning fiber selection to finished packaging, our smart manufacturing line delivers bespoke apparel solutions with rapid prototyping and global export compliance.',
     }),
     defineField({
       name: 'capabilities',
@@ -108,13 +114,16 @@ export default defineType({
   ],
   preview: {
     select: {
-      title: 'headline',
+      headline: 'headline',
+      adminLabel: 'adminLabel',
+      badge: 'badge',
       btn: 'actionButtonText',
     },
-    prepare({title, btn}) {
+    prepare({headline, adminLabel, badge, btn}) {
+      const name = adminLabel ? adminLabel : (headline || '制造实力基础设施');
       return {
-        title: title || 'Manufacturing Capabilities',
-        subtitle: `🔘 按钮: ${btn || 'Request Swatch Kit'}`,
+        title: `🏭 [制造实力] ${name}`,
+        subtitle: `类型: manufacturingSection · 标签: ${badge || 'OEM/ODM Capabilities'}`,
       }
     },
   },

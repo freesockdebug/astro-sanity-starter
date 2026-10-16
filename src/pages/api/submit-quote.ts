@@ -1,26 +1,217 @@
 import type { APIRoute } from 'astro';
 import { createClient } from '@sanity/client';
+import { SecurityService } from '@utils/security';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false; // Run dynamically as Cloudflare Worker endpoint
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  try {
-    const body = await request.json();
-    const { buyerInfo, items = [], turnstileToken, inquiryType = 'quote_cart' } = body;
+// RFC 5322 compliant practical email pattern
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+const ALLOWED_INQUIRY_TYPES = new Set(['quote_cart', 'quick_inquiry', 'sample_swatch', 'custom_inquiry']);
 
-    // 1. Basic validation
-    if (!buyerInfo || !buyerInfo.email || !buyerInfo.company) {
-      return new Response(
-        JSON.stringify({ error: 'Company name and work email are required.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
+interface ValidatedBuyerInfo {
+  company: string;
+  email: string;
+  name: string;
+  whatsapp: string;
+  destination: string;
+  message: string;
+}
+
+interface ValidatedItem {
+  id?: string;
+  title: string;
+  sku: string;
+  variant: string;
+  quantity: number;
+}
+
+interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  data?: {
+    buyerInfo: ValidatedBuyerInfo;
+    items: ValidatedItem[];
+    inquiryType: string;
+    turnstileToken: string;
+  };
+}
+
+/**
+ * Strict boundary validator for incoming RFQ payload
+ */
+function validateQuotePayload(body: any): ValidationResult {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { valid: false, error: 'Invalid request body format.' };
+  }
+
+  const { buyerInfo, items, turnstileToken, inquiryType = 'quote_cart' } = body;
+
+  if (!buyerInfo || typeof buyerInfo !== 'object' || Array.isArray(buyerInfo)) {
+    return { valid: false, error: 'Buyer information is required.' };
+  }
+
+  const company = typeof buyerInfo.company === 'string' ? buyerInfo.company.trim() : '';
+  const email = typeof buyerInfo.email === 'string' ? buyerInfo.email.trim() : '';
+  const name = typeof buyerInfo.name === 'string' ? buyerInfo.name.trim() : '';
+  const whatsapp = typeof buyerInfo.whatsapp === 'string' ? buyerInfo.whatsapp.trim() : '';
+  const destination = typeof buyerInfo.destination === 'string' ? buyerInfo.destination.trim() : '';
+  const message = typeof buyerInfo.message === 'string' ? buyerInfo.message.trim() : '';
+
+  if (!company) {
+    return { valid: false, error: 'Company name is required.' };
+  }
+  if (company.length > 120) {
+    return { valid: false, error: 'Company name cannot exceed 120 characters.' };
+  }
+
+  if (!email) {
+    return { valid: false, error: 'Work email is required.' };
+  }
+  if (email.length > 100 || !EMAIL_REGEX.test(email)) {
+    return { valid: false, error: 'Please provide a valid work email address.' };
+  }
+
+  if (name.length > 80) {
+    return { valid: false, error: 'Contact name cannot exceed 80 characters.' };
+  }
+  if (whatsapp.length > 50) {
+    return { valid: false, error: 'WhatsApp / Tel cannot exceed 50 characters.' };
+  }
+  if (destination.length > 100) {
+    return { valid: false, error: 'Destination cannot exceed 100 characters.' };
+  }
+  if (message.length > 2000) {
+    return { valid: false, error: 'Message / Notes cannot exceed 2000 characters.' };
+  }
+
+  // Items validation
+  if (!Array.isArray(items) || items.length === 0) {
+    return { valid: false, error: 'At least one product item is required in the quote basket.' };
+  }
+  if (items.length > 50) {
+    return { valid: false, error: 'A maximum of 50 items can be submitted per quote request.' };
+  }
+
+  const validatedItems: ValidatedItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const title = typeof item.title === 'string' ? item.title.trim().slice(0, 150) : 'Item';
+    const sku = typeof item.sku === 'string' ? item.sku.trim().slice(0, 80) : '';
+    const variant = typeof item.variant === 'string' ? item.variant.trim().slice(0, 80) : '';
+    const parsedQty = Math.max(1, Math.min(100_000, Number(item.quantity) || 1));
+
+    validatedItems.push({
+      id: typeof item.id === 'string' ? item.id.slice(0, 80) : undefined,
+      title,
+      sku,
+      variant,
+      quantity: parsedQty,
+    });
+  }
+
+  if (validatedItems.length === 0) {
+    return { valid: false, error: 'No valid product items found in quote request.' };
+  }
+
+  const sanitizedInquiryType = ALLOWED_INQUIRY_TYPES.has(inquiryType) ? inquiryType : 'quote_cart';
+  const cleanTurnstileToken = typeof turnstileToken === 'string' ? turnstileToken.trim() : '';
+
+  return {
+    valid: true,
+    data: {
+      buyerInfo: { company, email, name, whatsapp, destination, message },
+      items: validatedItems,
+      inquiryType: sanitizedInquiryType,
+      turnstileToken: cleanTurnstileToken,
+    },
+  };
+}
+
+/**
+ * Builds HTML template for B2B RFQ notification email
+ */
+function buildRfqEmailHtml(params: {
+  safeCompany: string;
+  safeName: string;
+  safeEmail: string;
+  safeWhatsapp: string;
+  safeDestination: string;
+  safeInquiryType: string;
+  safeMessage: string;
+  items: ValidatedItem[];
+}): string {
+  const { safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeInquiryType, safeMessage, items } = params;
+
+  const itemsRows = items
+    .map(
+      (i) => `
+    <tr style="border-bottom: 1px solid #e5e5e5;">
+      <td style="padding: 8px 12px;"><strong>${SecurityService.escapeHtml(i.title)}</strong><br><span style="font-size:12px;color:#737373;">${SecurityService.escapeHtml(i.sku || '')} | ${SecurityService.escapeHtml(i.variant || '')}</span></td>
+      <td style="padding: 8px 12px; text-align: right;">${i.quantity} pcs</td>
+    </tr>`
+    )
+    .join('');
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e5e5; border-radius: 12px;">
+      <h2 style="margin-top: 0; color: #171717;">New Request for Quotation (RFQ)</h2>
+      <p style="color: #525252; font-size: 14px;">A new B2B buyer has submitted a quotation request on Gwenvenni.com.</p>
+      <div style="background-color: #f5f5f7; border-radius: 8px; padding: 16px; margin: 20px 0;">
+        <p style="margin: 4px 0;"><strong>Company:</strong> ${safeCompany}</p>
+        <p style="margin: 4px 0;"><strong>Contact Name:</strong> ${safeName}</p>
+        <p style="margin: 4px 0;"><strong>Work Email:</strong> <a href="mailto:${safeEmail}">${safeEmail}</a></p>
+        <p style="margin: 4px 0;"><strong>WhatsApp / Tel:</strong> ${safeWhatsapp}</p>
+        <p style="margin: 4px 0;"><strong>Destination:</strong> ${safeDestination}</p>
+        <p style="margin: 4px 0;"><strong>Type:</strong> ${safeInquiryType}</p>
+      </div>
+      ${
+        safeMessage
+          ? `<div style="margin: 20px 0;"><h4 style="margin: 0 0 8px;">Customization Notes:</h4><blockquote style="margin: 0; padding: 12px; background: #fafafa; border-left: 3px solid #171717; font-size: 13px;">${safeMessage}</blockquote></div>`
+          : ''
+      }
+      <h4 style="margin: 24px 0 8px;">Requested Styles (${items.length}):</h4>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <thead>
+          <tr style="background: #f5f5f7; text-align: left;">
+            <th style="padding: 8px 12px;">Product / Variant</th>
+            <th style="padding: 8px 12px; text-align: right;">Quantity</th>
+          </tr>
+        </thead>
+        <tbody>${itemsRows}</tbody>
+      </table>
+      <p style="font-size: 12px; color: #a3a3a3; margin-top: 32px; border-top: 1px solid #e5e5e5; padding-top: 16px;">
+        Submitted at: ${new Date().toUTCString()} | Gwenvenni B2B Atelier
+      </p>
+    </div>`;
+}
+
+export const POST: APIRoute = async ({ request }) => {
+  try {
+    let rawBody: any;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Malformed JSON payload.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    // 2. Cloudflare Turnstile Verification (Canonical Siteverify implementation)
-    const runtimeEnv = cfEnv || null;
+    // 1. Strict Boundary Input Validation
+    const validation = validateQuotePayload(rawBody);
+    if (!validation.valid || !validation.data) {
+      return new Response(JSON.stringify({ error: validation.error }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
+    const { buyerInfo, items, inquiryType, turnstileToken } = validation.data;
+
+    // Environment resolution helper
+    const runtimeEnv = cfEnv || null;
     const getVal = (key: string): string | undefined => {
       return (
         runtimeEnv?.[key] ||
@@ -30,6 +221,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     };
 
+    // 2. Cloudflare Turnstile Bot Verification
     const turnstileSecret =
       getVal('TURNSTILE_SECRET_KEY') ||
       getVal('TURNSTILE_SECRET') ||
@@ -37,7 +229,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     const isDev = Boolean(import.meta.env?.DEV);
     if (turnstileSecret && !(isDev && (!turnstileToken || turnstileToken === 'dev-bypass'))) {
-      if (typeof turnstileToken !== 'string' || turnstileToken.length === 0 || turnstileToken.length > 2048) {
+      if (!turnstileToken || turnstileToken.length > 2048) {
         return new Response(
           JSON.stringify({ error: 'Missing or invalid bot verification token. Please complete the verification.' }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -45,7 +237,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
 
       const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '';
-      const expectedActions = new Set(['quote_cart', 'quick_inquiry', 'sample_swatch']);
       const rawHostnames = getVal('TURNSTILE_HOSTNAMES') || 'localhost,127.0.0.1,gwenvenni.com';
       const expectedHostnames = new Set(
         rawHostnames
@@ -59,7 +250,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(10_000), // 10s strict timeout
           body: new URLSearchParams({
             secret: turnstileSecret,
             response: turnstileToken,
@@ -87,14 +278,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
         );
       }
 
-      // Action validation (if provided)
-      if (verifyResult.action && !expectedActions.has(verifyResult.action)) {
-        return new Response(
-          JSON.stringify({ error: 'Turnstile action mismatch.' }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-
       // Hostname validation
       if (verifyResult.hostname && expectedHostnames.size > 0 && !expectedHostnames.has(verifyResult.hostname)) {
         return new Response(
@@ -104,7 +287,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    // 3. Option A: Write Inquiry to Sanity (with dedicated authenticated client)
+    // 3. Write Inquiry to Sanity CMS
     let sanityRecordId: string | null = null;
     let sanityWriteError: string | null = null;
     const sanityToken =
@@ -127,16 +310,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
         const doc = {
           _type: 'inquiry',
           company: buyerInfo.company,
-          buyerName: buyerInfo.name || '',
+          buyerName: buyerInfo.name,
           email: buyerInfo.email,
-          whatsapp: buyerInfo.whatsapp || '',
-          destination: buyerInfo.destination || '',
-          notes: buyerInfo.message || '',
+          whatsapp: buyerInfo.whatsapp,
+          destination: buyerInfo.destination,
+          notes: buyerInfo.message,
           inquiryType: inquiryType,
           status: 'pending',
           createdAt: new Date().toISOString(),
           itemsSummary: items
-            .map((i: any) => `[${i.sku || 'SKU'}] ${i.title} (${i.variant || 'Default'}) x ${i.quantity}pcs`)
+            .map((i) => `[${i.sku || 'SKU'}] ${i.title} (${i.variant || 'Default'}) x ${i.quantity}pcs`)
             .join('\n'),
           rawItems: JSON.stringify(items),
         };
@@ -151,20 +334,39 @@ export const POST: APIRoute = async ({ request, locals }) => {
       sanityWriteError = 'SANITY_TOKEN is missing on Cloudflare Worker runtime';
     }
 
-    // 4. Option B: Send Email notification via Resend (if key configured)
+    // 4. Send Email notification via Resend with timeout protection
     const resendApiKey = getVal('RESEND_API_KEY');
 
     if (resendApiKey) {
       try {
-        const itemsHtml = items
-          .map(
-            (i: any) => `
-          <tr style="border-bottom: 1px solid #e5e5e5;">
-            <td style="padding: 8px 12px;"><strong>${i.title}</strong><br><span style="font-size:12px;color:#737373;">${i.sku || ''} | ${i.variant || ''}</span></td>
-            <td style="padding: 8px 12px; text-align: right;">${i.quantity} pcs</td>
-          </tr>`
-          )
-          .join('');
+        const safeCompany = SecurityService.escapeHtml(buyerInfo.company);
+        const safeName = SecurityService.escapeHtml(buyerInfo.name || 'N/A');
+        const safeEmail = SecurityService.escapeHtml(buyerInfo.email);
+        const safeWhatsapp = SecurityService.escapeHtml(buyerInfo.whatsapp || 'N/A');
+        const safeDestination = SecurityService.escapeHtml(buyerInfo.destination || 'N/A');
+        const safeMessage = buyerInfo.message ? SecurityService.escapeHtml(buyerInfo.message) : '';
+        const safeInquiryType = SecurityService.escapeHtml(inquiryType);
+
+        const emailHtml = buildRfqEmailHtml({
+          safeCompany,
+          safeName,
+          safeEmail,
+          safeWhatsapp,
+          safeDestination,
+          safeInquiryType,
+          safeMessage,
+          items,
+        });
+
+        // Configurable Resend sender, recipients, and subject prefix
+        const fromEmail = getVal('RESEND_FROM_EMAIL')?.trim() || 'Gwenvenni RFQ System <rfq@gwenvenni.com>';
+        const rawToEmail = getVal('RESEND_TO_EMAIL')?.trim() || 'contact@gwenvenni.com';
+        const toEmails = rawToEmail
+          .split(/[,;]/)
+          .map((e: string) => e.trim())
+          .filter((e: string) => Boolean(e) && EMAIL_REGEX.test(e));
+        const resolvedTo = toEmails.length > 0 ? toEmails : ['contact@gwenvenni.com'];
+        const subjectPrefix = getVal('RESEND_SUBJECT_PREFIX')?.trim() || '[New B2B RFQ]';
 
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -172,45 +374,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
             Authorization: `Bearer ${resendApiKey}`,
             'Content-Type': 'application/json',
           },
+          signal: AbortSignal.timeout(8_000), // 8s strict timeout protection
           body: JSON.stringify({
-            from: 'Gwenvenni RFQ System <rfq@gwenvenni.com>',
-            to: ['contact@gwenvenni.com'],
-            subject: `[New B2B RFQ] ${buyerInfo.company} - ${items.length} Style(s)`,
-            html: `
-              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e5e5; border-radius: 12px;">
-                <h2 style="margin-top: 0; color: #171717;">New Request for Quotation (RFQ)</h2>
-                <p style="color: #525252; font-size: 14px;">A new B2B buyer has submitted a quotation request on Gwenvenni.com.</p>
-                <div style="background-color: #f5f5f7; border-radius: 8px; padding: 16px; margin: 20px 0;">
-                  <p style="margin: 4px 0;"><strong>Company:</strong> ${buyerInfo.company}</p>
-                  <p style="margin: 4px 0;"><strong>Contact Name:</strong> ${buyerInfo.name || 'N/A'}</p>
-                  <p style="margin: 4px 0;"><strong>Work Email:</strong> <a href="mailto:${buyerInfo.email}">${buyerInfo.email}</a></p>
-                  <p style="margin: 4px 0;"><strong>WhatsApp / Tel:</strong> ${buyerInfo.whatsapp || 'N/A'}</p>
-                  <p style="margin: 4px 0;"><strong>Destination:</strong> ${buyerInfo.destination || 'N/A'}</p>
-                  <p style="margin: 4px 0;"><strong>Type:</strong> ${inquiryType}</p>
-                </div>
-                ${
-                  buyerInfo.message
-                    ? `<div style="margin: 20px 0;"><h4 style="margin: 0 0 8px;">Customization Notes:</h4><blockquote style="margin: 0; padding: 12px; background: #fafafa; border-left: 3px solid #171717; font-size: 13px;">${buyerInfo.message}</blockquote></div>`
-                    : ''
-                }
-                <h4 style="margin: 24px 0 8px;">Requested Styles (${items.length}):</h4>
-                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                  <thead>
-                    <tr style="background: #f5f5f7; text-align: left;">
-                      <th style="padding: 8px 12px;">Product / Variant</th>
-                      <th style="padding: 8px 12px; text-align: right;">Quantity</th>
-                    </tr>
-                  </thead>
-                  <tbody>${itemsHtml}</tbody>
-                </table>
-                <p style="font-size: 12px; color: #a3a3a3; margin-top: 32px; border-top: 1px solid #e5e5e5; padding-top: 16px;">
-                  Submitted at: ${new Date().toUTCString()} | Gwenvenni B2B Atelier
-                </p>
-              </div>`,
+            from: fromEmail,
+            to: resolvedTo,
+            reply_to: buyerInfo.email,
+            subject: `${subjectPrefix} ${safeCompany} - ${items.length} Style(s)`,
+            html: emailHtml,
           }),
         });
       } catch (mailErr) {
-        console.warn('Resend mail sending failed (skipping):', mailErr);
+        console.warn('Resend mail sending failed or timed out (skipping):', mailErr);
       }
     }
 

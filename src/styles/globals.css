@@ -9,10 +9,6 @@
   --apple-text-primary: #1d1d1f;   /* Primary titles and key metrics */
   --apple-text-secondary: #86868b; /* Subtitles, body copy and specs */
   --apple-border: rgba(0, 0, 0, 0.08);
-  --color-canvas: #ffffff;
-  --color-canvas-inset: #f5f5f7;
-  --color-text-main: #1d1d1f;
-  --color-text-subtle: #86868b;
 }
 
 html {
@@ -30,8 +26,7 @@ body {
 }
 
 /* Apple 48px pure frosted glass nav */
-.apple-nav,
-.glass-nav-light {
+.apple-nav {
   height: 48px;
   background: #fffffff0; /* 94% 不透明度，阻隔滚动透字重影 */
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -47,51 +42,6 @@ body {
   scrollbar-width: none;
 }
 
-.glass-card-light {
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.02);
-}
-
-/* Apple solid pill button (Unified Request Swatch Kit Style) */
-.btn-apple-black {
-  background: #1d1d1f;
-  color: #ffffff;
-  font-weight: 600;
-  border-radius: 9999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.btn-apple-black:hover {
-  background: #000000;
-  transform: translateY(-1.5px);
-  box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.3);
-}
-
-.btn-apple-outline {
-  background: #ffffff;
-  color: #1d1d1f;
-  border: 1px solid #d2d2d7;
-  font-weight: 500;
-  border-radius: 9999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.25s ease;
-}
-
-.btn-apple-outline:hover {
-  background: #f5f5f7;
-  border-color: #86868b;
-  transform: translateY(-1.5px);
-  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.06);
-}
-
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -105,18 +55,6 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #86868b;
-}
-
-/* ==========================================================================
-   Apple 三级容器轨制（窄轨文字 + 中轨网格 + 宽轨大图）与流式间距
-   ========================================================================== */
-:root {
-  /* 随屏幕宽度丝滑缩放的流式区块上下间距（紧凑精致设计：手机 36px -> 笔记本 52px -> 大屏 68px） */
-  --section-py: clamp(2.25rem, 3.8vw, 4.25rem);
-  /* 流式网格间距（手机 14px -> 笔记本 20px -> 大屏 28px） */
-  --grid-gap: clamp(0.875rem, 1.5vw, 1.75rem);
-  /* 流式卡片内边距（手机 18px -> 笔记本 24px -> 大屏 32px） */
-  --card-pad: clamp(1.125rem, 1.8vw, 2rem);
 }
 
 /* ==========================================================================
@@ -199,13 +137,6 @@ body {
   letter-spacing: -0.022em;
 }
 
-/* Bento 卡片核心数字：紧凑克制，避免空大失衡（28px -> 40px） */
-.fluid-bento-metric {
-  font-size: clamp(1.75rem, 2.2vw + 0.25rem, 2.5rem);
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-}
-
 /* 当屏幕是笔记本/桌面端（宽 >= 1024px），但垂直高度较矮（高 <= 820px）时自动收紧首屏间距，露出至少 35% 产品大图 */
 @media (min-width: 1024px) and (max-height: 820px) {
   .hero-section {
@@ -225,5 +156,12 @@ body {
   }
 }
 
-
-
+/* Apple Footer 桌面端手风琴自展开 */
+@media (min-width: 768px) {
+  details.apple-footer-col summary {
+    pointer-events: none;
+  }
+  details.apple-footer-col > ul {
+    display: block !important;
+  }
+}

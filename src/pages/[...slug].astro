@@ -7,6 +7,7 @@ import SockSpecMatrix from '@components/hosiery/SockSpecMatrix.astro';
 import SockCollections from '@components/hosiery/SockCollections.astro';
 import ManufacturingCapabilities from '@components/hosiery/ManufacturingCapabilities.astro';
 import SwatchInquiry from '@components/hosiery/SwatchInquiry.astro';
+import CustomSection from '@components/hosiery/CustomSection.astro';
 import { getPageBySlug } from '@data/page';
 
 export const prerender = false;
@@ -23,6 +24,14 @@ if (!page) {
 const { title, sections, metaTitle, metaDescription, socialImage } = page;
 
 const componentMap: Record<string, any> = {
+    // Generalized Section Types
+    heroSection: SockHero,
+    featureMatrixSection: SockSpecMatrix,
+    productShowcaseSection: SockCollections,
+    manufacturingSection: ManufacturingCapabilities,
+    inquirySection: SwatchInquiry,
+    customSection: CustomSection,
+    // Backward compatibility for legacy types
     hosieryHeroSection: SockHero,
     hosierySpecSection: SockSpecMatrix,
     hosieryCollectionSection: SockCollections,
