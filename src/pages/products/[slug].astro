@@ -255,9 +255,9 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
   <body class="bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white">
     <AppleNav config={siteConfig} />
 
-    <main class="pt-14 sm:pt-16 pb-8 sm:pb-10">
+    <main class="pt-13 sm:pt-14 pb-8 sm:pb-10">
       <!-- Breadcrumb Navigation & Quick Prev/Next Style Switcher -->
-      <div class="apple-rail-bento py-1.5 sm:py-2 flex items-center justify-between gap-4">
+      <div class="apple-rail-bento py-1 sm:py-1.5 flex items-center justify-between gap-4">
         <nav class="flex items-center gap-2 text-[11px] text-zinc-500 font-mono min-w-0">
           <a href="/" class="hover:text-black shrink-0">{brandTitle}</a>
           <span class="shrink-0">/</span>
@@ -299,29 +299,29 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
       </div>
 
       <!-- Product Showcase Container -->
-      <div class="apple-rail-bento mt-1 sm:mt-1.5 lg:min-h-[calc(100vh-7.5rem)] lg:max-h-[820px] lg:flex lg:flex-col lg:justify-center">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 xl:gap-8 items-center">
+      <div class="apple-rail-bento mt-1 sm:mt-1.5">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 xl:gap-8 items-start">
           
-          <!-- LEFT: Apple-Style Multi-Image Carousel / Gallery -->
-          <div class="w-full min-w-0 lg:col-span-8">
-            <div class="flex flex-col lg:flex-row gap-3 lg:gap-4 items-start">
+          <!-- LEFT: Apple-Style Multi-Image Carousel / Gallery (7 Cols for Balanced Ratio) -->
+          <div class="w-full min-w-0 lg:col-span-7">
+            <div class="flex flex-col lg:flex-row gap-2.5 sm:gap-3 lg:gap-3.5 items-start">
               
               <!-- Thumbnail Gallery (Desktop: Left Vertical Column; Mobile: Bottom Horizontal Scroll) -->
-              <div class="order-2 lg:order-1 flex flex-row lg:flex-col gap-2 sm:gap-2.5 overflow-x-auto lg:overflow-y-auto no-scrollbar shrink-0 w-full lg:w-auto max-w-full lg:h-[clamp(560px,calc(100vh-13.5rem),760px)] pb-1 lg:pb-0 scrollbar-none">
+              <div class="order-2 lg:order-1 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto no-scrollbar shrink-0 w-full lg:w-auto max-w-full lg:h-[480px] xl:lg:h-[500px] pb-1 lg:pb-0 scrollbar-none">
                 {currentProduct.gallery.map((img: any, idx: number) => (
                   <button
                     type="button"
                     data-thumb-index={idx}
                     aria-label={`View image ${idx + 1}`}
-                    class={`carousel-thumb shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-[76px] lg:h-[76px] xl:w-20 xl:h-20 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
+                    class={`carousel-thumb shrink-0 w-14 h-14 sm:w-15 sm:h-15 lg:w-[68px] lg:h-[68px] xl:w-[72px] xl:h-[72px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
                   >
                     <img src={img.src} alt={img.alt} class="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
 
-              <!-- Main Viewport Box with Controls -->
-              <div class="order-1 lg:order-2 relative w-full flex-1 min-w-0 aspect-[4/3] lg:aspect-auto lg:h-[clamp(560px,calc(100vh-13.5rem),760px)] rounded-2xl overflow-hidden bg-stone-50 border border-zinc-200/80 shadow-xs group">
+              <!-- Main Viewport Box with Controls (Tightly bounded aspect ratio & height) -->
+              <div class="order-1 lg:order-2 relative w-full flex-1 min-w-0 aspect-[4/3] lg:aspect-auto lg:h-[480px] xl:lg:h-[500px] rounded-2xl overflow-hidden bg-stone-50 border border-zinc-200/80 shadow-xs group">
                 <!-- Carousel Images -->
                 <div id="carousel-track" class="w-full h-full relative">
                   {currentProduct.gallery.map((img: any, idx: number) => (
@@ -336,7 +336,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                 </div>
 
                 <!-- Top Indicator Badges -->
-                <div class="absolute top-3 left-3 z-20 flex items-center gap-2">
+                <div class="absolute top-3 left-3 z-20 flex items-center gap-1.5 sm:gap-2">
                   <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-white/90 backdrop-blur-md text-zinc-900 border border-zinc-200/80 shadow-xs font-semibold">
                     SKU: {currentProduct.sku}
                   </span>
@@ -376,61 +376,61 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
             </div>
 
-            <p class="text-[10px] text-zinc-400 font-mono text-center lg:text-left mt-2.5">
+            <p class="text-[10px] text-zinc-400 font-mono text-center lg:text-left mt-2">
               {currentProduct.galleryHint || "Click thumbnails or use arrows to view weave, heel pocket, seamless toe & elastic welt."}
             </p>
           </div>
 
-          <!-- RIGHT: Product Info, Tiered Wholesale Pricing & B2B Actions -->
-          <div class="w-full min-w-0 lg:col-span-4 space-y-3.5 xl:space-y-4">
+          <!-- RIGHT: Product Info, Tiered Wholesale Pricing & B2B Actions (5 Cols for Snug Symmetry) -->
+          <div class="w-full min-w-0 lg:col-span-5 space-y-3 sm:space-y-3.5">
             <!-- Header Info -->
-            <div class="space-y-1.5">
-              <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 text-zinc-800">
+            <div class="space-y-1">
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 text-zinc-800">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 <span>{currentProduct.statusBadge || "Active Production Ready"}</span>
               </div>
               <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-zinc-950">
                 {currentProduct.title}
               </h1>
-              <p class="text-xs sm:text-sm text-zinc-600 font-normal leading-relaxed">
+              <p class="text-xs text-zinc-600 font-normal leading-relaxed">
                 {currentProduct.tagline}
               </p>
             </div>
 
             <!-- Tiered Wholesale Pricing Matrix (Compact) -->
-            <div class="p-3.5 sm:p-4 rounded-xl bg-[#fbf9f5] border border-zinc-200/80 space-y-2">
-              <div class="flex items-center justify-between text-[11px] text-zinc-500 font-mono uppercase tracking-wider">
+            <div class="p-3 sm:p-3.5 rounded-xl bg-[#fbf9f5] border border-zinc-200/80 space-y-1.5">
+              <div class="flex items-center justify-between text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
                 <span>Wholesale FOB Tier</span>
                 <span>Unit Price</span>
               </div>
-              <div class="space-y-1.5">
+              <div class="space-y-1">
                 {currentProduct.pricingTiers.map((tier: any) => (
-                  <div class="flex items-center justify-between text-xs sm:text-sm py-1 border-b border-zinc-200/60 last:border-none">
+                  <div class="flex items-center justify-between text-xs sm:text-sm py-0.5 border-b border-zinc-200/50 last:border-none">
                     <span class="text-zinc-700 font-medium">{tier.range}</span>
-                    <span class="text-zinc-950 font-bold font-mono text-sm sm:text-base">{tier.price}</span>
+                    <span class="text-zinc-950 font-bold font-mono text-xs sm:text-sm">{tier.price}</span>
                   </div>
                 ))}
               </div>
-              <p class="text-[10px] text-zinc-400 font-mono">
+              <p class="text-[10px] text-zinc-400 font-mono pt-0.5">
                 {currentProduct.priceNote || "* Customs, freight, and custom branded packaging quoted upon destination."}
               </p>
             </div>
 
             <!-- Available Color Swatches with interactive selection -->
-            <div class="space-y-1.5">
+            <div class="space-y-1">
               <div class="flex items-center justify-between">
-                <span class="text-[11px] font-mono text-zinc-500 uppercase tracking-wider block">
+                <span class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">
                   {currentProduct.paletteTitle || "Available In-Stock Yarn Palette:"}
                 </span>
                 <span id="selected-color-name" class="text-xs font-medium text-zinc-900">
                   {currentProduct.colors[0]?.name || "Default"}
                 </span>
               </div>
-              <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex items-center gap-1.5 flex-wrap">
                 {currentProduct.colors.map((c: any, cIdx: number) => (
                   <button
                     type="button"
-                    class={`color-variant-btn flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all cursor-pointer ${
+                    class={`color-variant-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-all cursor-pointer ${
                       cIdx === 0
                         ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
                         : 'border-zinc-200 bg-white text-zinc-800 hover:border-zinc-400'
@@ -438,7 +438,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                     data-color={c.name}
                     data-hex={c.hex}
                   >
-                    <span class="w-3 h-3 rounded-full border border-black/20" style={`background-color: ${c.hex}`}></span>
+                    <span class="w-2.5 h-2.5 rounded-full border border-black/20" style={`background-color: ${c.hex}`}></span>
                     <span>{c.name}</span>
                   </button>
                 ))}
@@ -447,15 +447,15 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
             <!-- B2B Dual-Track RFQ Action Buttons -->
             {(showAddToQuoteButton || showBuySampleButton || showSpecSheetButton) && (
-            <div class="space-y-2 pt-1">
+            <div class="space-y-1.5 pt-0.5">
               {(showAddToQuoteButton || showBuySampleButton) && (
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
                 <!-- Track 1: Multi-Item Quote Basket -->
                 {showAddToQuoteButton && (
                 <button
                   type="button"
                   id="btn-add-quote"
-                  class="w-full py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-semibold bg-[#1d1d1f] hover:bg-black text-white group flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                  class="w-full py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-[#1d1d1f] hover:bg-black text-white group flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer"
                   data-id={currentProduct.slug}
                   data-title={currentProduct.shortTitle || currentProduct.title}
                   data-sku={currentProduct.sku || "SKU"}
@@ -476,7 +476,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                   target="_blank"
                   rel="noopener noreferrer"
                   id="btn-amazon-sample"
-                  class="w-full py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-semibold bg-[#f5f5f7] hover:bg-[#ff9900]/10 hover:border-[#ff9900]/40 text-[#1d1d1f] hover:text-[#111] border border-black/10 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
+                  class="w-full py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-[#f5f5f7] hover:bg-[#ff9900]/10 hover:border-[#ff9900]/40 text-[#1d1d1f] hover:text-[#111] border border-black/10 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
                   title="Buy Sample directly on Amazon"
                 >
                   <svg class="w-4 h-4 text-[#232f3e] group-hover:text-[#ff9900] transition-colors" viewBox="0 0 24 24" fill="currentColor">
@@ -494,11 +494,11 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
               <!-- Tech Pack / Spec Sheet Link -->
               {showSpecSheetButton && (
-              <div class="flex items-center justify-between text-xs pt-1 px-1 text-zinc-500">
+              <div class="flex items-center justify-between text-xs pt-0.5 px-0.5 text-zinc-500">
                 <button
                   type="button"
                   id="btn-download-spec"
-                  class="hover:text-black flex items-center gap-1 underline underline-offset-2 transition-colors cursor-pointer"
+                  class="hover:text-black flex items-center gap-1 underline underline-offset-2 transition-colors cursor-pointer text-[11px]"
                   data-sku={currentProduct.sku}
                   data-title={currentProduct.title}
                 >
@@ -515,16 +515,16 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
             <!-- Lead Time & Guarantee Badges -->
             <div class="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-100 text-[11px] text-zinc-600">
               <div class="flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-zinc-950" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>{currentProduct.leadTime}</span>
+                <span class="truncate">{currentProduct.leadTime}</span>
               </div>
               <div class="flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-zinc-950" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
-                <span>{currentProduct.supportBadge || "Full Private Label Support"}</span>
+                <span class="truncate">{currentProduct.supportBadge || "Full Private Label Support"}</span>
               </div>
             </div>
           </div>
@@ -533,22 +533,27 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
       <!-- Specifications Breakdown & Product Navigation Container (Below Fold) -->
       <div class="apple-rail-bento">
-        <!-- Specifications Breakdown Table (Compact) -->
-        <div class="mt-6 sm:mt-8 border-t border-black/10 pt-5 sm:pt-6">
-          <div class="max-w-3xl mb-3 sm:mb-4">
-            <span class="text-xs font-mono uppercase tracking-widest text-zinc-500">
-              {currentProduct.specsBadge || "Quality Standard"}
+        <!-- Specifications Breakdown: 4-Column Bento Matrix (No dead space) -->
+        <div class="mt-6 sm:mt-7 border-t border-black/5 pt-4 sm:pt-5">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <span class="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block">
+                {currentProduct.specsBadge || "Factory Quality Standard"}
+              </span>
+              <h2 class="text-lg sm:text-xl font-semibold tracking-tight text-zinc-950 mt-0.5">
+                {currentProduct.specsHeading || "Technical Specifications & Construction"}
+              </h2>
+            </div>
+            <span class="hidden sm:inline-block text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60">
+              ✓ 100% Lonati Verified
             </span>
-            <h2 class="text-xl sm:text-2xl font-bold text-zinc-950 mt-1">
-              {currentProduct.specsHeading || "Complete Technical Specifications"}
-            </h2>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1.5 bg-zinc-50/70 p-4 sm:p-5 rounded-2xl border border-zinc-200/80">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {currentProduct.specifications.map((spec: any) => (
-              <div class="py-1.5 border-b border-zinc-200/80 flex flex-col justify-center">
-                <span class="text-[11px] font-mono uppercase tracking-wider text-zinc-500">{spec.label}</span>
-                <span class="text-xs sm:text-sm font-semibold text-zinc-950 mt-0.5">{spec.value}</span>
+              <div class="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-[#f5f5f7] border border-black/5 hover:border-black/15 transition-all flex flex-col justify-between min-h-[88px]">
+                <span class="text-[10px] font-mono uppercase tracking-wider text-[#86868b] block">{spec.label}</span>
+                <span class="text-xs sm:text-[13px] font-semibold text-[#1d1d1f] mt-1.5 leading-snug line-clamp-3">{spec.value}</span>
               </div>
             ))}
           </div>
@@ -556,7 +561,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
         <!-- Bottom Style Navigation Cards (Previous / Next Silhouette) -->
         {allProducts.length > 1 && (
-          <div class="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-black/10">
+          <div class="mt-4 sm:mt-5 pt-3.5 sm:pt-4 border-t border-black/5">
             <div class="grid grid-cols-2 gap-2.5 sm:gap-4 items-stretch">
               <!-- Previous Product Card -->
               <a
