@@ -1,48 +1,11 @@
-export const IMAGE = `
-  {
-    "_id": image.asset->_id,
-    "src": image.asset->url,
-    "dimensions": image.asset->metadata.dimensions,
-    "alt": alt,
-  }
-`;
+export const IMAGE = `{
+  "_id": asset->_id,
+  "src": asset->url,
+  "alt": alt
+}`;
 
 export const SECTIONS = `{
   ...,
-  backgroundImage {
-    ...,
-    "image": {
-      "_id": image.asset->_id,
-      "src": image.asset->url
-    }
-  },
-  _type == "cardsSection" => {
-    items[] {
-      ...,
-      image ${IMAGE}
-    }
-  },
-  _type == "logosSection" => {
-    items[] ${IMAGE}
-  },
-  _type == "testimonialsSection" => {
-    items[] {
-        ...,
-        author-> {
-            _type,
-            _id,
-            name,
-            title,
-            image ${IMAGE},
-            company-> {
-                _type,
-                _id,
-                name,
-                logo ${IMAGE}
-            }
-        }
-    }
-  },
   _type == "hosieryHeroSection" => {
     ...,
     "heroImage": heroImage.asset->url
@@ -55,6 +18,7 @@ export const SECTIONS = `{
     ...,
     products[]->{
       title,
+      shortTitle,
       "slug": slug.current,
       tagline,
       featured,
@@ -70,5 +34,5 @@ export const SECTIONS = `{
       pricingTiers,
       specifications
     }
-  },
+  }
 }`;

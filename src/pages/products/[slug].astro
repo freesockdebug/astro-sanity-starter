@@ -1,188 +1,30 @@
 ---
 // src/pages/products/[slug].astro
-import AppleNav from '@components/hosiery/AppleNav.astro';
-import AppleFooter from '@components/hosiery/AppleFooter.astro';
-import QuoteDrawer from '@components/QuoteDrawer.astro';
-import '../../styles/globals.css';
+import Layout from '@layouts/Layout.astro';
+import { fetchProductBySlug, fetchAllProducts } from '@data/products';
+import { fetchData as fetchSiteConfig } from '@data/siteConfig';
+import { fetchRfqSettings } from '@data/rfqSettings';
 
 export const prerender = false;
 
 const { slug } = Astro.params;
 
-const productsData: Record<string, any> = {
-  "gwenvenni-double-ruffle-lace-socks": {
-    slug: "gwenvenni-double-ruffle-lace-socks",
-    title: "Gwenvenni Toddler Girls Double Ruffle Lace Trim Cotton Socks (5-Pack)",
-    tagline: "Charming double-layer eyelet lace ruffle cuff in 85% breathable combed cotton with non-binding gentle elasticity.",
-    sku: "GV-DR108-05",
-    moq: "100 Packs (500 Pairs)",
-    leadTime: "Sample: 48 Hours | Bulk: 14 - 18 Days",
-    rating: "4.7★ (631+ Verified Reviews)",
-    pricingTiers: [
-      { range: "100 - 499 Packs", price: "$3.80 / pack ($0.76/pr)" },
-      { range: "500 - 1,999 Packs", price: "$3.10 / pack ($0.62/pr)" },
-      { range: "2,000+ Packs", price: "$2.50 / pack ($0.50/pr)" }
-    ],
-    gallery: [
-      { src: "/images/products/gv-ruffle-main.jpg", alt: "Gwenvenni toddler girls double ruffle eyelet lace trim socks close-up" },
-      { src: "/images/products/gv-ruffle-pack.jpg", alt: "5-pack bundle presentation laid flat" },
-      { src: "/images/products/gv-ruffle-cuff.jpg", alt: "Macro detail of zero-pressure non-binding elastic welt and ruffle edge" },
-      { src: "/images/products/gv-ruffle-detail.jpg", alt: "Smooth comfort toe seam and reinforced heel" },
-      { src: "/images/products/gv-ruffle-wear.jpg", alt: "Lifestyle on-foot dress styling with Mary Jane shoes" },
-      { src: "/images/products/gv-ruffle-colors.jpg", alt: "Color assortment options and gift packaging" }
-    ],
-    colors: [
-      { name: "Classic Pure White", hex: "#ffffff" },
-      { name: "Warm Alabaster Ivory", hex: "#fbf9f5" },
-      { name: "Soft Powder Pink", hex: "#f7d8dc" },
-      { name: "Midnight Noir", hex: "#1c1917" }
-    ],
-    specifications: [
-      { label: "Yarn Composition", value: "85% Long-Staple Combed Cotton, 12% Chinlon, 3% Spandex" },
-      { label: "Cylinder Gauge", value: "200-Needle Fine Circular Derby Knit with Double Ruffle Eyelet Cuff" },
-      { label: "Elasticity & Welt", value: "Zero-Mark Comfort Stretch Lycra Top (Non-Slip, Non-Binding)" },
-      { label: "Toe Closure", value: "Smooth Comfort Hand-Linked Seamless Toe Closure" },
-      { label: "Size Grading", value: "0-6M, 6-12M, 1-2T, 3-5T, 6-8Y, 9-12Y (Multi-Age Range)" },
-      { label: "Packaging Format", value: "5 Pairs per Eco Kraft Pack / Retail Hanger Card" },
-      { label: "Amazon Retail Reference", value: "ASIN: B09MZ77HF4 | 4.7★ Rating (631+ Verified Reviews)" },
-      { label: "Compliance & Safety", value: "OEKO-TEX Standard 100 Class I & US CPSIA Certified Safe for Infants" }
-    ]
-  },
-  "ribbed-cashmere-crew": {
-    slug: "ribbed-cashmere-crew",
-    title: "200N Ribbed Cashmere-Silk Crew",
-    tagline: "Ultra-Fine 15.2µm Mongolian Cashmere & Grade 6A Mulberry Silk",
-    sku: "NK-CS200-01",
-    moq: "150 Pairs / Color",
-    leadTime: "Sample: 48 Hours | Bulk: 18 - 22 Days",
-    rating: "Grade 4.5 Anti-Pilling",
-    pricingTiers: [
-      { range: "150 - 499 Pairs", price: "$6.80" },
-      { range: "500 - 1,999 Pairs", price: "$5.40" },
-      { range: "2,000+ Pairs", price: "$4.60" }
-    ],
-    gallery: [
-      { src: "/images/sock-cashmere-crew.jpg", alt: "Cashmere ribbed crew socks laid flat on travertine" },
-      { src: "/images/hero-light.jpg", alt: "Ribbed organic cotton and silk sock folded on stone" },
-      { src: "/images/detail-toe.jpg", alt: "40X macro close-up of seamless hand-linked toe stitching" },
-      { src: "/images/detail-cuff.jpg", alt: "Macro detail of zero-pressure flexible ribbed elastic welt" },
-      { src: "/images/spec-light.jpg", alt: "Sock anatomy showing 200N derby rib and heel structure" }
-    ],
-    colors: [
-      { name: "Oatmeal Melange", hex: "#e7e3db" },
-      { name: "Heather Fog Grey", hex: "#c8c6c4" },
-      { name: "Warm Alabaster", hex: "#fbf9f5" },
-      { name: "Charcoal Noir", hex: "#1c1917" }
-    ],
-    specifications: [
-      { label: "Yarn Count & Composition", value: "70% Inner Mongolian Cashmere, 30% Mulberry Silk" },
-      { label: "Cylinder Gauge", value: "200-Needle Single Cylinder Derby Rib (Lonati)" },
-      { label: "Toe Closure", value: "100% Artisan Hand-Linked Seamless (Zero Ridge)" },
-      { label: "Elasticity & Cuff", value: "Zero-Feel Japanese Lycra Core-Spun Welt" },
-      { label: "Weight per Pair", value: "42 grams (Winter Thermal Lightweight)" },
-      { label: "Color Fastness", value: "Grade 4-5 (ISO 105-C06 Laboratory Tested)" },
-      { label: "Certifications", value: "OEKO-TEX Standard 100 Class I, GOTS, ISO9001" },
-      { label: "Customization Options", value: "Custom Pantone Dyeing, Jacquard Label, Branded Gift Box" }
-    ]
-  },
-  "silk-loafer": {
-    slug: "silk-loafer",
-    title: "Mulberry Silk Invisible Loafer Sock",
-    tagline: "Ultra-Low Cut Architectural Fit for Luxury Loafers & Sneakers",
-    sku: "NK-SL200-02",
-    moq: "200 Pairs / Color",
-    leadTime: "Sample: 48 Hours | Bulk: 15 - 18 Days",
-    rating: "Grade 6A Raw Silk",
-    pricingTiers: [
-      { range: "200 - 499 Pairs", price: "$4.90" },
-      { range: "500 - 1,999 Pairs", price: "$3.80" },
-      { range: "2,000+ Pairs", price: "$3.10" }
-    ],
-    gallery: [
-      { src: "/images/sock-silk-loafer.jpg", alt: "Mulberry silk low-cut loafer socks on travertine stone" },
-      { src: "/images/detail-toe.jpg", alt: "Macro view of hand-linked seamless toe closure" },
-      { src: "/images/hero-light.jpg", alt: "Editorial view of silk blend knit texture" },
-      { src: "/images/detail-cuff.jpg", alt: "Elastic welt detail" }
-    ],
-    colors: [
-      { name: "Champagne Nude", hex: "#f5edd8" },
-      { name: "Crisp Chalk", hex: "#fbf9f5" },
-      { name: "Onyx Black", hex: "#1c1917" }
-    ],
-    specifications: [
-      { label: "Yarn Count & Composition", value: "88% Grade 6A Mulberry Silk, 12% Spandex" },
-      { label: "Cylinder Gauge", value: "200-Needle Ultra-Thin Breathable Knit" },
-      { label: "Heel Grip", value: "360° Medical-Grade Silicone Non-Slip Contour" },
-      { label: "Toe Closure", value: "Hand-Linked Flat Seamless" },
-      { label: "Certifications", value: "OEKO-TEX Standard 100, BSCI" }
-    ]
-  },
-  "sheer-tights": {
-    slug: "sheer-tights",
-    title: "15D Invisible Sheer Tights",
-    tagline: "Second-Skin Compression with Run-Resistant Bi-Component Italian Yarn",
-    sku: "NK-ST400-03",
-    moq: "300 Pairs / Color",
-    leadTime: "Sample: 48 Hours | Bulk: 20 - 25 Days",
-    rating: "15 Denier Run-Proof",
-    pricingTiers: [
-      { range: "300 - 999 Pairs", price: "$5.20" },
-      { range: "1,000 - 4,999 Pairs", price: "$4.10" },
-      { range: "5,000+ Pairs", price: "$3.40" }
-    ],
-    gallery: [
-      { src: "/images/hero-light.jpg", alt: "15D Sheer seamless tights structure" },
-      { src: "/images/detail-toe.jpg", alt: "Invisible reinforced toe" },
-      { src: "/images/detail-cuff.jpg", alt: "Ergonomic comfort waistband" },
-      { src: "/images/spec-light.jpg", alt: "Macro weave fiber structure" }
-    ],
-    colors: [
-      { name: "Natural Fair", hex: "#d4b996" },
-      { name: "Warm Honey", hex: "#a18262" },
-      { name: "Smoky Black", hex: "#18181b" }
-    ],
-    specifications: [
-      { label: "Yarn Count & Composition", value: "80% Italian Polyamide, 20% Elastane" },
-      { label: "Gauge", value: "400-Needle Circular Seamless Machine" },
-      { label: "Waistband", value: "Zero-Pinch Comfort Band with Breathable Cotton Gusset" },
-      { label: "Run-Resistance", value: "Fusion Heat-Set Ladder-Proof Yarn" }
-    ]
-  },
-  "merino-slouch": {
-    slug: "merino-slouch",
-    title: "Superfine 18.5µ Merino Boot Sock",
-    tagline: "Thermo-Regulating Australian Merino with Cushioned Loop Footbed",
-    sku: "NK-MB144-04",
-    moq: "200 Pairs / Color",
-    leadTime: "Sample: 48 Hours | Bulk: 18 - 22 Days",
-    rating: "18.5µm Superfine Wool",
-    pricingTiers: [
-      { range: "200 - 499 Pairs", price: "$5.80" },
-      { range: "500 - 1,999 Pairs", price: "$4.60" },
-      { range: "2,000+ Pairs", price: "$3.90" }
-    ],
-    gallery: [
-      { src: "/images/spec-light.jpg", alt: "Merino wool knit loop construction" },
-      { src: "/images/sock-cashmere-crew.jpg", alt: "Thermal wool crew sock styling" },
-      { src: "/images/detail-toe.jpg", alt: "Reinforced seamless toe" },
-      { src: "/images/detail-cuff.jpg", alt: "Heavy rib welt" }
-    ],
-    colors: [
-      { name: "Charcoal Heather", hex: "#44403c" },
-      { name: "Oatmeal Grey", hex: "#a8a29e" },
-      { name: "Ecru Wool", hex: "#f5f5f4" }
-    ],
-    specifications: [
-      { label: "Yarn Count & Composition", value: "85% Australian Merino Wool, 15% Nylon" },
-      { label: "Cylinder Gauge", value: "144-Needle Cushion Terry Loop" },
-      { label: "Thermal Rating", value: "Natural Moisture Wicking & Odor Resistance" }
-    ]
-  }
-};
+const rawAllProducts = await fetchAllProducts();
+const allProducts = (rawAllProducts && rawAllProducts.length > 0) ? rawAllProducts : [];
 
-import { fetchProductBySlug, fetchAllProducts } from '@data/products';
-import { fetchData as fetchSiteConfig } from '@data/siteConfig';
-import { fetchRfqSettings } from '@data/rfqSettings';
+const currentProduct = slug ? await fetchProductBySlug(slug) : null;
+if (!currentProduct) {
+  return Astro.redirect('/#collections');
+}
+
+// Ensure product has fallbacks for arrays and images
+currentProduct.gallery = (currentProduct.gallery && currentProduct.gallery.length > 0)
+  ? currentProduct.gallery
+  : [{ src: currentProduct.mainImage || '/images/hero-light.jpg', alt: currentProduct.title || 'Product' }];
+currentProduct.colors = currentProduct.colors || [];
+currentProduct.pricingTiers = currentProduct.pricingTiers || [];
+currentProduct.specifications = currentProduct.specifications || [];
+currentProduct.mainImage = currentProduct.mainImage || currentProduct.gallery[0]?.src || '/images/hero-light.jpg';
 
 const siteConfig = await fetchSiteConfig();
 const rfqSettings = await fetchRfqSettings();
@@ -198,38 +40,13 @@ const collectionsLink = navLinks.find((l: any) =>
 const productsNavLabel = collectionsLink?.label || "Products";
 const productsNavUrl = collectionsLink?.url || "/#collections";
 
-const rawAllProducts = await fetchAllProducts();
-const allProducts = (rawAllProducts && rawAllProducts.length > 0)
-  ? rawAllProducts
-  : Object.values(productsData);
-
 const currentIndex = allProducts.findIndex((p: any) => p.slug === slug);
 const validIndex = currentIndex >= 0 ? currentIndex : 0;
-const prevIndex = (validIndex - 1 + allProducts.length) % allProducts.length;
-const nextIndex = (validIndex + 1) % allProducts.length;
+const prevIndex = (validIndex - 1 + allProducts.length) % (allProducts.length || 1);
+const nextIndex = (validIndex + 1) % (allProducts.length || 1);
 
-const prevProduct = allProducts[prevIndex];
-const nextProduct = allProducts[nextIndex];
-
-const sanityProduct = slug ? await fetchProductBySlug(slug) : null;
-const fallbackProduct = (slug && productsData[slug]) ? productsData[slug] : productsData["ribbed-cashmere-crew"];
-
-const currentProduct = sanityProduct ? {
-  ...fallbackProduct,
-  ...sanityProduct,
-  gallery: (sanityProduct.gallery && sanityProduct.gallery.length > 0)
-    ? sanityProduct.gallery
-    : fallbackProduct.gallery,
-  colors: (sanityProduct.colors && sanityProduct.colors.length > 0)
-    ? sanityProduct.colors
-    : fallbackProduct.colors,
-  pricingTiers: (sanityProduct.pricingTiers && sanityProduct.pricingTiers.length > 0)
-    ? sanityProduct.pricingTiers
-    : fallbackProduct.pricingTiers,
-  specifications: (sanityProduct.specifications && sanityProduct.specifications.length > 0)
-    ? sanityProduct.specifications
-    : fallbackProduct.specifications
-} : fallbackProduct;
+const prevProduct = allProducts[prevIndex] || currentProduct;
+const nextProduct = allProducts[nextIndex] || currentProduct;
 
 const addToQuoteBtnText = currentProduct.addToQuoteButtonText || rfqSettings?.btnAddToQuoteText || "Add to Quote Basket";
 
@@ -243,21 +60,13 @@ const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
 const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 ---
 
-<!doctype html>
-<html lang="en" class="scroll-smooth">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{currentProduct.title} | {brandTitle}</title>
-    <meta name="description" content={currentProduct.tagline} />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  </head>
-  <body class="bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white">
-    <AppleNav config={siteConfig} />
-
-    <main class="pt-12">
-      <!-- Section 1: Product Showcase (Full Viewport on Desktop) -->
-      <section id="product-overview" class="w-full lg:h-[calc(100svh-48px)] lg:max-h-[920px] lg:min-h-[640px] lg:flex lg:flex-col lg:justify-between py-2 sm:py-2.5 lg:py-3 border-b border-black/5 bg-white">
+<Layout
+  title={currentProduct.title}
+  description={currentProduct.tagline}
+  image={currentProduct.mainImage}
+  mainClass="pt-12"
+>
+  <section id="product-overview" class="w-full lg:h-[calc(100svh-48px)] lg:max-h-[920px] lg:min-h-[640px] lg:flex lg:flex-col lg:justify-between py-2 sm:py-2.5 lg:py-3 border-b border-black/5 bg-white">
         <!-- Breadcrumb Navigation & Quick Prev/Next Style Switcher -->
         <div class="apple-rail-bento py-1 sm:py-1.5 flex items-center justify-between gap-4 shrink-0">
           <nav class="flex items-center gap-2 text-[11px] text-zinc-500 font-mono min-w-0">
@@ -641,12 +450,8 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
           )}
         </div>
       </section>
-    </main>
 
-    <AppleFooter config={siteConfig} />
-
-    <!-- Carousel & Form Client Script -->
-    <script>
+  <script>
       let currentSlide = 0;
       const slides = document.querySelectorAll<HTMLImageElement>('.carousel-slide');
       const thumbs = document.querySelectorAll<HTMLButtonElement>('.carousel-thumb');
@@ -763,8 +568,4 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
         });
       }
     </script>
-
-    <!-- Global B2B RFQ Architecture: Single Unified Quote Basket Drawer -->
-    <QuoteDrawer />
-  </body>
-</html>
+</Layout>

@@ -1,59 +1,25 @@
 ---
 // src/pages/index.astro
-import AppleNav from '@components/hosiery/AppleNav.astro';
+import Layout from '@layouts/Layout.astro';
 import SockHero from '@components/hosiery/SockHero.astro';
 import SockSpecMatrix from '@components/hosiery/SockSpecMatrix.astro';
 import SockCollections from '@components/hosiery/SockCollections.astro';
 import ManufacturingCapabilities from '@components/hosiery/ManufacturingCapabilities.astro';
 import SwatchInquiry from '@components/hosiery/SwatchInquiry.astro';
-import AppleFooter from '@components/hosiery/AppleFooter.astro';
-import QuoteDrawer from '@components/QuoteDrawer.astro';
 import { client } from '@utils/sanity-client';
-import { fetchData as fetchSiteConfig } from '@data/siteConfig';
-
-import '../styles/globals.css';
+import { SECTIONS, IMAGE } from '@data/blocks';
 
 export const prerender = false;
 
-// Query live Homepage content from Sanity
+// Query live Homepage content from Sanity using shared SECTIONS and IMAGE blocks
 let homeData = null;
 try {
   homeData = await client.fetch(`*[_type == "page" && slug.current == "/"][0]{
     title,
     metaTitle,
     metaDescription,
-    sections[]{
-      ...,
-      _type == "hosieryHeroSection" => {
-        ...,
-        "heroImage": heroImage.asset->url
-      },
-      _type == "hosierySpecSection" => {
-        ...,
-        "macroImage": macroImage.asset->url
-      },
-      _type == "hosieryCollectionSection" => {
-        ...,
-        products[]->{
-          title,
-          shortTitle,
-          "slug": slug.current,
-          tagline,
-          featured,
-          moq,
-          leadTime,
-          "mainImage": mainImage.asset->url,
-          "gallery": gallery[]{
-            "src": asset->url,
-            "alt": alt,
-            "caption": caption
-          },
-          colors,
-          pricingTiers,
-          specifications
-        }
-      }
-    }
+    socialImage ${IMAGE},
+    sections[]${SECTIONS}
   }`);
 } catch (e) {
   console.error("Failed to fetch homeData from Sanity:", e);
@@ -69,58 +35,21 @@ const inqSection = sections.find((s: any) => s._type === 'hosieryInquirySection'
 const metaTitle = homeData?.metaTitle || "Nordic Knit Atelier | 200-Needle Luxury Women's Hosiery B2B Wholesale";
 const metaDescription = homeData?.metaDescription || "Specialized manufacturer of 200-needle luxury women's hosiery, mulberry silk socks, cashmere ribbed crew socks, and seamless tights. Low MOQ, rapid 48h swatch dispatch, and full private label OEM/ODM customization.";
 const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || "/images/hero-light.jpg";
-
-const siteConfig = await fetchSiteConfig();
 ---
 
-<!doctype html>
-<html lang="en" class="scroll-smooth">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{metaTitle}</title>
-    <meta name="description" content={metaDescription} />
-    <meta name="generator" content={Astro.generator} />
+<Layout title={metaTitle} description={metaDescription} image={ogImage} addTitleSuffix={false}>
+  <!-- Hero Section (Dynamic from Sanity Studio) -->
+  <SockHero {...heroSection} />
 
-    <!-- Apple Modern Typography (Inter / SF Pro stack) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Spec Matrix Section (Dynamic from Sanity Studio) -->
+  <SockSpecMatrix {...specSection} />
 
-    <!-- Open Graph -->
-    <meta property="og:title" content={metaTitle} />
-    <meta property="og:description" content={metaDescription} />
-    <meta property="og:image" content={ogImage} />
-    <meta property="og:type" content="website" />
+  <!-- Ready-to-Order Line Sheets & Capsule Collection Grid (Dynamic from Sanity Studio) -->
+  <SockCollections {...collSection} />
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  </head>
-  <body class="bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white">
-    <!-- Apple Pure White Glassmorphic Header -->
-    <AppleNav config={siteConfig} />
+  <!-- Vertical Knitting Manufacturing & OEM Capabilities (Dynamic from Sanity Studio) -->
+  <ManufacturingCapabilities {...mfgSection} />
 
-    <!-- Main Content Dynamic from Sanity Studio -->
-    <main>
-      <!-- Hero Section (Dynamic from Sanity Studio) -->
-      <SockHero {...heroSection} />
-
-      <!-- Spec Matrix Section (Dynamic from Sanity Studio) -->
-      <SockSpecMatrix {...specSection} />
-
-      <!-- Ready-to-Order Line Sheets & Capsule Collection Grid (Dynamic from Sanity Studio) -->
-      <SockCollections {...collSection} />
-
-      <!-- Vertical Knitting Manufacturing & OEM Capabilities (Dynamic from Sanity Studio) -->
-      <ManufacturingCapabilities {...mfgSection} />
-
-      <!-- B2B Swatch Request & RFQ Section (Dynamic from Sanity Studio) -->
-      <SwatchInquiry {...inqSection} />
-    </main>
-
-    <!-- Apple Luxury Minimalist Light Footer -->
-    <AppleFooter config={siteConfig} />
-
-    <!-- B2B RFQ Architecture: Single Unified Quote Drawer -->
-    <QuoteDrawer />
-  </body>
-</html>
+  <!-- B2B Swatch Request & RFQ Section (Dynamic from Sanity Studio) -->
+  <SwatchInquiry {...inqSection} />
+</Layout>

@@ -30,17 +30,10 @@ body {
 }
 
 /* Apple 48px pure frosted glass nav */
-.apple-nav {
-  height: 48px;
-  background: #fffffff0;
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 1px solid #00000014;
-}
-
+.apple-nav,
 .glass-nav-light {
   height: 48px;
-  background: #fffffff0; /* 从 82% 提升至 94% 不透明度，彻底阻隔滚动透字重影 */
+  background: #fffffff0; /* 94% 不透明度，阻隔滚动透字重影 */
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   backdrop-filter: blur(24px) saturate(180%);
   border-bottom: 1px solid #00000014;

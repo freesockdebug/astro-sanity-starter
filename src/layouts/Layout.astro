@@ -11,16 +11,22 @@ interface Props {
     title: string;
     addTitleSuffix?: boolean;
     description?: string;
-    image?: CustomImage;
+    image?: CustomImage | string;
+    bodyClass?: string;
+    mainClass?: string;
 }
 
-const { addTitleSuffix, description, image } = Astro.props;
+const { addTitleSuffix, description, image, bodyClass, mainClass } = Astro.props;
 
 const configData: SiteConfig = (await fetchData()) || {};
 const titleSuffix = configData.titleSuffix && addTitleSuffix !== false ? configData.titleSuffix : undefined;
 const title = [Astro.props.title, titleSuffix].filter(Boolean).join(' | ');
-const resolvedImage = image?.src ? { src: new URL(image.src, Astro.site).toString() } : undefined;
-const canonicalURL = new URL(Astro.request.url, Astro.site);
+
+const imageSrc = typeof image === 'string' ? image : image?.src;
+const resolvedImage = imageSrc
+    ? { src: imageSrc.startsWith('http') ? imageSrc : new URL(imageSrc, Astro.site || Astro.url).toString() }
+    : undefined;
+const canonicalURL = Astro.site ? new URL(Astro.request.url, Astro.site) : Astro.url;
 
 /**
  * Enforce some standard canonical URL formatting across the site.
@@ -33,7 +39,7 @@ function formatCanonicalURL(url: string | URL) {
 ---
 
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="light" class="scroll-smooth">
     <head>
         <!-- High Priority Global Metadata -->
         <meta charset="utf-8" />
@@ -47,29 +53,33 @@ function formatCanonicalURL(url: string | URL) {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
         <!-- Low Priority Global Metadata -->
-        {configData.favicon?.src && <link rel="icon" type="image/svg+xml" href={configData.favicon.src} />}
+        {configData.favicon?.src ? (
+            <link rel="icon" type="image/svg+xml" href={configData.favicon.src} />
+        ) : (
+            <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        )}
         <link rel="sitemap" href="/sitemap-index.xml" />
 
         <!-- Page Metadata -->
         <link rel="canonical" href={formatCanonicalURL(canonicalURL)} />
-        <meta name="description" content={description} />
+        {description && <meta name="description" content={description} />}
 
         <!-- Open Graph / Facebook -->
         <meta property="og:url" content={formatCanonicalURL(canonicalURL)} />
         <meta property="og:title" content={title} />
-        <meta property="og:description" content={description} />
+        {description && <meta property="og:description" content={description} />}
         {resolvedImage?.src && <meta property="og:image" content={resolvedImage.src} />}
 
         <!-- X/Twitter -->
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content={formatCanonicalURL(canonicalURL)} />
         <meta property="twitter:title" content={title} />
-        <meta property="twitter:description" content={description} />
+        {description && <meta property="twitter:description" content={description} />}
         {resolvedImage?.src && <meta property="twitter:image" content={resolvedImage.src} />}
     </head>
-    <body class="bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white">
+    <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
         <AppleNav config={configData} />
-        <main>
+        <main class={mainClass}>
             <slot />
         </main>
         <AppleFooter config={configData} />
