@@ -213,18 +213,47 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     const itemMoq = (customItem?.moq || defaultMoq).trim();
     const itemId = customItem?.id || `swatch-${itemSku.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 
-    addToQuote({
-      id: itemId,
-      title: itemTitle,
-      sku: itemSku,
-      imageUrl: itemImage,
-      variant: itemDesc,
-      quantity: 1,
-      moq: itemMoq,
-    });
+    // Replace any existing swatch item in quote basket so it immediately reflects the latest SKU
+    const current = quoteCart.get() || [];
+    const withoutOldSwatch = current.filter((i) => !i.id.startsWith('swatch-') && i.id !== 'swatch-kit-sample');
+
+    quoteCart.set([
+      ...withoutOldSwatch,
+      {
+        id: itemId,
+        title: itemTitle,
+        sku: itemSku,
+        imageUrl: itemImage,
+        variant: itemDesc,
+        quantity: 1,
+        moq: itemMoq,
+      }
+    ]);
 
     (window as any).openQuoteDrawer();
   };
+
+  // Auto-sync any existing generic swatch item in localStorage with current CMS SKU on init
+  try {
+    const rootEl = document.getElementById('quote-drawer-root');
+    const activeSku = (rootEl?.dataset.swatchSku || 'SWATCH-KIT').trim();
+    const currentCart = quoteCart.get() || [];
+    let shouldSync = false;
+    const syncedCart = currentCart.map((item) => {
+      if ((item.id === 'swatch-kit-sample' || item.id.startsWith('swatch-')) && item.sku !== activeSku) {
+        shouldSync = true;
+        return {
+          ...item,
+          id: `swatch-${activeSku.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+          sku: activeSku,
+        };
+      }
+      return item;
+    });
+    if (shouldSync) {
+      quoteCart.set(syncedCart);
+    }
+  } catch {}
 
   // Intercept all legacy "#inquiry" links and buttons to trigger the unified Quote Drawer
   document.addEventListener('click', (e) => {
