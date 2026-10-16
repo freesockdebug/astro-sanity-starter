@@ -34,51 +34,80 @@ const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnTe
 ---
 
 {showInquirySection && (
-<section id="inquiry" class="bg-white text-[#1d1d1f] border-t border-black/5 py-8 sm:py-10 lg:py-8 lg:h-[calc(100svh-48px)] lg:max-h-[850px] lg:flex lg:flex-col lg:justify-center">
+<section id="inquiry" class="bg-white text-[#1d1d1f] border-t border-black/5 py-8 sm:py-10 lg:py-12">
   <div class="apple-rail-bento w-full">
-    <div class="bg-[#f5f5f7] rounded-2xl sm:rounded-3xl border border-black/5 p-6 sm:p-8 lg:p-12 text-center shadow-xs max-w-4xl mx-auto">
-      <div class="max-w-xl mx-auto space-y-1 sm:space-y-1.5 mb-3.5 sm:mb-4">
-        {badge && (
-          <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b] block">
-            {badge}
-          </span>
-        )}
-        <h2 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
-          {headline}
-        </h2>
-        <p class="text-xs sm:text-sm text-[#86868b] font-normal leading-relaxed mt-1">
-          {subline}
-        </p>
-      </div>
-
-      <!-- Feature Pill Badges -->
-      <div class="flex flex-wrap items-center justify-center gap-2 mb-5 max-w-lg mx-auto">
-        {categories.map((cat: string) => (
-          <span class="px-3 py-1 rounded-full bg-white text-zinc-800 text-[11px] font-medium border border-black/5 shadow-2xs">
-            ✓ {cat}
-          </span>
-        ))}
-      </div>
-
-      <!-- Unified Action: Triggers Quote Drawer directly -->
-      {showSwatchButton && (
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <button
-            type="button"
-            data-open-swatch-kit
-            class="w-full sm:w-auto px-7 py-3 rounded-full text-xs sm:text-sm font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm hover:shadow-md cursor-pointer inline-flex items-center justify-center gap-2"
-          >
-            <span>{displayButtonText}</span>
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </button>
+    <div class="max-w-5xl mx-auto bg-[#f5f5f7] rounded-2xl sm:rounded-3xl border border-black/5 overflow-hidden shadow-xs grid grid-cols-1 md:grid-cols-12 items-stretch">
+      
+      <!-- Left Side (5 Cols): Physical Swatch Kit & Fabric Macro Visual Presentation -->
+      <div class="md:col-span-5 relative min-h-[200px] sm:min-h-[220px] md:min-h-full bg-stone-100 overflow-hidden group">
+        <img
+          src="/images/products/gv-ruffle-detail.jpg"
+          alt="Curated Swatch Kit & Fabric Dossier"
+          class="absolute inset-0 w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
+          loading="lazy"
+        />
+        <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent flex flex-col justify-end p-4 sm:p-5 text-white">
+          <span class="text-[10px] font-mono tracking-widest uppercase text-white/80">Physical Sample Dossier</span>
+          <p class="text-xs sm:text-sm font-semibold mt-0.5 text-white">
+            Curated Yarn Rings, Fabric Swatches & DHL Air Dispatch
+          </p>
         </div>
-      )}
+      </div>
 
-      <p class="text-[11px] text-[#86868b] mt-3">
-        Fast 48h Courier Dispatch · Priority Handling for Qualified Brands & Buying Offices
-      </p>
+      <!-- Right Side (7 Cols): Tight, Content-Rich Details & Action (No Empty Space) -->
+      <div class="md:col-span-7 p-5 sm:p-6 lg:p-7 flex flex-col justify-center gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">{badge}</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
+              48h Express
+            </span>
+            <span class="hidden sm:inline-block text-[10px] text-zinc-400 font-mono">· Free for Verified Brands</span>
+          </div>
+          
+          <h2 class="text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight text-[#1d1d1f] mt-1">
+            {headline}
+          </h2>
+          <p class="text-xs sm:text-[13px] text-[#86868b] font-normal leading-relaxed mt-1">
+            {subline}
+          </p>
+        </div>
+
+        <!-- Included Fabric Silhouettes Pills (Snug & Compact) -->
+        <div class="pt-2 border-t border-black/5">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1.5">
+            Included in Sample Dossier:
+          </span>
+          <div class="flex flex-wrap gap-1.5">
+            {categories.map((cat: string) => (
+              <span class="px-2.5 py-1 rounded-full bg-white text-zinc-800 text-[11px] font-medium border border-black/5 shadow-2xs">
+                ✓ {cat}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <!-- Action Row (Snug, No Gap) -->
+        <div class="pt-2 border-t border-black/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          {showSwatchButton && (
+            <button
+              type="button"
+              data-open-swatch-kit
+              class="px-5 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm hover:shadow-md cursor-pointer inline-flex items-center justify-center gap-2 shrink-0"
+            >
+              <span>{displayButtonText}</span>
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </button>
+          )}
+          <p class="text-[11px] text-[#86868b]">
+            Priority Handling for Fashion Labels & Buying Offices
+          </p>
+        </div>
+
+      </div>
+
     </div>
   </div>
 </section>
