@@ -74,6 +74,14 @@ export interface GalleryItem {
     caption?: string;
 }
 
+export interface ProductCategory {
+    _id: string;
+    title: string;
+    slug: string;
+    description?: string;
+    order?: number;
+}
+
 export interface Product {
     _id: string;
     title: string;
@@ -96,11 +104,26 @@ export interface Product {
     secondaryButtonText?: string;
     moq?: string;
     leadTime?: string;
+    wholesalePrice?: string;
+    category?: ProductCategory | string;
     mainImage?: string;
     gallery?: GalleryItem[];
     colors?: ColorVariant[];
     pricingTiers?: PricingTier[];
     specifications?: ProductSpecification[];
+}
+
+export interface CatalogSettings {
+    badgeText?: string;
+    title?: string;
+    subtitle?: string;
+    metaTitle?: string;
+    metaDescription?: string;
+    searchPlaceholder?: string;
+    allSilhouettesLabel?: string;
+    endOfCatalogText?: string;
+    emptyStateHeading?: string;
+    emptyStateText?: string;
 }
 
 export interface RfqSettings {
@@ -154,6 +177,7 @@ export interface SiteConfig {
     footer?: Footer;
     titleSuffix?: string;
     rfqConfig?: RfqSettings;
+    enableImageProxy?: boolean;
 }
 
 export interface BuyerInfo {

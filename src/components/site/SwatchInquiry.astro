@@ -1,6 +1,7 @@
 ---
-// src/components/hosiery/SwatchInquiry.astro
+// src/components/site/SwatchInquiry.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
+import { DEFAULT_SWATCH_INQUIRY } from '@data/defaults';
 
 interface Props {
   badge?: string;
@@ -14,17 +15,12 @@ interface Props {
 }
 
 const {
-  badge = "B2B Sample Room",
-  headline = "Request Your Curated Swatch Kit",
-  subline = "Feel the micron-level hand feel in person. Verified fashion labels, buying offices, and independent designers receive curated swatch books dispatched within 48 hours.",
+  badge = DEFAULT_SWATCH_INQUIRY.badge,
+  headline = DEFAULT_SWATCH_INQUIRY.headline,
+  subline = DEFAULT_SWATCH_INQUIRY.subline,
   buttonText: propButtonText,
   swatchSku,
-  categories = [
-    "Double Ruffle Lace",
-    "Mulberry Silk",
-    "Cashmere-Silk",
-    "15D Sheer Tights"
-  ],
+  categories = DEFAULT_SWATCH_INQUIRY.categories,
   showSection: propShowSection,
   showButton: propShowButton,
 } = Astro.props;
@@ -32,7 +28,7 @@ const {
 const rfqSettings = await fetchRfqSettings();
 const showInquirySection = propShowSection !== undefined ? propShowSection : (rfqSettings?.showInquirySection ?? true);
 const showSwatchButton = propShowButton !== undefined ? Boolean(propShowButton) : true;
-const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
+const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_SWATCH_INQUIRY.buttonText;
 ---
 
 {showInquirySection && (

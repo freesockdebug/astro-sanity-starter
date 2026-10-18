@@ -1,7 +1,8 @@
 ---
-// src/components/hosiery/SockHero.astro
+// src/components/site/SockHero.astro
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
+import { DEFAULT_HERO, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
 
 interface Props {
   superTitle?: string;
@@ -19,32 +20,32 @@ interface Props {
 
 const {
   superTitle: propSuperTitle,
-  headline = "Engineered Elegance. 140-Needle Micro Weave.",
-  subline = "Knitted on Italian Lonati machinery with 100% artisan hand-linked seamless toes. Built for modern private-label brands and luxury retail.",
+  headline = DEFAULT_HERO.headline,
+  subline = DEFAULT_HERO.subline,
   heroImage: propHeroImage,
   swatchSku,
   showPrimaryButton: propShowPrimary,
   primaryButtonText: propPrimaryText,
-  primaryButtonUrl = "#inquiry",
+  primaryButtonUrl = DEFAULT_HERO.primaryButtonUrl,
   showSecondaryButton: propShowSecondary,
-  secondaryButtonText = "Explore Line Sheets",
-  secondaryButtonUrl = "#collections"
+  secondaryButtonText = DEFAULT_HERO.secondaryButtonText,
+  secondaryButtonUrl = DEFAULT_HERO.secondaryButtonUrl,
 } = Astro.props;
 
 const rfqSettings = await fetchRfqSettings();
-const rawHeroImage = propHeroImage?.trim() || "/images/hero-light.jpg";
+const rawHeroImage = propHeroImage?.trim() || DEFAULT_FALLBACK_IMAGE;
 const heroImage = SanityImageService.hero(rawHeroImage, 1600);
-const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
+const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_HERO.primaryButtonText;
 
 // Super Title handling: support custom text or clean default
 const cleanSuperTitle = propSuperTitle !== undefined
   ? (propSuperTitle || "").trim()
-  : "B2B Hosiery Manufacturing & Private Label";
+  : DEFAULT_HERO.superTitle;
 
 // Headline parsing: support single-line or two-part contrast subtitle
 // If headline contains a period + space or newline, split into primary and secondary.
 // If it's a single sentence/line, render as ONE single line without forced <br> or unwanted fallback text.
-const rawHeadline = (headline || "Engineered Elegance").trim();
+const rawHeadline = (headline || DEFAULT_HERO.headline).trim();
 let headlinePrimary = rawHeadline;
 let headlineSecondary = "";
 
@@ -136,6 +137,8 @@ const showSecondaryButton = propShowSecondary !== undefined
       alt={headlinePrimary}
       class="hero-showcase-img w-full h-56 sm:h-72 md:h-80 lg:h-full object-cover transform transition-transform duration-1000 group-hover:scale-[1.02]"
       loading="eager"
+      fetchpriority="high"
+      decoding="async"
     />
   </div>
 </section>

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createClient } from '@sanity/client';
 import { SecurityService } from '@utils/security';
+import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -157,7 +158,7 @@ function buildRfqEmailHtml(params: {
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e5e5; border-radius: 12px;">
       <h2 style="margin-top: 0; color: #171717;">New Request for Quotation (RFQ)</h2>
-      <p style="color: #525252; font-size: 14px;">A new B2B buyer has submitted a quotation request on Gwenvenni.com.</p>
+      <p style="color: #525252; font-size: 14px;">A new B2B buyer has submitted a quotation request on ${DEFAULT_BRAND_TITLE}.</p>
       <div style="background-color: #f5f5f7; border-radius: 8px; padding: 16px; margin: 20px 0;">
         <p style="margin: 4px 0;"><strong>Company:</strong> ${safeCompany}</p>
         <p style="margin: 4px 0;"><strong>Contact Name:</strong> ${safeName}</p>
@@ -182,7 +183,7 @@ function buildRfqEmailHtml(params: {
         <tbody>${itemsRows}</tbody>
       </table>
       <p style="font-size: 12px; color: #a3a3a3; margin-top: 32px; border-top: 1px solid #e5e5e5; padding-top: 16px;">
-        Submitted at: ${new Date().toUTCString()} | Gwenvenni B2B Atelier
+        Submitted at: ${new Date().toUTCString()} | ${DEFAULT_BRAND_TITLE} B2B Atelier
       </p>
     </div>`;
 }
@@ -227,8 +228,7 @@ export const POST: APIRoute = async ({ request }) => {
       getVal('TURNSTILE_SECRET') ||
       getVal('turnstile_secret_key');
 
-    const isDev = Boolean(import.meta.env?.DEV);
-    if (turnstileSecret && !(isDev && (!turnstileToken || turnstileToken === 'dev-bypass'))) {
+    if (turnstileSecret) {
       if (!turnstileToken || turnstileToken.length > 2048) {
         return new Response(
           JSON.stringify({ error: 'Missing or invalid bot verification token. Please complete the verification.' }),
@@ -359,13 +359,14 @@ export const POST: APIRoute = async ({ request }) => {
         });
 
         // Configurable Resend sender, recipients, and subject prefix
-        const fromEmail = getVal('RESEND_FROM_EMAIL')?.trim() || 'Gwenvenni RFQ System <rfq@gwenvenni.com>';
-        const rawToEmail = getVal('RESEND_TO_EMAIL')?.trim() || 'contact@gwenvenni.com';
+        const defaultDomain = DEFAULT_CONTACT_EMAIL.split('@')[1] || 'gwenvenni.com';
+        const fromEmail = getVal('RESEND_FROM_EMAIL')?.trim() || `${DEFAULT_BRAND_TITLE} RFQ System <rfq@${defaultDomain}>`;
+        const rawToEmail = getVal('RESEND_TO_EMAIL')?.trim() || DEFAULT_CONTACT_EMAIL;
         const toEmails = rawToEmail
           .split(/[,;]/)
           .map((e: string) => e.trim())
           .filter((e: string) => Boolean(e) && EMAIL_REGEX.test(e));
-        const resolvedTo = toEmails.length > 0 ? toEmails : ['contact@gwenvenni.com'];
+        const resolvedTo = toEmails.length > 0 ? toEmails : [DEFAULT_CONTACT_EMAIL];
         const subjectPrefix = getVal('RESEND_SUBJECT_PREFIX')?.trim() || '[New B2B RFQ]';
 
         await fetch('https://api.resend.com/emails', {

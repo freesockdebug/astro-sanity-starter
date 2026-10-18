@@ -1,6 +1,8 @@
 ---
-// src/components/hosiery/SockSpecMatrix.astro
+// src/components/site/SockSpecMatrix.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
+import { SanityImageService } from '@utils/image';
+import { DEFAULT_SPEC_MATRIX, DEFAULT_RFQ } from '@data/defaults';
 
 interface Props {
   badge?: string;
@@ -50,55 +52,56 @@ interface Props {
 }
 
 const {
-  badge = "Engineered Construction",
-  title = "Specification Matrix",
-  description = "We treat the architectural construction of women's hosiery with the exactitude of horology. Every seam, tension zone, and yarn twist is calibrated for zero friction.",
+  badge = DEFAULT_SPEC_MATRIX.badge,
+  title = DEFAULT_SPEC_MATRIX.title,
+  description = DEFAULT_SPEC_MATRIX.description,
   macroImage: propMacroImage,
   swatchSku,
   showPrimaryButton: propShowPrimary,
   primaryButtonText: propPrimaryText,
-  primaryButtonUrl = "#inquiry",
+  primaryButtonUrl = DEFAULT_SPEC_MATRIX.primaryButtonUrl,
   showSecondaryButton: propShowSecondary,
-  secondaryButtonText = "Download B2B Line Sheet (PDF)",
-  secondaryButtonUrl = "#inquiry",
+  secondaryButtonText = DEFAULT_SPEC_MATRIX.secondaryButtonText,
+  secondaryButtonUrl = DEFAULT_SPEC_MATRIX.secondaryButtonUrl,
   // Bento 1
-  bento1Tag = "Yarn Architecture",
-  bento1Title = "60s/2 Double-Ply Combed Cotton.",
-  bento1Description = "Ultra-long staple combed fibers spun for anti-pilling longevity (Grade 4.5) and a breathable, second-skin handfeel across 50+ wash cycles.",
+  bento1Tag = DEFAULT_SPEC_MATRIX.bento1Tag,
+  bento1Title = DEFAULT_SPEC_MATRIX.bento1Title,
+  bento1Description = DEFAULT_SPEC_MATRIX.bento1Description,
   // Bento 2
-  bento2Tag = "Toe Closure",
-  bento2Stat = "0",
-  bento2Unit = "mm",
-  bento2Title = "Hand-Linked Seamless",
-  bento2Description = "Individual loop-by-loop manual interlocking eliminates interior ridges for zero pressure on toes.",
-  bento2BadgeText = "OEKO-TEX® 100 Class I",
-  bento2BadgeStatus = "Certified Safe",
+  bento2Tag = DEFAULT_SPEC_MATRIX.bento2Tag,
+  bento2Stat = DEFAULT_SPEC_MATRIX.bento2Stat,
+  bento2Unit = DEFAULT_SPEC_MATRIX.bento2Unit,
+  bento2Title = DEFAULT_SPEC_MATRIX.bento2Title,
+  bento2Description = DEFAULT_SPEC_MATRIX.bento2Description,
+  bento2BadgeText = DEFAULT_SPEC_MATRIX.bento2BadgeText,
+  bento2BadgeStatus = DEFAULT_SPEC_MATRIX.bento2BadgeStatus,
   // Bento 3
-  bento3Tag = "Machine Gauge",
-  bento3Stat = "200",
-  bento3Unit = "N",
-  bento3Title = "Lonati Cylinders",
-  bento3Description = "Italian high-density circular knit delivering refined micro-rib clarity with zero distortion.",
-  bento3FooterNote = "Tolerance: ±0.5% Needle Pitch",
+  bento3Tag = DEFAULT_SPEC_MATRIX.bento3Tag,
+  bento3Stat = DEFAULT_SPEC_MATRIX.bento3Stat,
+  bento3Unit = DEFAULT_SPEC_MATRIX.bento3Unit,
+  bento3Title = DEFAULT_SPEC_MATRIX.bento3Title,
+  bento3Description = DEFAULT_SPEC_MATRIX.bento3Description,
+  bento3FooterNote = DEFAULT_SPEC_MATRIX.bento3FooterNote,
   // Bento 4
-  bento4Tag = "Elasticity",
-  bento4Stat = "Zero",
-  bento4Unit = "Mark",
-  bento4Title = "Lycra Soft Stretch",
-  bento4Description = "Graduated tension welt stays upright without calf constrictions or pressure marks.",
-  bento4FooterNote = "Non-Slip Silicone Grip Compatible",
+  bento4Tag = DEFAULT_SPEC_MATRIX.bento4Tag,
+  bento4Stat = DEFAULT_SPEC_MATRIX.bento4Stat,
+  bento4Unit = DEFAULT_SPEC_MATRIX.bento4Unit,
+  bento4Title = DEFAULT_SPEC_MATRIX.bento4Title,
+  bento4Description = DEFAULT_SPEC_MATRIX.bento4Description,
+  bento4FooterNote = DEFAULT_SPEC_MATRIX.bento4FooterNote,
   // Bento 5
-  bento5Tag = "Sampling Speed",
-  bento5Stat = "48",
-  bento5Unit = "h",
-  bento5Title = "Global Courier Dispatch",
-  bento5Description = "Curated fabric swatch books and custom lab dip samples dispatched via DHL Express in 48 hours.",
-  bento5FooterNote = "Bulk Lead: 14 – 18 Working Days"
+  bento5Tag = DEFAULT_SPEC_MATRIX.bento5Tag,
+  bento5Stat = DEFAULT_SPEC_MATRIX.bento5Stat,
+  bento5Unit = DEFAULT_SPEC_MATRIX.bento5Unit,
+  bento5Title = DEFAULT_SPEC_MATRIX.bento5Title,
+  bento5Description = DEFAULT_SPEC_MATRIX.bento5Description,
+  bento5FooterNote = DEFAULT_SPEC_MATRIX.bento5FooterNote
 } = Astro.props;
 
 const rfqSettings = await fetchRfqSettings();
-const macroImage = propMacroImage?.trim() || "/images/spec-light.jpg";
-const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
+const rawMacroImage = propMacroImage?.trim() || DEFAULT_SPEC_MATRIX.macroImage;
+const macroImage = SanityImageService.macro(rawMacroImage, 1200);
+const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText;
 
 const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";
 const showPrimaryButton = propShowPrimary !== undefined
@@ -150,9 +153,10 @@ const cleanDescription = (description || "").replace(/^\d+/, "").trim();
         <div class="relative mt-2.5 rounded-xl lg:rounded-2xl overflow-hidden bg-[#f5f5f7] border border-black/5 flex-1 min-h-0 w-full">
           <img
             src={macroImage}
-            alt="Macro ribbed hosiery texture"
+            alt="Macro ribbed textile texture"
             class="absolute inset-0 w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
             loading="lazy"
+            decoding="async"
           />
         </div>
       </div>

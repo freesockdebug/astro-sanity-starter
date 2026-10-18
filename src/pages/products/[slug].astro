@@ -1,35 +1,60 @@
 ---
 // src/pages/products/[slug].astro
 import Layout from '@layouts/Layout.astro';
-import { fetchProductBySlug, fetchAllProducts } from '@data/products';
-import { fetchData as fetchSiteConfig } from '@data/siteConfig';
-import { fetchRfqSettings } from '@data/rfqSettings';
+import { client } from '@utils/sanity-client';
+import { PRODUCT_FIELDS, ProductService } from '@data/products';
+import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
+import { RfqSettingsService } from '@data/rfqSettings';
+import { cleanBrandTitle } from '@utils/text';
+import { SanityImageService } from '@utils/image';
+import { DEFAULT_BRAND_TITLE, DEFAULT_FALLBACK_IMAGE, DEFAULT_RFQ, DEFAULT_PRODUCT_DETAIL } from '@data/defaults';
 
 export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
 
 const { slug } = Astro.params;
 
-const rawAllProducts = await fetchAllProducts();
-const allProducts = (rawAllProducts && rawAllProducts.length > 0) ? rawAllProducts : [];
+// Scheme 2: Single Aggregated GROQ Query - combines 4 independent API calls into 1 single roundtrip
+let batchData: any = null;
+try {
+  batchData = await client.fetch(
+    `{
+      "product": *[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS},
+      "allProducts": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_FIELDS},
+      "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
+      "rfqSettings": *[_type == "rfqSettings"][0]
+    }`,
+    { slug }
+  );
+} catch (e) {
+  console.error(`Failed to batch-fetch product data for ${slug}:`, e);
+}
 
-const currentProduct = slug ? await fetchProductBySlug(slug) : null;
+// Pre-populate service caches so Layout, QuoteDrawer, and recommendations make 0 additional API requests
+if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
+if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
+if (batchData?.allProducts) ProductService.seed({ products: batchData.allProducts });
+
+const currentProduct = batchData?.product;
 if (!currentProduct) {
   return Astro.redirect('/#collections');
 }
 
+const allProducts = batchData?.allProducts || [];
+
 // Ensure product has fallbacks for arrays and images
 currentProduct.gallery = (currentProduct.gallery && currentProduct.gallery.length > 0)
   ? currentProduct.gallery
-  : [{ src: currentProduct.mainImage || '/images/hero-light.jpg', alt: currentProduct.title || 'Product' }];
+  : [{ src: currentProduct.mainImage || DEFAULT_FALLBACK_IMAGE, alt: currentProduct.title || 'Product' }];
 currentProduct.colors = currentProduct.colors || [];
 currentProduct.pricingTiers = currentProduct.pricingTiers || [];
 currentProduct.specifications = currentProduct.specifications || [];
-currentProduct.mainImage = currentProduct.mainImage || currentProduct.gallery[0]?.src || '/images/hero-light.jpg';
+currentProduct.mainImage = currentProduct.mainImage || currentProduct.gallery[0]?.src || DEFAULT_FALLBACK_IMAGE;
 
-const siteConfig = await fetchSiteConfig();
-const rfqSettings = await fetchRfqSettings();
-const rawBrandTitle = siteConfig?.header?.title || "GWENVENNI";
-const brandTitle = rawBrandTitle.split(/\s*\|\s*/)[0].trim().toUpperCase();
+const siteConfig = batchData?.siteConfig;
+const rfqSettings = batchData?.rfqSettings;
+const rawBrandTitle = siteConfig?.header?.title || DEFAULT_BRAND_TITLE;
+const brandTitle = cleanBrandTitle(rawBrandTitle);
 
 const navLinks = siteConfig?.header?.navLinks || [];
 const collectionsLink = navLinks.find((l: any) => 
@@ -48,12 +73,12 @@ const nextIndex = (validIndex + 1) % (allProducts.length || 1);
 const prevProduct = allProducts[prevIndex] || currentProduct;
 const nextProduct = allProducts[nextIndex] || currentProduct;
 
-const addToQuoteBtnText = currentProduct.addToQuoteButtonText || rfqSettings?.btnAddToQuoteText || "Add to Quote Basket";
+const addToQuoteBtnText = currentProduct.addToQuoteButtonText || rfqSettings?.btnAddToQuoteText || DEFAULT_RFQ.btnAddToQuoteText;
 
 // Amazon Sample Buying Link Resolution
 const rawAmazonUrl = currentProduct.amazonUrl || (currentProduct.amazonAsin ? `https://www.amazon.com/dp/${currentProduct.amazonAsin.trim()}` : null);
-const amazonSampleUrl = rawAmazonUrl || rfqSettings?.defaultAmazonStoreUrl || `https://www.amazon.com/s?k=${encodeURIComponent(currentProduct.title || "Gwenvenni")}`;
-const sampleButtonText = currentProduct.sampleButtonText || rfqSettings?.btnSampleAmazonText || "Order Sample on Amazon";
+const amazonSampleUrl = rawAmazonUrl || rfqSettings?.defaultAmazonStoreUrl || `https://www.amazon.com/s?k=${encodeURIComponent(currentProduct.title || DEFAULT_BRAND_TITLE)}`;
+const sampleButtonText = currentProduct.sampleButtonText || rfqSettings?.btnSampleAmazonText || DEFAULT_RFQ.btnSampleAmazonText;
 
 const showAddToQuoteButton = rfqSettings?.showProductAddToQuoteButton ?? true;
 const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
@@ -126,7 +151,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                       aria-label={`View image ${idx + 1}`}
                       class={`carousel-thumb shrink-0 w-14 h-14 sm:w-15 sm:h-15 lg:w-[68px] lg:h-[68px] xl:w-[74px] xl:h-[74px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer bg-[#fafafa] flex items-center justify-center ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
                     >
-                      <img src={img.src} alt={img.alt} class="w-full h-full object-contain p-0.5" />
+                      <img src={SanityImageService.thumbnail(img.src, 160)} alt={img.alt} class="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
                     </button>
                   ))}
                 </div>
@@ -137,11 +162,13 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                   <div id="carousel-track" class="w-full h-full relative">
                     {currentProduct.gallery.map((img: any, idx: number) => (
                       <img
-                        src={img.src}
+                        src={SanityImageService.hero(img.src, 1200)}
                         alt={img.alt}
                         class={`carousel-slide absolute inset-0 m-auto w-full h-full max-h-full max-w-full object-contain p-2 sm:p-4 transition-opacity duration-500 ease-in-out ${idx === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
                         data-index={idx}
                         loading={idx === 0 ? 'eager' : 'lazy'}
+                        fetchpriority={idx === 0 ? 'high' : 'auto'}
+                        decoding="async"
                       />
                     ))}
                   </div>
@@ -188,7 +215,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
               </div>
 
               <p class="text-[10px] text-zinc-400 font-mono text-center lg:text-left mt-1.5 shrink-0">
-                {currentProduct.galleryHint || "Click thumbnails or use arrows to view weave, heel pocket, seamless toe & elastic welt."}
+                {currentProduct.galleryHint || DEFAULT_PRODUCT_DETAIL.galleryHint}
               </p>
             </div>
 
@@ -199,7 +226,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 text-zinc-800 font-medium">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>{currentProduct.statusBadge || "Active Production Ready"}</span>
+                    <span>{currentProduct.statusBadge || DEFAULT_PRODUCT_DETAIL.statusBadge}</span>
                   </span>
                   {currentProduct.rating && (
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-stone-100 text-stone-700 border border-stone-200/60">
@@ -230,7 +257,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                   ))}
                 </div>
                 <p class="text-[10px] text-zinc-400 font-mono pt-0.5">
-                  {currentProduct.priceNote || "* Customs, freight, and custom branded packaging quoted upon destination."}
+                  {currentProduct.priceNote || DEFAULT_PRODUCT_DETAIL.priceNote}
                 </p>
               </div>
 
@@ -240,7 +267,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                 <div class="space-y-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">
-                      {currentProduct.paletteTitle || "Available In-Stock Yarn Palette:"}
+                      {currentProduct.paletteTitle || DEFAULT_PRODUCT_DETAIL.paletteTitle}
                     </span>
                     <span id="selected-color-name" class="text-xs font-medium text-zinc-900">
                       {currentProduct.colors[0]?.name || "Default"}
@@ -296,8 +323,8 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                     data-id={currentProduct.slug}
                     data-title={currentProduct.shortTitle || currentProduct.title}
                     data-sku={currentProduct.sku || "SKU"}
-                    data-image={currentProduct.gallery[0]?.src || "/images/hero-light.jpg"}
-                    data-moq={currentProduct.moq || "200 Pairs"}
+                    data-image={SanityImageService.thumbnail(currentProduct.gallery[0]?.src || DEFAULT_FALLBACK_IMAGE, 200)}
+                    data-moq={currentProduct.moq || DEFAULT_PRODUCT_DETAIL.fallbackMoq}
                   >
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -361,7 +388,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                   <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
-                  <span class="truncate">{currentProduct.supportBadge || "Full Private Label Support"}</span>
+                  <span class="truncate">{currentProduct.supportBadge || DEFAULT_PRODUCT_DETAIL.supportBadge}</span>
                 </div>
               </div>
             </div>
@@ -377,10 +404,10 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
             <div class="flex items-center justify-between mb-3">
               <div>
                 <span class="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block">
-                  {currentProduct.specsBadge || "Factory Quality Standard"}
+                  {currentProduct.specsBadge || DEFAULT_PRODUCT_DETAIL.specsBadge}
                 </span>
                 <h2 class="text-lg sm:text-xl font-semibold tracking-tight text-zinc-950 mt-0.5">
-                  {currentProduct.specsHeading || "Technical Specifications & Construction"}
+                  {currentProduct.specsHeading || DEFAULT_PRODUCT_DETAIL.specsHeading}
                 </h2>
               </div>
               <span class="hidden sm:inline-block text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60">

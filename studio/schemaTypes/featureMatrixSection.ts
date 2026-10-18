@@ -48,13 +48,13 @@ export default defineType({
       name: 'badge',
       title: 'Badge Label (上标分类)',
       type: 'string',
-      initialValue: 'Technical Architecture',
+      initialValue: 'Engineered Construction',
     }),
     defineField({
       name: 'title',
       title: 'Title (Apple 风格主标题)',
       type: 'string',
-      initialValue: 'Crafted to the micron.',
+      initialValue: 'Specification Matrix',
     }),
     defineField({
       name: 'description',
@@ -62,7 +62,7 @@ export default defineType({
       type: 'text',
       rows: 2,
       initialValue:
-        'Every thread engineered for retail longevity & zero friction.',
+        'We treat the architectural construction of luxury knitwear with the exactitude of horology. Every seam, tension zone, and yarn twist is calibrated for zero friction.',
     }),
     // Bento 1
     defineField({
@@ -198,31 +198,31 @@ export default defineType({
     // Bento 4
     defineField({
       name: 'bento4Tag',
-      title: 'Bento 4 Tag (上标，如 Elasticity)',
+      title: 'Bento 4 Tag (上标，如 Color Fastness)',
       type: 'string',
       fieldset: 'bento4',
-      initialValue: 'Elasticity',
+      initialValue: 'Color Fastness',
     }),
     defineField({
       name: 'bento4Stat',
-      title: 'Bento 4 Stat (大数值，如 Zero)',
+      title: 'Bento 4 Stat (大数值，如 Grade 4+)',
       type: 'string',
       fieldset: 'bento4',
-      initialValue: 'Zero',
+      initialValue: 'Grade 4+',
     }),
     defineField({
       name: 'bento4Unit',
-      title: 'Bento 4 Unit (单位，如 Mark)',
+      title: 'Bento 4 Unit (单位，如 Wash)',
       type: 'string',
       fieldset: 'bento4',
-      initialValue: 'Mark',
+      initialValue: 'Wash',
     }),
     defineField({
       name: 'bento4Title',
-      title: 'Bento 4 Title (主标题，如 Lycra Soft Stretch)',
+      title: 'Bento 4 Title (主标题，如 Low-Impact Eco Dyes.)',
       type: 'string',
       fieldset: 'bento4',
-      initialValue: 'Lycra Soft Stretch',
+      initialValue: 'Low-Impact Eco Dyes.',
     }),
     defineField({
       name: 'bento4Description',
@@ -231,14 +231,14 @@ export default defineType({
       rows: 2,
       fieldset: 'bento4',
       initialValue:
-        'Graduated tension welt stays upright without calf constrictions or pressure marks.',
+        'Custom pantone formulation with non-toxic reactive dyes ensuring Grade 4+ wash fastness without bleeding.',
     }),
     defineField({
       name: 'bento4FooterNote',
-      title: 'Bento 4 Footer Note (底部参数说明，如 Non-Slip Silicone Grip Compatible)',
+      title: 'Bento 4 Footer Note (底部参数说明，如 OEKO-TEX & REACH Compliant)',
       type: 'string',
       fieldset: 'bento4',
-      initialValue: 'Non-Slip Silicone Grip Compatible',
+      initialValue: 'OEKO-TEX & REACH Compliant',
     }),
 
     // Bento 5

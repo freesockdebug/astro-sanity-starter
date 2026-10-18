@@ -12,8 +12,8 @@ export const CONFIG_QUERY_OBJ = `{
     logo ${IMAGE}
   },
   footer,
-  rfqConfig,
-  titleSuffix
+  titleSuffix,
+  enableImageProxy
 }`;
 
 /**
@@ -23,6 +23,13 @@ export class SiteConfigService {
   private static cachedConfig: SiteConfig | null = null;
   private static cacheTimestamp: number = 0;
   private static readonly CACHE_TTL_MS = 10_000;
+
+  public static seed(config?: SiteConfig | null): void {
+    if (config) {
+      this.cachedConfig = config;
+      this.cacheTimestamp = Date.now();
+    }
+  }
 
   public static async getConfig(forceRefresh = false): Promise<SiteConfig | null> {
     const now = Date.now();

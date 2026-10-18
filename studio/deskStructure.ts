@@ -1,6 +1,8 @@
 import { StructureResolver, DefaultDocumentNodeResolver } from 'sanity/structure'
 import { HomeIcon } from '@sanity/icons/Home'
 import { TagIcon } from '@sanity/icons/Tag'
+import { ThListIcon } from '@sanity/icons/ThList'
+import { MasterDetailIcon } from '@sanity/icons/MasterDetail'
 import { DocumentsIcon } from '@sanity/icons/Documents'
 import { CogIcon } from '@sanity/icons/Cog'
 import { ArchiveIcon } from '@sanity/icons/Archive'
@@ -45,6 +47,26 @@ export const deskStructure: StructureResolver = (S) =>
         .icon(TagIcon)
         .schemaType('product')
         .child(S.documentTypeList('product').title('全部产品款式')),
+
+      // 2.1 Product Categories
+      S.listItem()
+        .id('categories')
+        .title('🏷️ Categories (产品类别配置)')
+        .icon(ThListIcon)
+        .schemaType('category')
+        .child(S.documentTypeList('category').title('全部产品类别')),
+
+      // 2.2 Product Catalog Page Settings
+      S.listItem()
+        .id('catalogSettings')
+        .title('🏛️ Catalog Settings (产品大厅页面配置)')
+        .icon(MasterDetailIcon)
+        .child(
+          S.document()
+            .schemaType('catalogSettings')
+            .documentId('catalogSettings')
+            .title('产品陈列大厅页面配置')
+        ),
 
       // 3. All Pages (About, Contact, Private Label)
       S.listItem()

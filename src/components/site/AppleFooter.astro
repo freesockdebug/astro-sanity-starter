@@ -1,0 +1,224 @@
+---
+// src/components/site/AppleFooter.astro
+import { fetchData } from '@data/siteConfig';
+import { fetchRfqSettings } from '@data/rfqSettings';
+import { cleanEnglishText, cleanBrandTitle } from '@utils/text';
+import {
+  DEFAULT_BRAND_TITLE,
+  DEFAULT_FOOTER_BIO,
+  DEFAULT_STATUS_BADGE,
+  DEFAULT_COPYRIGHT_TEXT,
+  DEFAULT_FOOTER_COLUMNS,
+  DEFAULT_LEGAL_LINKS,
+} from '@data/defaults';
+
+const config = Astro.props.config ?? await fetchData();
+const rfqSettings = await fetchRfqSettings();
+const header = config?.header;
+const footer = config?.footer;
+
+const rawBrandTitle = header?.title || DEFAULT_BRAND_TITLE;
+const brandTitle = cleanBrandTitle(rawBrandTitle, DEFAULT_BRAND_TITLE);
+const rawFooterText = footer?.text || DEFAULT_COPYRIGHT_TEXT;
+const footerBio = footer?.description || DEFAULT_FOOTER_BIO;
+const statusBadge = footer?.statusBadge || DEFAULT_STATUS_BADGE;
+
+const cleanFooterText = cleanEnglishText(rawFooterText) || DEFAULT_COPYRIGHT_TEXT;
+
+const rawColumns = (footer?.columns && footer.columns.length > 0) ? footer.columns : DEFAULT_FOOTER_COLUMNS;
+const columns = rawColumns.map((col: any) => ({
+  ...col,
+  title: cleanEnglishText(col.title),
+  links: col.links?.map((l: any) => ({
+    ...l,
+    label: cleanEnglishText(l.label)
+  }))
+}));
+
+const rawLegalLinks = (footer?.legalLinks && footer.legalLinks.length > 0) ? footer.legalLinks : DEFAULT_LEGAL_LINKS;
+const legalLinks = rawLegalLinks.map((l: any) => ({
+  ...l,
+  label: cleanEnglishText(l.label)
+}));
+---
+
+<footer class="bg-[#f5f5f7] text-[#86868b] py-6 sm:py-8 border-t border-black/10 text-[11px] sm:text-[12px] leading-normal font-normal">
+  <div class="apple-rail-footer space-y-4 sm:space-y-5">
+    <!-- Apple-style Footnote / Status Bar -->
+    <div class="pb-3 border-b border-black/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-[#86868b]">
+      <p class="max-w-2xl leading-relaxed text-[#6e6e73]">
+        {footerBio}
+      </p>
+      <div class="flex items-center gap-1.5 flex-shrink-0 font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+        <span class="text-[#1d1d1f] font-mono text-[11px]">{statusBadge}</span>
+      </div>
+    </div>
+
+    <!-- Apple Directory: Mobile Accordion (Tap to Expand), Desktop 5-Column Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-5 md:gap-x-6 md:gap-y-4 pt-1 border-t border-black/10 md:border-none">
+      {columns.map((col: any) => (
+        <details class="apple-footer-col group border-b border-black/10 md:border-none py-2.5 md:py-0">
+          <summary class="font-semibold text-[#1d1d1f] tracking-tight flex items-center justify-between cursor-pointer list-none [&::-webkit-details-marker]:hidden select-none md:cursor-default py-0.5 md:py-0">
+            <span>{col.title}</span>
+            <span class="md:hidden text-[#86868b] transition-transform duration-200 group-open:rotate-180 flex items-center justify-center">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </span>
+          </summary>
+          <ul class="pt-2 pb-1 space-y-1.5 md:space-y-1 text-[#424245] md:pt-1.5">
+            {col.links?.map((link: any) => (
+              <li>
+                <a
+                  href={link.url || "#"}
+                  data-swatch-sku={(link.url === '#inquiry' || (link.label || '').toLowerCase().includes('swatch')) ? rfqSettings?.swatchKitSku : undefined}
+                  class="hover:text-[#1d1d1f] hover:underline transition-colors block py-0.5 md:py-0"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ))}
+    </div>
+
+    <!-- Apple Bottom Legal Bar: Clean Inline Separation with subtle pipes -->
+    <div class="pt-3 border-t border-black/10 flex flex-col md:flex-row md:items-center justify-between gap-2 text-[11px] text-[#86868b]">
+      <div>
+        {cleanFooterText}
+      </div>
+      <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[#424245]">
+        {legalLinks.map((link: any, idx: number) => (
+          <div class="inline-flex items-center gap-2.5">
+            {idx > 0 && <span class="text-black/15 select-none font-normal">|</span>}
+            <a href={link.url || "#"} class="hover:text-[#1d1d1f] hover:underline transition-colors">
+              {link.label}
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+  <!-- Floating Back-to-Top Dock Button (Taobao & Apple Inspired) -->
+  <button
+    id="btn-back-to-top"
+    type="button"
+    aria-label="Back to top"
+    class="btn-back-to-top-dock z-40 flex flex-col items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/92 backdrop-blur-md border border-black/10 shadow-[0_4px_16px_rgba(0,0,0,0.1)] text-[#1d1d1f] hover:text-black hover:bg-white hover:border-black/25 hover:shadow-[0_8px_24px_rgba(0,0,0,0.15)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 ease-out opacity-0 pointer-events-none translate-y-3 cursor-pointer group select-none"
+    title="Back to top"
+  >
+    <svg
+      class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300 group-hover:-translate-y-0.5 text-[#1d1d1f]"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      stroke-width="2.2"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+    </svg>
+    <span class="text-[8px] sm:text-[9px] font-bold tracking-wider uppercase text-[#86868b] group-hover:text-black transition-colors leading-tight mt-0.5">TOP</span>
+  </button>
+</footer>
+
+<style>
+  /* Back-to-Top Dock Button - Perfectly aligned on the right flank with AppleStageNavigator */
+  .btn-back-to-top-dock {
+    position: fixed;
+    bottom: 1.5rem;
+    right: max(0.75rem, env(safe-area-inset-right)); /* Safe dock on mobile/narrow screens */
+  }
+
+  /* Desktop Screens (1024px+): Default fallback right margin (exact center axis) before JS dynamic centering */
+  @media (min-width: 1024px) {
+    .btn-back-to-top-dock {
+      right: max(1rem, calc((100vw - 1360px) / 4 - 22px));
+      left: auto;
+    }
+  }
+</style>
+
+<script>
+  import { alignElementToRightGutter } from '@utils/device';
+  function setupFooterAccordions() {
+    const isDesktop = window.innerWidth >= 768;
+    const allDetails = document.querySelectorAll<HTMLDetailsElement>('details.apple-footer-col');
+    allDetails.forEach(details => {
+      if (isDesktop) {
+        details.open = true;
+      } else {
+        if (!details.dataset.userToggled) {
+          details.open = false;
+        }
+      }
+    });
+  }
+
+  document.querySelectorAll<HTMLDetailsElement>('details.apple-footer-col summary').forEach(summary => {
+    summary.addEventListener('click', () => {
+      const details = summary.closest('details');
+      if (details) {
+        details.dataset.userToggled = 'true';
+      }
+    });
+  });
+
+  function setupBackToTop() {
+    const btn = document.getElementById('btn-back-to-top');
+    if (!btn || (btn as any)._initialized) return;
+    (btn as any)._initialized = true;
+
+    let isVisible = false;
+    let ticking = false;
+
+    function onScroll() {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const shouldShow = window.scrollY > 380;
+          if (shouldShow !== isVisible) {
+            isVisible = shouldShow;
+            if (isVisible) {
+              btn?.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-3');
+              btn?.classList.add('opacity-100', 'pointer-events-auto', 'translate-y-0');
+            } else {
+              btn?.classList.remove('opacity-100', 'pointer-events-auto', 'translate-y-0');
+              btn?.classList.add('opacity-0', 'pointer-events-none', 'translate-y-3');
+            }
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }
+
+    // Dynamically align Back-To-Top button exactly on right gutter center axis (synced with Stage Navigator)
+    function alignWithStageNav() {
+      alignElementToRightGutter(btn, { fallbackRight: 'max(0.75rem, env(safe-area-inset-right))' });
+    }
+
+    btn.addEventListener('click', () => {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    });
+
+    alignWithStageNav();
+    window.addEventListener('resize', alignWithStageNav, { passive: true });
+    window.addEventListener('load', alignWithStageNav, { passive: true });
+    setTimeout(alignWithStageNav, 50);
+    setTimeout(alignWithStageNav, 200);
+    window.addEventListener('scroll', () => {
+      onScroll();
+      alignWithStageNav();
+    }, { passive: true });
+    onScroll();
+  }
+
+  setupFooterAccordions();
+  window.addEventListener('resize', setupFooterAccordions);
+
+  setupBackToTop();
+  document.addEventListener('astro:page-load', setupBackToTop);
+</script>

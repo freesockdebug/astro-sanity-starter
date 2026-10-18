@@ -1,52 +1,78 @@
 ---
 // src/pages/index.astro
 import Layout from '@layouts/Layout.astro';
-import SockHero from '@components/hosiery/SockHero.astro';
-import SockSpecMatrix from '@components/hosiery/SockSpecMatrix.astro';
-import SockCollections from '@components/hosiery/SockCollections.astro';
-import ManufacturingCapabilities from '@components/hosiery/ManufacturingCapabilities.astro';
-import SwatchInquiry from '@components/hosiery/SwatchInquiry.astro';
-import CustomSection from '@components/hosiery/CustomSection.astro';
+import { componentMap, AppleStageNavigator } from '@components/site';
 import { client } from '@utils/sanity-client';
-import { SECTIONS, IMAGE } from '@data/blocks';
+import { SECTIONS, IMAGE, normalizeSections } from '@data/blocks';
+import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
+import { RfqSettingsService } from '@data/rfqSettings';
+import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
 
 export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
 
-// Query live Homepage content from Sanity using shared SECTIONS and IMAGE blocks
-let homeData = null;
+// Scheme 2: Single Aggregated GROQ Query - fetches page, siteConfig, and rfqSettings in 1 network roundtrip
+let batchData: any = null;
 try {
-  homeData = await client.fetch(`*[_type == "page" && slug.current == "/"][0]{
-    title,
-    metaTitle,
-    metaDescription,
-    socialImage ${IMAGE},
-    sections[]${SECTIONS}
+  batchData = await client.fetch(`{
+    "page": *[_type == "page" && slug.current == "/"][0]{
+      title,
+      metaTitle,
+      metaDescription,
+      socialImage ${IMAGE},
+      sections[]${SECTIONS}
+    },
+    "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
+    "rfqSettings": *[_type == "rfqSettings"][0]
   }`);
 } catch (e) {
-  console.error("Failed to fetch homeData from Sanity:", e);
+  console.error("Failed to batch-fetch homepage data from Sanity:", e);
 }
 
-const sections = homeData?.sections || [];
+// Pre-populate service caches so Layout, AppleNav, QuoteDrawer, and sections make 0 additional API requests
+if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
+if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
 
-const componentMap: Record<string, any> = {
-  heroSection: SockHero,
-  featureMatrixSection: SockSpecMatrix,
-  productShowcaseSection: SockCollections,
-  manufacturingSection: ManufacturingCapabilities,
-  inquirySection: SwatchInquiry,
-  customSection: CustomSection,
-  // Backward compatibility
-  hosieryHeroSection: SockHero,
-  hosierySpecSection: SockSpecMatrix,
-  hosieryCollectionSection: SockCollections,
-  hosieryManufacturingSection: ManufacturingCapabilities,
-  hosieryInquirySection: SwatchInquiry,
+const homeData = batchData?.page;
+
+const sections = normalizeSections(homeData?.sections || []);
+const heroSection = sections.find((s: any) => s._type === 'heroSection' || s._type === 'hosieryHeroSection');
+const metaTitle = homeData?.metaTitle || DEFAULT_META_TITLE;
+const metaDescription = homeData?.metaDescription || DEFAULT_META_DESCRIPTION;
+const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || DEFAULT_FALLBACK_IMAGE;
+
+// 100% Dynamic section resolver based strictly on Studio CMS configuration & order
+const SECTION_DEFAULTS: Record<string, { id: string; label: string }> = {
+  heroSection: { id: 'hero', label: 'Overview' },
+  hosieryHeroSection: { id: 'hero', label: 'Overview' },
+  featureMatrixSection: { id: 'specs', label: 'Specification' },
+  hosierySpecSection: { id: 'specs', label: 'Specification' },
+  productShowcaseSection: { id: 'collections', label: 'Silhouettes' },
+  hosieryCollectionSection: { id: 'collections', label: 'Silhouettes' },
+  manufacturingSection: { id: 'manufacturing', label: 'Infrastructure' },
+  hosieryManufacturingSection: { id: 'manufacturing', label: 'Infrastructure' },
+  inquirySection: { id: 'inquiry', label: 'Sample Request' },
+  hosieryInquirySection: { id: 'inquiry', label: 'Sample Request' },
+  customSection: { id: 'custom', label: 'Feature' },
 };
 
-const heroSection = sections.find((s: any) => s._type === 'heroSection' || s._type === 'hosieryHeroSection');
-const metaTitle = homeData?.metaTitle || "Gwenvenni Luxury Atelier | 200-Needle Luxury B2B Wholesale";
-const metaDescription = homeData?.metaDescription || "Specialized manufacturer of 200-needle luxury apparel, fine silks, cashmere, and seamless essentials. Low MOQ, rapid 48h swatch dispatch, and full OEM/ODM customization.";
-const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || "/images/hero-light.jpg";
+const stages = sections
+  .map((section: any, idx: number) => {
+    const type = section._type;
+    const defaults = SECTION_DEFAULTS[type] || { id: `section-${idx + 1}`, label: `Section ${idx + 1}` };
+    const id = section.elementId || section.sectionAnchor || defaults.id;
+    
+    // Priority: custom navLabel in Studio > adminLabel > default label
+    const customLabel = section.navLabel || (section.adminLabel && typeof section.adminLabel === 'string' && section.adminLabel.replace(/【.*?】/, '').trim());
+    const label = customLabel || defaults.label;
+
+    return {
+      id,
+      num: String(idx + 1).padStart(2, '0'),
+      label
+    };
+  })
+  .filter((st: any) => Boolean(st.id));
 ---
 
 <Layout title={metaTitle} description={metaDescription} image={ogImage} addTitleSuffix={false}>
@@ -54,4 +80,7 @@ const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || "/images
     const Component = componentMap[section._type];
     return Component ? <Component {...section} /> : null;
   })}
+
+  <!-- Apple Presentation Stage Navigator (Floating Glassmorphism Capsule) -->
+  <AppleStageNavigator stages={stages.length > 0 ? stages : undefined} />
 </Layout>

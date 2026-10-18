@@ -1,5 +1,10 @@
+// src/utils/image.ts
 /**
  * Sanity CDN Image Optimization Service
+ * Features:
+ * - Dynamic parameter optimization (w, q, auto=format)
+ * - Optional Cloudflare Edge Proxy Routing to bypass direct Sanity bandwidth consumption
+ * - Controllable via ENABLE_IMAGE_PROXY environment variable
  */
 export interface ImageOptimizationOptions {
   width?: number;
@@ -10,12 +15,48 @@ export interface ImageOptimizationOptions {
 }
 
 export class SanityImageService {
+  private static _studioConfigOverride: boolean | null = null;
+
+  /**
+   * Set proxy state dynamically from Sanity Studio siteConfig document
+   */
+  public static setStudioProxyConfig(enabled?: boolean): void {
+    if (typeof enabled === 'boolean') {
+      this._studioConfigOverride = enabled;
+    }
+  }
+
+  /**
+   * Check whether Cloudflare Edge Image Proxying is enabled.
+   * Priority:
+   * 1. Sanity Studio siteConfig setting (if defined)
+   * 2. ENABLE_IMAGE_PROXY environment variable
+   * 3. Defaults to true for optimal Cloudflare caching
+   */
+  public static isProxyEnabled(): boolean {
+    if (this._studioConfigOverride !== null) {
+      return this._studioConfigOverride;
+    }
+
+    const envVal =
+      (import.meta.env && import.meta.env.ENABLE_IMAGE_PROXY) ||
+      (typeof process !== 'undefined' && process.env && process.env.ENABLE_IMAGE_PROXY);
+
+    if (envVal !== undefined && envVal !== null) {
+      return envVal === 'true' || envVal === true;
+    }
+
+    // Default to true (safe, high performance edge caching)
+    return true;
+  }
+
   /**
    * Appends Sanity CDN image pipeline query parameters for dynamic resizing, WebP compression, and optimal delivery.
+   * If proxy is enabled, routes through /cdn-image/* for Cloudflare free edge caching.
    */
   public static optimize(url?: string | null, options: ImageOptimizationOptions = {}): string {
     if (!url || typeof url !== 'string') return url || '';
-    
+
     // Only apply to Sanity CDN URLs
     if (!url.includes('cdn.sanity.io')) {
       return url;
@@ -37,10 +78,29 @@ export class SanityImageService {
       if (format) parsedUrl.searchParams.set('auto', 'format');
       if (fit) parsedUrl.searchParams.set('fit', fit);
 
-      return parsedUrl.toString();
+      const optimizedUrl = parsedUrl.toString();
+
+      // If Edge Proxy is enabled: route through local Cloudflare Edge Cache (/cdn-image)
+      if (this.isProxyEnabled()) {
+        return optimizedUrl.replace('https://cdn.sanity.io', '/cdn-image');
+      }
+
+      return optimizedUrl;
     } catch {
       return url;
     }
+  }
+
+  /**
+   * Directly routes any Sanity CDN URL to the Cloudflare Edge Proxy (/cdn-image) without adding query parameters
+   */
+  public static toEdgeUrl(url?: string | null): string {
+    if (!url || typeof url !== 'string') return url || '';
+    if (!url.includes('cdn.sanity.io')) return url;
+    if (this.isProxyEnabled()) {
+      return url.replace('https://cdn.sanity.io', '/cdn-image');
+    }
+    return url;
   }
 
   /**
@@ -51,9 +111,30 @@ export class SanityImageService {
   }
 
   /**
-   * Helper to get hero or high-resolution banner image (e.g. 1400px wide)
+   * Helper to get hero or high-resolution banner image (e.g. 1600px wide)
    */
-  public static hero(url?: string | null, width: number = 1400): string {
+  public static hero(url?: string | null, width: number = 1600): string {
+    return this.optimize(url, { width, quality: 85, format: 'auto' });
+  }
+
+  /**
+   * Helper to get macro texture / specification visual (e.g. 1200px wide)
+   */
+  public static macro(url?: string | null, width: number = 1200): string {
+    return this.optimize(url, { width, quality: 85, format: 'auto' });
+  }
+
+  /**
+   * Helper to get brand logos or small UI icons (e.g. 300px wide, high quality)
+   */
+  public static logo(url?: string | null, width: number = 300): string {
+    return this.optimize(url, { width, quality: 90, format: 'auto' });
+  }
+
+  /**
+   * Helper to get user avatars or small badges (e.g. 120px wide)
+   */
+  public static avatar(url?: string | null, width: number = 120): string {
     return this.optimize(url, { width, quality: 85, format: 'auto' });
   }
 }

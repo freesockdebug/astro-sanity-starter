@@ -1,0 +1,510 @@
+---
+// src/pages/products/index.astro
+import Layout from '@layouts/Layout.astro';
+import { client } from '@utils/sanity-client';
+import { PRODUCT_FIELDS, CATEGORY_FIELDS, ProductService, fetchCatalogCategories } from '@data/products';
+import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
+import { RfqSettingsService } from '@data/rfqSettings';
+import { DEFAULT_CATALOG, DEFAULT_RFQ } from '@data/defaults';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+
+// Scheme 2: Single Aggregated GROQ Query - combines 5 independent API calls into 1 single roundtrip
+let batchData: any = null;
+try {
+  batchData = await client.fetch(`{
+    "products": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_FIELDS},
+    "categories": *[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS},
+    "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
+    "rfqSettings": *[_type == "rfqSettings"][0],
+    "catalogSettings": *[_type == "catalogSettings"][0]
+  }`);
+} catch (e) {
+  console.error("Failed to batch-fetch catalog data from Sanity:", e);
+}
+
+// Pre-populate service caches so Layout, QuoteDrawer, and Filter tabs make 0 additional API requests
+if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
+if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
+ProductService.seed({
+  products: batchData?.products,
+  categories: batchData?.categories,
+  catalogSettings: batchData?.catalogSettings
+});
+
+const mergedProducts = (batchData?.products || []).map((p: any) => ProductService.normalize(p, 800));
+const siteConfig = batchData?.siteConfig;
+const rfqSettings = batchData?.rfqSettings;
+const catalogSettings = batchData?.catalogSettings;
+
+const cardQuoteText = rfqSettings?.cardQuoteBtnText || DEFAULT_RFQ.cardQuoteBtnText;
+const allLabel = catalogSettings?.allSilhouettesLabel || DEFAULT_CATALOG.allSilhouettesLabel;
+
+// 2. Resolve aggregated categories & counts via data service layer (instantly from memory)
+const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
+
+const serializedProducts = JSON.stringify(mergedProducts);
+---
+
+<Layout
+  title={catalogSettings?.metaTitle || DEFAULT_CATALOG.metaTitle}
+  description={catalogSettings?.metaDescription || DEFAULT_CATALOG.metaDescription}
+>
+  <!-- Main Catalog Container with Wide Responsive Boundaries (Compact Bottom Spacing) -->
+  <main class="min-h-screen bg-white text-[#1d1d1f] pt-14 sm:pt-18 pb-6 sm:pb-8 border-t border-black/5">
+    
+    <!-- 1. Catalog Hero Header (Apple Rail Narrow) -->
+    <section class="apple-rail-narrow text-center mb-6 sm:mb-9 space-y-1.5 sm:space-y-2.5">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">
+        <span>{catalogSettings?.badgeText || DEFAULT_CATALOG.badgeText}</span>
+      </div>
+      <h1 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
+        {catalogSettings?.title || DEFAULT_CATALOG.title}
+      </h1>
+      <p class="text-xs sm:text-sm text-[#86868b] max-w-xl mx-auto font-normal leading-relaxed">
+        {catalogSettings?.subtitle || DEFAULT_CATALOG.subtitle}
+      </p>
+    </section>
+
+    <!-- 2. Sticky Control Toolbar: Search & Category Filter Rail -->
+    <div class="sticky top-12 z-40 bg-white/95 backdrop-blur-md border-y border-black/5 py-2.5 mb-6 transition-shadow shadow-xs">
+      <div class="apple-rail-wide flex flex-col md:flex-row md:items-center justify-between gap-3">
+        
+        <!-- Category Filter Tabs (Horizontal Swipe on Mobile) -->
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5" id="category-filter-rail">
+          {CATEGORIES.map((cat) => (
+            <button
+              type="button"
+              data-category-id={cat.id}
+              class={`category-tab-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                cat.id === 'all'
+                  ? 'bg-[#1d1d1f] text-white shadow-sm'
+                  : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/5'
+              }`}
+            >
+              <span>{cat.label}</span>
+              <span class={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                cat.id === 'all' ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'
+              }`}>
+                {cat.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <!-- Search Bar & Sorting Dropdown -->
+        <div class="flex items-center gap-2 shrink-0">
+          <!-- Realtime Search Input -->
+          <div class="relative flex-1 md:w-52">
+            <svg class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#86868b] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              id="catalog-search-input"
+              placeholder={catalogSettings?.searchPlaceholder || DEFAULT_CATALOG.searchPlaceholder}
+              class="w-full pl-8 pr-7 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b] transition-all"
+            />
+            <button
+              type="button"
+              id="catalog-search-clear"
+              class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-[#86868b] hover:text-black text-xs"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          </div>
+
+          <!-- Sort Select -->
+          <select
+            id="catalog-sort-select"
+            class="px-2.5 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 text-[#1d1d1f] focus:outline-none focus:border-black cursor-pointer font-medium"
+          >
+            <option value="featured">Featured Styles</option>
+            <option value="moq-asc">MOQ: Low to High</option>
+            <option value="title-asc">Title: A to Z</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Product Catalog Grid Area: Adaptive Column System -->
+    <div class="apple-rail-wide">
+      <!-- Active Filter Badge & Result Count -->
+      <div class="flex items-center justify-between text-xs text-[#86868b] mb-3 px-1">
+        <div>
+          Showing <span id="displayed-count-label" class="font-semibold text-[#1d1d1f]">0</span> of <span id="total-count-label" class="font-semibold text-[#1d1d1f]">{mergedProducts.length}</span> styles
+        </div>
+        <div id="active-category-indicator" class="font-medium text-[11px] text-[#1d1d1f] bg-[#f5f5f7] px-2 py-0.5 rounded-md border border-black/5">
+          {allLabel}
+        </div>
+      </div>
+
+      <!-- Card Grid Responsive Column Breakpoints (Aligned with Apple Rail 1360px-1540px width):
+           - Mobile phones (<640px): 2 columns (grid-cols-2)
+           - Small Tablets (640px~767px): 3 columns (sm:grid-cols-3)
+           - Tablets / Small Laptops (768px~1023px): 4 columns (md:grid-cols-4)
+           - Standard Desktop (1024px~1599px, incl. 1536px): 5 columns (lg:grid-cols-5 xl:grid-cols-5)
+           - Ultra-wide (1600px+): 6 columns (2xl:grid-cols-6)
+      -->
+      <div
+        id="products-grid"
+        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5"
+      >
+        <!-- Cards will be populated and progressively rendered by client JS -->
+      </div>
+
+      <!-- Zero Results Empty State -->
+      <div id="catalog-empty-state" class="hidden py-20 text-center space-y-3">
+        <div class="w-12 h-12 rounded-full bg-[#f5f5f7] text-[#86868b] flex items-center justify-center mx-auto border border-black/5">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3 class="text-base font-semibold text-[#1d1d1f]">{catalogSettings?.emptyStateHeading || DEFAULT_CATALOG.emptyStateHeading}</h3>
+        <p class="text-xs text-[#86868b] max-w-sm mx-auto">
+          {catalogSettings?.emptyStateText || DEFAULT_CATALOG.emptyStateText}
+        </p>
+        <button
+          type="button"
+          id="catalog-reset-btn"
+          class="px-4 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer"
+        >
+          Reset All Filters
+        </button>
+      </div>
+
+      <!-- 4. Infinite Scroll Sentinel & Compact End of List -->
+      <div id="catalog-load-trigger" class="w-full">
+        <!-- End-of-List Divider (Compact padding) -->
+        <div id="catalog-all-loaded-notice" class="hidden py-6 sm:py-8 items-center justify-center gap-3 text-xs text-[#86868b] select-none">
+          <span class="w-10 sm:w-16 h-px bg-black/10"></span>
+          <span class="font-normal tracking-wide">{catalogSettings?.endOfCatalogText || DEFAULT_CATALOG.endOfCatalogText}</span>
+          <span class="w-10 sm:w-16 h-px bg-black/10"></span>
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script define:vars={{ serializedProducts, cardQuoteText }}>
+  // Catalog State Management
+  const allProducts = JSON.parse(serializedProducts);
+  const BATCH_SIZE = 21; // High density e-commerce batch (divisible by 7 and 3)
+  let currentCategory = 'all';
+  let searchQuery = '';
+  let currentSort = 'featured';
+  let displayedCount = 0;
+  let filteredList = [];
+
+  const gridContainer = document.getElementById('products-grid');
+  const emptyState = document.getElementById('catalog-empty-state');
+  const allLoadedNotice = document.getElementById('catalog-all-loaded-notice');
+  const displayedCountLabel = document.getElementById('displayed-count-label');
+  const totalCountLabel = document.getElementById('total-count-label');
+  const activeCategoryIndicator = document.getElementById('active-category-indicator');
+  const searchInput = document.getElementById('catalog-search-input');
+  const searchClearBtn = document.getElementById('catalog-search-clear');
+  const sortSelect = document.getElementById('catalog-sort-select');
+  const loadTriggerSentinel = document.getElementById('catalog-load-trigger');
+
+  // Filter & Sort Logic
+  function updateFilteredProducts() {
+    filteredList = allProducts.filter((item) => {
+      // Category filter
+      const matchesCategory = currentCategory === 'all' || item.category === currentCategory;
+      if (!matchesCategory) return false;
+
+      // Search query filter
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const searchable = `${item.title} ${item.shortTitle} ${item.sku} ${item.tagline} ${item.composition} ${item.gauge}`.toLowerCase();
+        return searchable.includes(q);
+      }
+      return true;
+    });
+
+    // Sorting
+    if (currentSort === 'moq-asc') {
+      filteredList.sort((a, b) => {
+        const numA = parseInt(a.moq.replace(/[^0-9]/g, '')) || 9999;
+        const numB = parseInt(b.moq.replace(/[^0-9]/g, '')) || 9999;
+        return numA - numB;
+      });
+    } else if (currentSort === 'title-asc') {
+      filteredList.sort((a, b) => (a.shortTitle || a.title).localeCompare(b.shortTitle || b.title));
+    }
+
+    // Reset pagination
+    displayedCount = 0;
+    if (gridContainer) gridContainer.innerHTML = '';
+    renderNextBatch();
+  }
+
+  // Create Product Card HTML compliant with Taobao Dense Grid & Gwenvenni Apple Specs
+  // Create Product Card HTML matching Taobao Shelf Layout (Image-Top, 2-line title, Price/MOQ block)
+  function createCardElement(item) {
+    const card = document.createElement('div');
+    card.className = "group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between";
+
+    const colorDots = (item.colors || [])
+      .slice(0, 4)
+      .map(
+        (hex) => `
+        <span class="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:scale-125 transition-transform" title="Color: ${hex}">
+          <span class="w-2.5 h-2.5 rounded-full border border-black/15 shadow-2xs block" style="background-color: ${hex}"></span>
+        </span>`
+      )
+      .join('');
+
+    card.innerHTML = `
+      <div class="flex-1 min-h-0 flex flex-col">
+        <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with rounded corners -->
+        <a
+          href="/products/${item.slug}"
+          class="block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] my-0 group-hover:opacity-95 transition-all shrink-0"
+        >
+          <img
+            src="${item.image}"
+            alt="${item.title}"
+            class="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+            decoding="async"
+          />
+          <div class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
+            ${item.category ? item.category.toUpperCase() : 'OEM'}
+          </div>
+        </a>
+
+        <!-- 2. Taobao Colorway / Mini Swatch Row -->
+        <div class="shrink-0 flex items-center justify-between pt-2 pb-1 px-0.5">
+          <div class="flex items-center gap-1">
+            ${colorDots}
+          </div>
+          <span class="text-[10px] text-[#86868b] font-mono">${item.leadTime || '15-20d'}</span>
+        </div>
+
+        <!-- 3. Taobao Title: Strict 2-line clamp with fixed 36px height (18px line-height) -->
+        <div class="shrink-0 h-[36px] mt-0.5 px-0.5">
+          <a href="/products/${item.slug}" class="block">
+            <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-[18px]" title="${item.title}">
+              ${item.shortTitle || item.title}
+            </h3>
+          </a>
+        </div>
+
+        <!-- 4. Composition subtitle -->
+        <p class="text-[10px] text-[#86868b] px-0.5 mt-1 line-clamp-1 truncate">${item.composition || 'Premium Knit'}</p>
+      </div>
+
+      <!-- 5. Taobao Price & Action Bottom Row -->
+      <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
+        <div class="flex flex-col">
+          <div class="flex items-baseline gap-0.5 text-[#ff5000] font-semibold leading-none">
+            <span class="text-[10px] font-mono">¥</span>
+            <span class="text-sm font-mono tracking-tight font-bold">${item.wholesalePrice || (item.category === 'silk' ? '32.00' : item.category === 'cashmere' ? '45.00' : '18.50')}</span>
+            <span class="text-[9px] text-[#86868b] font-normal ml-0.5">/pc</span>
+          </div>
+          <span class="text-[9px] text-[#86868b] font-mono mt-0.5">MOQ ${item.moq || '200'}</span>
+        </div>
+
+        <button
+          type="button"
+          class="btn-catalog-quote px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1d1d1f] hover:bg-[#ff5000] text-white transition-all cursor-pointer flex items-center gap-1 shadow-2xs shrink-0"
+          data-id="${item.id}"
+          data-title="${item.shortTitle || item.title}"
+          data-sku="${item.sku || item.id}"
+          data-image="${item.image}"
+          data-moq="${item.moq || '200 Pairs'}"
+          data-variant="${item.composition || 'Standard Spec'}"
+        >
+          <span>+</span>
+          <span>${cardQuoteText}</span>
+        </button>
+      </div>
+    `;
+
+    // Bind Quick Quote addition
+    const quoteBtn = card.querySelector('.btn-catalog-quote');
+    quoteBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const quoteItem = {
+        id: item.id,
+        title: item.shortTitle || item.title,
+        sku: item.sku || item.id,
+        imageUrl: item.image,
+        moq: item.moq || '200 Pairs',
+        variant: item.composition || 'Standard Spec',
+        quantity: 1,
+      };
+      
+      // Dispatch to global nanostore cart
+      if (typeof window !== 'undefined' && (window).openQuoteDrawer) {
+        import('/src/stores/quoteCart.ts').then((mod) => {
+          mod.addToQuote(quoteItem);
+          (window).openQuoteDrawer();
+        }).catch(() => {
+          // Fallback if dynamic import fails
+          alert(`Added "${quoteItem.title}" to quote basket!`);
+        });
+      }
+    });
+
+    return card;
+  }
+
+  // Render next slice of batch items
+  function renderNextBatch() {
+    if (!gridContainer) return;
+
+    const totalFiltered = filteredList.length;
+    if (totalCountLabel) totalCountLabel.textContent = String(totalFiltered);
+
+    if (totalFiltered === 0) {
+      gridContainer.classList.add('hidden');
+      if (emptyState) emptyState.classList.remove('hidden');
+      if (allLoadedNotice) {
+        allLoadedNotice.classList.add('hidden');
+        allLoadedNotice.classList.remove('flex');
+      }
+      if (displayedCountLabel) displayedCountLabel.textContent = '0';
+      return;
+    }
+
+    gridContainer.classList.remove('hidden');
+    if (emptyState) emptyState.classList.add('hidden');
+
+    const nextBatch = filteredList.slice(displayedCount, displayedCount + BATCH_SIZE);
+    nextBatch.forEach((item) => {
+      const card = createCardElement(item);
+      gridContainer.appendChild(card);
+    });
+
+    displayedCount += nextBatch.length;
+    if (displayedCountLabel) displayedCountLabel.textContent = String(displayedCount);
+
+    // Update End of Catalog Notice visibility
+    if (displayedCount >= totalFiltered) {
+      if (allLoadedNotice) {
+        allLoadedNotice.classList.remove('hidden');
+        allLoadedNotice.classList.add('flex');
+      }
+    } else {
+      if (allLoadedNotice) {
+        allLoadedNotice.classList.add('hidden');
+        allLoadedNotice.classList.remove('flex');
+      }
+    }
+  }
+
+  // IntersectionObserver for seamless Infinite Scroll lazy-loading
+  if ('IntersectionObserver' in window && loadTriggerSentinel) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && displayedCount < filteredList.length) {
+          renderNextBatch();
+        }
+      });
+    }, { rootMargin: '300px' });
+    observer.observe(loadTriggerSentinel);
+  }
+
+  // Category Tab Click Handler
+  const tabButtons = document.querySelectorAll('.category-tab-btn');
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetCat = btn.getAttribute('data-category-id') || 'all';
+      currentCategory = targetCat;
+
+      // Update Active visual style
+      tabButtons.forEach((b) => {
+        const isCurrent = b === btn;
+        b.className = `category-tab-btn shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+          isCurrent
+            ? 'bg-[#1d1d1f] text-white shadow-sm'
+            : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/5'
+        }`;
+        const badge = b.querySelector('span:last-child');
+        if (badge) {
+          badge.className = `text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+            isCurrent ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'
+          }`;
+        }
+      });
+
+      if (activeCategoryIndicator) {
+        activeCategoryIndicator.textContent = btn.querySelector('span:first-child')?.textContent || 'All Silhouettes';
+      }
+
+      // Sync URL parameter without page reload
+      const url = new URL(window.location.href);
+      if (targetCat === 'all') {
+        url.searchParams.delete('category');
+      } else {
+        url.searchParams.set('category', targetCat);
+      }
+      window.history.replaceState({}, '', url.toString());
+
+      updateFilteredProducts();
+    });
+  });
+
+  // Search input with debounce
+  let searchDebounceTimer;
+  searchInput?.addEventListener('input', (e) => {
+    clearTimeout(searchDebounceTimer);
+    const val = (e.target).value.trim();
+    if (searchClearBtn) {
+      searchClearBtn.classList.toggle('hidden', val.length === 0);
+    }
+    searchDebounceTimer = setTimeout(() => {
+      searchQuery = val;
+      updateFilteredProducts();
+    }, 250);
+  });
+
+  // Clear search
+  searchClearBtn?.addEventListener('click', () => {
+    if (searchInput) {
+      (searchInput).value = '';
+      searchQuery = '';
+      searchClearBtn.classList.add('hidden');
+      updateFilteredProducts();
+    }
+  });
+
+  // Reset all filters
+  document.getElementById('catalog-reset-btn')?.addEventListener('click', () => {
+    currentCategory = 'all';
+    searchQuery = '';
+    if (searchInput) (searchInput).value = '';
+    if (searchClearBtn) searchClearBtn.classList.add('hidden');
+    const allTab = document.querySelector('[data-category-id="all"]');
+    if (allTab) (allTab).click();
+  });
+
+  // Sort dropdown
+  sortSelect?.addEventListener('change', (e) => {
+    currentSort = (e.target).value;
+    updateFilteredProducts();
+  });
+
+  // Handle URL deep linking (e.g. /products?category=silk)
+  function initFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const cat = params.get('category');
+    if (cat) {
+      const matchBtn = document.querySelector(`[data-category-id="${cat}"]`);
+      if (matchBtn) {
+        (matchBtn).click();
+        return;
+      }
+    }
+    updateFilteredProducts();
+  }
+
+  // Initial Boot
+  initFromUrl();
+</script>

@@ -1,5 +1,5 @@
 {
-    "name": "astro-sanity-starter",
+    "name": "gwenvenni-web",
     "version": "0.0.1",
     "scripts": {
         "dev": "astro dev --host 0.0.0.0 --ignore-lock",
@@ -28,6 +28,7 @@
         "marked": "^15.0.4",
         "nanostores": "^1.5.5",
         "tailwindcss": "^4.0.9",
+        "ua-parser-js": "^2.0.10",
         "wrangler": "^4.150.0"
     },
     "devDependencies": {

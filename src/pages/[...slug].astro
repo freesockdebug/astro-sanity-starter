@@ -2,42 +2,46 @@
 // src/pages/[...slug].astro
 import type { Page } from 'types';
 import Layout from '@layouts/Layout.astro';
-import SockHero from '@components/hosiery/SockHero.astro';
-import SockSpecMatrix from '@components/hosiery/SockSpecMatrix.astro';
-import SockCollections from '@components/hosiery/SockCollections.astro';
-import ManufacturingCapabilities from '@components/hosiery/ManufacturingCapabilities.astro';
-import SwatchInquiry from '@components/hosiery/SwatchInquiry.astro';
-import CustomSection from '@components/hosiery/CustomSection.astro';
-import { getPageBySlug } from '@data/page';
+import { componentMap } from '@components/site';
+import { client } from '@utils/sanity-client';
+import { PAGE_QUERY_OBJ } from '@data/page';
+import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
+import { RfqSettingsService } from '@data/rfqSettings';
+import { normalizeSections } from '@data/blocks';
 
 export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
 
 const { slug } = Astro.params;
+const formattedSlug = !slug || slug === '/' ? '/' : (slug.startsWith('/') ? slug : `/${slug}`);
+const unslashed = formattedSlug.replace(/^\//, '');
 
-const pages = await getPageBySlug(slug);
-const page: Page = pages && pages.length ? pages[0] : null;
+// Scheme 2: Single Aggregated GROQ Query - combines 3 independent API calls into 1 single roundtrip
+let batchData: any = null;
+try {
+  batchData = await client.fetch(
+    `{
+      "page": *[_type == "page" && (slug.current == $formattedSlug || slug.current == $unslashed)][0] ${PAGE_QUERY_OBJ},
+      "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
+      "rfqSettings": *[_type == "rfqSettings"][0]
+    }`,
+    { formattedSlug, unslashed }
+  );
+} catch (e) {
+  console.error(`Failed to batch-fetch page data for ${slug}:`, e);
+}
 
+// Pre-populate service caches so Layout, AppleNav, QuoteDrawer, and sections make 0 additional API requests
+if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
+if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
+
+const page: Page = batchData?.page;
 if (!page) {
     return new Response("404 Not Found", { status: 404, statusText: "Not Found" });
 }
 
-const { title, sections, metaTitle, metaDescription, socialImage } = page;
-
-const componentMap: Record<string, any> = {
-    // Generalized Section Types
-    heroSection: SockHero,
-    featureMatrixSection: SockSpecMatrix,
-    productShowcaseSection: SockCollections,
-    manufacturingSection: ManufacturingCapabilities,
-    inquirySection: SwatchInquiry,
-    customSection: CustomSection,
-    // Backward compatibility for legacy types
-    hosieryHeroSection: SockHero,
-    hosierySpecSection: SockSpecMatrix,
-    hosieryCollectionSection: SockCollections,
-    hosieryManufacturingSection: ManufacturingCapabilities,
-    hosieryInquirySection: SwatchInquiry
-};
+const { title, sections: rawSections, metaTitle, metaDescription, socialImage } = page;
+const sections = normalizeSections(rawSections);
 ---
 
 {

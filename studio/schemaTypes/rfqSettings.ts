@@ -255,7 +255,7 @@ export default defineType({
       name: 'swatchKitTitle',
       title: 'Swatch Kit Title (样卡默认项标题)',
       type: 'string',
-      initialValue: 'Curated Hosiery Swatch Kit & Color Book',
+      initialValue: 'Curated Swatch Kit & Fabric Color Book',
       fieldset: 'swatch',
       description: '当买家点击“申领色卡/样卡”时，自动加入询盘车的样卡名称',
     }),

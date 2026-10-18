@@ -1,56 +1,9 @@
 ---
-// src/components/hosiery/SockCollections.astro
-const collections = [
-  {
-    id: "silk-loafer",
-    title: "Mulberry Silk Loafer Sock",
-    tagline: "Invisible Comfort for Luxury Footwear",
-    image: "/images/sock-silk-loafer.jpg",
-    composition: "88% Grade 6A Mulberry Silk, 12% Spandex",
-    gauge: "200-Needle Ultra-Thin",
-    moq: "200 Pairs",
-    features: ["360° Non-Slip Silicone Heel", "Breathable Mesh Sole", "Deep Cut Invisible Fit"],
-    colors: ["#f5edd8", "#1c1917", "#e7e5e4"]
-  },
-  {
-    id: "cashmere-crew",
-    title: "Ribbed Cashmere-Silk Crew",
-    tagline: "The Everyday Signature Slouch",
-    image: "/images/sock-cashmere-crew.jpg",
-    composition: "70% Inner Mongolian Cashmere, 30% Silk",
-    gauge: "176-Needle Derby Rib",
-    moq: "150 Pairs",
-    features: ["Zero-Pressure Ribbed Welt", "Hand-Linked Seamless Toe", "Cloud-Soft Brushed Loft"],
-    colors: ["#d6d3d1", "#78716c", "#a8a29e", "#e7e5e4"]
-  },
-  {
-    id: "sheer-tights",
-    title: "15D Invisible Sheer Tights",
-    tagline: "Second-Skin Compression & Durability",
-    image: "/images/hero-light.jpg",
-    composition: "80% Italian Bi-Component Nylon, 20% Elastane",
-    gauge: "400-Needle Seamless Circular",
-    moq: "300 Pairs",
-    features: ["Run-Resistant Fusion Yarn", "Ergonomic Control Top", "Cotton Hygiene Gusset"],
-    colors: ["#18181b", "#d4b996", "#a18262"]
-  },
-  {
-    id: "merino-slouch",
-    title: "Superfine 18.5µ Merino Boot Sock",
-    tagline: "All-Day Thermal Temperature Regulation",
-    image: "/images/spec-light.jpg",
-    composition: "85% Australian Merino Wool, 15% Nylon",
-    gauge: "144-Needle Terry Loop",
-    moq: "200 Pairs",
-    features: ["Natural Odor Neutralization", "Cushioned Arch Support", "Pre-Shrunk Machine Washable"],
-    colors: ["#44403c", "#a8a29e", "#f5f5f4"]
-  }
-];
-
-import { fetchAllProducts } from '@data/products';
+// src/components/site/SockCollections.astro
+import { fetchNormalizedProducts, ProductService } from '@data/products';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
-import { SanityImageService } from '@utils/image';
+import { DEFAULT_COLLECTIONS, DEFAULT_RFQ, DEFAULT_HERO } from '@data/defaults';
 
 interface Props {
   badge?: string;
@@ -67,55 +20,34 @@ interface Props {
 }
 
 const {
-  badge = "Capsule Catalog 2026",
-  title = "Ready-to-Order Line Sheets",
-  subtitle = "Proprietary silhouettes developed for white-labeling, brand customization, and low-MOQ rapid wholesale reordering.",
+  badge = DEFAULT_COLLECTIONS.badge,
+  title = DEFAULT_COLLECTIONS.title,
+  subtitle = DEFAULT_COLLECTIONS.subtitle,
   swatchSku,
   showActionButton: propShowAction,
   actionButtonText: propActionText,
-  actionButtonUrl = "#inquiry",
+  actionButtonUrl = DEFAULT_HERO.primaryButtonUrl,
   showCardQuoteButton: propShowCardQuote,
-  cardDetailsButtonText = "View Gallery & Specs",
+  cardDetailsButtonText = DEFAULT_COLLECTIONS.cardDetailsButtonText,
   cardQuoteButtonText,
   products: propProducts
 } = Astro.props;
 
 const siteConfig = await fetchSiteConfig();
 const rfqSettings = await fetchRfqSettings();
-const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || "Request Swatch Kit";
-const resolvedCardQuoteText = cardQuoteButtonText || rfqSettings?.cardQuoteBtnText || "Quote";
+const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText;
+const resolvedCardQuoteText = cardQuoteButtonText || rfqSettings?.cardQuoteBtnText || DEFAULT_RFQ.cardQuoteBtnText;
 
-// Only display products added to this section in Sanity Studio; unadded products are not displayed
-const rawProducts = propProducts !== undefined ? (propProducts || []) : await fetchAllProducts();
-const hasSanityProducts = rawProducts && rawProducts.length > 0;
-const sanityProducts = hasSanityProducts ? rawProducts : [];
+// Only display products added to this section in Sanity Studio; unadded products fall back to normalized catalog
+const normalizedProducts = propProducts !== undefined
+  ? propProducts.map((p: any) => ProductService.normalize(p, 700))
+  : await fetchNormalizedProducts(700);
 
-function resolveTitle(item: any) {
-  if (item?.shortTitle && item.shortTitle.trim()) {
-    return item.shortTitle.trim();
-  }
-  const title = item?.title || "Curated Knit";
-  const cleaned = title.replace(/\([^)]*\)/g, '').trim();
-  return cleaned || title;
-}
-
-const activeCollections = hasSanityProducts
-  ? sanityProducts.map((p: any) => ({
-      id: p.slug || p._id,
-      title: resolveTitle(p),
-      fullTitle: p.title,
-      tagline: p.tagline,
-      image: SanityImageService.thumbnail(p.mainImage || (p.gallery && p.gallery[0]?.src) || "/images/hero-light.jpg", 700),
-      composition: (p.specifications && p.specifications[0]?.value) || "Luxury Knit Blend",
-      gauge: (p.specifications && p.specifications[1]?.value) || "200-Needle Fine Knit",
-      moq: p.moq || "200 Pairs",
-      colors: p.colors?.map((c: any) => c.hex) || ["#1c1917", "#e7e5e4"]
-    }))
-  : collections.map((c: any) => ({
-      ...c,
-      title: resolveTitle(c),
-      fullTitle: c.title
-    }));
+const activeCollections = normalizedProducts.map((p) => ({
+  ...p,
+  title: p.shortTitle || p.title,
+  fullTitle: p.title
+}));
 
 const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
 const showHeaderActionButton = RfqSettingsService.isButtonVisible({
@@ -153,6 +85,13 @@ const showCardQuoteButton = propShowCardQuote !== undefined
             <span aria-hidden="true">›</span>
           </a>
         )}
+        <a
+          href="/products"
+          class="px-3.5 py-1.5 rounded-full text-xs font-medium bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] border border-black/5 transition-all inline-flex items-center gap-1 shadow-2xs"
+        >
+          <span>Browse All</span>
+          <span aria-hidden="true">›</span>
+        </a>
         <!-- Desktop Carousel Navigation Buttons -->
         <div id="collections-arrows-container" class="hidden sm:inline-flex items-center gap-1.5">
           <button
@@ -207,6 +146,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
                 alt={item.title}
                 class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
                 loading="lazy"
+                decoding="async"
               />
             </a>
 

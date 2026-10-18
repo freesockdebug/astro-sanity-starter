@@ -91,7 +91,7 @@ body {
   }
 }
 
-/* 3. 桌面端 (1024px+)：严格遵循苹果官网设计（Header/Footer 1024px，导语文本 980px，主体内容展开至 1440px） */
+/* 3. 桌面端 (1024px+)：严格遵循苹果官网设计（Header/Footer 1024px，导语文本 980px，主体内容展开至 1360px） */
 @media (min-width: 1024px) {
   .apple-rail-header,
   .apple-rail-footer {
@@ -103,23 +103,23 @@ body {
   .apple-rail-bento,
   .apple-rail-showcase,
   .apple-rail-wide {
-    width: min(100% - 3rem, 1440px);
+    width: min(100% - 5.5rem, 1360px);
   }
 }
 
-/* 4. 超大屏 (1440px+) 与 4K 宽屏 (1920px+) 视觉沉浸 */
-@media (min-width: 1440px) {
+/* 4. 超大屏 (1600px+) 与 4K 宽屏 (1920px+) 视觉沉浸：外侧留出 80px~190px 黄金留白，彻底告别重叠与遮盖 */
+@media (min-width: 1600px) {
   .apple-rail-bento,
   .apple-rail-showcase,
   .apple-rail-wide {
-    width: min(100% - 4rem, 1600px);
+    width: min(100% - 6rem, 1440px);
   }
 }
 @media (min-width: 1920px) {
   .apple-rail-bento,
   .apple-rail-showcase,
   .apple-rail-wide {
-    width: min(100% - 5rem, 1680px);
+    width: min(100% - 7rem, 1540px);
   }
 }
 
@@ -165,3 +165,22 @@ body {
     display: block !important;
   }
 }
+
+/* ==========================================================================
+   Apple Full-page Screen Snapping Deck
+   ========================================================================== */
+html.apple-snap-active {
+  scroll-behavior: smooth;
+}
+
+@media (min-width: 1024px) {
+  html.apple-snap-active {
+    scroll-snap-type: y proximity;
+  }
+  html.apple-snap-active section[id],
+  html.apple-snap-active footer {
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
+  }
+}
+

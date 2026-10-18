@@ -1,7 +1,8 @@
 ---
 // src/components/QuoteDrawer.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
-import { fetchAllProducts } from '@data/products';
+import { fetchNormalizedProducts } from '@data/products';
+import { DEFAULT_RFQ, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
 
 interface Props {
   settings?: any;
@@ -9,7 +10,7 @@ interface Props {
 
 const { settings } = Astro.props;
 const rfqSettings = settings ?? (await fetchRfqSettings());
-const allProducts = await fetchAllProducts();
+const allProducts = await fetchNormalizedProducts(200);
 
 const productSkuMap = (allProducts || []).reduce((acc: any, p: any) => {
   if (p.sku) {
@@ -17,25 +18,25 @@ const productSkuMap = (allProducts || []).reduce((acc: any, p: any) => {
     acc[key] = {
       sku: p.sku.trim(),
       title: `${p.shortTitle || p.title} - Swatch Kit`,
-      imageUrl: p.mainImage || (p.gallery && p.gallery[0]?.src) || "/images/spec-light.jpg",
+      imageUrl: p.image || DEFAULT_FALLBACK_IMAGE,
       variant: `Physical fabric & color swatch dossier for ${p.shortTitle || p.title}`
     };
   }
   return acc;
 }, {});
 
-const drawerTitle = rfqSettings?.drawerTitle || "Quote Basket";
-const drawerSubtitle = rfqSettings?.drawerSubtitle || "Wholesale RFQ & Sample Dispatch";
-const drawerStatus = rfqSettings?.drawerStatus || "48h Express Dispatch";
-const drawerEmptyTitle = rfqSettings?.drawerEmptyTitle || "Your Quote Basket is empty";
-const drawerEmptyDesc = rfqSettings?.drawerEmptyDesc || "Browse our ready-to-order capsule lines and add styles to request formal wholesale quotes, custom branding, and physical samples.";
-const submitButtonText = rfqSettings?.drawerSubmitButtonText || "Submit Request for Quote";
-const successFeedbackMessage = rfqSettings?.drawerSuccessMessage || "✓ Quote request received! Our B2B specialist will reply within 24 hours.";
-const swatchKitSku = rfqSettings?.swatchKitSku || "SWATCH-KIT";
-const swatchKitTitle = rfqSettings?.swatchKitTitle || "Curated Hosiery Swatch Kit & Color Book";
-const swatchKitDesc = rfqSettings?.swatchKitDesc || "Physical fabric swatches & yarn color dossier via DHL Express";
-const swatchKitImageUrl = rfqSettings?.swatchKitImage?.asset?.url || rfqSettings?.swatchKitImageUrl || "/images/spec-light.jpg";
-const swatchKitMoq = rfqSettings?.swatchKitMoq || "1 Set (Priority Dispatch)";
+const drawerTitle = rfqSettings?.drawerTitle || DEFAULT_RFQ.drawerTitle;
+const drawerSubtitle = rfqSettings?.drawerSubtitle || DEFAULT_RFQ.drawerSubtitle;
+const drawerStatus = rfqSettings?.drawerStatus || DEFAULT_RFQ.drawerStatus;
+const drawerEmptyTitle = rfqSettings?.drawerEmptyTitle || DEFAULT_RFQ.drawerEmptyTitle;
+const drawerEmptyDesc = rfqSettings?.drawerEmptyDesc || DEFAULT_RFQ.drawerEmptyDesc;
+const submitButtonText = rfqSettings?.drawerSubmitButtonText || DEFAULT_RFQ.drawerSubmitButtonText;
+const successFeedbackMessage = rfqSettings?.drawerSuccessMessage || DEFAULT_RFQ.drawerSuccessMessage;
+const swatchKitSku = rfqSettings?.swatchKitSku || DEFAULT_RFQ.swatchKitSku;
+const swatchKitTitle = rfqSettings?.swatchKitTitle || DEFAULT_RFQ.swatchKitTitle;
+const swatchKitDesc = rfqSettings?.swatchKitDesc || DEFAULT_RFQ.swatchKitDesc;
+const swatchKitImageUrl = rfqSettings?.swatchKitImage?.asset?.url || rfqSettings?.swatchKitImageUrl || DEFAULT_RFQ.swatchKitImageUrl;
+const swatchKitMoq = rfqSettings?.swatchKitMoq || DEFAULT_RFQ.swatchKitMoq;
 
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAAFXbqPn5Jkh6bMhV";
 ---
@@ -200,7 +201,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
 </div>
 
 <script>
-  import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '../stores/quoteCart';
+  import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '../../stores/quoteCart';
 
   // Expose global drawer opener
   (window as any).openQuoteDrawer = () => {
@@ -217,10 +218,10 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
   (window as any).requestSwatchKit = (customItem?: any) => {
     const root = document.getElementById('quote-drawer-root');
     const defaultSku = root?.dataset.swatchSku || 'SWATCH-KIT';
-    const defaultTitle = root?.dataset.swatchTitle || 'Curated Hosiery Swatch Kit & Color Book';
-    const defaultDesc = root?.dataset.swatchDesc || 'Physical fabric swatches & yarn color dossier via DHL Express';
-    const defaultImage = root?.dataset.swatchImage || '/images/spec-light.jpg';
-    const defaultMoq = root?.dataset.swatchMoq || '1 Set (Priority Dispatch)';
+    const defaultTitle = root?.dataset.swatchTitle || DEFAULT_RFQ.swatchKitTitle;
+    const defaultDesc = root?.dataset.swatchDesc || DEFAULT_RFQ.swatchKitDesc;
+    const defaultImage = root?.dataset.swatchImage || DEFAULT_RFQ.swatchKitImageUrl;
+    const defaultMoq = root?.dataset.swatchMoq || DEFAULT_RFQ.swatchKitMoq;
 
     let productMap: Record<string, any> = {};
     try {
@@ -362,7 +363,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
         (item) => `
       <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 text-xs">
         <img
-          src="${item.imageUrl || '/images/hero-light.jpg'}"
+          src="${(item.imageUrl || '/images/hero-light.jpg').replace('https://cdn.sanity.io', '/cdn-image')}"
           alt="${item.title}"
           class="w-12 h-12 rounded-lg object-cover bg-white border border-black/5 shrink-0"
         />
@@ -448,6 +449,13 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
 
     const formData = new FormData(rfqForm);
     const turnstileToken = formData.get('cf-turnstile-response')?.toString() || '';
+    if (!turnstileToken) {
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs bg-amber-50 text-amber-800 border border-amber-200 block';
+        alertBox.textContent = 'Please complete the Cloudflare security verification before submitting.';
+      }
+      return;
+    }
 
     const payload = {
       buyerInfo: {

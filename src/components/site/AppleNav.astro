@@ -1,13 +1,16 @@
 ---
-// src/components/hosiery/AppleNav.astro
+// src/components/site/AppleNav.astro
 import { fetchData } from '@data/siteConfig';
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
+import { cleanBrandTitle, cleanEnglishText } from '@utils/text';
+import { SanityImageService } from '@utils/image';
+import { DEFAULT_BRAND_TITLE } from '@data/defaults';
 
 const config = Astro.props.config ?? await fetchData();
 const rfqSettings = await fetchRfqSettings();
 const header = config?.header;
-const brandTitle = header?.title || "Nordic Knit";
-const logoImage = header?.logo?.src;
+const brandTitle = header?.title || DEFAULT_BRAND_TITLE;
+const logoImage = header?.logo?.src ? SanityImageService.logo(header.logo.src) : undefined;
 const allLinks = header?.navLinks || [];
 const actionButton = allLinks.find((l: any) => l._type === 'actionButton');
 const isSwatchNav = (actionButton?.label || "").toLowerCase().includes("swatch") || actionButton?.url === "#inquiry";
@@ -23,7 +26,7 @@ const showNavActionButton = actionButton
 const navLinks = allLinks.filter((l: any) => l._type === 'actionLink' || l._type === undefined);
 
 // Apple-standard clean brand name: always prioritize pure brand identity
-const cleanBrandTitle = (brandTitle || "Gwenvenni").split(/\s*\|\s*/)[0].trim().toUpperCase();
+const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
 ---
 
 <header class="fixed top-0 left-0 right-0 z-50 apple-nav transition-all duration-300">
@@ -31,10 +34,10 @@ const cleanBrandTitle = (brandTitle || "Gwenvenni").split(/\s*\|\s*/)[0].trim().
     <!-- Brand / Logo (Pure Apple Minimalism) -->
     <a href="/" class="flex items-center gap-2 group flex-shrink-0">
       {logoImage ? (
-        <img src={logoImage} alt={cleanBrandTitle} class="h-6 w-auto object-contain" />
+        <img src={logoImage} alt={resolvedBrandTitle} class="h-6 w-auto object-contain" />
       ) : (
         <span class="text-sm font-semibold tracking-tight text-[#1d1d1f] hover:opacity-70 transition-opacity">
-          {cleanBrandTitle}
+          {resolvedBrandTitle}
         </span>
       )}
     </a>
@@ -42,7 +45,7 @@ const cleanBrandTitle = (brandTitle || "Gwenvenni").split(/\s*\|\s*/)[0].trim().
     <!-- Nav Links (Desktop - Apple Centered Style) -->
     <nav class="hidden md:flex items-center gap-7 text-xs font-normal text-[#1d1d1f]/75 tracking-normal">
       {navLinks.map((link: any) => (
-        <a href={link.url} class="hover:text-[#1d1d1f] transition-colors">{link.label}</a>
+        <a href={link.url} class="hover:text-[#1d1d1f] transition-colors">{cleanEnglishText(link.label)}</a>
       ))}
     </nav>
 
@@ -113,4 +116,22 @@ const cleanBrandTitle = (brandTitle || "Gwenvenni").split(/\s*\|\s*/)[0].trim().
       menu.classList.toggle('hidden');
     });
   }
+
+  // Intercept in-page hash links for fluid cinematic scrolling
+  document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((anchor) => {
+    anchor.addEventListener('click', (e) => {
+      const href = anchor.getAttribute('href');
+      if (!href || href === '#') return;
+      const targetId = href.slice(1);
+      const targetEl = document.getElementById(targetId);
+      if (targetEl) {
+        e.preventDefault();
+        if (menu && !menu.classList.contains('hidden')) {
+          menu.classList.add('hidden');
+        }
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        history.replaceState(null, '', href);
+      }
+    });
+  });
 </script>

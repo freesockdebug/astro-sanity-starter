@@ -87,12 +87,12 @@ export default defineType({
         },
         {
           _key: 'col2',
-          title: 'Hosiery Lines',
+          title: 'Product Lines',
           links: [
-            {_key: 'l21', label: 'Double Ruffle Lace', url: '/products/gwenvenni-double-ruffle-lace-socks'},
-            {_key: 'l22', label: 'Mulberry Silk Loafers', url: '#collections'},
-            {_key: 'l23', label: 'Ribbed Cashmere Crews', url: '#collections'},
-            {_key: 'l24', label: '15D Seamless Tights', url: '#collections'},
+            {_key: 'l21', label: 'All Silhouettes Archive', url: '/products'},
+            {_key: 'l22', label: 'Mulberry Silk Loafers', url: '/products'},
+            {_key: 'l23', label: 'Ribbed Cashmere Crews', url: '/products'},
+            {_key: 'l24', label: 'Seamless Essentials', url: '/products'},
           ],
         },
         {

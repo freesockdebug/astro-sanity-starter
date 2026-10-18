@@ -22,7 +22,7 @@ export default defineConfig({
             allowedHosts: true
         },
         optimizeDeps: {
-            exclude: ['marked']
+            exclude: ['marked', '@sanity/client']
         }
     },
     server: {

@@ -23,14 +23,14 @@ export default defineType({
       name: 'superTitle',
       title: 'Super Title (顶部眉标/类别胶囊文字)',
       type: 'string',
-      initialValue: 'B2B Atelier Manufacturing & Private Label',
+      initialValue: 'B2B Manufacturing & Private Label Atelier',
     }),
     defineField({
       name: 'headline',
       title: 'Main Headline (主标题 - 支持句号分隔两段灰度对比)',
       type: 'string',
-      description: '示例：Engineered Elegance. 140-Needle Micro Weave.（第二句将自动渲染为 Apple 标志性浅灰色）',
-      initialValue: 'Engineered Elegance. 140-Needle Micro Weave.',
+      description: '示例：Engineered Elegance. 200-Needle Micro Weave.（第二句将自动渲染为 Apple 标志性浅灰色）',
+      initialValue: 'Engineered Elegance. 200-Needle Micro Weave.',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
@@ -39,7 +39,7 @@ export default defineType({
       type: 'text',
       rows: 2,
       initialValue:
-        'Knitted on precision machinery with 100% artisan hand-linked seamless finish. Built for modern private-label brands and luxury retail.',
+        'Knitted on Italian Lonati machinery with 100% artisan hand-linked seamless toes. Built for modern private-label brands and luxury retail.',
     }),
     defineField({
       name: 'heroImage',

@@ -27,7 +27,8 @@ pnpm-debug.log*
 .wrangler/
 *.build.log
 
-# Temporary test scrapers & local test data
+# Development & testing scripts, scrapers and seeders
+scripts/
 amazon_*.json
-scripts/scrape_*.py
 studio/.sanity/
+

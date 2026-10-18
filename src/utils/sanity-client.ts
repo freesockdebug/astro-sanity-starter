@@ -10,20 +10,35 @@ const SANITY_TOKEN = getEnv('SANITY_TOKEN');
 const STACKBIT_PREVIEW = getEnv('STACKBIT_PREVIEW');
 const SANITY_PREVIEW_DRAFTS = getEnv('SANITY_PREVIEW_DRAFTS');
 
-const isDev = import.meta.env?.DEV;
+const isDev = Boolean(import.meta.env?.DEV || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development'));
 const isDeployPreview = typeof process !== 'undefined' && process.env?.CONTEXT === 'deploy-preview';
 const previewDrafts = STACKBIT_PREVIEW?.toLowerCase() === 'true' || SANITY_PREVIEW_DRAFTS?.toLowerCase() === 'true';
+const isDraftMode = isDev || isDeployPreview || previewDrafts;
 
 export const sanityConfig: ClientConfig = {
     projectId: SANITY_PROJECT_ID,
     dataset: SANITY_DATASET,
-    useCdn: false,
+    useCdn: !isDraftMode,
     apiVersion: '2024-01-31',
-    token: SANITY_TOKEN,
-    perspective: isDev || isDeployPreview || previewDrafts ? 'previewDrafts' : 'published'
+    // Only pass token in draft/preview mode. Public published requests without token use the 5,000,000 free requests/mo API CDN.
+    token: isDraftMode ? SANITY_TOKEN : undefined,
+    perspective: isDraftMode ? 'previewDrafts' : 'published'
 };
 
 export const client = createClient(sanityConfig);
+
+// Telemetry & Audit Logger to track exact API call volume and CDN status
+let apiCallCount = 0;
+const rawFetch = client.fetch.bind(client);
+(client as any).fetch = async (query: string, ...rest: any[]) => {
+    apiCallCount++;
+    const querySummary = typeof query === 'string' 
+        ? query.replace(/[\r\n\s]+/g, ' ').trim().slice(0, 90)
+        : 'dynamic query';
+    const endpointType = sanityConfig.useCdn && !sanityConfig.token ? 'API CDN (5,000,000 Free/mo)' : 'LIVE API (Paid Quota)';
+    console.log(`[SANITY API CALL #${apiCallCount}] [${endpointType}] ${querySummary}...`);
+    return (rawFetch as any)(query, ...rest);
+};
 
 // Dev-only hot reload listener for local Node.js environment
 if (isDev && typeof process !== 'undefined' && typeof process.cwd === 'function') {
