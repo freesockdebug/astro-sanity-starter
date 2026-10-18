@@ -244,9 +244,18 @@ const serializedProducts = JSON.stringify(mergedProducts);
       </div>
 
       <!-- 4. Infinite Scroll Sentinel & Compact End of List -->
-      <div id="catalog-load-trigger" class="w-full">
+      <div id="catalog-load-trigger" class="w-full min-h-[56px] py-4 flex items-center justify-center">
+        <!-- Loading Spinner while fetching next batch -->
+        <div id="catalog-loading-spinner" class="hidden items-center gap-2 text-xs text-[#86868b] font-medium">
+          <svg class="animate-spin h-4 w-4 text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+          <span>Loading more styles...</span>
+        </div>
+
         <!-- End-of-List Divider (Compact padding) -->
-        <div id="catalog-all-loaded-notice" class="hidden py-6 sm:py-8 items-center justify-center gap-3 text-xs text-[#86868b] select-none">
+        <div id="catalog-all-loaded-notice" class="hidden items-center justify-center gap-3 text-xs text-[#86868b] select-none">
           <span class="w-10 sm:w-16 h-px bg-black/10"></span>
           <span class="font-normal tracking-wide">{catalogSettings?.endOfCatalogText || DEFAULT_CATALOG.endOfCatalogText}</span>
           <span class="w-10 sm:w-16 h-px bg-black/10"></span>
@@ -269,6 +278,7 @@ const serializedProducts = JSON.stringify(mergedProducts);
   const gridContainer = document.getElementById('products-grid');
   const emptyState = document.getElementById('catalog-empty-state');
   const allLoadedNotice = document.getElementById('catalog-all-loaded-notice');
+  const loadingSpinner = document.getElementById('catalog-loading-spinner');
   const displayedCountLabel = document.getElementById('displayed-count-label');
   const totalCountLabel = document.getElementById('total-count-label');
   const activeCategoryIndicator = document.getElementById('active-category-indicator');
@@ -457,8 +467,9 @@ const serializedProducts = JSON.stringify(mergedProducts);
     displayedCount += nextBatch.length;
     if (displayedCountLabel) displayedCountLabel.textContent = String(displayedCount);
 
-    // Update End of Catalog Notice visibility
+    // Update End of Catalog Notice and Spinner visibility
     if (displayedCount >= totalFiltered) {
+      if (loadingSpinner) loadingSpinner.classList.add('hidden');
       if (allLoadedNotice) {
         allLoadedNotice.classList.remove('hidden');
         allLoadedNotice.classList.add('flex');
@@ -467,6 +478,10 @@ const serializedProducts = JSON.stringify(mergedProducts);
       if (allLoadedNotice) {
         allLoadedNotice.classList.add('hidden');
         allLoadedNotice.classList.remove('flex');
+      }
+      if (loadingSpinner) {
+        loadingSpinner.classList.remove('hidden');
+        loadingSpinner.classList.add('flex');
       }
     }
   }
@@ -479,7 +494,7 @@ const serializedProducts = JSON.stringify(mergedProducts);
           renderNextBatch();
         }
       });
-    }, { rootMargin: '300px' });
+    }, { rootMargin: '400px' });
     observer.observe(loadTriggerSentinel);
   }
 
@@ -580,9 +595,17 @@ const serializedProducts = JSON.stringify(mergedProducts);
     if (totalCountLabel) totalCountLabel.textContent = String(filteredList.length);
     if (displayedCountLabel) displayedCountLabel.textContent = String(displayedCount);
     if (gridContainer) bindQuoteButtons(gridContainer);
-    if (displayedCount >= filteredList.length && allLoadedNotice) {
-      allLoadedNotice.classList.remove('hidden');
-      allLoadedNotice.classList.add('flex');
+    if (displayedCount >= filteredList.length) {
+      if (allLoadedNotice) {
+        allLoadedNotice.classList.remove('hidden');
+        allLoadedNotice.classList.add('flex');
+      }
+      if (loadingSpinner) loadingSpinner.classList.add('hidden');
+    } else {
+      if (loadingSpinner) {
+        loadingSpinner.classList.remove('hidden');
+        loadingSpinner.classList.add('flex');
+      }
     }
   }
 
