@@ -44,6 +44,8 @@ const allLabel = catalogSettings?.allSilhouettesLabel || DEFAULT_CATALOG.allSilh
 // 2. Resolve aggregated categories & counts via data service layer (instantly from memory)
 const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
 
+const BATCH_SIZE = 21;
+const initialProducts = mergedProducts.slice(0, BATCH_SIZE);
 const serializedProducts = JSON.stringify(mergedProducts);
 ---
 
@@ -135,25 +137,90 @@ const serializedProducts = JSON.stringify(mergedProducts);
       <!-- Active Filter Badge & Result Count -->
       <div class="flex items-center justify-between text-xs text-[#86868b] mb-3 px-1">
         <div>
-          Showing <span id="displayed-count-label" class="font-semibold text-[#1d1d1f]">0</span> of <span id="total-count-label" class="font-semibold text-[#1d1d1f]">{mergedProducts.length}</span> styles
+          Showing <span id="displayed-count-label" class="font-semibold text-[#1d1d1f]">{Math.min(initialProducts.length, mergedProducts.length)}</span> of <span id="total-count-label" class="font-semibold text-[#1d1d1f]">{mergedProducts.length}</span> styles
         </div>
         <div id="active-category-indicator" class="font-medium text-[11px] text-[#1d1d1f] bg-[#f5f5f7] px-2 py-0.5 rounded-md border border-black/5">
           {allLabel}
         </div>
       </div>
 
-      <!-- Card Grid Responsive Column Breakpoints (Aligned with Apple Rail 1360px-1540px width):
-           - Mobile phones (<640px): 2 columns (grid-cols-2)
-           - Small Tablets (640px~767px): 3 columns (sm:grid-cols-3)
-           - Tablets / Small Laptops (768px~1023px): 4 columns (md:grid-cols-4)
-           - Standard Desktop (1024px~1599px, incl. 1536px): 5 columns (lg:grid-cols-5 xl:grid-cols-5)
-           - Ultra-wide (1600px+): 6 columns (2xl:grid-cols-6)
-      -->
+      <!-- Card Grid Responsive Column Breakpoints (Aligned with Apple Rail 1360px-1540px width) -->
       <div
         id="products-grid"
-        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5"
+        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5 min-h-[50vh]"
       >
-        <!-- Cards will be populated and progressively rendered by client JS -->
+        {initialProducts.map((item: any) => (
+          <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between" data-product-id={item.id}>
+            <div class="flex-1 min-h-0 flex flex-col">
+              <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with rounded corners -->
+              <a
+                href={`/products/${item.slug}`}
+                class="block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] my-0 group-hover:opacity-95 transition-all shrink-0"
+              >
+                <img
+                  src={item.image}
+                  alt={item.title}
+                  class="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
+                  {item.category ? item.category.toUpperCase() : 'OEM'}
+                </div>
+              </a>
+
+              <!-- 2. Taobao Colorway / Mini Swatch Row -->
+              <div class="shrink-0 flex items-center justify-between pt-2 pb-1 px-0.5">
+                <div class="flex items-center gap-1">
+                  {(item.colors || []).slice(0, 4).map((hex: string) => (
+                    <span class="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:scale-125 transition-transform" title={`Color: ${hex}`}>
+                      <span class="w-2.5 h-2.5 rounded-full border border-black/15 shadow-2xs block" style={`background-color: ${hex}`}></span>
+                    </span>
+                  ))}
+                </div>
+                <span class="text-[10px] text-[#86868b] font-mono">{item.leadTime || '15-20d'}</span>
+              </div>
+
+              <!-- 3. Taobao Title: Strict 2-line clamp with fixed 36px height (18px line-height) -->
+              <div class="shrink-0 h-[36px] mt-0.5 px-0.5">
+                <a href={`/products/${item.slug}`} class="block">
+                  <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-[18px]" title={item.title}>
+                    {item.shortTitle || item.title}
+                  </h3>
+                </a>
+              </div>
+
+              <!-- 4. Composition subtitle -->
+              <p class="text-[10px] text-[#86868b] px-0.5 mt-1 line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
+            </div>
+
+            <!-- 5. Taobao Price & Action Bottom Row -->
+            <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
+              <div class="flex flex-col">
+                <div class="flex items-baseline gap-0.5 text-[#ff5000] font-semibold leading-none">
+                  <span class="text-[10px] font-mono">¥</span>
+                  <span class="text-sm font-mono tracking-tight font-bold">{item.wholesalePrice || (item.category === 'silk' ? '32.00' : item.category === 'cashmere' ? '45.00' : '18.50')}</span>
+                  <span class="text-[9px] text-[#86868b] font-normal ml-0.5">/pc</span>
+                </div>
+                <span class="text-[9px] text-[#86868b] font-mono mt-0.5">MOQ {item.moq || '200'}</span>
+              </div>
+
+              <button
+                type="button"
+                class="btn-catalog-quote px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1d1d1f] hover:bg-[#ff5000] text-white transition-all cursor-pointer flex items-center gap-1 shadow-2xs shrink-0"
+                data-id={item.id}
+                data-title={item.shortTitle || item.title}
+                data-sku={item.sku || item.id}
+                data-image={item.image}
+                data-moq={item.moq || '200 Pairs'}
+                data-variant={item.composition || 'Standard Spec'}
+              >
+                <span>+</span>
+                <span>{cardQuoteText}</span>
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
       <!-- Zero Results Empty State -->
@@ -326,34 +393,38 @@ const serializedProducts = JSON.stringify(mergedProducts);
       </div>
     `;
 
-    // Bind Quick Quote addition
-    const quoteBtn = card.querySelector('.btn-catalog-quote');
-    quoteBtn?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const quoteItem = {
-        id: item.id,
-        title: item.shortTitle || item.title,
-        sku: item.sku || item.id,
-        imageUrl: item.image,
-        moq: item.moq || '200 Pairs',
-        variant: item.composition || 'Standard Spec',
-        quantity: 1,
-      };
-      
-      // Dispatch to global nanostore cart
-      if (typeof window !== 'undefined' && (window).openQuoteDrawer) {
-        import('/src/stores/quoteCart.ts').then((mod) => {
-          mod.addToQuote(quoteItem);
-          (window).openQuoteDrawer();
-        }).catch(() => {
-          // Fallback if dynamic import fails
-          alert(`Added "${quoteItem.title}" to quote basket!`);
-        });
-      }
-    });
-
+    bindQuoteButtons(card);
     return card;
+  }
+
+  function bindQuoteButtons(scope = document) {
+    scope.querySelectorAll('.btn-catalog-quote').forEach((quoteBtn) => {
+      if ((quoteBtn as any).dataset.bound) return;
+      (quoteBtn as any).dataset.bound = 'true';
+      quoteBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const quoteItem = {
+          id: (quoteBtn as any).dataset.id,
+          title: (quoteBtn as any).dataset.title,
+          sku: (quoteBtn as any).dataset.sku,
+          imageUrl: (quoteBtn as any).dataset.image,
+          moq: (quoteBtn as any).dataset.moq,
+          variant: (quoteBtn as any).dataset.variant,
+          quantity: 1,
+        };
+        
+        // Dispatch to global nanostore cart
+        if (typeof window !== 'undefined' && (window as any).openQuoteDrawer) {
+          import('/src/stores/quoteCart.ts').then((mod) => {
+            mod.addToQuote(quoteItem);
+            (window as any).openQuoteDrawer();
+          }).catch(() => {
+            alert(`Added "${quoteItem.title}" to quote basket!`);
+          });
+        }
+      });
+    });
   }
 
   // Render next slice of batch items
@@ -496,14 +567,23 @@ const serializedProducts = JSON.stringify(mergedProducts);
   function initFromUrl() {
     const params = new URLSearchParams(window.location.search);
     const cat = params.get('category');
-    if (cat) {
+    if (cat && cat !== 'all') {
       const matchBtn = document.querySelector(`[data-category-id="${cat}"]`);
       if (matchBtn) {
-        (matchBtn).click();
+        (matchBtn as any).click();
         return;
       }
     }
-    updateFilteredProducts();
+    // Default initial view: seamlessly hydrate SSR-rendered cards without clearing DOM!
+    filteredList = allProducts.slice();
+    displayedCount = Math.min(BATCH_SIZE, filteredList.length);
+    if (totalCountLabel) totalCountLabel.textContent = String(filteredList.length);
+    if (displayedCountLabel) displayedCountLabel.textContent = String(displayedCount);
+    if (gridContainer) bindQuoteButtons(gridContainer);
+    if (displayedCount >= filteredList.length && allLoadedNotice) {
+      allLoadedNotice.classList.remove('hidden');
+      allLoadedNotice.classList.add('flex');
+    }
   }
 
   // Initial Boot
