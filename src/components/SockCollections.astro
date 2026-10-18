@@ -1,5 +1,5 @@
 ---
-// src/components/site/SockCollections.astro
+// src/components/SockCollections.astro
 import { fetchNormalizedProducts, ProductService } from '@data/products';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
@@ -214,7 +214,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
 </section>
 
 <script>
-  import { addToQuote } from '../../stores/quoteCart';
+  import { addToQuote } from '@stores/quoteCart';
 
   // Desktop horizontal shelf scroll arrows & dynamic centering
   const shelf = document.getElementById('collections-shelf');

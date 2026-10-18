@@ -201,7 +201,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
 </div>
 
 <script>
-  import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '../../stores/quoteCart';
+  import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '@stores/quoteCart';
 
   // Expose global drawer opener
   (window as any).openQuoteDrawer = () => {

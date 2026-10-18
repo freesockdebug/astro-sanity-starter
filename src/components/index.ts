@@ -1,4 +1,4 @@
-// src/components/site/index.ts
+// src/components/index.ts
 /**
  * Central registry and component map for all site sections
  */
