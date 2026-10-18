@@ -48,10 +48,19 @@ function formatCanonicalURL(url: string | URL) {
         <title>{title}</title>
         <meta name="generator" content={Astro.generator} />
 
-        <!-- Fonts -->
+        <!-- High-priority LCP Image Preload (Directly eliminates Resource Load Delay) -->
+        {resolvedImage?.src && (
+            <link rel="preload" as="image" href={resolvedImage.src} fetchpriority="high" />
+        )}
+
+        <!-- Fonts (Non-blocking asynchronous load with zero render delay) -->
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" media="print" onload="this.media='all'" />
+        <noscript>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+        </noscript>
 
         <!-- Low Priority Global Metadata -->
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
