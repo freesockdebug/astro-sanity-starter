@@ -16,6 +16,10 @@ export default defineType({
       name: 'seo',
       title: 'SEO',
     },
+    {
+      name: 'integrations',
+      title: '小部件与通知 (Widgets & Alerts)',
+    },
   ],
   fields: [
     defineField({
@@ -52,6 +56,73 @@ export default defineType({
         'Suffix to append to the title tag of all pages, except in pages where the this behavior is disabled.',
       type: 'string',
       group: 'seo',
+    }),
+    // --- Widget 1: WhatsApp Click-to-Chat ---
+    defineField({
+      name: 'enableWhatsApp',
+      title: '启用 WhatsApp 商务即时沟通气泡',
+      description: '在全站右下角浮动展示极简现代 WhatsApp 气泡，方便海外采购商一键直连业务员。',
+      type: 'boolean',
+      initialValue: true,
+      group: 'integrations',
+    }),
+    defineField({
+      name: 'whatsAppNumber',
+      title: 'WhatsApp 接收号码',
+      description: '国际格式号码（必须包含国家区号，如 +8613800000000 或 +12125551234）。',
+      type: 'string',
+      group: 'integrations',
+      hidden: ({document}) => !document?.enableWhatsApp,
+    }),
+    defineField({
+      name: 'whatsAppPrefillText',
+      title: 'WhatsApp 预设咨询文案',
+      description: '客户点击后对话框默认带出的英文问候语。',
+      type: 'string',
+      initialValue: "Hello Gwenvenni, I'm interested in your private-label knitwear collection.",
+      group: 'integrations',
+      hidden: ({document}) => !document?.enableWhatsApp,
+    }),
+    defineField({
+      name: 'whatsAppTooltip',
+      title: '气泡悬浮提示词',
+      description: '鼠标停留在气泡上时浮现的胶囊标签文案。',
+      type: 'string',
+      initialValue: 'Chat with B2B Specialist',
+      group: 'integrations',
+      hidden: ({document}) => !document?.enableWhatsApp,
+    }),
+    // --- Widget 2: Cloudflare Web Analytics ---
+    defineField({
+      name: 'cloudflareAnalyticsToken',
+      title: 'Cloudflare Web Analytics Token',
+      description: '在 Cloudflare 控制台 Web Analytics 获取的站点 Token。零 Cookie、零隐私弹窗、极速加载。留空则不注入。',
+      type: 'string',
+      group: 'integrations',
+    }),
+    // --- Widget 4: Instant Notification Webhook ---
+    defineField({
+      name: 'enableNotificationWebhook',
+      title: '启用询价即时通知推送',
+      description: '当买手提交 Quote Basket 询盘或索样时，即时将买手信息和意向款式推送到群机器人。',
+      type: 'boolean',
+      initialValue: true,
+      group: 'integrations',
+    }),
+    defineField({
+      name: 'notificationWebhookUrl',
+      title: '机器人 Webhook 地址 (URL)',
+      description: '支持飞书、钉钉、企业微信机器人，或 Slack / Discord / 通用接收 Webhook。',
+      type: 'url',
+      group: 'integrations',
+      hidden: ({document}) => !document?.enableNotificationWebhook,
+    }),
+    defineField({
+      name: 'notificationRecipientEmail',
+      title: '询盘告警接收邮箱',
+      description: '接收询盘通知的业务员邮箱地址（留空则默认发送至 contact 邮箱）。',
+      type: 'string',
+      group: 'integrations',
     }),
   ],
   preview: {

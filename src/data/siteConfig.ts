@@ -13,7 +13,15 @@ export const CONFIG_QUERY_OBJ = `{
   },
   footer,
   titleSuffix,
-  enableImageProxy
+  enableImageProxy,
+  enableWhatsApp,
+  whatsAppNumber,
+  whatsAppPrefillText,
+  whatsAppTooltip,
+  cloudflareAnalyticsToken,
+  enableNotificationWebhook,
+  notificationWebhookUrl,
+  notificationRecipientEmail
 }`;
 
 /**

@@ -1,6 +1,6 @@
 ---
 import { type SiteConfig, type CustomImage } from 'types';
-import { AppleNav, AppleFooter, QuoteDrawer } from '@components/site';
+import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget } from '@components/site';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
 
@@ -82,5 +82,19 @@ function formatCanonicalURL(url: string | URL) {
         </main>
         <AppleFooter config={configData} />
         <QuoteDrawer />
+
+        <!-- 1. WhatsApp Instant Live Chat Widget (Controlled from Sanity Studio) -->
+        {configData?.enableWhatsApp && configData?.whatsAppNumber && (
+            <WhatsAppWidget
+                phoneNumber={configData.whatsAppNumber}
+                prefillText={configData.whatsAppPrefillText}
+                tooltip={configData.whatsAppTooltip}
+            />
+        )}
+
+        <!-- 2. Cloudflare Web Analytics (0-Cookie, GDPR-compliant privacy analytics) -->
+        {configData?.cloudflareAnalyticsToken && (
+            <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={`{"token": "${configData.cloudflareAnalyticsToken}"}`}></script>
+        )}
     </body>
 </html>

@@ -12,6 +12,7 @@ import AppleNav from './AppleNav.astro';
 import AppleFooter from './AppleFooter.astro';
 import QuoteDrawer from './QuoteDrawer.astro';
 import AppleStageNavigator from './AppleStageNavigator.astro';
+import WhatsAppWidget from './WhatsAppWidget.astro';
 
 export {
   SockHero,
@@ -24,6 +25,7 @@ export {
   AppleFooter,
   QuoteDrawer,
   AppleStageNavigator,
+  WhatsAppWidget,
 };
 
 /**

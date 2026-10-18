@@ -178,6 +178,20 @@ export interface SiteConfig {
     titleSuffix?: string;
     rfqConfig?: RfqSettings;
     enableImageProxy?: boolean;
+
+    // Widget 1: WhatsApp Click-to-Chat Widget
+    enableWhatsApp?: boolean;
+    whatsAppNumber?: string;
+    whatsAppPrefillText?: string;
+    whatsAppTooltip?: string;
+
+    // Widget 2: Cloudflare Web Analytics
+    cloudflareAnalyticsToken?: string;
+
+    // Widget 4: Instant Quote/Sample Notification Webhook
+    enableNotificationWebhook?: boolean;
+    notificationWebhookUrl?: string;
+    notificationRecipientEmail?: string;
 }
 
 export interface BuyerInfo {

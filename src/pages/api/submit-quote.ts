@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createClient } from '@sanity/client';
 import { SecurityService } from '@utils/security';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
+import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -222,6 +223,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     };
 
+    // Load Studio site configuration (cached) for custom notification emails and webhook URLs
+    const siteConfig = await fetchSiteConfig();
+
     // 2. Cloudflare Turnstile Bot Verification
     const turnstileSecret =
       getVal('TURNSTILE_SECRET_KEY') ||
@@ -361,7 +365,7 @@ export const POST: APIRoute = async ({ request }) => {
         // Configurable Resend sender, recipients, and subject prefix
         const defaultDomain = DEFAULT_CONTACT_EMAIL.split('@')[1] || 'gwenvenni.com';
         const fromEmail = getVal('RESEND_FROM_EMAIL')?.trim() || `${DEFAULT_BRAND_TITLE} RFQ System <rfq@${defaultDomain}>`;
-        const rawToEmail = getVal('RESEND_TO_EMAIL')?.trim() || DEFAULT_CONTACT_EMAIL;
+        const rawToEmail = siteConfig?.notificationRecipientEmail?.trim() || getVal('RESEND_TO_EMAIL')?.trim() || DEFAULT_CONTACT_EMAIL;
         const toEmails = rawToEmail
           .split(/[,;]/)
           .map((e: string) => e.trim())
@@ -386,6 +390,56 @@ export const POST: APIRoute = async ({ request }) => {
         });
       } catch (mailErr) {
         console.warn('Resend mail sending failed or timed out (skipping):', mailErr);
+      }
+    }
+
+    // 4. Instant Notification Webhook (WeChat Work, DingTalk, Feishu, Slack, Discord, Generic Webhook)
+    const webhookUrl = siteConfig?.notificationWebhookUrl?.trim() || getVal('NOTIFICATION_WEBHOOK_URL')?.trim();
+    const enableWebhook = siteConfig?.enableNotificationWebhook !== false;
+
+    if (enableWebhook && webhookUrl) {
+      try {
+        const itemLines = items
+          .map((item, idx) => `  ${idx + 1}. [${item.sku}] ${item.title} (${item.variant}) × ${item.quantity}双`)
+          .join('\n');
+        
+        const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+        const plainText = `🔔 【Gwenvenni 官网收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${buyerInfo.destination || '未提供'}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
+
+        let webhookBody: any;
+        if (webhookUrl.includes('qyapi.weixin.qq.com')) {
+          webhookBody = {
+            msgtype: 'markdown',
+            markdown: { content: plainText }
+          };
+        } else if (webhookUrl.includes('dingtalk.com')) {
+          webhookBody = {
+            msgtype: 'markdown',
+            markdown: {
+              title: `【新询盘】${buyerInfo.company || buyerInfo.name || '买手咨询'}`,
+              text: `### 🔔 Gwenvenni 官网收到新询价单\n\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${buyerInfo.destination || '未提供'}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`
+            }
+          };
+        } else if (webhookUrl.includes('feishu.cn') || webhookUrl.includes('larksuite.com')) {
+          webhookBody = {
+            msg_type: 'text',
+            content: { text: plainText }
+          };
+        } else {
+          webhookBody = {
+            text: plainText,
+            content: plainText
+          };
+        }
+
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(webhookBody),
+          signal: AbortSignal.timeout(6_000),
+        });
+      } catch (webhookErr) {
+        console.warn('Webhook notification failed or timed out (skipping):', webhookErr);
       }
     }
 
