@@ -34,7 +34,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     <!-- Brand / Logo (Pure Apple Minimalism) -->
     <a href="/" class="flex items-center gap-2 group flex-shrink-0">
       {logoImage ? (
-        <img src={logoImage} alt={resolvedBrandTitle} class="h-6 w-auto object-contain" />
+        <img src={logoImage} alt={resolvedBrandTitle} class="h-6 w-auto object-contain" loading="eager" decoding="async" />
       ) : (
         <span class="text-sm font-semibold tracking-tight text-[#1d1d1f] hover:opacity-70 transition-opacity">
           {resolvedBrandTitle}
