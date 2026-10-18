@@ -409,26 +409,26 @@ const serializedProducts = JSON.stringify(mergedProducts);
 
   function bindQuoteButtons(scope = document) {
     scope.querySelectorAll('.btn-catalog-quote').forEach((quoteBtn) => {
-      if ((quoteBtn as any).dataset.bound) return;
-      (quoteBtn as any).dataset.bound = 'true';
+      if (quoteBtn.dataset.bound) return;
+      quoteBtn.dataset.bound = 'true';
       quoteBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         const quoteItem = {
-          id: (quoteBtn as any).dataset.id,
-          title: (quoteBtn as any).dataset.title,
-          sku: (quoteBtn as any).dataset.sku,
-          imageUrl: (quoteBtn as any).dataset.image,
-          moq: (quoteBtn as any).dataset.moq,
-          variant: (quoteBtn as any).dataset.variant,
+          id: quoteBtn.dataset.id,
+          title: quoteBtn.dataset.title,
+          sku: quoteBtn.dataset.sku,
+          imageUrl: quoteBtn.dataset.image,
+          moq: quoteBtn.dataset.moq,
+          variant: quoteBtn.dataset.variant,
           quantity: 1,
         };
         
         // Dispatch to global nanostore cart
-        if (typeof window !== 'undefined' && (window as any).openQuoteDrawer) {
+        if (typeof window !== 'undefined' && window.openQuoteDrawer) {
           import('/src/stores/quoteCart.ts').then((mod) => {
             mod.addToQuote(quoteItem);
-            (window as any).openQuoteDrawer();
+            window.openQuoteDrawer();
           }).catch(() => {
             alert(`Added "${quoteItem.title}" to quote basket!`);
           });
@@ -585,7 +585,7 @@ const serializedProducts = JSON.stringify(mergedProducts);
     if (cat && cat !== 'all') {
       const matchBtn = document.querySelector(`[data-category-id="${cat}"]`);
       if (matchBtn) {
-        (matchBtn as any).click();
+        matchBtn.click();
         return;
       }
     }
