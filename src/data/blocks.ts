@@ -22,18 +22,14 @@ export const SECTIONS = `{
       title,
       shortTitle,
       "slug": slug.current,
+      sku,
       tagline,
       moq,
       leadTime,
       "mainImage": mainImage.asset->url,
-      "gallery": gallery[]{
-        "src": asset->url,
-        "alt": alt,
-        "caption": caption
-      },
       colors,
-      pricingTiers,
-      specifications
+      wholesalePrice,
+      "specifications": specifications[0..1]
     }
   },
   _type == "customSection" => {

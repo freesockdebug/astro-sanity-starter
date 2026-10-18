@@ -2,7 +2,7 @@
 // src/pages/products/index.astro
 import Layout from '@layouts/Layout.astro';
 import { client } from '@utils/sanity-client';
-import { PRODUCT_FIELDS, CATEGORY_FIELDS, ProductService, fetchCatalogCategories } from '@data/products';
+import { PRODUCT_CARD_FIELDS, CATEGORY_FIELDS, ProductService, fetchCatalogCategories } from '@data/products';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { DEFAULT_CATALOG, DEFAULT_RFQ } from '@data/defaults';
@@ -14,7 +14,7 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, 
 let batchData: any = null;
 try {
   batchData = await client.fetch(`{
-    "products": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_FIELDS},
+    "products": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS},
     "categories": *[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS},
     "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
     "rfqSettings": *[_type == "rfqSettings"][0],
@@ -46,7 +46,23 @@ const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
 
 const BATCH_SIZE = 21;
 const initialProducts = mergedProducts.slice(0, BATCH_SIZE);
-const serializedProducts = JSON.stringify(mergedProducts);
+const minimalProducts = mergedProducts.map((p: any) => ({
+  id: p.id,
+  slug: p.slug,
+  title: p.title,
+  shortTitle: p.shortTitle,
+  category: p.category,
+  image: p.image,
+  colors: p.colors,
+  leadTime: p.leadTime,
+  composition: p.composition,
+  wholesalePrice: p.wholesalePrice,
+  moq: p.moq,
+  sku: p.sku,
+  tagline: p.tagline,
+  gauge: p.gauge
+}));
+const catalogJson = JSON.stringify(minimalProducts);
 ---
 
 <Layout
@@ -263,11 +279,15 @@ const serializedProducts = JSON.stringify(mergedProducts);
       </div>
     </div>
   </main>
+
+  <!-- Lightweight compact catalog data in standard application/json (avoids Astro define:vars double escaping) -->
+  <script type="application/json" id="catalog-products-data" set:html={catalogJson}></script>
 </Layout>
 
-<script define:vars={{ serializedProducts, cardQuoteText }}>
+<script define:vars={{ cardQuoteText }}>
   // Catalog State Management
-  const allProducts = JSON.parse(serializedProducts);
+  const catalogDataEl = document.getElementById('catalog-products-data');
+  const allProducts = catalogDataEl ? JSON.parse(catalogDataEl.textContent || '[]') : [];
   const BATCH_SIZE = 21; // High density e-commerce batch (divisible by 7 and 3)
   let currentCategory = 'all';
   let searchQuery = '';

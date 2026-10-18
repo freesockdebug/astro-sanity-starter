@@ -44,6 +44,30 @@ export const PRODUCT_FIELDS = `{
   }
 }`;
 
+/**
+ * High-performance lightweight card projection for product listings & showcases.
+ * Strips heavy galleries, deep specifications, and pricing tiers to drop payload size by ~80%.
+ */
+export const PRODUCT_CARD_FIELDS = `{
+  _id,
+  title,
+  shortTitle,
+  "slug": slug.current,
+  sku,
+  tagline,
+  moq,
+  leadTime,
+  "mainImage": mainImage.asset->url,
+  colors,
+  wholesalePrice,
+  "specifications": specifications[0..1],
+  "category": category->{
+    _id,
+    title,
+    "slug": slug.current
+  }
+}`;
+
 export const CATEGORY_FIELDS = `{
   _id,
   title,

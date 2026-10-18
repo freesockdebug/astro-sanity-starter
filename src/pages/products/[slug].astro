@@ -2,7 +2,7 @@
 // src/pages/products/[slug].astro
 import Layout from '@layouts/Layout.astro';
 import { client } from '@utils/sanity-client';
-import { PRODUCT_FIELDS, ProductService } from '@data/products';
+import { PRODUCT_FIELDS, PRODUCT_CARD_FIELDS, ProductService } from '@data/products';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { cleanBrandTitle } from '@utils/text';
@@ -20,7 +20,7 @@ try {
   batchData = await client.fetch(
     `{
       "product": *[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS},
-      "allProducts": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_FIELDS},
+      "allProducts": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS},
       "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
       "rfqSettings": *[_type == "rfqSettings"][0]
     }`,
