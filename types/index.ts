@@ -185,8 +185,6 @@ export interface SiteConfig {
     whatsAppPrefillText?: string;
     whatsAppTooltip?: string;
 
-    // Widget 2: Cloudflare Web Analytics
-    cloudflareAnalyticsToken?: string;
 
     // Widget 4: Instant Quote/Sample Notification Webhook
     enableNotificationWebhook?: boolean;

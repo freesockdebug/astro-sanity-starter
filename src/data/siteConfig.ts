@@ -18,7 +18,6 @@ export const CONFIG_QUERY_OBJ = `{
   whatsAppNumber,
   whatsAppPrefillText,
   whatsAppTooltip,
-  cloudflareAnalyticsToken,
   enableNotificationWebhook,
   notificationWebhookUrl,
   notificationRecipientEmail

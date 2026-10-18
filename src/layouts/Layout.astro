@@ -92,9 +92,5 @@ function formatCanonicalURL(url: string | URL) {
             />
         )}
 
-        <!-- 2. Cloudflare Web Analytics (0-Cookie, GDPR-compliant privacy analytics) -->
-        {configData?.cloudflareAnalyticsToken && (
-            <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={`{"token": "${configData.cloudflareAnalyticsToken}"}`}></script>
-        )}
     </body>
 </html>

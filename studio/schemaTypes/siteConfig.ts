@@ -92,14 +92,6 @@ export default defineType({
       group: 'integrations',
       hidden: ({document}) => !document?.enableWhatsApp,
     }),
-    // --- Widget 2: Cloudflare Web Analytics ---
-    defineField({
-      name: 'cloudflareAnalyticsToken',
-      title: 'Cloudflare Web Analytics Token',
-      description: '在 Cloudflare 控制台 Web Analytics 获取的站点 Token。零 Cookie、零隐私弹窗、极速加载。留空则不注入。',
-      type: 'string',
-      group: 'integrations',
-    }),
     // --- Widget 4: Instant Notification Webhook ---
     defineField({
       name: 'enableNotificationWebhook',
