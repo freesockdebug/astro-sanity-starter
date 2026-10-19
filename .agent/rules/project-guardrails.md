@@ -285,3 +285,9 @@ export const POST: APIRoute = async (context) => {
 
 ---
 *本文档由 Gwenvenni 研发团队首席架构师制定，实时生效。*
+## 🛑 AI 每次修改代码前的强制自检协议 (Mandatory Pre-Flight Check)
+当你收到修改或新增功能的指令时，在输出最终代码前，你必须严格执行以下自检并在回复开头用 3 行以内简要确认：
+1. [环境边界检查]：新增的变量属于构建时还是 Worker 运行时？是否同步更新了 `src/env.d.ts`？
+2. [回归破坏检查]：本次改动是否破坏了现有的 Sanity GROQ 查询结构、Nanostores 持久化键名或 D1 表结构？
+3. [专家健壮性检查]：外部 `fetch` 是否有异常处理？用户输入是否做了校验？是否消除了所有隐式 `any`？
+*注意：完成代码修改后，请主动调用终端运行 `npm run verify`（即 `astro check && eslint .`），确保零报错后再向我交差。*

@@ -31,4 +31,5 @@ pnpm-debug.log*
 scripts/
 amazon_*.json
 studio/.sanity/
-
+# AI agent documentation
+AGENTS.md
