@@ -31,5 +31,13 @@ pnpm-debug.log*
 scripts/
 amazon_*.json
 studio/.sanity/
-# AI agent documentation
+# AI agent documentation & IDE rules
 AGENTS.md
+.agent/
+.agents
+
+# Sanity export archives
+sanity-export/*.tar.gz
+
+# Local IDE configuration
+.vscode/
