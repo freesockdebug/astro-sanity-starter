@@ -7,7 +7,7 @@ import { client } from '@utils/sanity-client';
 import { PAGE_QUERY_OBJ } from '@data/page';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
-import { normalizeSections } from '@data/blocks';
+import { normalizeSections, extractHeroPreload } from '@data/blocks';
 
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
@@ -42,11 +42,12 @@ if (!page) {
 
 const { title, sections: rawSections, metaTitle, metaDescription, socialImage } = page;
 const sections = normalizeSections(rawSections);
+const heroPreload = extractHeroPreload(sections);
 ---
 
 {
     page && (
-        <Layout title={metaTitle ?? title} description={metaDescription} image={socialImage}>
+        <Layout title={metaTitle ?? title} description={metaDescription} image={socialImage} preloadHeroImage={heroPreload}>
             <Fragment>
                 {sections?.length &&
                     sections.map((section: any) => {

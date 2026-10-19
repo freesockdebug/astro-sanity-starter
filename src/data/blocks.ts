@@ -118,3 +118,14 @@ export function normalizeSections(sections: any[] = []): any[] {
     return s;
   });
 }
+
+/**
+ * Resolves the responsive LCP preload descriptor from sections if a Hero section is present.
+ * High-cohesion utility ensuring all section-based pages (homepage & dynamic slug pages) share SSOT preloading.
+ */
+export function extractHeroPreload(sections: any[] = []): { src: string; srcset?: string; sizes?: string } | undefined {
+  if (!Array.isArray(sections)) return undefined;
+  const heroSection = sections.find((s: any) => s && (s._type === 'heroSection' || s._type === 'hosieryHeroSection'));
+  const rawHeroImg = heroSection?.heroImage;
+  return SanityImageService.resolveHeroPreload(rawHeroImg);
+}

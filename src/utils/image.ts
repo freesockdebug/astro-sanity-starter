@@ -161,4 +161,23 @@ export class SanityImageService {
       .map((w) => `${this.optimize(url, { ...options, width: w })} ${w}w`)
       .join(', ');
   }
+
+  /**
+   * Generates a high-priority preload descriptor for LCP Hero images.
+   * Centralizes responsive breakpoints and fetch sizes to prevent oversized downloads on mobile.
+   */
+  public static resolveHeroPreload(
+    url?: string | null,
+    widths: number[] = [480, 800, 1200, 1600],
+    sizes: string = '(max-width: 640px) 100vw, (max-width: 1024px) 95vw, 1520px'
+  ): { src: string; srcset?: string; sizes?: string } | undefined {
+    if (!url || typeof url !== 'string' || (!url.includes('cdn.sanity.io') && !url.includes('/cdn-image/'))) {
+      return undefined;
+    }
+    return {
+      src: this.hero(url, widths[widths.length - 1] || 1600),
+      srcset: this.srcSet(url, widths, { quality: 80 }),
+      sizes,
+    };
+  }
 }
