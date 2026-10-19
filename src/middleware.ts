@@ -39,17 +39,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
     ? (caches as any).default 
     : null;
 
-  // Normalise cache request key: strip tracking/analytics query params and ignore dynamic client headers
-  const cacheUrl = new URL(url.toString());
-  const TRACKING_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'ref', '_ga', '_gl', '_t'];
-  TRACKING_PARAMS.forEach((p) => cacheUrl.searchParams.delete(p));
-
-  // Pure URL-based GET request ensures cross-device & cross-client cache hits
-  const cacheKey = new Request(cacheUrl.toString(), {
+  // Normalise cache request key to canonical origin + pathname
+  // This guarantees cross-query sharing (stripping tracking/ads) and precise edge invalidation
+  const canonicalUrl = new URL(pathname, url.origin);
+  const cacheKey = new Request(canonicalUrl.toString(), {
     method: 'GET',
   });
 
-  if (cache) {
+  const isPurge = url.searchParams.has('purge') || url.searchParams.has('revalidate');
+  if (isPurge && cache) {
+    try {
+      await cache.delete(cacheKey);
+    } catch (e) {
+      console.warn('[EdgeCache] Error purging cache:', e);
+    }
+  }
+
+  if (cache && !isPurge) {
     try {
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
