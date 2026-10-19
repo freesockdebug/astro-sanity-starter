@@ -89,6 +89,8 @@ export const POST: APIRoute = async (context) => {
       url.searchParams.get('token') ||
       body?.secret;
 
+    const expectedSecret = getEnv('REVALIDATE_SECRET') || getEnv('SANITY_REVALIDATE_SECRET');
+
     // 2. Authenticate webhook request if secret is configured in environment
     if (expectedSecret && providedSecret !== expectedSecret) {
       return new Response(JSON.stringify({ error: 'Unauthorized: Invalid revalidation secret' }), {
