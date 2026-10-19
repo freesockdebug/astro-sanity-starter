@@ -57,6 +57,10 @@ export class SanityImageService {
   public static optimize(url?: string | null, options: ImageOptimizationOptions = {}): string {
     if (!url || typeof url !== 'string') return url || '';
 
+    // Fast-path for local optimized static assets
+    if (url.includes('/images/hero-light')) return '/images/hero-light.webp';
+    if (url.includes('/images/spec-light')) return '/images/spec-light.webp';
+
     // Only apply to Sanity CDN URLs (direct cdn.sanity.io or already proxied /cdn-image/)
     const isDirectSanity = url.includes('cdn.sanity.io');
     const isProxiedSanity = url.includes('/cdn-image/');
@@ -154,7 +158,19 @@ export class SanityImageService {
     widths: number[] = [480, 800, 1200, 1600],
     options: Omit<ImageOptimizationOptions, 'width'> = {}
   ): string {
-    if (!url || typeof url !== 'string' || (!url.includes('cdn.sanity.io') && !url.includes('/cdn-image/'))) {
+    if (!url || typeof url !== 'string') {
+      return '';
+    }
+
+    if (url.includes('/images/hero-light')) {
+      return '/images/hero-light-480.webp 480w, /images/hero-light-800.webp 800w, /images/hero-light-1200.webp 1200w, /images/hero-light.webp 1376w';
+    }
+
+    if (url.includes('/images/spec-light')) {
+      return '/images/spec-light-480.webp 480w, /images/spec-light-800.webp 800w, /images/spec-light.webp 1376w';
+    }
+
+    if (!url.includes('cdn.sanity.io') && !url.includes('/cdn-image/')) {
       return '';
     }
     return widths
@@ -171,7 +187,19 @@ export class SanityImageService {
     widths: number[] = [480, 800, 1200, 1600],
     sizes: string = '(max-width: 640px) 100vw, (max-width: 1024px) 95vw, 1520px'
   ): { src: string; srcset?: string; sizes?: string } | undefined {
-    if (!url || typeof url !== 'string' || (!url.includes('cdn.sanity.io') && !url.includes('/cdn-image/'))) {
+    if (!url || typeof url !== 'string') {
+      return undefined;
+    }
+
+    if (url.includes('/images/hero-light')) {
+      return {
+        src: '/images/hero-light.webp',
+        srcset: this.srcSet(url, widths),
+        sizes,
+      };
+    }
+
+    if (!url.includes('cdn.sanity.io') && !url.includes('/cdn-image/')) {
       return undefined;
     }
     return {

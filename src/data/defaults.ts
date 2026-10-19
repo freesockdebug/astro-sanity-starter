@@ -12,7 +12,7 @@ export const DEFAULT_META_TITLE = 'Gwenvenni Luxury Atelier | 200-Needle Luxury 
 export const DEFAULT_META_DESCRIPTION =
   'Specialized manufacturer of 200-needle luxury apparel, fine silks, cashmere, and seamless essentials. Low MOQ, rapid 48h swatch dispatch, and full OEM/ODM customization.';
 export const DEFAULT_CONTACT_EMAIL = 'contact@gwenvenni.com';
-export const DEFAULT_FALLBACK_IMAGE = '/images/hero-light.jpg';
+export const DEFAULT_FALLBACK_IMAGE = '/images/hero-light.webp';
 
 // =============================================================================
 // 2. Global Footer Defaults
@@ -98,7 +98,7 @@ export const DEFAULT_SPEC_MATRIX = {
   title: 'Specification Matrix',
   description:
     'We treat the architectural construction of luxury knitwear with the exactitude of horology. Every seam, tension zone, and yarn twist is calibrated for zero friction.',
-  macroImage: '/images/spec-light.jpg',
+  macroImage: '/images/spec-light.webp',
   primaryButtonUrl: '#inquiry',
   secondaryButtonText: 'Download B2B Line Sheet (PDF)',
   secondaryButtonUrl: '#inquiry',
@@ -208,7 +208,7 @@ export const DEFAULT_RFQ = {
   swatchKitSku: 'SWATCH-KIT',
   swatchKitTitle: 'Curated Swatch Kit & Fabric Color Book',
   swatchKitDesc: 'Physical fabric swatches & yarn color dossier via DHL Express',
-  swatchKitImageUrl: '/images/spec-light.jpg',
+  swatchKitImageUrl: '/images/spec-light.webp',
   swatchKitMoq: '1 Set (Priority Dispatch)',
 
   drawerSuccessMessage:

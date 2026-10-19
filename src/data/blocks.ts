@@ -1,4 +1,5 @@
 import { SanityImageService } from '@utils/image';
+import { DEFAULT_FALLBACK_IMAGE } from './defaults';
 
 export const IMAGE = `{
   "_id": asset->_id,
@@ -126,6 +127,7 @@ export function normalizeSections(sections: any[] = []): any[] {
 export function extractHeroPreload(sections: any[] = []): { src: string; srcset?: string; sizes?: string } | undefined {
   if (!Array.isArray(sections)) return undefined;
   const heroSection = sections.find((s: any) => s && (s._type === 'heroSection' || s._type === 'hosieryHeroSection'));
-  const rawHeroImg = heroSection?.heroImage;
+  if (!heroSection) return undefined;
+  const rawHeroImg = heroSection.heroImage || DEFAULT_FALLBACK_IMAGE;
   return SanityImageService.resolveHeroPreload(rawHeroImg);
 }
