@@ -212,36 +212,45 @@ export const POST: APIRoute = async (context) => {
     const cfApiToken = rawCfToken?.trim();
     let cfPurged = false;
     let cfMessage = 'Skipped (credentials not set in environment)';
-    let cfDiagnostics: any = null;
+    let cfDiagnostics: any = undefined;
+
+    const isDebug = url.searchParams.has('debug') || url.searchParams.has('diagnose');
 
     if (cfApiToken) {
       try {
-        // Optional verification check to diagnose exact permissions
-        const debugMode = url.searchParams.has('debug') || url.searchParams.has('diagnose');
-        let tokenVerifyData: any = null;
+        // Only run verbose diagnostic probes when explicitly requested via ?debug=1
+        if (isDebug) {
+          let tokenVerifyData: any = null;
+          try {
+            const verifyRes = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
+              headers: {
+                'Authorization': `Bearer ${cfApiToken}`,
+                'Content-Type': 'application/json'
+              },
+              signal: AbortSignal.timeout(6000)
+            });
+            tokenVerifyData = await verifyRes.json();
 
-        try {
-          const verifyRes = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
-            headers: {
-              'Authorization': `Bearer ${cfApiToken}`,
-              'Content-Type': 'application/json'
-            },
-            signal: AbortSignal.timeout(6000)
-          });
-          tokenVerifyData = await verifyRes.json();
+            const zonesProbe = await fetch('https://api.cloudflare.com/client/v4/zones?per_page=5', {
+              headers: {
+                'Authorization': `Bearer ${cfApiToken}`,
+                'Content-Type': 'application/json'
+              },
+              signal: AbortSignal.timeout(6000)
+            });
+            const zonesData: any = await zonesProbe.json();
+            tokenVerifyData.accessibleZones = zonesData?.result?.map((z: any) => ({ id: z.id, name: z.name })) || zonesData?.errors;
+          } catch (e: any) {
+            tokenVerifyData = { error: e?.message };
+          }
 
-          // Probe zones access
-          const zonesProbe = await fetch('https://api.cloudflare.com/client/v4/zones?per_page=5', {
-            headers: {
-              'Authorization': `Bearer ${cfApiToken}`,
-              'Content-Type': 'application/json'
-            },
-            signal: AbortSignal.timeout(6000)
-          });
-          const zonesData: any = await zonesProbe.json();
-          tokenVerifyData.accessibleZones = zonesData?.result?.map((z: any) => ({ id: z.id, name: z.name })) || zonesData?.errors;
-        } catch (e: any) {
-          tokenVerifyData = { error: e?.message };
+          cfDiagnostics = {
+            zoneIdProvided: Boolean(cfZoneId),
+            zoneIdMasked: cfZoneId ? `${cfZoneId.slice(0, 4)}...${cfZoneId.slice(-4)}` : null,
+            tokenLength: cfApiToken.length,
+            tokenMasked: `${cfApiToken.slice(0, 3)}...${cfApiToken.slice(-3)}`,
+            tokenVerification: tokenVerifyData
+          };
         }
 
         // Auto-discover Zone ID if not explicitly specified
@@ -299,43 +308,33 @@ export const POST: APIRoute = async (context) => {
         } else {
           cfMessage = 'Cloudflare API Token found, but Zone ID could not be identified automatically';
         }
-
-        cfDiagnostics = {
-          zoneIdProvided: Boolean(cfZoneId),
-          zoneIdMasked: cfZoneId ? `${cfZoneId.slice(0, 4)}...${cfZoneId.slice(-4)}` : null,
-          tokenLength: cfApiToken.length,
-          tokenMasked: `${cfApiToken.slice(0, 3)}...${cfApiToken.slice(-3)}`,
-          tokenVerification: tokenVerifyData
-        };
       } catch (err: any) {
         cfMessage = `Cloudflare purge failed: ${err?.message || 'Network error'}`;
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        revalidated: true,
-        documentType: docType || 'custom',
-        slug: docSlug || null,
-        purgedUrls: urlsToPurge,
-        workerEdgeCache: {
-          available: Boolean(workerCache),
-          purgedEntries: workerPurgedCount
-        },
-        cloudflareCdn: {
-          executed: Boolean(cfApiToken && cfZoneId),
-          success: cfPurged,
-          status: cfMessage,
-          diagnostics: cfDiagnostics
-        },
-        timestamp: new Date().toISOString()
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    // Default clean & minimal response
+    const responsePayload: Record<string, any> = {
+      success: true,
+      purgedUrls: urlsToPurge,
+      edgeCachePurged: workerPurgedCount > 0 || Boolean(workerCache),
+      cdnPurged: cfPurged
+    };
+
+    // Attach extended debug metadata only if ?debug=1 is explicitly passed
+    if (isDebug) {
+      responsePayload.documentType = docType || 'custom';
+      responsePayload.slug = docSlug || null;
+      responsePayload.workerEntriesPurged = workerPurgedCount;
+      responsePayload.cloudflareStatus = cfMessage;
+      responsePayload.diagnostics = cfDiagnostics;
+      responsePayload.timestamp = new Date().toISOString();
+    }
+
+    return new Response(JSON.stringify(responsePayload), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (err: any) {
     return new Response(
       JSON.stringify({ success: false, error: err?.message || 'Internal server error' }),
