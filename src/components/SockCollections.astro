@@ -40,8 +40,8 @@ const resolvedCardQuoteText = cardQuoteButtonText || rfqSettings?.cardQuoteBtnTe
 
 // Only display products added to this section in Sanity Studio; unadded products fall back to normalized catalog
 const normalizedProducts = propProducts !== undefined
-  ? propProducts.map((p: any) => ProductService.normalize(p, 700))
-  : await fetchNormalizedProducts(700);
+  ? propProducts.map((p: any) => ProductService.normalize(p, 480))
+  : await fetchNormalizedProducts(480);
 
 const activeCollections = normalizedProducts.map((p) => ({
   ...p,
@@ -143,6 +143,10 @@ const showCardQuoteButton = propShowCardQuote !== undefined
             >
               <img
                 src={item.image}
+                srcset={SanityImageService.srcSet(item.image, [280, 480]) || undefined}
+                sizes="(max-width: 640px) 280px, 340px"
+                width="280"
+                height="280"
                 alt={item.title}
                 class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
                 loading="lazy"

@@ -282,10 +282,11 @@ function getSanityDim(img: any): { w: number; h: number; ratio: number } | null 
                   : 'max-w-4xl';
 
               const imgUrl = SanityImageService.optimize(block.image, { width: 1600 });
+              const imgSrcSet = SanityImageService.srcSet(block.image, [480, 800, 1200, 1600]);
               return (
                 <div class={`w-full ${isScreenFit ? 'flex-1 min-h-0 flex flex-col justify-center items-center my-auto overflow-hidden' : 'flex flex-col items-center justify-center'}`}>
                   <div class={`overflow-hidden ${singleAspect} ${rounded} ${shadow} ${isScreenFit ? 'h-full max-h-[520px]' : ''} ${singleMaxWidth} w-full mx-auto ${isDark ? 'border border-zinc-800' : 'border border-black/5'} bg-[#f5f5f7] dark:bg-zinc-900 group`}>
-                    <img src={imgUrl} alt={block.caption || 'Illustration'} loading="lazy" decoding="async" class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105" />
+                    <img src={imgUrl} srcset={imgSrcSet || undefined} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1200px" alt={block.caption || 'Illustration'} loading="lazy" decoding="async" class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105" />
                   </div>
                   {block.caption && <p class={`mt-2 text-xs text-center shrink-0 ${subtitleClass}`}>{block.caption}</p>}
                 </div>

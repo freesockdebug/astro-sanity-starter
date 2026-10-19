@@ -63,12 +63,22 @@ const minimalProducts = mergedProducts.map((p: any) => ({
   gauge: p.gauge
 }));
 const catalogJson = JSON.stringify(minimalProducts);
+
+const firstCardImg = mergedProducts[0]?.image;
+const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (firstCardImg.includes('cdn.sanity.io') || firstCardImg.includes('/cdn-image/'))
+  ? {
+      src: SanityImageService.thumbnail(firstCardImg, 480),
+      srcset: SanityImageService.srcSet(firstCardImg, [240, 480]),
+      sizes: '(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px',
+    }
+  : undefined;
 ---
 
 <Layout
   title={catalogSettings?.metaTitle || DEFAULT_CATALOG.metaTitle}
   description={catalogSettings?.metaDescription || DEFAULT_CATALOG.metaDescription}
   image={mergedProducts[0]?.image}
+  preloadHeroImage={catalogHeroPreload}
 >
   <!-- Main Catalog Container with Wide Responsive Boundaries (Compact Bottom Spacing) -->
   <main class="min-h-screen bg-white text-[#1d1d1f] pt-14 sm:pt-18 pb-6 sm:pb-8 border-t border-black/5">
@@ -170,7 +180,7 @@ const catalogJson = JSON.stringify(minimalProducts);
         id="products-grid"
         class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5 min-h-[50vh]"
       >
-        {initialProducts.map((item: any) => (
+        {initialProducts.map((item: any, idx: number) => (
           <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between" data-product-id={item.id}>
             <div class="flex-1 min-h-0 flex flex-col">
               <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with rounded corners -->
@@ -180,9 +190,12 @@ const catalogJson = JSON.stringify(minimalProducts);
               >
                 <img
                   src={item.image}
+                  srcset={SanityImageService.srcSet(item.image, [240, 480]) || undefined}
+                  sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
                   alt={item.title}
                   class="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
-                  loading="lazy"
+                  loading={idx < 4 ? "eager" : "lazy"}
+                  fetchpriority={idx === 0 ? "high" : "auto"}
                   decoding="async"
                   width="240"
                   height="240"

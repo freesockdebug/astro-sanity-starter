@@ -171,8 +171,12 @@ const { stages = defaultStages } = Astro.props;
 
       // Update URL quietly without triggering scroll jumps
       const targetId = stageMeta[index].id;
-      if (window.location.hash !== `#${targetId}`) {
-        history.replaceState(null, '', `#${targetId}`);
+      if (index > 0) {
+        if (window.location.hash !== `#${targetId}`) {
+          history.replaceState(null, '', `#${targetId}`);
+        }
+      } else if (window.location.hash && window.location.hash !== '') {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
       }
     }
 

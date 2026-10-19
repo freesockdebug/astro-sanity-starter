@@ -101,6 +101,7 @@ const {
 const rfqSettings = await fetchRfqSettings();
 const rawMacroImage = propMacroImage?.trim() || DEFAULT_SPEC_MATRIX.macroImage;
 const macroImage = SanityImageService.macro(rawMacroImage, 1200);
+const macroSrcSet = SanityImageService.srcSet(rawMacroImage, [360, 600, 1000]);
 const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText;
 
 const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";
@@ -153,6 +154,10 @@ const cleanDescription = (description || "").replace(/^\d+/, "").trim();
         <div class="relative mt-2.5 rounded-xl lg:rounded-2xl overflow-hidden bg-[#f5f5f7] border border-black/5 flex-1 min-h-0 w-full">
           <img
             src={macroImage}
+            srcset={macroSrcSet || undefined}
+            sizes="(max-width: 640px) 82vw, 600px"
+            width="600"
+            height="400"
             alt="Macro ribbed textile texture"
             class="absolute inset-0 w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
             loading="lazy"
