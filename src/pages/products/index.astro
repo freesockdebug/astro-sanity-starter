@@ -75,13 +75,13 @@ const catalogJson = JSON.stringify(minimalProducts);
     
     <!-- 1. Catalog Hero Header (Apple Rail Narrow) -->
     <section class="apple-rail-narrow text-center mb-6 sm:mb-9 space-y-1.5 sm:space-y-2.5">
-      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-semibold text-[#52525b] uppercase tracking-wider">
         <span>{catalogSettings?.badgeText || DEFAULT_CATALOG.badgeText}</span>
       </div>
       <h1 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
         {catalogSettings?.title || DEFAULT_CATALOG.title}
       </h1>
-      <p class="text-xs sm:text-sm text-[#86868b] max-w-xl mx-auto font-normal leading-relaxed">
+      <p class="text-xs sm:text-sm text-[#52525b] max-w-xl mx-auto font-normal leading-relaxed">
         {catalogSettings?.subtitle || DEFAULT_CATALOG.subtitle}
       </p>
     </section>
@@ -104,7 +104,7 @@ const catalogJson = JSON.stringify(minimalProducts);
             >
               <span>{cat.label}</span>
               <span class={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                cat.id === 'all' ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'
+                cat.id === 'all' ? 'bg-white/20 text-white' : 'bg-black/5 text-[#404040]'
               }`}>
                 {cat.count}
               </span>
@@ -116,19 +116,22 @@ const catalogJson = JSON.stringify(minimalProducts);
         <div class="flex items-center gap-2 shrink-0">
           <!-- Realtime Search Input -->
           <div class="relative flex-1 md:w-52">
-            <svg class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#86868b] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <label for="catalog-search-input" class="sr-only">Search product catalog</label>
+            <svg class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
               id="catalog-search-input"
+              aria-label="Search product silhouettes or SKUs"
               placeholder={catalogSettings?.searchPlaceholder || DEFAULT_CATALOG.searchPlaceholder}
-              class="w-full pl-8 pr-7 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b] transition-all"
+              class="w-full pl-8 pr-7 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b] transition-all"
             />
             <button
               type="button"
               id="catalog-search-clear"
-              class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-[#86868b] hover:text-black text-xs"
+              aria-label="Clear search text"
+              class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-[#52525b] hover:text-black text-xs"
               title="Clear search"
             >
               ✕
@@ -136,8 +139,10 @@ const catalogJson = JSON.stringify(minimalProducts);
           </div>
 
           <!-- Sort Select -->
+          <label for="catalog-sort-select" class="sr-only">Sort products</label>
           <select
             id="catalog-sort-select"
+            aria-label="Sort product catalog"
             class="px-2.5 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 text-[#1d1d1f] focus:outline-none focus:border-black cursor-pointer font-medium"
           >
             <option value="featured">Featured Styles</option>
@@ -196,7 +201,7 @@ const catalogJson = JSON.stringify(minimalProducts);
                     </span>
                   ))}
                 </div>
-                <span class="text-[10px] text-[#86868b] font-mono">{item.leadTime || '15-20d'}</span>
+                <span class="text-[10px] text-[#52525b] font-mono">{item.leadTime || '15-20d'}</span>
               </div>
 
               <!-- 3. Taobao Title: Strict 2-line clamp with fixed 36px height (18px line-height) -->
@@ -209,7 +214,7 @@ const catalogJson = JSON.stringify(minimalProducts);
               </div>
 
               <!-- 4. Composition subtitle -->
-              <p class="text-[10px] text-[#86868b] px-0.5 mt-1 line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
+              <p class="text-[10px] text-[#52525b] px-0.5 mt-1 line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
             </div>
 
             <!-- 5. Taobao Price & Action Bottom Row -->
@@ -218,9 +223,9 @@ const catalogJson = JSON.stringify(minimalProducts);
                 <div class="flex items-baseline gap-0.5 text-[#ff5000] font-semibold leading-none">
                   <span class="text-[10px] font-mono">¥</span>
                   <span class="text-sm font-mono tracking-tight font-bold">{item.wholesalePrice || (item.category === 'silk' ? '32.00' : item.category === 'cashmere' ? '45.00' : '18.50')}</span>
-                  <span class="text-[9px] text-[#86868b] font-normal ml-0.5">/pc</span>
+                  <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/pc</span>
                 </div>
-                <span class="text-[9px] text-[#86868b] font-mono mt-0.5">MOQ {item.moq || '200'}</span>
+                <span class="text-[9px] text-[#52525b] font-mono mt-0.5">MOQ {item.moq || '200'}</span>
               </div>
 
               <button
@@ -371,6 +376,8 @@ const catalogJson = JSON.stringify(minimalProducts);
             class="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
             decoding="async"
+            width="240"
+            height="240"
           />
           <div class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
             ${item.category ? item.category.toUpperCase() : 'OEM'}
@@ -382,7 +389,7 @@ const catalogJson = JSON.stringify(minimalProducts);
           <div class="flex items-center gap-1">
             ${colorDots}
           </div>
-          <span class="text-[10px] text-[#86868b] font-mono">${item.leadTime || '15-20d'}</span>
+          <span class="text-[10px] text-[#52525b] font-mono">${item.leadTime || '15-20d'}</span>
         </div>
 
         <!-- 3. Taobao Title: Strict 2-line clamp with fixed 36px height (18px line-height) -->
@@ -395,7 +402,7 @@ const catalogJson = JSON.stringify(minimalProducts);
         </div>
 
         <!-- 4. Composition subtitle -->
-        <p class="text-[10px] text-[#86868b] px-0.5 mt-1 line-clamp-1 truncate">${item.composition || 'Premium Knit'}</p>
+        <p class="text-[10px] text-[#52525b] px-0.5 mt-1 line-clamp-1 truncate">${item.composition || 'Premium Knit'}</p>
       </div>
 
       <!-- 5. Taobao Price & Action Bottom Row -->
@@ -404,9 +411,9 @@ const catalogJson = JSON.stringify(minimalProducts);
           <div class="flex items-baseline gap-0.5 text-[#ff5000] font-semibold leading-none">
             <span class="text-[10px] font-mono">¥</span>
             <span class="text-sm font-mono tracking-tight font-bold">${item.wholesalePrice || (item.category === 'silk' ? '32.00' : item.category === 'cashmere' ? '45.00' : '18.50')}</span>
-            <span class="text-[9px] text-[#86868b] font-normal ml-0.5">/pc</span>
+            <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/pc</span>
           </div>
-          <span class="text-[9px] text-[#86868b] font-mono mt-0.5">MOQ ${item.moq || '200'}</span>
+          <span class="text-[9px] text-[#52525b] font-mono mt-0.5">MOQ ${item.moq || '200'}</span>
         </div>
 
         <button

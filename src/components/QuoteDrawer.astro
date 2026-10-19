@@ -53,7 +53,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
   data-swatch-moq={swatchKitMoq}
   data-product-sku-map={JSON.stringify(productSkuMap)}
 >
-  <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" />
+  <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" aria-label="Toggle Request for Quote Drawer" />
   
   <div class="drawer-side">
     <!-- Click backdrop to close -->
@@ -115,7 +115,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
 
       <!-- Bottom Section: Buyer Info Form -->
       <div id="quote-form-section" class="border-t border-black/10 pt-4 mt-4 space-y-3">
-        <div class="flex items-center justify-between text-xs text-[#86868b]">
+        <div class="flex items-center justify-between text-xs text-[#52525b]">
           <span>{drawerSubtitle}</span>
           <span class="text-emerald-700 font-medium">{drawerStatus}</span>
         </div>
@@ -126,14 +126,16 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
               type="text"
               name="company"
               required
+              aria-label="Company or Brand Name (Required)"
               placeholder="Company / Brand Name *"
-              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
             <input
               type="text"
               name="buyer_name"
+              aria-label="Buyer Name"
               placeholder="Buyer Name"
-              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
           </div>
 
@@ -142,29 +144,33 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
               type="email"
               name="email"
               required
+              aria-label="Work Email Address (Required)"
               placeholder="Work Email Address *"
-              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
             <input
               type="text"
               name="whatsapp"
+              aria-label="WhatsApp or Phone Number"
               placeholder="WhatsApp / Phone"
-              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
           </div>
 
           <input
             type="text"
             name="destination"
+            aria-label="Shipping Country and City"
             placeholder="Shipping Country & City (for freight estimate)"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b]"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
           />
 
           <textarea
             name="message"
             rows="2"
+            aria-label="Customization requirements"
             placeholder="Customization requirements (Custom logo, Pantone color, packaging, target price)..."
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#86868b] resize-none"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b] resize-none"
           ></textarea>
 
           <!-- Turnstile Container (Canonical Action: quote_cart) -->
