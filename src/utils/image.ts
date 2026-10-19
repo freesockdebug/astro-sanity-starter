@@ -57,8 +57,10 @@ export class SanityImageService {
   public static optimize(url?: string | null, options: ImageOptimizationOptions = {}): string {
     if (!url || typeof url !== 'string') return url || '';
 
-    // Only apply to Sanity CDN URLs
-    if (!url.includes('cdn.sanity.io')) {
+    // Only apply to Sanity CDN URLs (direct cdn.sanity.io or already proxied /cdn-image/)
+    const isDirectSanity = url.includes('cdn.sanity.io');
+    const isProxiedSanity = url.includes('/cdn-image/');
+    if (!isDirectSanity && !isProxiedSanity) {
       return url;
     }
 
@@ -71,7 +73,11 @@ export class SanityImageService {
     } = options;
 
     try {
-      const parsedUrl = new URL(url);
+      const fullUrl = isProxiedSanity
+        ? (url.startsWith('http') ? url.replace('/cdn-image/', 'https://cdn.sanity.io/') : `https://cdn.sanity.io${url.replace(/^\/cdn-image/, '')}`)
+        : url;
+
+      const parsedUrl = new URL(fullUrl.startsWith('http') ? fullUrl : `https://cdn.sanity.io${fullUrl.startsWith('/') ? '' : '/'}${fullUrl}`);
       if (width) parsedUrl.searchParams.set('w', String(width));
       if (height) parsedUrl.searchParams.set('h', String(height));
       if (quality) parsedUrl.searchParams.set('q', String(quality));
@@ -96,6 +102,7 @@ export class SanityImageService {
    */
   public static toEdgeUrl(url?: string | null): string {
     if (!url || typeof url !== 'string') return url || '';
+    if (url.includes('/cdn-image/')) return url;
     if (!url.includes('cdn.sanity.io')) return url;
     if (this.isProxyEnabled()) {
       return url.replace('https://cdn.sanity.io', '/cdn-image');
@@ -147,7 +154,7 @@ export class SanityImageService {
     widths: number[] = [480, 800, 1200, 1600],
     options: Omit<ImageOptimizationOptions, 'width'> = {}
   ): string {
-    if (!url || typeof url !== 'string' || !url.includes('cdn.sanity.io')) {
+    if (!url || typeof url !== 'string' || (!url.includes('cdn.sanity.io') && !url.includes('/cdn-image/'))) {
       return '';
     }
     return widths

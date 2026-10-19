@@ -1,8 +1,7 @@
 ---
 // src/components/QuoteDrawer.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
-import { fetchNormalizedProducts } from '@data/products';
-import { DEFAULT_RFQ, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
+import { DEFAULT_RFQ } from '@data/defaults';
 
 interface Props {
   settings?: any;
@@ -10,20 +9,6 @@ interface Props {
 
 const { settings } = Astro.props;
 const rfqSettings = settings ?? (await fetchRfqSettings());
-const allProducts = await fetchNormalizedProducts(200);
-
-const productSkuMap = (allProducts || []).reduce((acc: any, p: any) => {
-  if (p.sku) {
-    const key = p.sku.trim().toUpperCase();
-    acc[key] = {
-      sku: p.sku.trim(),
-      title: `${p.shortTitle || p.title} - Swatch Kit`,
-      imageUrl: p.image || DEFAULT_FALLBACK_IMAGE,
-      variant: `Physical fabric & color swatch dossier for ${p.shortTitle || p.title}`
-    };
-  }
-  return acc;
-}, {});
 
 const drawerTitle = rfqSettings?.drawerTitle || DEFAULT_RFQ.drawerTitle;
 const drawerSubtitle = rfqSettings?.drawerSubtitle || DEFAULT_RFQ.drawerSubtitle;
@@ -51,7 +36,6 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
   data-swatch-desc={swatchKitDesc}
   data-swatch-image={swatchKitImageUrl}
   data-swatch-moq={swatchKitMoq}
-  data-product-sku-map={JSON.stringify(productSkuMap)}
 >
   <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" aria-label="Toggle Request for Quote Drawer" />
   
@@ -252,18 +236,11 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     const defaultImage = root?.dataset.swatchImage || DEFAULT_RFQ.swatchKitImageUrl;
     const defaultMoq = root?.dataset.swatchMoq || DEFAULT_RFQ.swatchKitMoq;
 
-    let productMap: Record<string, any> = {};
-    try {
-      productMap = JSON.parse(root?.dataset.productSkuMap || '{}');
-    } catch {}
-
     const rawSku = (customItem?.sku || defaultSku).trim();
-    const matched = productMap[rawSku.toUpperCase()];
-
-    const itemSku = matched?.sku || rawSku;
-    const itemTitle = (customItem?.title || matched?.title || defaultTitle).trim();
-    const itemDesc = (customItem?.variant || matched?.variant || defaultDesc).trim();
-    const itemImage = (customItem?.imageUrl || matched?.imageUrl || defaultImage).trim();
+    const itemSku = rawSku;
+    const itemTitle = (customItem?.title || defaultTitle).trim();
+    const itemDesc = (customItem?.variant || defaultDesc).trim();
+    const itemImage = (customItem?.imageUrl || defaultImage).trim();
     const itemMoq = (customItem?.moq || defaultMoq).trim();
     const itemId = customItem?.id || `swatch-${itemSku.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 
@@ -291,24 +268,16 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
   try {
     const rootEl = document.getElementById('quote-drawer-root');
     const activeSku = (rootEl?.dataset.swatchSku || 'SWATCH-KIT').trim();
-    let productMap: Record<string, any> = {};
-    try {
-      productMap = JSON.parse(rootEl?.dataset.productSkuMap || '{}');
-    } catch {}
-    const matchedActive = productMap[activeSku.toUpperCase()];
 
     const currentCart = quoteCart.get() || [];
     let shouldSync = false;
     const syncedCart = currentCart.map((item) => {
-      if ((item.id === 'swatch-kit-sample' || item.id.startsWith('swatch-')) && (item.sku !== activeSku || (matchedActive && item.title !== matchedActive.title))) {
+      if ((item.id === 'swatch-kit-sample' || item.id.startsWith('swatch-')) && item.sku !== activeSku) {
         shouldSync = true;
         return {
           ...item,
           id: `swatch-${activeSku.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
           sku: activeSku,
-          title: matchedActive?.title || item.title,
-          imageUrl: matchedActive?.imageUrl || item.imageUrl,
-          variant: matchedActive?.variant || item.variant,
         };
       }
       return item;

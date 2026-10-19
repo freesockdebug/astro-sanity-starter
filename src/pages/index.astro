@@ -43,7 +43,7 @@ const metaDescription = homeData?.metaDescription || DEFAULT_META_DESCRIPTION;
 const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || DEFAULT_FALLBACK_IMAGE;
 
 const rawHeroImg = heroSection?.heroImage;
-const heroPreload = rawHeroImg && typeof rawHeroImg === 'string' && rawHeroImg.includes('cdn.sanity.io')
+const heroPreload = rawHeroImg && typeof rawHeroImg === 'string' && (rawHeroImg.includes('cdn.sanity.io') || rawHeroImg.includes('/cdn-image/'))
   ? {
       src: SanityImageService.hero(rawHeroImg, 1600),
       srcset: SanityImageService.srcSet(rawHeroImg, [480, 800, 1200, 1600], { quality: 80 }),

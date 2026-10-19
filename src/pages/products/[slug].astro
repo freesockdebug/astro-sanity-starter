@@ -85,7 +85,7 @@ const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
 const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
 const firstGalleryImg = currentProduct.gallery?.[0]?.src || currentProduct.mainImage;
-const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string' && firstGalleryImg.includes('cdn.sanity.io')
+const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string' && (firstGalleryImg.includes('cdn.sanity.io') || firstGalleryImg.includes('/cdn-image/'))
   ? {
       src: SanityImageService.hero(firstGalleryImg, 1200),
       srcset: SanityImageService.srcSet(firstGalleryImg, [480, 800, 1200]),
