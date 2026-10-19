@@ -35,6 +35,7 @@ const {
 const rfqSettings = await fetchRfqSettings();
 const rawHeroImage = propHeroImage?.trim() || DEFAULT_FALLBACK_IMAGE;
 const heroImage = SanityImageService.hero(rawHeroImage, 1600);
+const heroSrcSet = SanityImageService.srcSet(rawHeroImage, [480, 800, 1200, 1600], { quality: 80 });
 const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_HERO.primaryButtonText;
 
 // Super Title handling: support custom text or clean default
@@ -134,6 +135,8 @@ const showSecondaryButton = propShowSecondary !== undefined
   <div class="apple-rail-showcase hero-showcase-box mt-3 sm:mt-4 rounded-2xl sm:rounded-3xl overflow-hidden bg-[#f5f5f7] border border-black/5 shadow-xl group flex-1 min-h-0 lg:max-h-[560px]">
     <img
       src={heroImage}
+      srcset={heroSrcSet || undefined}
+      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 95vw, 1520px"
       alt={headlinePrimary}
       class="hero-showcase-img w-full h-56 sm:h-72 md:h-80 lg:h-full object-cover transform transition-transform duration-1000 group-hover:scale-[1.02]"
       loading="eager"

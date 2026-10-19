@@ -137,4 +137,21 @@ export class SanityImageService {
   public static avatar(url?: string | null, width: number = 120): string {
     return this.optimize(url, { width, quality: 85, format: 'auto' });
   }
+
+  /**
+   * Generates a responsive srcset string with automated format conversion (WebP/AVIF).
+   * Perfect for mobile device responsive scaling to eliminate oversized downloads.
+   */
+  public static srcSet(
+    url?: string | null,
+    widths: number[] = [480, 800, 1200, 1600],
+    options: Omit<ImageOptimizationOptions, 'width'> = {}
+  ): string {
+    if (!url || typeof url !== 'string' || !url.includes('cdn.sanity.io')) {
+      return '';
+    }
+    return widths
+      .map((w) => `${this.optimize(url, { ...options, width: w })} ${w}w`)
+      .join(', ');
+  }
 }

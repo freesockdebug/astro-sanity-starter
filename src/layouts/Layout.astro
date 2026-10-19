@@ -13,9 +13,10 @@ interface Props {
     image?: CustomImage | string;
     bodyClass?: string;
     mainClass?: string;
+    preloadHeroImage?: boolean | { src: string; srcset?: string; sizes?: string };
 }
 
-const { addTitleSuffix, description, image, bodyClass, mainClass } = Astro.props;
+const { addTitleSuffix, description, image, bodyClass, mainClass, preloadHeroImage } = Astro.props;
 
 const configData: SiteConfig = (await fetchData()) || {};
 SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
@@ -48,9 +49,22 @@ function formatCanonicalURL(url: string | URL) {
         <title>{title}</title>
         <meta name="generator" content={Astro.generator} />
 
-        <!-- High-priority LCP Image Preload (Directly eliminates Resource Load Delay) -->
-        {resolvedImage?.src && (
-            <link rel="preload" as="image" href={resolvedImage.src} fetchpriority="high" />
+        <!-- High-priority Responsive LCP Image Preload (Avoids downloading mismatched 1200px on mobile) -->
+        {preloadHeroImage && (
+            typeof preloadHeroImage === 'object' ? (
+                <link
+                    rel="preload"
+                    as="image"
+                    href={preloadHeroImage.src}
+                    imagesrcset={preloadHeroImage.srcset}
+                    imagesizes={preloadHeroImage.sizes}
+                    fetchpriority="high"
+                />
+            ) : (
+                resolvedImage?.src && (
+                    <link rel="preload" as="image" href={resolvedImage.src} fetchpriority="high" />
+                )
+            )
         )}
 
         <!-- Fonts (Non-blocking asynchronous load with zero render delay) -->

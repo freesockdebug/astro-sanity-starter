@@ -6,6 +6,7 @@ import { client } from '@utils/sanity-client';
 import { SECTIONS, IMAGE, normalizeSections } from '@data/blocks';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
+import { SanityImageService } from '@utils/image';
 import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
 
 export const prerender = false;
@@ -41,6 +42,15 @@ const metaTitle = homeData?.metaTitle || DEFAULT_META_TITLE;
 const metaDescription = homeData?.metaDescription || DEFAULT_META_DESCRIPTION;
 const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || DEFAULT_FALLBACK_IMAGE;
 
+const rawHeroImg = heroSection?.heroImage;
+const heroPreload = rawHeroImg && typeof rawHeroImg === 'string' && rawHeroImg.includes('cdn.sanity.io')
+  ? {
+      src: SanityImageService.hero(rawHeroImg, 1600),
+      srcset: SanityImageService.srcSet(rawHeroImg, [480, 800, 1200, 1600], { quality: 80 }),
+      sizes: '(max-width: 640px) 100vw, (max-width: 1024px) 95vw, 1520px',
+    }
+  : undefined;
+
 // 100% Dynamic section resolver based strictly on Studio CMS configuration & order
 const SECTION_DEFAULTS: Record<string, { id: string; label: string }> = {
   heroSection: { id: 'hero', label: 'Overview' },
@@ -75,7 +85,7 @@ const stages = sections
   .filter((st: any) => Boolean(st.id));
 ---
 
-<Layout title={metaTitle} description={metaDescription} image={ogImage} addTitleSuffix={false}>
+<Layout title={metaTitle} description={metaDescription} image={ogImage} addTitleSuffix={false} preloadHeroImage={heroPreload}>
   {sections.map((section: any) => {
     const Component = componentMap[section._type];
     return Component ? <Component {...section} /> : null;

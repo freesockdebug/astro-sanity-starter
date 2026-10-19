@@ -39,10 +39,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
     ? (caches as any).default 
     : null;
 
-  // Normalise cache request key (strip irrelevant tracking query params if needed, or use exact URL)
-  const cacheKey = new Request(url.toString(), {
+  // Normalise cache request key: strip tracking/analytics query params and ignore dynamic client headers
+  const cacheUrl = new URL(url.toString());
+  const TRACKING_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'ref', '_ga', '_gl', '_t'];
+  TRACKING_PARAMS.forEach((p) => cacheUrl.searchParams.delete(p));
+
+  // Pure URL-based GET request ensures cross-device & cross-client cache hits
+  const cacheKey = new Request(cacheUrl.toString(), {
     method: 'GET',
-    headers: request.headers,
   });
 
   if (cache) {
@@ -69,10 +73,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
       const cloned = response.clone();
       const edgeHeaders = new Headers(cloned.headers);
 
-      // Instruct Cloudflare Edge Cache to retain HTML for 4 hours, SWR for 1 day
-      edgeHeaders.set('Cache-Control', 'public, max-age=0, s-maxage=14400, stale-while-revalidate=86400');
-      edgeHeaders.set('Cloudflare-CDN-Cache-Control', 'public, max-age=14400, stale-while-revalidate=86400');
-      edgeHeaders.set('CDN-Cache-Control', 'public, max-age=14400, stale-while-revalidate=86400');
+      // Instruct Cloudflare Edge Cache & Browser:
+      // Browser: max-age=0, must-revalidate (browser always gets fresh or revalidated from edge)
+      // Edge / CDN: s-maxage=86400 (cache at edge for 24 hours), SWR for 7 days
+      edgeHeaders.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+      edgeHeaders.set('Cloudflare-CDN-Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+      edgeHeaders.set('CDN-Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
       edgeHeaders.set('X-Edge-Cache', 'MISS');
 
       const responseToCache = new Response(cloned.body, {
@@ -91,9 +97,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
         });
       }
 
-      // Return response with informative headers
-      const returnedResponse = new Response(response.body, response);
-      returnedResponse.headers.set('X-Edge-Cache', 'MISS');
+      // Return response with proper cache headers so upstream CDN caches it as well
+      const returnedResponse = new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: edgeHeaders,
+      });
       return returnedResponse;
     } catch (err) {
       console.warn('[EdgeCache] Error writing cache:', err);

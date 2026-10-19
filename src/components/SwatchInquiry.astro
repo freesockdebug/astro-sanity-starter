@@ -38,13 +38,18 @@ const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnTe
       
       <!-- Left Side (5 Cols): Physical Swatch Kit & Fabric Macro Visual Presentation -->
       <div class="md:col-span-5 relative min-h-[200px] sm:min-h-[220px] md:min-h-full bg-stone-100 overflow-hidden group">
-        <img
-          src="/images/products/gv-ruffle-detail.jpg"
-          alt="Curated Swatch Kit & Fabric Dossier"
-          class="absolute inset-0 w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
-          loading="lazy"
-          decoding="async"
-        />
+        <picture>
+          <source srcset="/images/products/gv-ruffle-detail.webp" type="image/webp" />
+          <img
+            src="/images/products/gv-ruffle-detail.jpg"
+            alt="Curated Swatch Kit & Fabric Dossier"
+            class="absolute inset-0 w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
+            loading="lazy"
+            decoding="async"
+            width="800"
+            height="509"
+          />
+        </picture>
         <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent flex flex-col justify-end p-4 sm:p-5 text-white">
           <span class="text-[10px] font-mono tracking-widest uppercase text-white/80">Physical Sample Dossier</span>
           <p class="text-xs sm:text-sm font-semibold mt-0.5 text-white">

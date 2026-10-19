@@ -41,8 +41,7 @@ const swatchKitMoq = rfqSettings?.swatchKitMoq || DEFAULT_RFQ.swatchKitMoq;
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAAFXbqPn5Jkh6bMhV";
 ---
 
-<!-- Cloudflare Turnstile Client Script -->
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer is:inline></script>
+
 
 <div
   id="quote-drawer-root"
@@ -203,11 +202,35 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
 <script>
   import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '@stores/quoteCart';
 
+  // Lazy-load Turnstile on demand to eliminate ~700KB initial page load payload
+  function ensureTurnstileLoaded() {
+    if (typeof window === 'undefined' || document.getElementById('cf-turnstile-script')) return;
+    const script = document.createElement('script');
+    script.id = 'cf-turnstile-script';
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   // Expose global drawer opener
   (window as any).openQuoteDrawer = () => {
+    ensureTurnstileLoaded();
     const toggle = document.getElementById('quote-drawer-toggle') as HTMLInputElement | null;
     if (toggle) toggle.checked = true;
   };
+
+  const drawerToggle = document.getElementById('quote-drawer-toggle') as HTMLInputElement | null;
+  if (drawerToggle) {
+    drawerToggle.addEventListener('change', () => {
+      if (drawerToggle.checked) ensureTurnstileLoaded();
+    });
+  }
+
+  const rfqFormElement = document.getElementById('rfq-form');
+  if (rfqFormElement) {
+    rfqFormElement.addEventListener('focusin', () => ensureTurnstileLoaded(), { once: true });
+  }
 
   (window as any).closeQuoteDrawer = () => {
     const toggle = document.getElementById('quote-drawer-toggle') as HTMLInputElement | null;
