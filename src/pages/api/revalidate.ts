@@ -229,6 +229,17 @@ export const POST: APIRoute = async (context) => {
             signal: AbortSignal.timeout(6000)
           });
           tokenVerifyData = await verifyRes.json();
+
+          // Probe zones access
+          const zonesProbe = await fetch('https://api.cloudflare.com/client/v4/zones?per_page=5', {
+            headers: {
+              'Authorization': `Bearer ${cfApiToken}`,
+              'Content-Type': 'application/json'
+            },
+            signal: AbortSignal.timeout(6000)
+          });
+          const zonesData: any = await zonesProbe.json();
+          tokenVerifyData.accessibleZones = zonesData?.result?.map((z: any) => ({ id: z.id, name: z.name })) || zonesData?.errors;
         } catch (e: any) {
           tokenVerifyData = { error: e?.message };
         }
