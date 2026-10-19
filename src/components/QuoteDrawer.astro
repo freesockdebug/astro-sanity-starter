@@ -380,7 +380,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
         (item) => `
       <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 text-xs">
         <img
-          src="${(item.imageUrl || '/images/hero-light.jpg').replace('https://cdn.sanity.io', '/cdn-image')}"
+          src="${(item.imageUrl || '/images/hero-light.webp').replace('https://cdn.sanity.io', '/cdn-image')}"
           alt="${item.title}"
           class="w-12 h-12 rounded-lg object-cover bg-white border border-black/5 shrink-0"
         />

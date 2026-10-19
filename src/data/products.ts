@@ -147,7 +147,7 @@ export class ProductService {
       else if (text.includes('terry') || text.includes('athletic') || text.includes('sport') || text.includes('trail')) category = 'terry';
     }
 
-    const rawImg = sp.image || sp.mainImage || (sp.gallery && sp.gallery[0]?.src) || '/images/hero-light.jpg';
+    const rawImg = sp.image || sp.mainImage || (sp.gallery && sp.gallery[0]?.src) || '/images/hero-light.webp';
     const image = SanityImageService.thumbnail(rawImg, imageWidth);
 
     const colors = Array.isArray(sp.colors)

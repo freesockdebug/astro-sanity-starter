@@ -567,7 +567,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
           const id = addQuoteBtn.dataset.id || 'product';
           const title = addQuoteBtn.dataset.title || 'Product';
           const sku = addQuoteBtn.dataset.sku || 'SKU';
-          const imageUrl = addQuoteBtn.dataset.image || '/images/hero-light.jpg';
+          const imageUrl = addQuoteBtn.dataset.image || '/images/hero-light.webp';
           const rawMoq = addQuoteBtn.dataset.moq || '200 Pairs';
           const moqNum = parseInt(rawMoq.replace(/\D/g, ''), 10) || 200;
 
@@ -596,7 +596,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
             id: `spec-${sku.toLowerCase()}`,
             title: `Tech Pack & Spec Sheet (PDF): ${title}`,
             sku: sku,
-            imageUrl: '/images/spec-light.jpg',
+            imageUrl: '/images/spec-light.webp',
             variant: 'Official Engineering PDF Dossier',
             quantity: 1,
             moq: 'Direct Dispatch',
