@@ -189,16 +189,19 @@ export function alignElementToRightGutter(
     elementWidth?: number;
   }
 ): void {
-  if (!element) return;
+  if (!element || typeof window === 'undefined') return;
   const screen = getClientScreenInfo();
 
-  if (screen.isDockMode || screen.gutterCenterX === null) {
-    element.style.left = 'auto';
-    element.style.right = options?.fallbackRight || '';
-    return;
-  }
+  window.requestAnimationFrame(() => {
+    if (!element) return;
+    if (screen.isDockMode || screen.gutterCenterX === null) {
+      element.style.left = 'auto';
+      element.style.right = options?.fallbackRight || '';
+      return;
+    }
 
-  const width = options?.elementWidth || element.offsetWidth || 0;
-  element.style.left = `${Math.round(screen.gutterCenterX - width / 2)}px`;
-  element.style.right = 'auto';
+    const width = options?.elementWidth || 44;
+    element.style.left = `${Math.round(screen.gutterCenterX - width / 2)}px`;
+    element.style.right = 'auto';
+  });
 }

@@ -194,7 +194,10 @@ const legalLinks = rawLegalLinks.map((l: any) => ({
 
     // Dynamically align Back-To-Top button exactly on right gutter center axis (synced with Stage Navigator)
     function alignWithStageNav() {
-      alignElementToRightGutter(btn, { fallbackRight: 'max(0.75rem, env(safe-area-inset-right))' });
+      alignElementToRightGutter(btn, {
+        fallbackRight: 'max(0.75rem, env(safe-area-inset-right))',
+        elementWidth: 44
+      });
     }
 
     btn.addEventListener('click', () => {
@@ -209,10 +212,9 @@ const legalLinks = rawLegalLinks.map((l: any) => ({
     window.addEventListener('load', alignWithStageNav, { passive: true });
     setTimeout(alignWithStageNav, 50);
     setTimeout(alignWithStageNav, 200);
-    window.addEventListener('scroll', () => {
-      onScroll();
-      alignWithStageNav();
-    }, { passive: true });
+
+    // Scroll listener ONLY toggles visibility; horizontal alignment strictly on resize/load to prevent forced reflow
+    window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
   }
 
