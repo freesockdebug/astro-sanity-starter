@@ -88,9 +88,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       });
 
       // Asynchronously store to Cloudflare Edge Cache without blocking the response
-      const ctx = (context.locals as any)?.runtime?.ctx;
-      if (ctx?.waitUntil) {
-        ctx.waitUntil(cache.put(cacheKey, responseToCache));
+      const cfCtx = (context.locals as any)?.cfContext;
+      if (cfCtx?.waitUntil) {
+        cfCtx.waitUntil(cache.put(cacheKey, responseToCache));
       } else {
         cache.put(cacheKey, responseToCache).catch((err: any) => {
           console.warn('[EdgeCache] Async cache put error:', err);
