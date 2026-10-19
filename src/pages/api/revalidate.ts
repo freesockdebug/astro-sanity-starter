@@ -69,18 +69,7 @@ export const POST: APIRoute = async (context) => {
   const { request, url } = context;
 
   try {
-    const expectedSecret = getEnv('REVALIDATE_SECRET', context) || getEnv('SANITY_REVALIDATE_SECRET', context);
-    const providedSecret = request.headers.get('x-webhook-secret') || url.searchParams.get('secret');
-
-    // 1. Authenticate webhook request if secret is configured
-    if (expectedSecret && providedSecret !== expectedSecret) {
-      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid revalidation secret' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // 2. Parse payload (Sanity webhook, custom JSON, or manual trigger)
+    // 1. Parse payload first (to support body secret as well)
     let body: any = {};
     if (request.headers.get('content-type')?.includes('application/json')) {
       try {
@@ -88,6 +77,24 @@ export const POST: APIRoute = async (context) => {
       } catch {
         // Fallback to empty body for empty POST
       }
+    }
+
+    const authHeader = request.headers.get('authorization');
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+    const providedSecret =
+      request.headers.get('x-webhook-secret') ||
+      request.headers.get('x-revalidate-secret') ||
+      bearerToken ||
+      url.searchParams.get('secret') ||
+      url.searchParams.get('token') ||
+      body?.secret;
+
+    // 2. Authenticate webhook request if secret is configured in environment
+    if (expectedSecret && providedSecret !== expectedSecret) {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid revalidation secret' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const docType = body?._type;
