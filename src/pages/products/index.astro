@@ -446,38 +446,49 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       </div>
     `;
 
-    bindQuoteButtons(card);
     return card;
   }
 
-  function bindQuoteButtons(scope = document) {
-    scope.querySelectorAll('.btn-catalog-quote').forEach((quoteBtn) => {
-      if (quoteBtn.dataset.bound) return;
-      quoteBtn.dataset.bound = 'true';
-      quoteBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const quoteItem = {
-          id: quoteBtn.dataset.id,
-          title: quoteBtn.dataset.title,
-          sku: quoteBtn.dataset.sku,
-          imageUrl: quoteBtn.dataset.image,
-          moq: quoteBtn.dataset.moq,
-          variant: quoteBtn.dataset.variant,
-          quantity: 1,
-        };
-        
-        // Dispatch to global nanostore cart
-        if (typeof window !== 'undefined' && window.openQuoteDrawer) {
-          import('/src/stores/quoteCart.ts').then((mod) => {
-            mod.addToQuote(quoteItem);
-            window.openQuoteDrawer();
-          }).catch(() => {
-            alert(`Added "${quoteItem.title}" to quote basket!`);
-          });
-        }
-      });
-    });
+  // Global Event Delegation for Product Catalog Quote Buttons
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    const quoteBtn = target && target.closest ? target.closest('.btn-catalog-quote') : null;
+    if (!quoteBtn) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rawMoq = quoteBtn.dataset.moq || '200 Pairs';
+    const moqNum = parseInt(rawMoq.replace(/\D/g, ''), 10) || 200;
+    const quoteItem = {
+      id: quoteBtn.dataset.id || 'product',
+      title: quoteBtn.dataset.title || 'Product',
+      sku: quoteBtn.dataset.sku || 'SKU',
+      imageUrl: quoteBtn.dataset.image || '',
+      moq: rawMoq,
+      variant: quoteBtn.dataset.variant || 'Standard Spec',
+      quantity: moqNum,
+    };
+
+    if (typeof window !== 'undefined' && window.addToQuoteAndOpen) {
+      window.addToQuoteAndOpen(quoteItem);
+    } else if (typeof window !== 'undefined' && window.addToQuote) {
+      window.addToQuote(quoteItem);
+      if (window.openQuoteDrawer) window.openQuoteDrawer();
+    } else {
+      window.__quoteQueue = window.__quoteQueue || [];
+      window.__quoteQueue.push(quoteItem);
+      if (typeof window !== 'undefined' && window.openQuoteDrawer) {
+        window.openQuoteDrawer();
+      } else {
+        const toggle = document.getElementById('quote-drawer-toggle');
+        if (toggle) toggle.checked = true;
+      }
+    }
+  });
+
+  function bindQuoteButtons(scope) {
+    // Kept as no-op for backward compatibility with existing callers
   }
 
   // Render next slice of batch items

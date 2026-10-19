@@ -210,6 +210,25 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     if (toggle) toggle.checked = true;
   };
 
+  // Expose global quote dispatchers for inline page scripts
+  (window as any).addToQuote = (item: any) => {
+    addToQuote(item);
+  };
+
+  (window as any).addToQuoteAndOpen = (item: any) => {
+    addToQuote(item);
+    (window as any).openQuoteDrawer();
+  };
+
+  // Drain any quote items queued before drawer hydrated
+  if (Array.isArray((window as any).__quoteQueue) && (window as any).__quoteQueue.length > 0) {
+    (window as any).__quoteQueue.forEach((item: any) => {
+      addToQuote(item);
+    });
+    (window as any).__quoteQueue = [];
+    (window as any).openQuoteDrawer();
+  }
+
   const drawerToggle = document.getElementById('quote-drawer-toggle') as HTMLInputElement | null;
   if (drawerToggle) {
     drawerToggle.addEventListener('change', () => {
