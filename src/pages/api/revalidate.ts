@@ -1,17 +1,26 @@
 // src/pages/api/revalidate.ts
 import type { APIRoute } from 'astro';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
 /**
- * Universal environment variable accessor safe for Cloudflare Worker runtime
+ * Universal environment variable accessor safe for Cloudflare Worker runtime (Astro v6 compliant)
  */
-const getEnv = (key: string, context?: any): string | undefined => {
+const getEnv = (key: string, _context?: any): string | undefined => {
+  try {
+    if (typeof cfEnv !== 'undefined' && cfEnv && (cfEnv as any)[key]) {
+      return (cfEnv as any)[key];
+    }
+  } catch {
+    // Non-worker environment fallback
+  }
+
   return (
-    context?.locals?.runtime?.env?.[key] ||
-    (context?.locals as any)?.env?.[key] ||
-    (typeof process !== 'undefined' && process.env?.[key]) ||
-    (import.meta.env && (import.meta.env as any)[key])
+    (typeof process !== 'undefined' && process.env && (process.env as any)[key]) ||
+    (import.meta.env && (import.meta.env as any)[key]) ||
+    (globalThis as any)?.[key]
   );
 };
 
