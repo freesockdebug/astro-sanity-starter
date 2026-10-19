@@ -207,13 +207,32 @@ export const POST: APIRoute = async (context) => {
     }
 
     // 5. LAYER 2: Cloudflare Global CDN Zone Cache Purge API
-    let cfZoneId = getEnv('CLOUDFLARE_ZONE_ID', context);
-    const cfApiToken = getEnv('CLOUDFLARE_API_TOKEN', context);
+    let cfZoneId = getEnv('CLOUDFLARE_ZONE_ID')?.trim();
+    const rawCfToken = getEnv('CLOUDFLARE_API_TOKEN');
+    const cfApiToken = rawCfToken?.trim();
     let cfPurged = false;
     let cfMessage = 'Skipped (credentials not set in environment)';
+    let cfDiagnostics: any = null;
 
     if (cfApiToken) {
       try {
+        // Optional verification check to diagnose exact permissions
+        const debugMode = url.searchParams.has('debug') || url.searchParams.has('diagnose');
+        let tokenVerifyData: any = null;
+
+        try {
+          const verifyRes = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
+            headers: {
+              'Authorization': `Bearer ${cfApiToken}`,
+              'Content-Type': 'application/json'
+            },
+            signal: AbortSignal.timeout(6000)
+          });
+          tokenVerifyData = await verifyRes.json();
+        } catch (e: any) {
+          tokenVerifyData = { error: e?.message };
+        }
+
         // Auto-discover Zone ID if not explicitly specified
         if (!cfZoneId && !url.hostname.includes('localhost') && !url.hostname.includes('127.0.0.1')) {
           const domainParts = url.hostname.split('.');
@@ -269,6 +288,14 @@ export const POST: APIRoute = async (context) => {
         } else {
           cfMessage = 'Cloudflare API Token found, but Zone ID could not be identified automatically';
         }
+
+        cfDiagnostics = {
+          zoneIdProvided: Boolean(cfZoneId),
+          zoneIdMasked: cfZoneId ? `${cfZoneId.slice(0, 4)}...${cfZoneId.slice(-4)}` : null,
+          tokenLength: cfApiToken.length,
+          tokenMasked: `${cfApiToken.slice(0, 3)}...${cfApiToken.slice(-3)}`,
+          tokenVerification: tokenVerifyData
+        };
       } catch (err: any) {
         cfMessage = `Cloudflare purge failed: ${err?.message || 'Network error'}`;
       }
@@ -288,7 +315,8 @@ export const POST: APIRoute = async (context) => {
         cloudflareCdn: {
           executed: Boolean(cfApiToken && cfZoneId),
           success: cfPurged,
-          status: cfMessage
+          status: cfMessage,
+          diagnostics: cfDiagnostics
         },
         timestamp: new Date().toISOString()
       }),
