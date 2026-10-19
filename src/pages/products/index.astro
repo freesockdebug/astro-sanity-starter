@@ -33,7 +33,7 @@ ProductService.seed({
   catalogSettings: batchData?.catalogSettings
 });
 
-const mergedProducts = (batchData?.products || []).map((p: any) => ProductService.normalize(p, 800));
+const mergedProducts = (batchData?.products || []).map((p: any) => ProductService.normalize(p, 480));
 const siteConfig = batchData?.siteConfig;
 const rfqSettings = batchData?.rfqSettings;
 const catalogSettings = batchData?.catalogSettings;
@@ -179,6 +179,8 @@ const catalogJson = JSON.stringify(minimalProducts);
                   class="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
                   loading="lazy"
                   decoding="async"
+                  width="240"
+                  height="240"
                 />
                 <div class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
                   {item.category ? item.category.toUpperCase() : 'OEM'}

@@ -83,6 +83,15 @@ const sampleButtonText = currentProduct.sampleButtonText || rfqSettings?.btnSamp
 const showAddToQuoteButton = rfqSettings?.showProductAddToQuoteButton ?? true;
 const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
 const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
+
+const firstGalleryImg = currentProduct.gallery?.[0]?.src || currentProduct.mainImage;
+const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string' && firstGalleryImg.includes('cdn.sanity.io')
+  ? {
+      src: SanityImageService.hero(firstGalleryImg, 1200),
+      srcset: SanityImageService.srcSet(firstGalleryImg, [480, 800, 1200]),
+      sizes: '(max-width: 1024px) 100vw, 800px',
+    }
+  : undefined;
 ---
 
 <Layout
@@ -90,6 +99,7 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
   description={currentProduct.tagline}
   image={currentProduct.mainImage}
   mainClass="pt-12"
+  preloadHeroImage={productHeroPreload}
 >
   <section id="product-overview" class="w-full lg:h-[calc(100svh-48px)] lg:max-h-[920px] lg:min-h-[640px] lg:flex lg:flex-col lg:justify-between py-2 sm:py-2.5 lg:py-3 border-b border-black/5 bg-white">
         <!-- Breadcrumb Navigation & Quick Prev/Next Style Switcher -->
@@ -163,6 +173,8 @@ const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
                     {currentProduct.gallery.map((img: any, idx: number) => (
                       <img
                         src={SanityImageService.hero(img.src, 1200)}
+                        srcset={SanityImageService.srcSet(img.src, [480, 800, 1200]) || undefined}
+                        sizes="(max-width: 1024px) 100vw, 800px"
                         alt={img.alt}
                         class={`carousel-slide absolute inset-0 m-auto w-full h-full max-h-full max-w-full object-contain p-2 sm:p-4 transition-opacity duration-500 ease-in-out ${idx === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
                         data-index={idx}
