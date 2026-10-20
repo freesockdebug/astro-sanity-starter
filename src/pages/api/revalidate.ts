@@ -55,20 +55,64 @@ const expandCanonicalUrls = (origin: string, pathOrUrl: string): string[] => {
 };
 
 /**
- * Dynamic CORS header generator adhering to W3C CORS specifications:
- * Browsers forbid literal wildcards in subdomains (i.e. `*.gwenvenni.com` directly in header will fail).
- * The industry standard is dynamically testing the incoming Origin against trusted regex and echoing it back with `Vary: Origin`.
+ * Extract apex/root domain from hostname (e.g. 'admin.gwenvenni.com' -> 'gwenvenni.com')
  */
-const getCorsHeaders = (request?: Request): Record<string, string> => {
+const extractRootDomain = (hostname: string): string => {
+  const parts = hostname.toLowerCase().split('.');
+  if (parts.length <= 2) return hostname.toLowerCase();
+  return parts.slice(-2).join('.');
+};
+
+/**
+ * Dynamic CORS header generator:
+ * Resolves trusted domains dynamically from runtime request URL and environment variables,
+ * strictly eliminating hardcoded domain names while securing all authorized subdomains.
+ */
+const getCorsHeaders = (request?: Request, currentUrl?: URL): Record<string, string> => {
   const origin = request?.headers.get('origin');
 
-  // 安全白名单校验：匹配 gwenvenni.com 及其所有子域名（如 admin.gwenvenni.com），以及本地开发端口
-  const isAllowedOrigin = Boolean(
-    origin && (
-      /^https?:\/\/([a-zA-Z0-9-]+\.)*gwenvenni\.com$/.test(origin) ||
-      /^https?:\/\/(localhost|127\.0.0\.1)(:\d+)?$/.test(origin)
-    )
-  );
+  // 1. 从当前运行时 URL 提取站点主机名与根域名（自动适应任何绑定域名）
+  const currentHost = currentUrl?.hostname?.toLowerCase() || '';
+  const rootDomain = currentHost ? extractRootDomain(currentHost) : '';
+
+  // 2. 从环境变量读取可能配置的允许域名（如 ALLOWED_ORIGIN_DOMAINS, SITE_DOMAIN, TURNSTILE_HOSTNAMES）
+  const envConfiguredDomains = [
+    getEnv('ALLOWED_ORIGIN_DOMAINS'),
+    getEnv('SITE_DOMAIN'),
+    getEnv('TURNSTILE_HOSTNAMES'),
+  ]
+    .filter(Boolean)
+    .join(',')
+    .split(',')
+    .map(d => d.trim().toLowerCase())
+    .filter(Boolean);
+
+  const trustedDomainSet = new Set<string>();
+  if (rootDomain) trustedDomainSet.add(rootDomain);
+  if (currentHost) trustedDomainSet.add(currentHost);
+  for (const d of envConfiguredDomains) {
+    trustedDomainSet.add(d);
+  }
+
+  // 3. 校验请求的 Origin 是否属于本地开发环境，或在受信任根域及其子域名白名单内
+  let isAllowedOrigin = false;
+  if (origin) {
+    try {
+      const originHost = new URL(origin).hostname.toLowerCase();
+      if (originHost === 'localhost' || originHost === '127.0.0.1' || originHost.endsWith('.local')) {
+        isAllowedOrigin = true;
+      } else {
+        for (const trusted of trustedDomainSet) {
+          if (originHost === trusted || originHost.endsWith(`.${trusted}`)) {
+            isAllowedOrigin = true;
+            break;
+          }
+        }
+      }
+    } catch {
+      isAllowedOrigin = false;
+    }
+  }
 
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -87,10 +131,10 @@ const getCorsHeaders = (request?: Request): Record<string, string> => {
 /**
  * Handle CORS preflight requests
  */
-export const OPTIONS: APIRoute = async ({ request }) => {
+export const OPTIONS: APIRoute = async ({ request, url }) => {
   return new Response(null, {
     status: 204,
-    headers: getCorsHeaders(request),
+    headers: getCorsHeaders(request, url),
   });
 };
 
@@ -107,7 +151,7 @@ export const OPTIONS: APIRoute = async ({ request }) => {
  */
 export const POST: APIRoute = async (context) => {
   const { request, url } = context;
-  const corsHeaders = getCorsHeaders(request);
+  const corsHeaders = getCorsHeaders(request, url);
 
   try {
     // 1. Parse payload first (to support body secret as well)
