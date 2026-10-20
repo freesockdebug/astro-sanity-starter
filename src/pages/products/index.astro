@@ -45,7 +45,7 @@ const allLabel = catalogSettings?.allSilhouettesLabel || DEFAULT_CATALOG.allSilh
 // 2. Resolve aggregated categories & counts via data service layer (instantly from memory)
 const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
 
-const BATCH_SIZE = 21;
+const BATCH_SIZE = 20;
 const initialProducts = mergedProducts.slice(0, BATCH_SIZE);
 const minimalProducts = mergedProducts.map((p: any) => ({
   id: p.id,
@@ -314,7 +314,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   // Catalog State Management
   const catalogDataEl = document.getElementById('catalog-products-data');
   const allProducts = catalogDataEl ? JSON.parse(catalogDataEl.textContent || '[]') : [];
-  const BATCH_SIZE = 21; // High density e-commerce batch (divisible by 7 and 3)
+  const BATCH_SIZE = 20; // 4 full rows on 5-col desktop grid, 5 full rows on 4-col tablet grid
   let currentCategory = 'all';
   let searchQuery = '';
   let currentSort = 'featured';
