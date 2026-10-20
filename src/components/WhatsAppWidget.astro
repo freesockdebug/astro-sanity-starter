@@ -22,7 +22,7 @@ const chatUrl = cleanPhone
 {cleanPhone && (
   <aside 
     id="whatsapp-chat-widget" 
-    class="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-40 group select-none"
+    class="fixed bottom-5 left-5 sm:bottom-6 sm:left-6 z-40 group select-none"
     aria-label="WhatsApp Instant Communication"
   >
     <a
@@ -49,9 +49,9 @@ const chatUrl = cleanPhone
     </a>
 
     <!-- Elegant Floating Tooltip Label (Desktop Hover) -->
-    <div class="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-3 px-3 py-1.5 rounded-full bg-[#1d1d1f]/90 backdrop-blur-md text-white text-xs font-medium shadow-md opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 whitespace-nowrap hidden sm:flex items-center gap-1.5">
-      <span>{tooltip}</span>
+    <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 rounded-full bg-[#1d1d1f]/90 backdrop-blur-md text-white text-xs font-medium shadow-md opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 whitespace-nowrap hidden sm:flex items-center gap-1.5">
       <span class="w-1.5 h-1.5 rounded-full bg-[#25D366]"></span>
+      <span>{tooltip}</span>
     </div>
   </aside>
 )}
