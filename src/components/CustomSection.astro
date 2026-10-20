@@ -185,7 +185,7 @@ function getSanityDim(img: any): { w: number; h: number; ratio: number } | null 
 }
 ---
 
-<section id={Astro.props.elementId || Astro.props.sectionAnchor || 'custom'} class={`relative w-full transition-colors duration-300 ${themeContainerClass} ${heightContainerClass}`}>
+<section id={Astro.props.elementId || Astro.props.sectionAnchor || 'custom'} class={`relative w-full transition-colors duration-300 custom-section-root ${themeContainerClass} ${heightContainerClass}`}>
   <div class={`${railClass} ${isScreenFit ? 'h-full flex flex-col justify-between my-auto' : 'w-full flex flex-col gap-6 sm:gap-8 lg:gap-12'}`}>
     {/* ---------------- 模式 1: 垂直自然积木流 (Vertical Flow) ---------------- */}
     {layoutMode === 'flow' && (
