@@ -49,7 +49,9 @@ export function createPurgeCacheAction(): DocumentActionComponent {
           const endpoint = `${siteUrl}/api/revalidate?path=${encodeURIComponent(targetPath)}&secret=${encodeURIComponent(secret)}`
           const res = await fetch(endpoint, {
             method: 'GET',
+            mode: 'cors',
             headers: { Accept: 'application/json' },
+            signal: AbortSignal.timeout(10000),
           })
           const data = await res.json()
 

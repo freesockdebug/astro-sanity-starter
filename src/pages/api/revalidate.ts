@@ -54,6 +54,26 @@ const expandCanonicalUrls = (origin: string, pathOrUrl: string): string[] => {
   ];
 };
 
+const getCorsHeaders = (request?: Request): Record<string, string> => {
+  const origin = request?.headers.get('origin');
+  return {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Webhook-Secret, X-Revalidate-Secret',
+    'Access-Control-Max-Age': '86400',
+  };
+};
+
+/**
+ * Handle CORS preflight requests
+ */
+export const OPTIONS: APIRoute = async ({ request }) => {
+  return new Response(null, {
+    status: 204,
+    headers: getCorsHeaders(request),
+  });
+};
+
 /**
  * On-Demand Cache Revalidation & Purge Endpoint
  * 
@@ -67,6 +87,7 @@ const expandCanonicalUrls = (origin: string, pathOrUrl: string): string[] => {
  */
 export const POST: APIRoute = async (context) => {
   const { request, url } = context;
+  const corsHeaders = getCorsHeaders(request);
 
   try {
     // 1. Parse payload first (to support body secret as well)
@@ -95,7 +116,10 @@ export const POST: APIRoute = async (context) => {
     if (expectedSecret && providedSecret !== expectedSecret) {
       return new Response(JSON.stringify({ error: 'Unauthorized: Invalid revalidation secret' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders,
+        }
       });
     }
 
@@ -333,14 +357,20 @@ export const POST: APIRoute = async (context) => {
 
     return new Response(JSON.stringify(responsePayload), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders,
+      }
     });
   } catch (err: any) {
     return new Response(
       JSON.stringify({ success: false, error: err?.message || 'Internal server error' }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders,
+        }
       }
     );
   }
