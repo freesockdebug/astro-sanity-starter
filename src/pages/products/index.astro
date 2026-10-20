@@ -339,32 +339,46 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   const sortSelect = document.getElementById('catalog-sort-select');
   const loadTriggerSentinel = document.getElementById('catalog-load-trigger');
 
-  // Filter & Sort Logic
+  // Filter & Sort Logic (Immutable source, defensive parsing, clean priority)
   function updateFilteredProducts() {
-    filteredList = allProducts.filter((item) => {
-      // Category filter
+    let result = allProducts.filter((item) => {
+      // 1. Category filter
       const matchesCategory = currentCategory === 'all' || item.category === currentCategory;
       if (!matchesCategory) return false;
 
-      // Search query filter
+      // 2. Search query filter: filter(Boolean) prevents matching literal "undefined" string
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const searchable = `${item.title} ${item.shortTitle} ${item.sku} ${item.tagline} ${item.composition} ${item.gauge}`.toLowerCase();
+        const searchable = [
+          item.title,
+          item.shortTitle,
+          item.sku,
+          item.tagline,
+          item.composition,
+          item.gauge
+        ].filter(Boolean).join(' ').toLowerCase();
         return searchable.includes(q);
       }
       return true;
     });
 
-    // Sorting
+    // 3. Sorting (Defensive parsing prevents runtime errors on null/non-string moq)
     if (currentSort === 'moq-asc') {
-      filteredList.sort((a, b) => {
-        const numA = parseInt(a.moq.replace(/[^0-9]/g, '')) || 9999;
-        const numB = parseInt(b.moq.replace(/[^0-9]/g, '')) || 9999;
+      result.sort((a, b) => {
+        const numA = (a.moq ? parseInt(String(a.moq).replace(/\D/g, ''), 10) : 0) || 9999;
+        const numB = (b.moq ? parseInt(String(b.moq).replace(/\D/g, ''), 10) : 0) || 9999;
         return numA - numB;
       });
     } else if (currentSort === 'title-asc') {
-      filteredList.sort((a, b) => (a.shortTitle || a.title).localeCompare(b.shortTitle || b.title));
+      result.sort((a, b) => {
+        const titleA = (a.shortTitle || a.title || '').trim();
+        const titleB = (b.shortTitle || b.title || '').trim();
+        return titleA.localeCompare(titleB);
+      });
     }
+    // When currentSort === 'featured', result naturally retains Sanity's curated default order
+
+    filteredList = result;
 
     // Reset pagination
     displayedCount = 0;
