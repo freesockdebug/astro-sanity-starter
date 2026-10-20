@@ -123,10 +123,19 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
           ))}
         </div>
 
-        <!-- Search Bar & Sorting Dropdown -->
+        <!-- Search Bar, Sorting Dropdown & Compact Count Indicator -->
         <div class="flex items-center gap-2 shrink-0">
+          <!-- Live Count Capsule: Consolidated into toolbar to eliminate extra vertical row -->
+          <div class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-mono text-[#71717a] shrink-0">
+            <span>Showing</span>
+            <span id="displayed-count-label" class="font-semibold text-[#18181b]">{Math.min(initialProducts.length, mergedProducts.length)}</span>
+            <span>of</span>
+            <span id="total-count-label" class="font-semibold text-[#18181b]">{mergedProducts.length}</span>
+            <span class="hidden md:inline">styles</span>
+          </div>
+
           <!-- Realtime Search Input -->
-          <div class="relative flex-1 md:w-52">
+          <div class="relative flex-1 md:w-48 lg:w-52">
             <label for="catalog-search-input" class="sr-only">Search product catalog</label>
             <svg class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -160,21 +169,17 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <option value="moq-asc">MOQ: Low to High</option>
             <option value="title-asc">Title: A to Z</option>
           </select>
+
+          <!-- Active Category Indicator Hook (Preserved for reactive script compatibility) -->
+          <span id="active-category-indicator" class="hidden text-[11px] font-medium text-[#18181b]">
+            {allLabel}
+          </span>
         </div>
       </div>
     </div>
 
     <!-- 3. Product Catalog Grid Area: Adaptive Column System -->
     <div class="apple-rail-wide">
-      <!-- Active Filter Badge & Result Count -->
-      <div class="flex items-center justify-between text-xs text-[#86868b] mb-3 px-1">
-        <div>
-          Showing <span id="displayed-count-label" class="font-semibold text-[#1d1d1f]">{Math.min(initialProducts.length, mergedProducts.length)}</span> of <span id="total-count-label" class="font-semibold text-[#1d1d1f]">{mergedProducts.length}</span> styles
-        </div>
-        <div id="active-category-indicator" class="font-medium text-[11px] text-[#1d1d1f] bg-[#f5f5f7] px-2 py-0.5 rounded-md border border-black/5">
-          {allLabel}
-        </div>
-      </div>
 
       <!-- Card Grid Responsive Column Breakpoints (Aligned with Apple Rail 1360px-1540px width) -->
       <div
