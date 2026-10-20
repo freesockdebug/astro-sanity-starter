@@ -123,6 +123,13 @@ body {
   }
 }
 
+/* 超大外接显示器产品货架 7 列标准 (>= 1760px，彻底免疫任意工具类层叠覆盖) */
+@media (min-width: 1760px) {
+  #products-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+}
+
 /* 首屏主标题：36px -> 随屏幕宽度平滑过渡 -> 最大 72px */
 .fluid-hero-title {
   font-size: clamp(2.25rem, 4.2vw + 0.5rem, 4.5rem);

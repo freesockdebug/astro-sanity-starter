@@ -185,12 +185,12 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
            - 移动端手机 (<640px): 2 列 (grid-cols-2)
            - 平板设备 (640px~1023px): 3~4 列 (sm:grid-cols-3 md:grid-cols-4)
            - 普通电脑/矮屏 (1024px~1279px): 5 列 (lg:grid-cols-5)
-           - 中大尺寸电脑 (1280px~1759px，含1536px): 6 列 (xl:grid-cols-6 2xl:grid-cols-6)
-           - 超大外接显示器 (>=1760px): 7 列 (min-[1760px]:grid-cols-7)
+           - 中大尺寸电脑 (1280px~1759px，含1536px): 6 列 (xl:grid-cols-6)
+           - 超大外接显示器 (>=1760px): 7 列 (由 globals.css 权威保证，防止类名层叠优先级错位)
       -->
       <div
         id="products-grid"
-        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 min-[1760px]:grid-cols-7 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5 min-h-[50vh]"
+        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5 min-h-[50vh]"
       >
         {initialProducts.map((item: any, idx: number) => (
           <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between" data-product-id={item.id}>
