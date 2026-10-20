@@ -54,14 +54,34 @@ const expandCanonicalUrls = (origin: string, pathOrUrl: string): string[] => {
   ];
 };
 
+/**
+ * Dynamic CORS header generator adhering to W3C CORS specifications:
+ * Browsers forbid literal wildcards in subdomains (i.e. `*.gwenvenni.com` directly in header will fail).
+ * The industry standard is dynamically testing the incoming Origin against trusted regex and echoing it back with `Vary: Origin`.
+ */
 const getCorsHeaders = (request?: Request): Record<string, string> => {
   const origin = request?.headers.get('origin');
-  return {
-    'Access-Control-Allow-Origin': origin || '*',
+
+  // 安全白名单校验：匹配 gwenvenni.com 及其所有子域名（如 admin.gwenvenni.com），以及本地开发端口
+  const isAllowedOrigin = Boolean(
+    origin && (
+      /^https?:\/\/([a-zA-Z0-9-]+\.)*gwenvenni\.com$/.test(origin) ||
+      /^https?:\/\/(localhost|127\.0.0\.1)(:\d+)?$/.test(origin)
+    )
+  );
+
+  const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Webhook-Secret, X-Revalidate-Secret',
     'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
   };
+
+  if (isAllowedOrigin && origin) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+
+  return headers;
 };
 
 /**
