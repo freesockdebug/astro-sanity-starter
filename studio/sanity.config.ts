@@ -4,6 +4,7 @@ import { visionTool } from '@sanity/vision'
 import { schemaTypes } from './schemaTypes'
 import { markdownSchema } from 'sanity-plugin-markdown'
 import { deskStructure, defaultDocumentNode } from './deskStructure'
+import { createPurgeCacheAction } from './actions/purgeCacheAction'
 
 export default defineConfig({
   name: 'default',
@@ -23,5 +24,15 @@ export default defineConfig({
 
   schema: {
     types: schemaTypes,
+  },
+
+  document: {
+    actions: (prev, context) => {
+      // 在产品、页面、产品设置、全站配置中加入一键清除缓存 Action
+      if (['product', 'page', 'catalogSettings', 'siteConfig'].includes(context.schemaType)) {
+        return [...prev, createPurgeCacheAction()]
+      }
+      return prev
+    },
   },
 })

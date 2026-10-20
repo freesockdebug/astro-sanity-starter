@@ -7,7 +7,9 @@ import { DocumentsIcon } from '@sanity/icons/Documents'
 import { CogIcon } from '@sanity/icons/Cog'
 import { ArchiveIcon } from '@sanity/icons/Archive'
 import { EnvelopeIcon } from '@sanity/icons/Envelope'
+import { BoltIcon } from '@sanity/icons/Bolt'
 import { PageLivePreview } from './components/PageLivePreview'
+import { CachePurgeDashboard } from './components/CachePurgeDashboard'
 
 export const defaultDocumentNode: DefaultDocumentNodeResolver = (S, { schemaType }) => {
   if (schemaType === 'page') {
@@ -106,5 +108,16 @@ export const deskStructure: StructureResolver = (S) =>
             .schemaType('siteConfig')
             .documentId('427de992-8d59-40a3-af5f-2f83675af6c3')
             .title('全局品牌与页头页尾')
+        ),
+
+      // 7. Cloudflare Edge & CDN Cache Purge
+      S.listItem()
+        .id('cachePurge')
+        .title('⚡ Cloudflare 缓存清理 (CDN & Edge)')
+        .icon(BoltIcon)
+        .child(
+          S.component(CachePurgeDashboard)
+            .title('Cloudflare 边缘缓存与 CDN 快速刷新')
+            .id('cache-purge-view')
         ),
     ])
