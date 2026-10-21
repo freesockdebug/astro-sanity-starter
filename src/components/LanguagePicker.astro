@@ -45,20 +45,22 @@ const pathname = currentUrl.pathname;
   <div class={`relative group language-picker select-none ${className}`}>
     <button
       type="button"
-      class="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-[#1d1d1f]/80 hover:text-black hover:bg-black/5 border border-transparent hover:border-black/5 transition-all cursor-pointer"
+      class="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium text-[#1d1d1f]/80 hover:text-black hover:bg-black/5 border border-transparent hover:border-black/5 transition-all cursor-pointer touch-manipulation"
       aria-label="Select Language"
+      aria-haspopup="true"
+      aria-expanded="false"
     >
       <svg class="w-3.5 h-3.5 text-[#1d1d1f]/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       <span class="font-mono text-[11px] font-semibold">{activeMeta.short}</span>
-      <svg class="w-3 h-3 text-zinc-400 group-hover:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg class="lang-picker-arrow w-3 h-3 text-zinc-400 group-hover:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
       </svg>
     </button>
 
-    <!-- Dropdown Panel (Hover & Focus) -->
-    <div class="absolute right-0 top-full pt-1.5 opacity-0 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-200 z-50">
+    <!-- Dropdown Panel (Hover & Click/Touch Toggle) -->
+    <div class="lang-picker-dropdown absolute right-0 top-full pt-1.5 opacity-0 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-200 z-50">
       <div class="w-44 p-1.5 rounded-2xl bg-white/95 backdrop-blur-xl border border-black/10 shadow-[0_10px_30px_rgba(0,0,0,0.12)] space-y-0.5">
         {(Object.keys(LANGUAGES) as SupportedLocale[]).map((code) => {
           const item = LANGUAGES[code];
@@ -67,7 +69,7 @@ const pathname = currentUrl.pathname;
           return (
             <a
               href={targetUrl}
-              class={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
+              class={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors touch-manipulation ${
                 isActive
                   ? 'bg-zinc-100 font-semibold text-black'
                   : 'text-zinc-600 hover:text-black hover:bg-zinc-50'
@@ -87,3 +89,74 @@ const pathname = currentUrl.pathname;
     </div>
   </div>
 )}
+
+<style>
+  .language-picker.is-open .lang-picker-dropdown {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+    pointer-events: auto !important;
+  }
+  .language-picker.is-open .lang-picker-arrow {
+    transform: rotate(180deg) !important;
+  }
+</style>
+
+<script>
+  function initLanguagePickers() {
+    const pickers = document.querySelectorAll('.language-picker');
+    pickers.forEach((picker) => {
+      if (picker.getAttribute('data-ready') === 'true') return;
+      picker.setAttribute('data-ready', 'true');
+
+      const btn = picker.querySelector('button');
+      if (!btn) return;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = picker.classList.contains('is-open');
+
+        // Close any other open pickers
+        document.querySelectorAll('.language-picker.is-open').forEach((p) => {
+          if (p !== picker) {
+            p.classList.remove('is-open');
+            const otherBtn = p.querySelector('button');
+            if (otherBtn) otherBtn.setAttribute('aria-expanded', 'false');
+          }
+        });
+
+        if (isOpen) {
+          picker.classList.remove('is-open');
+          btn.setAttribute('aria-expanded', 'false');
+        } else {
+          picker.classList.add('is-open');
+          btn.setAttribute('aria-expanded', 'true');
+        }
+      });
+    });
+  }
+
+  // Close when clicking outside
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.language-picker.is-open').forEach((picker) => {
+      if (!picker.contains(e.target)) {
+        picker.classList.remove('is-open');
+        const btn = picker.querySelector('button');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  });
+
+  // Close on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.language-picker.is-open').forEach((picker) => {
+        picker.classList.remove('is-open');
+        const btn = picker.querySelector('button');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      });
+    }
+  });
+
+  initLanguagePickers();
+  document.addEventListener('astro:page-load', initLanguagePickers);
+</script>}
