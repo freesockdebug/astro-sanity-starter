@@ -9,6 +9,8 @@
         "deploy": "astro build && wrangler deploy",
         "build:studio": "cd studio && npm run build",
         "deploy:studio": "cd studio && npm run build && npx wrangler deploy --config wrangler.jsonc",
+        "check": "npx tsx scripts/check-preflight.ts",
+        "check:full": "npx tsx scripts/check-preflight.ts --full",
         "astro": "astro",
         "create-project": "node ./sanity-export/create-project.js",
         "import": "node ./sanity-export/import.js",

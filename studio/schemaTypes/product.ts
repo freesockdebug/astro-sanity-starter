@@ -152,10 +152,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'range', subtitle: 'price'},
-            prepare({title, subtitle}) {
+            prepare({title, subtitle}: any) {
+              const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+              const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
               return {
-                title: title || '未命名订购阶梯',
-                subtitle: subtitle ? `单价: ${subtitle}` : undefined,
+                title: rawT ? String(rawT) : '未命名订购阶梯',
+                subtitle: rawS ? `单价: ${String(rawS)}` : undefined,
               }
             },
           },
@@ -176,10 +178,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'name', subtitle: 'hex'},
-            prepare({title, subtitle}) {
+            prepare({title, subtitle}: any) {
+              const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+              const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
               return {
-                title: title || '未命名颜色',
-                subtitle: subtitle ? `色值: ${subtitle}` : undefined,
+                title: rawT ? String(rawT) : '未命名颜色',
+                subtitle: rawS ? `色值: ${String(rawS)}` : undefined,
               }
             },
           },
@@ -228,10 +232,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'label', subtitle: 'value'},
-            prepare({title, subtitle}) {
+            prepare({title, subtitle}: any) {
+              const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+              const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
               return {
-                title: title || '未命名参数',
-                subtitle: subtitle || undefined,
+                title: rawT ? String(rawT) : '未命名参数',
+                subtitle: rawS ? String(rawS) : undefined,
               }
             },
           },

@@ -225,10 +225,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'headline', subtitle: 'badge'},
-            prepare({title, subtitle}) {
+            prepare({title, subtitle}: any) {
+              const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+              const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
               return {
-                title: `✍️ [标题文本] ${title || '未命名标题'}`,
-                subtitle: subtitle ? `眉标: ${subtitle}` : '标题与文本块',
+                title: `✍️ [标题文本] ${rawT ? String(rawT) : '未命名标题'}`,
+                subtitle: rawS ? `眉标: ${String(rawS)}` : '标题与文本块',
               }
             },
           },
@@ -615,10 +617,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'author', subtitle: 'quote', media: 'avatar'},
-            prepare({title, subtitle, media}) {
+            prepare({title, subtitle, media}: any) {
+              const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+              const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
               return {
-                title: `💬 [语录引言] ${title || '工坊评语'}`,
-                subtitle: subtitle ? `“${subtitle.slice(0, 40)}...”` : '',
+                title: `💬 [语录引言] ${rawT ? String(rawT) : '工坊评语'}`,
+                subtitle: rawS ? `“${String(rawS).slice(0, 40)}...”` : '',
                 media,
               }
             },

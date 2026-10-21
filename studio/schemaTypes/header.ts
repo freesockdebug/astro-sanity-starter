@@ -57,8 +57,11 @@ export default defineType({
       media: 'logo.image.asset',
     },
     prepare(selection: any) {
+      const title = typeof selection?.title === 'object' && selection?.title
+        ? selection.title.en || selection.title.zh || Object.values(selection.title)[0]
+        : selection?.title;
       return {
-        title: selection?.title ? String(selection.title) : 'Header',
+        title: title ? String(title) : 'Header',
         media: selection?.media,
       }
     },

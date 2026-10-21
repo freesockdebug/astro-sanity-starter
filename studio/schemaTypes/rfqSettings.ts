@@ -284,9 +284,11 @@ export default defineType({
               subtitle: 'sku',
             },
             prepare({ title, subtitle }: any) {
+              const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+              const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
               return {
-                title: title ? String(title) : '未命名样卡',
-                subtitle: subtitle ? `SKU: ${String(subtitle)}` : undefined,
+                title: rawT ? String(rawT) : '未命名样卡',
+                subtitle: rawS ? `SKU: ${String(rawS)}` : undefined,
               }
             },
           },

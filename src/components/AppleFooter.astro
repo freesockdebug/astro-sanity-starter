@@ -291,8 +291,8 @@ const legalLinks = rawLegalLinks.map((l: any) => {
 
   function setupBackToTop() {
     const btn = document.getElementById('btn-back-to-top');
-    if (!btn || (btn as any)._initialized) return;
-    (btn as any)._initialized = true;
+    if (!btn || btn.dataset.initialized) return;
+    btn.dataset.initialized = 'true';
 
     let isVisible = false;
     let ticking = false;

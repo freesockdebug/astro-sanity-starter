@@ -123,8 +123,11 @@ export default defineType({
       title: 'header.title',
     },
     prepare(selection: any) {
+      const title = typeof selection?.title === 'object' && selection?.title
+        ? selection.title.en || selection.title.zh || Object.values(selection.title)[0]
+        : selection?.title;
       return {
-        title: selection?.title ? String(selection.title) : 'Site Configuration',
+        title: title ? String(title) : 'Site Configuration',
       }
     },
   },
