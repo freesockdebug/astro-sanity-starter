@@ -251,7 +251,7 @@ const legalLinks = rawLegalLinks.map((l: any) => {
   /* Back-to-Top Dock Button - Perfectly aligned on the right flank with AppleStageNavigator */
   .btn-back-to-top-dock {
     position: fixed;
-    bottom: 1.5rem;
+    bottom: max(1.25rem, env(safe-area-inset-bottom));
     right: max(0.75rem, env(safe-area-inset-right)); /* Safe dock on mobile/narrow screens */
   }
 
