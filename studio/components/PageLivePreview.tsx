@@ -128,6 +128,16 @@ function getSanityImageUrl(source: any): string | null {
   return null
 }
 
+function safeText(val: any, fallback = ''): string {
+  if (typeof val === 'string') return val
+  if (typeof val === 'number') return String(val)
+  if (typeof val === 'object' && val !== null) {
+    const extracted = val.en || val.zh || val.de || val.fr || val.es || Object.values(val)[0]
+    return typeof extracted === 'string' ? extracted : fallback
+  }
+  return fallback
+}
+
 const PALETTE_BLOCKS = [
   {
     type: 'headingBlock',
@@ -1544,7 +1554,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
 
                     {/* --- 真实视觉渲染: 标题积木 (支持 Apple 双色中英双段灰度对比) --- */}
                     {block._type === 'headingBlock' && (() => {
-                      const rawHeadline = block.headline || '未填写主标题'
+                      const rawHeadline = safeText(block.headline, '未填写主标题')
                       const match = rawHeadline.match(/^(.+?[\.|\。])\s*(.+)$/)
                       const isDark = currentSection?.theme === 'dark'
 
@@ -1567,7 +1577,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                                 marginBottom: '6px',
                               }}
                             >
-                              {block.badge}
+                              {safeText(block.badge)}
                             </div>
                           )}
                           <h2
@@ -1600,7 +1610,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                                 lineHeight: 1.5,
                               }}
                             >
-                              {block.subtitle}
+                              {safeText(block.subtitle)}
                             </p>
                           )}
                         </div>
@@ -1709,7 +1719,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                                 marginTop: '6px',
                               }}
                             >
-                              {block.caption}
+                              {safeText(block.caption)}
                             </div>
                           )}
                         </div>
@@ -1745,7 +1755,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                                     marginBottom: '3px',
                                   }}
                                 >
-                                  {m.value || '--'}
+                                  {safeText(m.value, '--')}
                                 </div>
                                 <div
                                   style={{
@@ -1758,11 +1768,11 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                                     marginBottom: '2px',
                                   }}
                                 >
-                                  {m.label || '指标名称'}
+                                  {safeText(m.label, '指标名称')}
                                 </div>
                                 {m.desc && (
                                   <div style={{ fontSize: '11px', color: '#86868b', lineHeight: 1.35 }}>
-                                    {m.desc}
+                                    {safeText(m.desc)}
                                   </div>
                                 )}
                               </div>
@@ -1804,7 +1814,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                               gap: '4px',
                             }}
                           >
-                            <span>{btn.label || '按钮文案'}</span>
+                            <span>{safeText(btn.label, '按钮文案')}</span>
                             {btn.actionType === 'rfqDrawer' && <span style={{ fontSize: '10px' }}>⚡</span>}
                           </span>
                         ))}
@@ -1844,14 +1854,14 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                                   marginBottom: '8px',
                                 }}
                               >
-                                {c.tag}
+                                {safeText(c.tag)}
                               </span>
                             )}
                             <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '4px' }}>
-                              {c.title}
+                              {safeText(c.title)}
                             </div>
                             <div style={{ fontSize: '12px', color: '#71717a', lineHeight: 1.4 }}>
-                              {c.desc}
+                              {safeText(c.desc)}
                             </div>
                           </div>
                         ))}
@@ -1960,7 +1970,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                       </label>
                       <input
                         type="text"
-                        value={selectedBlock.headline || ''}
+                        value={safeText(selectedBlock.headline)}
                         onChange={(e) => updateSelectedBlockField('headline', e.target.value)}
                         style={{
                           width: '100%',
@@ -1980,7 +1990,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                       </label>
                       <input
                         type="text"
-                        value={selectedBlock.badge || ''}
+                        value={safeText(selectedBlock.badge)}
                         onChange={(e) => updateSelectedBlockField('badge', e.target.value)}
                         style={{
                           width: '100%',
@@ -2000,7 +2010,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                       </label>
                       <textarea
                         rows={3}
-                        value={selectedBlock.subtitle || ''}
+                        value={safeText(selectedBlock.subtitle)}
                         onChange={(e) => updateSelectedBlockField('subtitle', e.target.value)}
                         style={{
                           width: '100%',
@@ -2249,7 +2259,7 @@ export function PageLivePreview(props: PageLivePreviewProps) {
                         <input
                           type="text"
                           placeholder="按钮文字"
-                          value={b.label || ''}
+                          value={safeText(b.label)}
                           onChange={(e) => {
                             const newB = [...selectedBlock.buttons]
                             newB[bIdx] = { ...newB[bIdx], label: e.target.value }

@@ -28,4 +28,17 @@ export default defineType({
     type: 'string',
     fieldset: lang.isDefault ? undefined : 'translations',
   })),
+  preview: {
+    select: {
+      en: 'en',
+      de: 'de',
+      fr: 'fr',
+      es: 'es',
+    },
+    prepare({en, de, fr, es}: any) {
+      return {
+        title: String(en || de || fr || es || 'Empty'),
+      }
+    },
+  },
 })

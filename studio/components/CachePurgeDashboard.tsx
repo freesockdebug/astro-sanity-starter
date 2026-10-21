@@ -25,19 +25,27 @@ export function CachePurgeDashboard() {
   const [customPath, setCustomPath] = useState('')
   const [loadingPath, setLoadingPath] = useState<string | null>(null)
   const [logs, setLogs] = useState<PurgeResult[]>([])
-  const [recentProducts, setRecentProducts] = useState<Array<{ title: string; slug: string }>>([])
+  const [recentProducts, setRecentProducts] = useState<Array<{ title: any; slug: string }>>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
 
   // 线上前台地址与密钥：优先读取 studio 环境变量
   const siteUrl = (process.env.SANITY_STUDIO_SITE_URL || 'https://gwenvenni.com').replace(/\/$/, '')
   const secret = process.env.SANITY_STUDIO_REVALIDATE_SECRET || 'itsasecret'
 
+  const getTitleText = (title: any): string => {
+    if (typeof title === 'string') return title
+    if (typeof title === 'object' && title !== null) {
+      return title.en || title.zh || title.de || title.fr || title.es || Object.values(title)[0] || '未命名产品'
+    }
+    return '未命名产品'
+  }
+
   // 加载最近的产品列表方便直接点选清理
   useEffect(() => {
     let mounted = true
     setLoadingProducts(true)
     client
-      .fetch(`*[_type == "product" && defined(slug.current)] | order(_updatedAt desc)[0...8]{ title, "slug": slug.current }`)
+      .fetch(`*[_type == "product" && defined(slug.current)] | order(_updatedAt desc)[0...8]{ "title": coalesce(title.en, title.zh, title.de, title), "slug": slug.current }`)
       .then((data) => {
         if (mounted && Array.isArray(data)) {
           setRecentProducts(data)
@@ -381,9 +389,9 @@ export function CachePurgeDashboard() {
                         textOverflow: 'ellipsis',
                         marginBottom: '2px',
                       }}
-                      title={prod.title}
+                      title={getTitleText(prod.title)}
                     >
-                      {prod.title}
+                      {getTitleText(prod.title)}
                     </div>
                     <div
                       style={{

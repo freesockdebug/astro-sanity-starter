@@ -404,10 +404,11 @@ export default defineType({
                   ],
                   preview: {
                     select: {label: 'label', style: 'style', actionType: 'actionType'},
-                    prepare({label, style, actionType}) {
+                    prepare({label, style, actionType}: any) {
+                      const rawL = typeof label === 'object' && label ? (label.en || label.zh || label.de || Object.values(label)[0]) : label;
                       return {
-                        title: label || '未命名按钮',
-                        subtitle: `${style} · 行为: ${actionType === 'rfqDrawer' ? '呼出询价抽屉' : '跳转链接'}`,
+                        title: String(rawL || '未命名按钮'),
+                        subtitle: `${style || 'primary'} · 行为: ${actionType === 'rfqDrawer' ? '呼出询价抽屉' : '跳转链接'}`,
                       }
                     },
                   },
@@ -475,9 +476,11 @@ export default defineType({
                   ],
                   preview: {
                     select: {value: 'value', label: 'label'},
-                    prepare({value, label}) {
+                    prepare({value, label}: any) {
+                      const rawV = typeof value === 'object' && value ? (value.en || Object.values(value)[0]) : value;
+                      const rawL = typeof label === 'object' && label ? (label.en || Object.values(label)[0]) : label;
                       return {
-                        title: `${value || ''} - ${label || ''}`,
+                        title: `${rawV ? String(rawV) : ''} - ${rawL ? String(rawL) : ''}`,
                       }
                     },
                   },
@@ -561,10 +564,12 @@ export default defineType({
                   ],
                   preview: {
                     select: {title: 'title', tag: 'tag', span: 'span', media: 'image'},
-                    prepare({title, tag, span, media}) {
+                    prepare({title, tag, span, media}: any) {
+                      const rawT = typeof title === 'object' && title ? (title.en || Object.values(title)[0]) : title;
+                      const rawTag = typeof tag === 'object' && tag ? (tag.en || Object.values(tag)[0]) : tag;
                       return {
-                        title: `${title || '未命名卡片'} (${span === 'span-2' ? '跨双列' : '单列'})`,
-                        subtitle: tag ? `标签: ${tag}` : '',
+                        title: `${rawT ? String(rawT) : '未命名卡片'} (${span === 'span-2' ? '跨双列' : '单列'})`,
+                        subtitle: rawTag ? `标签: ${String(rawTag)}` : '',
                         media,
                       }
                     },
