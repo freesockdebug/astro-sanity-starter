@@ -13,6 +13,7 @@ import AppleFooter from './AppleFooter.astro';
 import QuoteDrawer from './QuoteDrawer.astro';
 import AppleStageNavigator from './AppleStageNavigator.astro';
 import WhatsAppWidget from './WhatsAppWidget.astro';
+import LanguagePicker from './LanguagePicker.astro';
 
 export {
   SockHero,
@@ -26,6 +27,7 @@ export {
   QuoteDrawer,
   AppleStageNavigator,
   WhatsAppWidget,
+  LanguagePicker,
 };
 
 /**

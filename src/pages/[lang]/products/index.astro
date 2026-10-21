@@ -1,0 +1,14 @@
+---
+// src/pages/[lang]/products/index.astro
+import ProductsPage from '../../products/index.astro';
+import { LANGUAGES } from '@i18n';
+
+export const prerender = false;
+const { lang } = Astro.params;
+
+if (!lang || !(lang in LANGUAGES) || lang === 'en') {
+  return Astro.redirect('/products');
+}
+---
+
+<ProductsPage />

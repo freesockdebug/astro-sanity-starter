@@ -11,6 +11,13 @@ export default defineConfig({
     adapter: cloudflare({
         imageService: 'passthrough'
     }),
+    i18n: {
+        defaultLocale: 'en',
+        locales: ['en', 'de', 'fr', 'es'],
+        routing: {
+            prefixDefaultLocale: false
+        }
+    },
     image: {
         domains: ['cdn.sanity.io']
     },

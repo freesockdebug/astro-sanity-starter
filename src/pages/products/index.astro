@@ -7,9 +7,13 @@ import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_CATALOG, DEFAULT_RFQ } from '@data/defaults';
+import { getLangFromUrl, useTranslations, getLocalizedValue, getLocalizedPath } from '@i18n';
 
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
 
 // Scheme 2: Single Aggregated GROQ Query - combines 5 independent API calls into 1 single roundtrip
 let batchData: any = null;
@@ -127,11 +131,11 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
         <div class="flex items-center gap-2 shrink-0">
           <!-- Live Count Capsule: Consolidated into toolbar to eliminate extra vertical row -->
           <div class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-mono text-[#71717a] shrink-0">
-            <span>Showing</span>
+            <span>{t('catalog.showing')}</span>
             <span id="displayed-count-label" class="font-semibold text-[#18181b]">{Math.min(initialProducts.length, mergedProducts.length)}</span>
-            <span>of</span>
+            <span>{t('catalog.of')}</span>
             <span id="total-count-label" class="font-semibold text-[#18181b]">{mergedProducts.length}</span>
-            <span class="hidden md:inline">styles</span>
+            <span class="hidden md:inline">{t('catalog.styles')}</span>
           </div>
 
           <!-- Realtime Search Input -->
@@ -197,14 +201,14 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <div class="flex-1 min-h-0 flex flex-col">
               <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with rounded corners -->
               <a
-                href={`/products/${item.slug}`}
+                href={getLocalizedPath(`/products/${item.slug}`, currentLang)}
                 class="block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] my-0 group-hover:opacity-95 transition-all shrink-0"
               >
                 <img
                   src={item.image}
                   srcset={SanityImageService.srcSet(item.image, [240, 480]) || undefined}
                   sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
-                  alt={item.title}
+                  alt={getLocalizedValue(item.title, currentLang)}
                   class="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
                   loading={idx < 4 ? "eager" : "lazy"}
                   fetchpriority={idx === 0 ? "high" : "auto"}
@@ -231,9 +235,9 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
               <!-- 3. Taobao Title: Strict 2-line clamp with fixed 36px height (18px line-height) -->
               <div class="shrink-0 h-[36px] mt-0.5 px-0.5">
-                <a href={`/products/${item.slug}`} class="block">
-                  <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-[18px]" title={item.title}>
-                    {item.shortTitle || item.title}
+                <a href={getLocalizedPath(`/products/${item.slug}`, currentLang)} class="block">
+                  <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-[18px]" title={getLocalizedValue(item.title, currentLang)}>
+                    {getLocalizedValue(item.shortTitle || item.title, currentLang)}
                   </h3>
                 </a>
               </div>
@@ -250,7 +254,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                   <span class="text-sm font-mono tracking-tight font-bold">{item.wholesalePrice || (item.category === 'silk' ? '32.00' : item.category === 'cashmere' ? '45.00' : '18.50')}</span>
                   <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/pc</span>
                 </div>
-                <span class="text-[9px] text-[#52525b] font-mono mt-0.5">MOQ {item.moq || '200'}</span>
+                <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq || '200'}</span>
               </div>
 
               <button

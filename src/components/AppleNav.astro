@@ -5,6 +5,7 @@ import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { cleanBrandTitle, cleanEnglishText } from '@utils/text';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_BRAND_TITLE } from '@data/defaults';
+import LanguagePicker from './LanguagePicker.astro';
 
 const config = Astro.props.config ?? await fetchData();
 const rfqSettings = await fetchRfqSettings();
@@ -50,7 +51,10 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     </nav>
 
     <!-- B2B Actions & RFQ Quote Basket -->
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1 sm:gap-2">
+      <!-- Desktop Language Picker -->
+      <LanguagePicker class="hidden md:flex" />
+
       <!-- Quote Basket Drawer Trigger (Apple Style Shopping Bag Icon) -->
       <button
         type="button"
@@ -105,6 +109,8 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
         <span>{actionButton.label}</span>
       </a>
     )}
+    <!-- Mobile Language Selector -->
+    <LanguagePicker isMobile={true} />
   </div>
 </header>
 

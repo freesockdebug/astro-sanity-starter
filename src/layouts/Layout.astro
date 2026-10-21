@@ -3,6 +3,7 @@ import { type SiteConfig, type CustomImage } from 'types';
 import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget } from '@components';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
+import { getLangFromUrl, switchLocalePath, LANGUAGES, type SupportedLocale } from '@i18n';
 
 import '../styles/globals.css';
 
@@ -18,6 +19,7 @@ interface Props {
 
 const { addTitleSuffix, description, image, bodyClass, mainClass, preloadHeroImage } = Astro.props;
 
+const currentLang = getLangFromUrl(Astro.url);
 const configData: SiteConfig = (await fetchData()) || {};
 SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
 const titleSuffix = configData.titleSuffix && addTitleSuffix !== false ? configData.titleSuffix : undefined;
@@ -41,13 +43,19 @@ function formatCanonicalURL(url: string | URL) {
 ---
 
 <!doctype html>
-<html lang="en" data-theme="light" class="scroll-smooth">
+<html lang={currentLang} data-theme="light" class="scroll-smooth">
     <head>
         <!-- High Priority Global Metadata -->
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>{title}</title>
         <meta name="generator" content={Astro.generator} />
+
+        <!-- Hreflang Tags for Multi-Region International SEO (Google & Bing) -->
+        {(Object.keys(LANGUAGES) as SupportedLocale[]).map((loc) => (
+            <link rel="alternate" hreflang={loc} href={new URL(switchLocalePath(Astro.url.pathname, loc), Astro.site || Astro.url).toString()} />
+        ))}
+        <link rel="alternate" hreflang="x-default" href={new URL(switchLocalePath(Astro.url.pathname, 'en'), Astro.site || Astro.url).toString()} />
 
         <!-- High-priority Responsive LCP Image Preload (Avoids downloading mismatched 1200px on mobile) -->
         {preloadHeroImage && (

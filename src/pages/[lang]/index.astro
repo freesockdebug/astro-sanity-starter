@@ -1,0 +1,14 @@
+---
+// src/pages/[lang]/index.astro
+import HomePage from '../index.astro';
+import { LANGUAGES, type SupportedLocale } from '@i18n';
+
+export const prerender = false;
+const { lang } = Astro.params;
+
+if (!lang || !(lang in LANGUAGES) || lang === 'en') {
+  return Astro.redirect('/');
+}
+---
+
+<HomePage />
