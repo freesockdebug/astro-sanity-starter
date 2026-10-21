@@ -8,6 +8,9 @@ import { sanityConfig } from './src/utils/sanity-client';
 // https://astro.build/config
 export default defineConfig({
     output: 'server',
+    devToolbar: {
+        enabled: false
+    },
     adapter: cloudflare({
         imageService: 'passthrough'
     }),
