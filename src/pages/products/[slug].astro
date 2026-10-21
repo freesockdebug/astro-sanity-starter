@@ -301,9 +301,11 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                 <div class="space-y-1 xl:space-y-1.5">
                   {currentProduct.pricingTiers.map((tier: any) => (
                     <div class="flex items-center justify-between text-xs sm:text-sm py-0.5 border-b border-zinc-200/50 last:border-none">
-                      <span class="text-zinc-700 font-medium">{tier.range}</span>
+                      <span class="text-zinc-700 font-medium">
+                        {tier.range}{tier.unit && !tier.range.toLowerCase().includes(tier.unit.toLowerCase()) ? ` ${tier.unit}` : ''}
+                      </span>
                       <span class="text-zinc-950 font-bold font-mono text-xs sm:text-sm">
-                        {tier.price}{tier.unit ? ` / ${tier.unit}` : ''}
+                        {tier.price}{tier.unit ? ` / ${tier.unit.toLowerCase() === 'pairs' ? 'pair' : tier.unit.toLowerCase().replace(/s$/, '')}` : ''}
                       </span>
                     </div>
                   ))}

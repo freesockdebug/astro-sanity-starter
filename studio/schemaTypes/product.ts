@@ -157,7 +157,12 @@ export default defineType({
         {
           type: 'object',
           fields: [
-            {name: 'range', title: 'Quantity Range (订购数量区间)', type: 'string'},
+            {
+              name: 'range',
+              title: 'Quantity Range (订购数量区间)',
+              description: '仅填写数量范围数字（无需写单位），例如：200 - 499 或 2,000+。单位由下方 Unit 字段维护',
+              type: 'string',
+            },
             {name: 'price', title: 'Unit Price (单价)', type: 'string'},
             {
               name: 'unit',
@@ -181,10 +186,14 @@ export default defineType({
             prepare({title, subtitle, unit}: any) {
               const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
               const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
-              const unitStr = unit ? ` / ${unit}` : '';
+              const rangeStr = rawT ? String(rawT) : '未命名订购阶梯';
+              const rangeWithUnit = unit && !rangeStr.toLowerCase().includes(String(unit).toLowerCase())
+                ? `${rangeStr} ${unit}`
+                : rangeStr;
+              const priceUnitStr = unit ? ` / ${unit}` : '';
               return {
-                title: rawT ? String(rawT) : '未命名订购阶梯',
-                subtitle: rawS ? `单价: ${String(rawS)}${unitStr}` : undefined,
+                title: rangeWithUnit,
+                subtitle: rawS ? `单价: ${String(rawS)}${priceUnitStr}` : undefined,
               }
             },
           },
