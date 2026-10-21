@@ -168,20 +168,29 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
 
                 <!-- Main Viewport Box with Controls (Fills full height on desktop, 100% full image with object-contain) -->
                 <div class="order-1 lg:order-2 relative w-full flex-1 min-w-0 aspect-[4/3] lg:aspect-auto h-[360px] sm:h-[440px] lg:h-full rounded-2xl overflow-hidden bg-[#fafafa] border border-zinc-200/80 shadow-xs group flex items-center justify-center">
-                  <!-- Carousel Images -->
-                  <div id="carousel-track" class="w-full h-full relative">
+                  <!-- Carousel Images Track (Native Scroll Snap for Silky Mobile Touch Swipe & Desktop Fluidity) -->
+                  <div 
+                    id="carousel-track" 
+                    class="w-full h-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar scroll-smooth relative select-none touch-pan-x"
+                    style="scrollbar-width: none; -ms-overflow-style: none;"
+                  >
                     {currentProduct.gallery.map((img: any, idx: number) => (
-                      <img
-                        src={SanityImageService.hero(img.src, 1200)}
-                        srcset={SanityImageService.srcSet(img.src, [480, 800, 1200]) || undefined}
-                        sizes="(max-width: 1024px) 100vw, 800px"
-                        alt={img.alt}
-                        class={`carousel-slide absolute inset-0 m-auto w-full h-full max-h-full max-w-full object-contain p-2 sm:p-4 transition-opacity duration-500 ease-in-out ${idx === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
+                      <div
+                        class="carousel-slide shrink-0 w-full h-full snap-center flex items-center justify-center p-2 sm:p-4 relative"
                         data-index={idx}
-                        loading={idx === 0 ? 'eager' : 'lazy'}
-                        fetchpriority={idx === 0 ? 'high' : 'auto'}
-                        decoding="async"
-                      />
+                      >
+                        <img
+                          src={SanityImageService.hero(img.src, 1200)}
+                          srcset={SanityImageService.srcSet(img.src, [480, 800, 1200]) || undefined}
+                          sizes="(max-width: 1024px) 100vw, 800px"
+                          alt={img.alt}
+                          class="w-full h-full max-h-full max-w-full object-contain pointer-events-none select-none"
+                          draggable="false"
+                          loading={idx === 0 ? 'eager' : 'lazy'}
+                          fetchpriority={idx === 0 ? 'high' : 'auto'}
+                          decoding="async"
+                        />
+                      </div>
                     ))}
                   </div>
 
@@ -200,28 +209,44 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                     <span id="carousel-counter-curr">1</span> / <span id="carousel-counter-total">{currentProduct.gallery.length}</span>
                   </div>
 
-                  <!-- Navigation Arrow Controls -->
-                  <button
-                    type="button"
-                    id="carousel-prev"
-                    aria-label="Previous slide"
-                    class="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-zinc-900 shadow-sm backdrop-blur-md flex items-center justify-center transition-all opacity-80 group-hover:opacity-100 cursor-pointer"
-                  >
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
+                  <!-- Mobile Pagination Dots (Visual swipe indicator for touch devices) -->
+                  {currentProduct.gallery.length > 1 && (
+                    <div class="sm:hidden absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/35 backdrop-blur-md pointer-events-none">
+                      {currentProduct.gallery.map((_: any, idx: number) => (
+                        <span 
+                          class={`carousel-dot h-1.5 rounded-full transition-all duration-300 ${idx === 0 ? 'bg-white w-3' : 'bg-white/50 w-1.5'}`} 
+                          data-dot-index={idx}
+                        />
+                      ))}
+                    </div>
+                  )}
 
-                  <button
-                    type="button"
-                    id="carousel-next"
-                    aria-label="Next slide"
-                    class="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-zinc-900 shadow-sm backdrop-blur-md flex items-center justify-center transition-all opacity-80 group-hover:opacity-100 cursor-pointer"
-                  >
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+                  <!-- Navigation Arrow Controls (Desktop only, hidden on mobile for clean touch experience) -->
+                  {currentProduct.gallery.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        id="carousel-prev"
+                        aria-label="Previous slide"
+                        class="hidden sm:flex absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-zinc-900 shadow-sm backdrop-blur-md items-center justify-center transition-all opacity-80 group-hover:opacity-100 cursor-pointer"
+                      >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        id="carousel-next"
+                        aria-label="Next slide"
+                        class="hidden sm:flex absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-zinc-900 shadow-sm backdrop-blur-md items-center justify-center transition-all opacity-80 group-hover:opacity-100 cursor-pointer"
+                      >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
                 </div>
 
               </div>
@@ -492,25 +517,17 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
 
   <script>
       let currentSlide = 0;
-      const slides = document.querySelectorAll<HTMLImageElement>('.carousel-slide');
-      const thumbs = document.querySelectorAll<HTMLButtonElement>('.carousel-thumb');
+      const track = document.getElementById('carousel-track');
+      const slides = document.querySelectorAll('.carousel-slide');
+      const thumbs = document.querySelectorAll('.carousel-thumb');
+      const dots = document.querySelectorAll('.carousel-dot');
       const prevBtn = document.getElementById('carousel-prev');
       const nextBtn = document.getElementById('carousel-next');
       const counterCurr = document.getElementById('carousel-counter-curr');
+      let scrollTimer;
 
-      function showSlide(index: number) {
-        if (!slides.length) return;
-        currentSlide = (index + slides.length) % slides.length;
-
-        slides.forEach((slide, i) => {
-          if (i === currentSlide) {
-            slide.classList.remove('opacity-0', 'pointer-events-none');
-            slide.classList.add('opacity-100', 'z-10');
-          } else {
-            slide.classList.remove('opacity-100', 'z-10');
-            slide.classList.add('opacity-0', 'pointer-events-none');
-          }
-        });
+      function updateUI(index) {
+        currentSlide = index;
 
         thumbs.forEach((thumb, i) => {
           if (i === currentSlide) {
@@ -523,25 +540,63 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
           }
         });
 
+        dots.forEach((dot, i) => {
+          if (i === currentSlide) {
+            dot.classList.add('bg-white', 'w-3');
+            dot.classList.remove('bg-white/50', 'w-1.5');
+          } else {
+            dot.classList.remove('bg-white', 'w-3');
+            dot.classList.add('bg-white/50', 'w-1.5');
+          }
+        });
+
         if (counterCurr) {
           counterCurr.textContent = String(currentSlide + 1);
         }
       }
 
-      if (prevBtn) prevBtn.addEventListener('click', () => showSlide(currentSlide - 1));
-      if (nextBtn) nextBtn.addEventListener('click', () => showSlide(currentSlide + 1));
+      function scrollToSlide(index) {
+        if (!track || !slides.length) return;
+        currentSlide = (index + slides.length) % slides.length;
+        const target = slides[currentSlide];
+        if (target) {
+          track.scrollTo({
+            left: target.offsetLeft,
+            behavior: 'smooth'
+          });
+        }
+        updateUI(currentSlide);
+      }
+
+      // 手势滑动监听（触屏左右滑动、触摸惯性滚动与缩略图/点阵实时同步）
+      if (track) {
+        track.addEventListener('scroll', () => {
+          clearTimeout(scrollTimer);
+          scrollTimer = setTimeout(() => {
+            const scrollLeft = track.scrollLeft;
+            const slideWidth = track.clientWidth || 1;
+            const newIndex = Math.round(scrollLeft / slideWidth);
+            if (newIndex >= 0 && newIndex < slides.length && newIndex !== currentSlide) {
+              updateUI(newIndex);
+            }
+          }, 50);
+        }, { passive: true });
+      }
+
+      if (prevBtn) prevBtn.addEventListener('click', () => scrollToSlide(currentSlide - 1));
+      if (nextBtn) nextBtn.addEventListener('click', () => scrollToSlide(currentSlide + 1));
 
       thumbs.forEach((thumb) => {
         thumb.addEventListener('click', () => {
           const idx = Number(thumb.getAttribute('data-thumb-index'));
-          if (!isNaN(idx)) showSlide(idx);
+          if (!isNaN(idx)) scrollToSlide(idx);
         });
       });
 
       // B2B Dual-Track RFQ Handlers
       import { addToQuote } from '../../stores/quoteCart';
 
-      const firstColorBtn = document.querySelector<HTMLElement>('.color-variant-btn');
+      const firstColorBtn = document.querySelector('.color-variant-btn');
       let selectedVariant = firstColorBtn?.dataset.color || 'Standard';
       const colorBtns = document.querySelectorAll('.color-variant-btn');
       const selectedColorLabel = document.getElementById('selected-color-name');
@@ -561,7 +616,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
       });
 
       // Track 1: Add to Multi-Item Quote Basket
-      const addQuoteBtn = document.getElementById('btn-add-quote') as HTMLElement | null;
+      const addQuoteBtn = document.getElementById('btn-add-quote');
       if (addQuoteBtn) {
         addQuoteBtn.addEventListener('click', () => {
           const id = addQuoteBtn.dataset.id || 'product';
@@ -580,14 +635,14 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
             quantity: moqNum,
             moq: rawMoq,
           });
-          if ((window as any).openQuoteDrawer) {
-            (window as any).openQuoteDrawer();
+          if (typeof window !== 'undefined' && window.openQuoteDrawer) {
+            window.openQuoteDrawer();
           }
         });
       }
 
       // Download Spec Sheet (PDF): Adds dossier to quote cart
-      const specBtn = document.getElementById('btn-download-spec') as HTMLElement | null;
+      const specBtn = document.getElementById('btn-download-spec');
       if (specBtn) {
         specBtn.addEventListener('click', () => {
           const sku = specBtn.dataset.sku || 'SPEC';
@@ -601,8 +656,8 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
             quantity: 1,
             moq: 'Direct Dispatch',
           });
-          if ((window as any).openQuoteDrawer) {
-            (window as any).openQuoteDrawer();
+          if (typeof window !== 'undefined' && window.openQuoteDrawer) {
+            window.openQuoteDrawer();
           }
         });
       }
