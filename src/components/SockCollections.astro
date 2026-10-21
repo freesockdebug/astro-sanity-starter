@@ -39,6 +39,7 @@ const {
 } = Astro.props;
 
 const siteConfig = await fetchSiteConfig();
+const rfqSettings = await fetchRfqSettings();
 const actionButtonText = propActionText?.trim() || (currentLang !== 'en' ? t('hero.requestSwatch') : (rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText));
 const resolvedCardQuoteText = cardQuoteButtonText || (currentLang !== 'en' ? t('catalog.requestQuote') : (rfqSettings?.cardQuoteBtnText || t('catalog.requestQuote')));
 
