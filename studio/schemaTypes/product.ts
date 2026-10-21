@@ -120,8 +120,8 @@ export default defineType({
     }),
     defineField({
       name: 'wholesalePrice',
-      title: 'Base Wholesale Price (陈列大厅展示起批价，如 18.50 或 32.00)',
-      description: '在产品陈列大厅卡片底部突出展示的起批指导价（如 ¥ 18.50/pc），留空将自动根据材质估算。',
+      title: 'Base Wholesale Price (陈列大厅展示起批价，如 $4.90 或 4.90)',
+      description: '在产品陈列大厅卡片底部突出展示的起批指导价（如 $4.90/pc）。留空将自动继承第一档阶梯起批价。',
       type: 'string',
       group: 'wholesale',
     }),

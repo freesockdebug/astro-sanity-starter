@@ -60,6 +60,7 @@ export const PRODUCT_CARD_FIELDS = `{
   "mainImage": mainImage.asset->url,
   colors,
   wholesalePrice,
+  "startingPrice": pricingTiers[0].price,
   "specifications": specifications[0..1],
   "category": category->{
     _id,
@@ -174,7 +175,7 @@ export class ProductService {
       gauge: (sp.specifications && sp.specifications[1]?.value) || sp.gauge || 'Fine Gauge Knit',
       moq: sp.moq || '200 Pairs',
       leadTime: sp.leadTime || '15-20 Days',
-      wholesalePrice: sp.wholesalePrice || undefined,
+      wholesalePrice: sp.wholesalePrice || sp.startingPrice || undefined,
       colors,
       isFeatured: sp.isFeatured ?? true,
       isNew: sp.isNew ?? false,
