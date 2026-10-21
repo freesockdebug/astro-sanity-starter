@@ -84,24 +84,24 @@ export interface ProductCategory {
 
 export interface Product {
     _id: string;
-    title: string;
-    shortTitle?: string;
+    title: string | Record<string, string>;
+    shortTitle?: string | Record<string, string>;
     slug: string;
     sku?: string;
-    tagline?: string;
-    statusBadge?: string;
-    supportBadge?: string;
-    specsHeading?: string;
-    specsBadge?: string;
-    galleryHint?: string;
-    priceNote?: string;
-    paletteTitle?: string;
-    addToQuoteButtonText?: string;
+    tagline?: string | Record<string, string>;
+    statusBadge?: string | Record<string, string>;
+    supportBadge?: string | Record<string, string>;
+    specsHeading?: string | Record<string, string>;
+    specsBadge?: string | Record<string, string>;
+    galleryHint?: string | Record<string, string>;
+    priceNote?: string | Record<string, string>;
+    paletteTitle?: string | Record<string, string>;
+    addToQuoteButtonText?: string | Record<string, string>;
     amazonAsin?: string;
     amazonUrl?: string;
-    sampleButtonText?: string;
-    primaryButtonText?: string;
-    secondaryButtonText?: string;
+    sampleButtonText?: string | Record<string, string>;
+    primaryButtonText?: string | Record<string, string>;
+    secondaryButtonText?: string | Record<string, string>;
     moq?: string;
     leadTime?: string;
     wholesalePrice?: string;

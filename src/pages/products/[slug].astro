@@ -48,7 +48,7 @@ const allProducts = batchData?.allProducts || [];
 // Ensure product has fallbacks for arrays and images
 currentProduct.gallery = (currentProduct.gallery && currentProduct.gallery.length > 0)
   ? currentProduct.gallery
-  : [{ src: currentProduct.mainImage || DEFAULT_FALLBACK_IMAGE, alt: currentProduct.title || 'Product' }];
+  : [{ src: currentProduct.mainImage || DEFAULT_FALLBACK_IMAGE, alt: getLocalizedValue(currentProduct.title, currentLang) || 'Product' }];
 currentProduct.colors = currentProduct.colors || [];
 currentProduct.pricingTiers = currentProduct.pricingTiers || [];
 currentProduct.specifications = currentProduct.specifications || [];
@@ -65,7 +65,7 @@ const collectionsLink = navLinks.find((l: any) =>
   l.url?.includes('collection') || 
   l.url?.includes('product')
 );
-const productsNavLabel = collectionsLink?.label || t('nav.products');
+const productsNavLabel = getLocalizedValue(collectionsLink?.label, currentLang) || t('nav.products');
 const productsNavUrl = collectionsLink?.url || "/products";
 
 const currentIndex = allProducts.findIndex((p: any) => p.slug === slug);
@@ -82,12 +82,12 @@ const currentProductTagline = getLocalizedValue(currentProduct.tagline, currentL
 const prevProductTitle = getLocalizedValue(prevProduct.shortTitle || prevProduct.title, currentLang);
 const nextProductTitle = getLocalizedValue(nextProduct.shortTitle || nextProduct.title, currentLang);
 
-const addToQuoteBtnText = currentProduct.addToQuoteButtonText || getLocalizedValue(rfqSettings?.btnAddToQuoteText, currentLang) || t('pdp.addToQuote');
+const addToQuoteBtnText = getLocalizedValue(currentProduct.addToQuoteButtonText, currentLang) || getLocalizedValue(rfqSettings?.btnAddToQuoteText, currentLang) || t('pdp.addToQuote');
 
 // Amazon Sample Buying Link Resolution
 const rawAmazonUrl = currentProduct.amazonUrl || (currentProduct.amazonAsin ? `https://www.amazon.com/dp/${currentProduct.amazonAsin.trim()}` : null);
 const amazonSampleUrl = rawAmazonUrl || rfqSettings?.defaultAmazonStoreUrl || `https://www.amazon.com/s?k=${encodeURIComponent(currentProductTitle || DEFAULT_BRAND_TITLE)}`;
-const sampleButtonText = currentProduct.sampleButtonText || getLocalizedValue(rfqSettings?.btnSampleAmazonText, currentLang) || t('pdp.buySampleAmazon');
+const sampleButtonText = getLocalizedValue(currentProduct.sampleButtonText, currentLang) || getLocalizedValue(rfqSettings?.btnSampleAmazonText, currentLang) || t('pdp.buySampleAmazon');
 
 const showAddToQuoteButton = rfqSettings?.showProductAddToQuoteButton ?? true;
 const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
@@ -262,7 +262,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
               </div>
 
               <p class="text-[10px] text-zinc-400 font-mono text-center lg:text-left mt-1.5 shrink-0">
-                {currentProduct.galleryHint || DEFAULT_PRODUCT_DETAIL.galleryHint}
+                {getLocalizedValue(currentProduct.galleryHint, currentLang) || t('pdp.galleryHint') || DEFAULT_PRODUCT_DETAIL.galleryHint}
               </p>
             </div>
 
@@ -273,7 +273,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 text-zinc-800 font-medium">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>{currentProduct.statusBadge || DEFAULT_PRODUCT_DETAIL.statusBadge}</span>
+                    <span>{getLocalizedValue(currentProduct.statusBadge, currentLang) || t('pdp.statusBadge') || DEFAULT_PRODUCT_DETAIL.statusBadge}</span>
                   </span>
                   {currentProduct.rating && (
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-stone-100 text-stone-700 border border-stone-200/60">
@@ -304,7 +304,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                   ))}
                 </div>
                 <p class="text-[10px] text-zinc-400 font-mono pt-0.5">
-                  {currentProduct.priceNote || DEFAULT_PRODUCT_DETAIL.priceNote}
+                  {getLocalizedValue(currentProduct.priceNote, currentLang) || t('pdp.priceNote') || DEFAULT_PRODUCT_DETAIL.priceNote}
                 </p>
               </div>
 
@@ -314,7 +314,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                 <div class="space-y-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">
-                      {currentProduct.paletteTitle || DEFAULT_PRODUCT_DETAIL.paletteTitle}
+                      {getLocalizedValue(currentProduct.paletteTitle, currentLang) || t('pdp.paletteTitle') || DEFAULT_PRODUCT_DETAIL.paletteTitle}
                     </span>
                     <span id="selected-color-name" class="text-xs font-medium text-zinc-900">
                       {currentProduct.colors[0]?.name || "Default"}
@@ -368,7 +368,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                     id="btn-add-quote"
                     class="w-full py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-semibold bg-[#1d1d1f] hover:bg-black text-white group flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer"
                     data-id={currentProduct.slug}
-                    data-title={currentProduct.shortTitle || currentProduct.title}
+                    data-title={currentProductShortTitle}
                     data-sku={currentProduct.sku || "SKU"}
                     data-image={SanityImageService.thumbnail(currentProduct.gallery[0]?.src || DEFAULT_FALLBACK_IMAGE, 200)}
                     data-moq={currentProduct.moq || DEFAULT_PRODUCT_DETAIL.fallbackMoq}
@@ -411,12 +411,12 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                     id="btn-download-spec"
                     class="hover:text-black flex items-center gap-1 underline underline-offset-2 transition-colors cursor-pointer text-[11px]"
                     data-sku={currentProduct.sku}
-                    data-title={currentProduct.title}
+                    data-title={currentProductTitle}
                   >
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <span>{t('pdp.downloadSpecSheet')}</span>
+                    <span>{getLocalizedValue(currentProduct.secondaryButtonText, currentLang) || t('pdp.downloadSpecSheet')}</span>
                   </button>
                 </div>
                 )}
@@ -435,7 +435,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                   <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
-                  <span class="truncate">{currentProduct.supportBadge || DEFAULT_PRODUCT_DETAIL.supportBadge}</span>
+                  <span class="truncate">{getLocalizedValue(currentProduct.supportBadge, currentLang) || t('pdp.supportBadge') || DEFAULT_PRODUCT_DETAIL.supportBadge}</span>
                 </div>
               </div>
             </div>
@@ -451,10 +451,10 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
             <div class="flex items-center justify-between mb-3">
               <div>
                 <span class="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block">
-                  {currentProduct.specsBadge || DEFAULT_PRODUCT_DETAIL.specsBadge}
+                  {getLocalizedValue(currentProduct.specsBadge, currentLang) || t('pdp.specsBadge') || DEFAULT_PRODUCT_DETAIL.specsBadge}
                 </span>
                 <h2 class="text-lg sm:text-xl font-semibold tracking-tight text-zinc-950 mt-0.5">
-                  {currentProduct.specsHeading || t('pdp.specs')}
+                  {getLocalizedValue(currentProduct.specsHeading, currentLang) || t('pdp.specs')}
                 </h2>
               </div>
               <span class="hidden sm:inline-block text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60">

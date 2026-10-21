@@ -57,6 +57,12 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'pdp.linking': 'Toe Linking',
     'pdp.composition': 'Composition',
     'pdp.sizing': 'Sizing Standard',
+    'pdp.statusBadge': 'Active Production Ready',
+    'pdp.supportBadge': 'Full Private Label Support',
+    'pdp.priceNote': '* Customs, freight, and custom branded packaging quoted upon destination.',
+    'pdp.paletteTitle': 'Available In-Stock Yarn Palette:',
+    'pdp.specsBadge': 'Factory Quality Standard',
+    'pdp.galleryHint': 'Click thumbnails or use arrows to inspect fabric weave, tactile finish, and construction details.',
 
     // RFQ Drawer
     'rfq.drawerTitle': 'B2B Inquiry & Sample Dossier',
@@ -138,6 +144,12 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'pdp.linking': 'Spitzenverarbeitung',
     'pdp.composition': 'Materialzusammensetzung',
     'pdp.sizing': 'Größenstandard',
+    'pdp.statusBadge': 'Aktiv produktionsbereit',
+    'pdp.supportBadge': 'Volle Unterstützung für Handelsmarken',
+    'pdp.priceNote': '* Zoll, Fracht und kundenspezifische Verpackung werden nach Bestimmungsort berechnet.',
+    'pdp.paletteTitle': 'Verfügbare Garnfarben ab Lager:',
+    'pdp.specsBadge': 'Werksqualitätsstandard',
+    'pdp.galleryHint': 'Miniaturansichten anklicken oder Pfeile nutzen, um Gewebe, Haptik und Details zu prüfen.',
 
     // RFQ Drawer
     'rfq.drawerTitle': 'B2B-Anfrage & Musterdossier',
@@ -219,6 +231,12 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'pdp.linking': 'Rémaillage pointe',
     'pdp.composition': 'Composition',
     'pdp.sizing': 'Norme de taille',
+    'pdp.statusBadge': 'Prêt pour la production',
+    'pdp.supportBadge': 'Support complet marque blanche',
+    'pdp.priceNote': '* Douane, fret et emballage personnalisé devisés selon la destination.',
+    'pdp.paletteTitle': 'Palette de fils en stock disponible :',
+    'pdp.specsBadge': 'Norme de qualité usine',
+    'pdp.galleryHint': 'Cliquez sur les miniatures ou flèches pour inspecter le tissage et les détails.',
 
     // RFQ Drawer
     'rfq.drawerTitle': 'Dossier de devis B2B & Échantillons',
@@ -300,6 +318,12 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'pdp.linking': 'Remallado de puntera',
     'pdp.composition': 'Composición',
     'pdp.sizing': 'Estándar de tallas',
+    'pdp.statusBadge': 'Listo para producción activa',
+    'pdp.supportBadge': 'Soporte completo de marca blanca',
+    'pdp.priceNote': '* Aduanas, flete y embalaje personalizado cotizados según destino.',
+    'pdp.paletteTitle': 'Paleta de hilos en stock disponible:',
+    'pdp.specsBadge': 'Estándar de calidad de fábrica',
+    'pdp.galleryHint': 'Haga clic en miniaturas o flechas para inspeccionar el tejido, acabado y detalles.',
 
     // RFQ Drawer
     'rfq.drawerTitle': 'Cotización B2B y Muestras',
