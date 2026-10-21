@@ -30,7 +30,7 @@ export const SECTIONS = `{
       leadTime,
       "mainImage": mainImage.asset->url,
       colors,
-      wholesalePrice,
+      pricingTiers,
       "specifications": specifications[0..1]
     }
   },

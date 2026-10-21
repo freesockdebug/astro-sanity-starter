@@ -104,7 +104,6 @@ export interface Product {
     secondaryButtonText?: string | Record<string, string>;
     moq?: string;
     leadTime?: string;
-    wholesalePrice?: string;
     category?: ProductCategory | string;
     mainImage?: string;
     gallery?: GalleryItem[];

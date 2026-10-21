@@ -63,7 +63,8 @@ const minimalProducts = mergedProducts.map((p: any) => {
     colors: p.colors,
     leadTime: p.leadTime,
     composition: p.composition,
-    wholesalePrice: p.wholesalePrice,
+    price: p.price,
+    currency: p.currency,
     moq: p.moq,
     sku: p.sku,
     tagline: getLocalizedValue(p.tagline, currentLang),
@@ -81,26 +82,6 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       sizes: '(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px',
     }
   : undefined;
-
-// Helper to reliably format B2B wholesale prices with international currency ($)
-function formatWholesalePrice(rawPrice: any, category?: string): { currency: string; amount: string } {
-  if (rawPrice !== undefined && rawPrice !== null && String(rawPrice).trim() !== '') {
-    const str = String(rawPrice).trim();
-    const match = str.match(/^([$€£¥])\s*([0-9.,]+)/) || str.match(/([0-9.,]+)\s*([$€£¥])$/);
-    if (match) {
-      const isSymbolFirst = match[1] && '[$€£¥]'.includes(match[1]);
-      const symbol = isSymbolFirst ? match[1] : match[2];
-      const num = isSymbolFirst ? match[2] : match[1];
-      return { currency: symbol === '¥' ? '$' : symbol, amount: num };
-    }
-    const numOnly = str.replace(/[^0-9.]/g, '');
-    if (numOnly) {
-      return { currency: '$', amount: numOnly };
-    }
-  }
-  const fallback = category === 'silk' ? '4.90' : category === 'cashmere' ? '6.80' : category === 'sheer' ? '3.80' : '3.20';
-  return { currency: '$', amount: fallback };
-}
 ---
 
 <Layout
@@ -274,8 +255,8 @@ function formatWholesalePrice(rawPrice: any, category?: string): { currency: str
             <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
               <div class="flex flex-col">
                 <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
-                  <span class="text-[10px] font-mono">{formatWholesalePrice(item.wholesalePrice, item.category).currency}</span>
-                  <span class="text-sm font-mono tracking-tight font-bold">{formatWholesalePrice(item.wholesalePrice, item.category).amount}</span>
+                  <span class="text-[10px] font-mono">{item.currency || '$'}</span>
+                  <span class="text-sm font-mono tracking-tight font-bold">{item.price}</span>
                   <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/pc</span>
                 </div>
                 <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq || '200'}</span>
@@ -417,25 +398,6 @@ function formatWholesalePrice(rawPrice: any, category?: string): { currency: str
   // Create Product Card HTML compliant with Taobao Dense Grid & Gwenvenni Apple Specs
   // Create Product Card HTML matching Taobao Shelf Layout (Image-Top, 2-line title, Price/MOQ block)
   function createCardElement(item) {
-    function formatWholesalePrice(rawPrice, category) {
-      if (rawPrice !== undefined && rawPrice !== null && String(rawPrice).trim() !== '') {
-        var str = String(rawPrice).trim();
-        var match = str.match(/^([$€£¥])\s*([0-9.,]+)/) || str.match(/([0-9.,]+)\s*([$€£¥])$/);
-        if (match) {
-          var isSymbolFirst = match[1] && '[$€£¥]'.indexOf(match[1]) !== -1;
-          var symbol = isSymbolFirst ? match[1] : match[2];
-          var num = isSymbolFirst ? match[2] : match[1];
-          return { currency: symbol === '¥' ? '$' : symbol, amount: num };
-        }
-        var numOnly = str.replace(/[^0-9.]/g, '');
-        if (numOnly) {
-          return { currency: '$', amount: numOnly };
-        }
-      }
-      var fallback = category === 'silk' ? '4.90' : category === 'cashmere' ? '6.80' : category === 'sheer' ? '3.80' : '3.20';
-      return { currency: '$', amount: fallback };
-    }
-
     const card = document.createElement('div');
     card.className = "group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between";
 
@@ -450,8 +412,6 @@ function formatWholesalePrice(rawPrice: any, category?: string): { currency: str
         </span>`
       )
       .join('');
-
-    var pInfo = formatWholesalePrice(item.wholesalePrice, item.category);
 
     card.innerHTML = `
       <div class="flex-1 min-h-0 flex flex-col">
@@ -499,8 +459,8 @@ function formatWholesalePrice(rawPrice: any, category?: string): { currency: str
       <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
         <div class="flex flex-col">
           <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
-            <span class="text-[10px] font-mono">${pInfo.currency}</span>
-            <span class="text-sm font-mono tracking-tight font-bold">${pInfo.amount}</span>
+            <span class="text-[10px] font-mono">${item.currency || '$'}</span>
+            <span class="text-sm font-mono tracking-tight font-bold">${item.price}</span>
             <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/pc</span>
           </div>
           <span class="text-[9px] text-[#52525b] font-mono mt-0.5">${moqPrefix} ${item.moq || '200'}</span>
