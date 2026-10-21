@@ -43,8 +43,8 @@ const siteConfig = batchData?.siteConfig;
 const rfqSettings = batchData?.rfqSettings;
 const catalogSettings = batchData?.catalogSettings;
 
-const cardQuoteText = rfqSettings?.cardQuoteBtnText || DEFAULT_RFQ.cardQuoteBtnText;
-const allLabel = catalogSettings?.allSilhouettesLabel || DEFAULT_CATALOG.allSilhouettesLabel;
+const cardQuoteText = getLocalizedValue(rfqSettings?.cardQuoteBtnText, currentLang) || DEFAULT_RFQ.cardQuoteBtnText;
+const allLabel = getLocalizedValue(catalogSettings?.allSilhouettesLabel, currentLang) || DEFAULT_CATALOG.allSilhouettesLabel;
 
 // 2. Resolve aggregated categories & counts via data service layer (instantly from memory)
 const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
@@ -84,8 +84,8 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 ---
 
 <Layout
-  title={catalogSettings?.metaTitle || DEFAULT_CATALOG.metaTitle}
-  description={catalogSettings?.metaDescription || DEFAULT_CATALOG.metaDescription}
+  title={getLocalizedValue(catalogSettings?.metaTitle, currentLang) || DEFAULT_CATALOG.metaTitle}
+  description={getLocalizedValue(catalogSettings?.metaDescription, currentLang) || DEFAULT_CATALOG.metaDescription}
   image={mergedProducts[0]?.image}
   preloadHeroImage={catalogHeroPreload}
 >
@@ -95,13 +95,13 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     <!-- 1. Catalog Hero Header (Apple Rail Narrow) -->
     <section class="catalog-hero-header apple-rail-narrow text-center mb-6 sm:mb-9 space-y-1.5 sm:space-y-2.5">
       <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-semibold text-[#52525b] uppercase tracking-wider">
-        <span>{catalogSettings?.badgeText || DEFAULT_CATALOG.badgeText}</span>
+        <span>{getLocalizedValue(catalogSettings?.badgeText, currentLang) || DEFAULT_CATALOG.badgeText}</span>
       </div>
       <h1 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
-        {catalogSettings?.title || DEFAULT_CATALOG.title}
+        {getLocalizedValue(catalogSettings?.title, currentLang) || DEFAULT_CATALOG.title}
       </h1>
       <p class="text-xs sm:text-sm text-[#52525b] max-w-xl mx-auto font-normal leading-relaxed">
-        {catalogSettings?.subtitle || DEFAULT_CATALOG.subtitle}
+        {getLocalizedValue(catalogSettings?.subtitle, currentLang) || DEFAULT_CATALOG.subtitle}
       </p>
     </section>
 
@@ -152,7 +152,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               type="text"
               id="catalog-search-input"
               aria-label="Search product silhouettes or SKUs"
-              placeholder={catalogSettings?.searchPlaceholder || DEFAULT_CATALOG.searchPlaceholder}
+              placeholder={getLocalizedValue(catalogSettings?.searchPlaceholder, currentLang) || DEFAULT_CATALOG.searchPlaceholder}
               class="w-full pl-8 pr-7 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b] transition-all"
             />
             <button
@@ -286,9 +286,9 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h3 class="text-base font-semibold text-[#1d1d1f]">{catalogSettings?.emptyStateHeading || DEFAULT_CATALOG.emptyStateHeading}</h3>
+        <h3 class="text-base font-semibold text-[#1d1d1f]">{getLocalizedValue(catalogSettings?.emptyStateHeading, currentLang) || DEFAULT_CATALOG.emptyStateHeading}</h3>
         <p class="text-xs text-[#86868b] max-w-sm mx-auto">
-          {catalogSettings?.emptyStateText || DEFAULT_CATALOG.emptyStateText}
+          {getLocalizedValue(catalogSettings?.emptyStateText, currentLang) || DEFAULT_CATALOG.emptyStateText}
         </p>
         <button
           type="button"
@@ -313,7 +313,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
         <!-- End-of-List Divider (Compact padding) -->
         <div id="catalog-all-loaded-notice" class="hidden items-center justify-center gap-3 text-xs text-[#86868b] select-none">
           <span class="w-10 sm:w-16 h-px bg-black/10"></span>
-          <span class="font-normal tracking-wide">{catalogSettings?.endOfCatalogText || DEFAULT_CATALOG.endOfCatalogText}</span>
+          <span class="font-normal tracking-wide">{getLocalizedValue(catalogSettings?.endOfCatalogText, currentLang) || DEFAULT_CATALOG.endOfCatalogText}</span>
           <span class="w-10 sm:w-16 h-px bg-black/10"></span>
         </div>
       </div>

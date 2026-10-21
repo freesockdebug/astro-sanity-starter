@@ -3,7 +3,7 @@ import { type SiteConfig, type CustomImage } from 'types';
 import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget } from '@components';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
-import { getLangFromUrl, switchLocalePath, LANGUAGES, type SupportedLocale } from '@i18n';
+import { getLangFromUrl, switchLocalePath, LANGUAGES, type SupportedLocale, getLocalizedValue } from '@i18n';
 
 import '../styles/globals.css';
 
@@ -22,7 +22,8 @@ const { addTitleSuffix, description, image, bodyClass, mainClass, preloadHeroIma
 const currentLang = getLangFromUrl(Astro.url);
 const configData: SiteConfig = (await fetchData()) || {};
 SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
-const titleSuffix = configData.titleSuffix && addTitleSuffix !== false ? configData.titleSuffix : undefined;
+const rawTitleSuffix = configData.titleSuffix && addTitleSuffix !== false ? configData.titleSuffix : undefined;
+const titleSuffix = rawTitleSuffix ? (typeof rawTitleSuffix === 'object' ? getLocalizedValue(rawTitleSuffix, currentLang) : rawTitleSuffix) : undefined;
 const title = [Astro.props.title, titleSuffix].filter(Boolean).join(' | ');
 
 const rawImageSrc = typeof image === 'string' ? image : image?.src;
@@ -110,8 +111,8 @@ function formatCanonicalURL(url: string | URL) {
         {configData?.enableWhatsApp && configData?.whatsAppNumber && (
             <WhatsAppWidget
                 phoneNumber={configData.whatsAppNumber}
-                prefillText={configData.whatsAppPrefillText}
-                tooltip={configData.whatsAppTooltip}
+                prefillText={getLocalizedValue(configData.whatsAppPrefillText, currentLang)}
+                tooltip={getLocalizedValue(configData.whatsAppTooltip, currentLang)}
             />
         )}
 

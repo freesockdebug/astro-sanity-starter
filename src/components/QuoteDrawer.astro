@@ -2,7 +2,7 @@
 // src/components/QuoteDrawer.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { DEFAULT_RFQ } from '@data/defaults';
-import { getLangFromUrl, useTranslations } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
 
 interface Props {
   settings?: any;
@@ -14,16 +14,16 @@ const t = useTranslations(currentLang);
 const { settings } = Astro.props;
 const rfqSettings = settings ?? (await fetchRfqSettings());
 
-const drawerTitle = rfqSettings?.drawerTitle || t('rfq.drawerTitle');
-const drawerSubtitle = rfqSettings?.drawerSubtitle || DEFAULT_RFQ.drawerSubtitle;
-const drawerStatus = rfqSettings?.drawerStatus || DEFAULT_RFQ.drawerStatus;
-const drawerEmptyTitle = rfqSettings?.drawerEmptyTitle || DEFAULT_RFQ.drawerEmptyTitle;
-const drawerEmptyDesc = rfqSettings?.drawerEmptyDesc || t('rfq.emptyMessage');
-const submitButtonText = rfqSettings?.drawerSubmitButtonText || t('rfq.submitQuote');
-const successFeedbackMessage = rfqSettings?.drawerSuccessMessage || DEFAULT_RFQ.drawerSuccessMessage;
+const drawerTitle = getLocalizedValue(rfqSettings?.drawerTitle, currentLang) || t('rfq.drawerTitle');
+const drawerSubtitle = getLocalizedValue(rfqSettings?.drawerSubtitle, currentLang) || DEFAULT_RFQ.drawerSubtitle;
+const drawerStatus = getLocalizedValue(rfqSettings?.drawerStatus, currentLang) || DEFAULT_RFQ.drawerStatus;
+const drawerEmptyTitle = getLocalizedValue(rfqSettings?.drawerEmptyTitle, currentLang) || DEFAULT_RFQ.drawerEmptyTitle;
+const drawerEmptyDesc = getLocalizedValue(rfqSettings?.drawerEmptyDesc, currentLang) || t('rfq.emptyMessage');
+const submitButtonText = getLocalizedValue(rfqSettings?.drawerSubmitButtonText, currentLang) || t('rfq.submitQuote');
+const successFeedbackMessage = getLocalizedValue(rfqSettings?.drawerSuccessMessage, currentLang) || DEFAULT_RFQ.drawerSuccessMessage;
 const swatchKitSku = rfqSettings?.swatchKitSku || DEFAULT_RFQ.swatchKitSku;
-const swatchKitTitle = rfqSettings?.swatchKitTitle || DEFAULT_RFQ.swatchKitTitle;
-const swatchKitDesc = rfqSettings?.swatchKitDesc || DEFAULT_RFQ.swatchKitDesc;
+const swatchKitTitle = getLocalizedValue(rfqSettings?.swatchKitTitle, currentLang) || DEFAULT_RFQ.swatchKitTitle;
+const swatchKitDesc = getLocalizedValue(rfqSettings?.swatchKitDesc, currentLang) || DEFAULT_RFQ.swatchKitDesc;
 const swatchKitImageUrl = rfqSettings?.swatchKitImage?.asset?.url || rfqSettings?.swatchKitImageUrl || DEFAULT_RFQ.swatchKitImageUrl;
 const swatchKitMoq = rfqSettings?.swatchKitMoq || DEFAULT_RFQ.swatchKitMoq;
 

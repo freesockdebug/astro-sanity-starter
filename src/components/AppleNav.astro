@@ -33,6 +33,9 @@ const navLinks = allLinks.filter((l: any) => l._type === 'actionLink' || l._type
 function getLocalizedNavLabel(link: any): string {
   const url = link.url || '';
   const val = getLocalizedValue(link.label, currentLang);
+  if (val && typeof val === 'string' && val.trim() !== '') {
+    return cleanEnglishText(val) || val;
+  }
   if (url.includes('product') || url.includes('#collection')) return t('nav.products');
   if (url.includes('about')) return t('nav.about');
   if (url.includes('private') || url.includes('oem')) return t('nav.privateLabel');

@@ -14,22 +14,22 @@ export default defineType({
     },
     {
       name: 'buttons',
-      title: '✏️ 全站按钮文案与默认链接 (Button Labels & Store URLs)',
+      title: '✏️ 全站按钮文案与默认链接 (Button Labels & Store URLs - 多语言)',
       options: { collapsible: true, collapsed: false },
     },
     {
       name: 'drawer',
-      title: '🛒 Quote Basket Drawer (右侧询盘抽屉全局文案)',
+      title: '🛒 Quote Basket Drawer (右侧询盘抽屉全局文案 - 多语言)',
       options: { collapsible: true, collapsed: true },
     },
     {
       name: 'swatch',
-      title: '📦 Swatch Kit Defaults (样卡申领默认项配置)',
+      title: '📦 Swatch Kit Defaults (样卡申领默认项配置 - 多语言)',
       options: { collapsible: true, collapsed: true },
     },
     {
       name: 'feedback',
-      title: '✉️ Feedback & Notices (表单提交提示语)',
+      title: '✉️ Feedback & Notices (表单提交提示语 - 多语言)',
       options: { collapsible: true, collapsed: true },
     },
   ],
@@ -155,9 +155,9 @@ export default defineType({
     // -------------------------------------------------------------
     defineField({
       name: 'btnSampleAmazonText',
-      title: 'Product Page: Buy Sample Text (单品买样按钮文案)',
-      type: 'string',
-      initialValue: 'Order Sample on Amazon',
+      title: 'Product Page: Buy Sample Text (单品买样按钮文案 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'buttons',
     }),
     defineField({
@@ -170,30 +170,30 @@ export default defineType({
     }),
     defineField({
       name: 'btnAddToQuoteText',
-      title: 'Product Page: Add to Quote (单品页加车按钮文案)',
-      type: 'string',
-      initialValue: 'Add to Quote Basket',
+      title: 'Product Page: Add to Quote (单品页加车按钮文案 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'buttons',
     }),
     defineField({
       name: 'cardQuoteBtnText',
-      title: 'Catalog Card: Quote Button (列表卡片加车按钮文案)',
-      type: 'string',
-      initialValue: 'Quote',
+      title: 'Catalog Card: Quote Button (列表卡片加车按钮文案 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'buttons',
     }),
     defineField({
       name: 'heroSwatchBtnText',
-      title: 'Hero / Swatch Button Text (样卡申领按钮默认文案)',
-      type: 'string',
-      initialValue: 'Request Swatch Kit',
+      title: 'Hero / Swatch Button Text (样卡申领按钮默认文案 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'buttons',
     }),
     defineField({
       name: 'drawerSubmitButtonText',
-      title: 'Drawer Submit Button (抽屉提交按钮文案)',
-      type: 'string',
-      initialValue: 'Submit Request for Quote',
+      title: 'Drawer Submit Button (抽屉提交按钮文案 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'buttons',
     }),
 
@@ -202,40 +202,37 @@ export default defineType({
     // -------------------------------------------------------------
     defineField({
       name: 'drawerTitle',
-      title: 'Drawer Header Title (抽屉标题)',
-      type: 'string',
-      initialValue: 'Quote Basket',
+      title: 'Drawer Header Title (抽屉标题 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'drawer',
-      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'drawerSubtitle',
-      title: 'Drawer Subtitle (抽屉眉题/说明)',
-      type: 'string',
-      initialValue: 'Wholesale RFQ & Sample Dispatch',
+      title: 'Drawer Subtitle (抽屉眉题/说明 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'drawer',
     }),
     defineField({
       name: 'drawerStatus',
-      title: 'Status Badge (右上角时效标签)',
-      type: 'string',
-      initialValue: '48h Express Dispatch',
+      title: 'Status Badge (右上角时效标签 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'drawer',
     }),
     defineField({
       name: 'drawerEmptyTitle',
-      title: 'Empty State Title (空车提示主标题)',
-      type: 'string',
-      initialValue: 'Your Quote Basket is empty',
+      title: 'Empty State Title (空车提示主标题 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'drawer',
     }),
     defineField({
       name: 'drawerEmptyDesc',
-      title: 'Empty State Description (空车引导文案)',
-      type: 'text',
-      rows: 2,
-      initialValue:
-        'Browse our ready-to-order capsule lines and add styles to request formal wholesale quotes, custom branding, and physical samples.',
+      title: 'Empty State Description (空车引导文案 - 多语言)',
+      type: 'localeText',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'drawer',
     }),
 
@@ -253,17 +250,17 @@ export default defineType({
     }),
     defineField({
       name: 'swatchKitTitle',
-      title: 'Swatch Kit Title (样卡默认项标题)',
-      type: 'string',
-      initialValue: 'Curated Swatch Kit & Fabric Color Book',
+      title: 'Swatch Kit Title (样卡默认项标题 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'swatch',
       description: '当买家点击“申领色卡/样卡”时，自动加入询盘车的样卡名称',
     }),
     defineField({
       name: 'swatchKitDesc',
-      title: 'Swatch Kit Subtitle (样卡默认项说明)',
-      type: 'string',
-      initialValue: 'Physical fabric swatches & yarn color dossier via DHL Express',
+      title: 'Swatch Kit Subtitle (样卡默认项说明 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'swatch',
     }),
     defineField({
@@ -296,30 +293,32 @@ export default defineType({
     // -------------------------------------------------------------
     defineField({
       name: 'drawerSuccessMessage',
-      title: 'Success Feedback Message (提交成功提示语)',
-      type: 'text',
-      rows: 2,
-      initialValue:
-        '✓ Quote request received! Our B2B specialist will reply with official wholesale quotation and PI within 24 hours.',
+      title: 'Success Feedback Message (提交成功提示语 - 多语言)',
+      type: 'localeText',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'feedback',
     }),
     defineField({
       name: 'drawerErrorMessage',
-      title: 'Error Message (网络或提交失败提示语)',
-      type: 'string',
-      initialValue: 'Submission failed. Please check your connection and try again.',
+      title: 'Error Message (网络或提交失败提示语 - 多语言)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
       fieldset: 'feedback',
     }),
   ],
   preview: {
     select: {
-      title: 'drawerTitle',
-      subtitle: 'drawerSubtitle',
+      titleEn: 'drawerTitle.en',
+      rawTitle: 'drawerTitle',
+      subtitleEn: 'drawerSubtitle.en',
+      rawSubtitle: 'drawerSubtitle',
     },
-    prepare({ title, subtitle }) {
+    prepare({ titleEn, rawTitle, subtitleEn, rawSubtitle }) {
+      const resolvedTitle = typeof rawTitle === 'string' ? rawTitle : titleEn;
+      const resolvedSubtitle = typeof rawSubtitle === 'string' ? rawSubtitle : subtitleEn;
       return {
-        title: title || 'B2B RFQ Settings',
-        subtitle: subtitle || '全站按钮显隐与询盘车文案配置',
+        title: resolvedTitle || 'B2B RFQ Settings',
+        subtitle: resolvedSubtitle || '全站按钮显隐与询盘车文案配置',
       };
     },
   },

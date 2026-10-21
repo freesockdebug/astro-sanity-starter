@@ -14,9 +14,9 @@ export default defineType({
   fields: [
     defineField({
       name: 'label',
-      title: 'Label',
-      type: 'string',
-      validation: (Rule) => Rule.required(),
+      title: 'Label (链接文本 - 多语言)',
+      type: 'localeString',
+      options: {collapsible: true, collapsed: true},
       group: 'content',
     }),
     defineField({
@@ -36,12 +36,15 @@ export default defineType({
   ],
   preview: {
     select: {
-      label: 'label',
+      titleEn: 'label.en',
+      rawLabel: 'label',
+      subtitle: 'url',
     },
-    prepare(selection) {
+    prepare({titleEn, rawLabel, subtitle}) {
+      const resolved = typeof rawLabel === 'string' ? rawLabel : titleEn;
       return {
-        title: selection.label,
-        subtitle: 'Link',
+        title: resolved || subtitle || 'Link',
+        subtitle: subtitle || 'Link',
       }
     },
   },

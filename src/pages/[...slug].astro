@@ -52,7 +52,7 @@ const localizedMetaDescription = (metaDescription && typeof metaDescription === 
 
 {
     page && (
-        <Layout title={metaTitle ?? title} description={metaDescription} image={socialImage} preloadHeroImage={heroPreload}>
+        <Layout title={localizedMetaTitle || localizedTitle} description={localizedMetaDescription} image={socialImage} preloadHeroImage={heroPreload}>
             <Fragment>
                 {sections?.length &&
                     sections.map((section: any) => {
