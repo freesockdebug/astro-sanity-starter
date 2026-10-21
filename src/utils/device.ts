@@ -119,8 +119,8 @@ export function getClientScreenInfo(): ClientScreenInfo {
 
   const remainingRight = clientWidth - blockRight;
 
-  // On desktop (width >= 1024px) with reasonable gutter (>= 32px)
-  if (isDesktop && remainingRight >= 32) {
+  // On desktop (width >= 1024px) with reasonable gutter (>= 48px)
+  if (isDesktop && remainingRight >= 48) {
     const naturalCenterX = Math.round(blockRight + remainingRight / 2);
 
     // Safe edge clamping: ensure the widest component (Top button, 44px width)
