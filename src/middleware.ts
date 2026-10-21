@@ -16,6 +16,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
 
+  // 2. Completely bypass caching in local development (Vite dev server / workerd)
+  if (import.meta.env.DEV) {
+    return next();
+  }
+
   // 2. Intercept missing /_astro/ static assets: if an asset request reaches SSR Worker,
   // it does not exist in the static bucket. Return explicit 404 to prevent falling through to dynamic HTML routes.
   if (pathname.startsWith('/_astro/')) {
