@@ -17,14 +17,15 @@ const brandTitle = header?.title || DEFAULT_BRAND_TITLE;
 const logoImage = header?.logo?.src ? SanityImageService.logo(header.logo.src) : undefined;
 const allLinks = header?.navLinks || [];
 const actionButton = allLinks.find((l: any) => l._type === 'actionButton');
-const isSwatchNav = (actionButton?.label || "").toLowerCase().includes("swatch") || actionButton?.url === "#inquiry";
+const actionBtnRawText = getLocalizedValue(actionButton?.label, currentLang);
+const isSwatchNav = (actionBtnRawText || "").toLowerCase().includes("swatch") || actionButton?.url === "#inquiry";
 const showNavActionButton = actionButton
   ? RfqSettingsService.isButtonVisible({
       propOverride: header?.showActionButton,
       settingOverride: rfqSettings?.showNavActionButton,
       isSwatchAction: isSwatchNav,
       globalSwatchSetting: rfqSettings?.showSwatchKitButton,
-      buttonText: actionButton.label,
+      buttonText: actionBtnRawText,
     })
   : false;
 const navLinks = allLinks.filter((l: any) => l._type === 'actionLink' || l._type === undefined);

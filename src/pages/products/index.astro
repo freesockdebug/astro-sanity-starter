@@ -50,7 +50,6 @@ const allLabel = getLocalizedValue(catalogSettings?.allSilhouettesLabel, current
 const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
 
 const BATCH_SIZE = 20;
-const initialProducts = mergedProducts.slice(0, BATCH_SIZE);
 const minimalProducts = mergedProducts.map((p: any) => {
   const locTitle = getLocalizedValue(p.title, currentLang);
   const locShortTitle = getLocalizedValue(p.shortTitle, currentLang) || locTitle;
@@ -71,6 +70,7 @@ const minimalProducts = mergedProducts.map((p: any) => {
     gauge: p.gauge
   };
 });
+const initialProducts = minimalProducts.slice(0, BATCH_SIZE);
 const catalogJson = JSON.stringify(minimalProducts);
 
 const firstCardImg = mergedProducts[0]?.image;

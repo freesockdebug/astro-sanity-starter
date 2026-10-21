@@ -3,7 +3,7 @@
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_SPEC_MATRIX, DEFAULT_RFQ } from '@data/defaults';
-import { getLangFromUrl, useTranslations, getLocalizedPath } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedPath, getLocalizedValue } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -106,7 +106,7 @@ const rfqSettings = await fetchRfqSettings();
 const rawMacroImage = propMacroImage?.trim() || DEFAULT_SPEC_MATRIX.macroImage;
 const macroImage = SanityImageService.macro(rawMacroImage, 1200);
 const macroSrcSet = SanityImageService.srcSet(rawMacroImage, [360, 600, 1000]);
-const primaryButtonText = propPrimaryText?.trim() || (currentLang !== 'en' ? t('hero.requestSwatch') : (rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText));
+const primaryButtonText = propPrimaryText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang) || t('hero.requestSwatch');
 const resolvedSecondaryText = (secondaryButtonText && secondaryButtonText !== DEFAULT_SPEC_MATRIX.secondaryButtonText) ? secondaryButtonText : (currentLang !== 'en' ? t('hero.exploreLineSheets') : secondaryButtonText);
 
 const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";

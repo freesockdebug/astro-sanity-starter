@@ -82,12 +82,12 @@ const currentProductTagline = getLocalizedValue(currentProduct.tagline, currentL
 const prevProductTitle = getLocalizedValue(prevProduct.shortTitle || prevProduct.title, currentLang);
 const nextProductTitle = getLocalizedValue(nextProduct.shortTitle || nextProduct.title, currentLang);
 
-const addToQuoteBtnText = currentProduct.addToQuoteButtonText || rfqSettings?.btnAddToQuoteText || t('pdp.addToQuote');
+const addToQuoteBtnText = currentProduct.addToQuoteButtonText || getLocalizedValue(rfqSettings?.btnAddToQuoteText, currentLang) || t('pdp.addToQuote');
 
 // Amazon Sample Buying Link Resolution
 const rawAmazonUrl = currentProduct.amazonUrl || (currentProduct.amazonAsin ? `https://www.amazon.com/dp/${currentProduct.amazonAsin.trim()}` : null);
 const amazonSampleUrl = rawAmazonUrl || rfqSettings?.defaultAmazonStoreUrl || `https://www.amazon.com/s?k=${encodeURIComponent(currentProductTitle || DEFAULT_BRAND_TITLE)}`;
-const sampleButtonText = currentProduct.sampleButtonText || rfqSettings?.btnSampleAmazonText || t('pdp.buySampleAmazon');
+const sampleButtonText = currentProduct.sampleButtonText || getLocalizedValue(rfqSettings?.btnSampleAmazonText, currentLang) || t('pdp.buySampleAmazon');
 
 const showAddToQuoteButton = rfqSettings?.showProductAddToQuoteButton ?? true;
 const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;

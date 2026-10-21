@@ -2,7 +2,7 @@
 // src/components/SwatchInquiry.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { DEFAULT_SWATCH_INQUIRY } from '@data/defaults';
-import { getLangFromUrl, useTranslations } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -32,7 +32,7 @@ const t = useTranslations(currentLang);
 const rfqSettings = await fetchRfqSettings();
 const showInquirySection = propShowSection !== undefined ? propShowSection : (rfqSettings?.showInquirySection ?? true);
 const showSwatchButton = propShowButton !== undefined ? Boolean(propShowButton) : true;
-const displayButtonText = propButtonText?.trim() || (currentLang !== 'en' ? t('hero.requestSwatch') : (rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_SWATCH_INQUIRY.buttonText));
+const displayButtonText = propButtonText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang) || t('hero.requestSwatch');
 
 const I18N_COPY: Record<string, { tagText: string; tagSubtitle: string; verified: string; included: string; note: string }> = {
   de: {
