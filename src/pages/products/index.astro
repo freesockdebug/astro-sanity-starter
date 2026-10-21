@@ -295,7 +295,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
           id="catalog-reset-btn"
           class="px-4 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer"
         >
-          Reset All Filters
+          {t('catalog.resetFilters')}
         </button>
       </div>
 
@@ -324,7 +324,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   <script type="application/json" id="catalog-products-data" set:html={catalogJson}></script>
 </Layout>
 
-<script define:vars={{ cardQuoteText, currentLang }}>
+<script define:vars={{ cardQuoteText, currentLang, moqPrefix: t('catalog.moqPrefix') }}>
   // Catalog State Management
   const catalogDataEl = document.getElementById('catalog-products-data');
   const allProducts = catalogDataEl ? JSON.parse(catalogDataEl.textContent || '[]') : [];
@@ -462,7 +462,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <span class="text-sm font-mono tracking-tight font-bold">${item.wholesalePrice || (item.category === 'silk' ? '32.00' : item.category === 'cashmere' ? '45.00' : '18.50')}</span>
             <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/pc</span>
           </div>
-          <span class="text-[9px] text-[#52525b] font-mono mt-0.5">MOQ ${item.moq || '200'}</span>
+          <span class="text-[9px] text-[#52525b] font-mono mt-0.5">${moqPrefix} ${item.moq || '200'}</span>
         </div>
 
         <button

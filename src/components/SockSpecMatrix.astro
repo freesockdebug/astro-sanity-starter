@@ -3,6 +3,7 @@
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_SPEC_MATRIX, DEFAULT_RFQ } from '@data/defaults';
+import { getLangFromUrl, useTranslations } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -97,6 +98,9 @@ const {
   bento5Description = DEFAULT_SPEC_MATRIX.bento5Description,
   bento5FooterNote = DEFAULT_SPEC_MATRIX.bento5FooterNote
 } = Astro.props;
+
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
 
 const rfqSettings = await fetchRfqSettings();
 const rawMacroImage = propMacroImage?.trim() || DEFAULT_SPEC_MATRIX.macroImage;
@@ -259,7 +263,7 @@ const cleanDescription = (description || "").replace(/^\d+/, "").trim();
 
     <!-- Mobile Swipe Visual Hint -->
     <div class="flex lg:hidden items-center justify-center gap-1.5 pt-0.5 text-[11px] font-medium text-[#86868b]">
-      <span>Swipe to explore 5 technical specs</span>
+      <span>{t('specs.swipeHint')}</span>
       <span aria-hidden="true">→</span>
     </div>
 

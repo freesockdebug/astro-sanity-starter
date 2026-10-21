@@ -2,6 +2,7 @@
 // src/components/ManufacturingCapabilities.astro
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { DEFAULT_MANUFACTURING, DEFAULT_RFQ } from '@data/defaults';
+import { getLangFromUrl, useTranslations } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -23,6 +24,9 @@ const {
   swatchSku,
   showActionButton: propShowAction
 } = Astro.props;
+
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
 
 const rfqSettings = await fetchRfqSettings();
 const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText;
@@ -96,7 +100,7 @@ const footers = [
 
     <!-- Mobile Swipe Visual Hint -->
     <div class="flex md:hidden items-center justify-center gap-1.5 pt-2.5 text-[11px] font-medium text-[#86868b]">
-      <span>Swipe to view capabilities</span>
+      <span>{t('manufacturing.swipeHint')}</span>
       <span aria-hidden="true">→</span>
     </div>
 

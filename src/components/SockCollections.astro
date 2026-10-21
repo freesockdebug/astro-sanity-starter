@@ -41,7 +41,7 @@ const {
 const siteConfig = await fetchSiteConfig();
 const rfqSettings = await fetchRfqSettings();
 const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText;
-const resolvedCardQuoteText = cardQuoteButtonText || rfqSettings?.cardQuoteBtnText || DEFAULT_RFQ.cardQuoteBtnText;
+const resolvedCardQuoteText = cardQuoteButtonText || rfqSettings?.cardQuoteBtnText || t('catalog.requestQuote');
 
 // Only display products added to this section in Sanity Studio; unadded products fall back to normalized catalog
 const normalizedProducts = propProducts !== undefined
@@ -95,10 +95,10 @@ const showCardQuoteButton = propShowCardQuote !== undefined
           </a>
         )}
         <a
-          href="/products"
+          href={getLocalizedPath('/products', currentLang)}
           class="px-3.5 py-1.5 rounded-full text-xs font-medium bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] border border-black/5 transition-all inline-flex items-center gap-1 shadow-2xs"
         >
-          <span>Browse All</span>
+          <span>{t('catalog.browseAll')}</span>
           <span aria-hidden="true">›</span>
         </a>
         <!-- Desktop Carousel Navigation Buttons -->
@@ -219,8 +219,8 @@ const showCardQuoteButton = propShowCardQuote !== undefined
 
     <!-- Swipe / Scroll Visual Hint -->
     <div id="collections-scroll-hint" class="shrink-0 flex items-center justify-center gap-1.5 pt-1 text-[11px] font-medium text-[#86868b]">
-      <span class="sm:hidden">Swipe to explore all silhouettes</span>
-      <span class="hidden sm:inline">Scroll horizontally or use arrows to explore all silhouettes</span>
+      <span class="sm:hidden">{t('collections.swipeHint')}</span>
+      <span class="hidden sm:inline">{t('collections.scrollHint')}</span>
       <span aria-hidden="true">→</span>
     </div>
   </div>

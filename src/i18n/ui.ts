@@ -35,11 +35,15 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'catalog.sortMoq': 'MOQ: Low to High',
     'catalog.sortTitle': 'Title: A to Z',
     'catalog.loadingMore': 'Loading more styles...',
+    'catalog.resetFilters': 'Reset All Filters',
+    'catalog.browseAll': 'Browse All',
+    'catalog.requestQuote': 'Request Quote',
 
     // Product Detail Page (PDP)
     'pdp.addToQuote': 'Add to Quote Basket',
     'pdp.buySampleAmazon': 'Buy Sample on Amazon',
     'pdp.downloadSpec': 'Request Tech Pack / PDF',
+    'pdp.downloadSpecSheet': 'Download Spec Sheet (PDF)',
     'pdp.specs': 'Manufacturing Specifications',
     'pdp.wholesaleTiers': 'Wholesale Volume Pricing',
     'pdp.unitPrice': 'Unit Price',
@@ -59,12 +63,27 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.emptyMessage': 'Your inquiry basket is empty. Select styles from the catalog.',
     'rfq.submitQuote': 'Submit Official RFQ',
     'rfq.sampleRequest': 'Request Swatch & Prototype',
+    'rfq.companyPlaceholder': 'Company / Brand Name *',
+    'rfq.buyerNamePlaceholder': 'Buyer Name',
     'rfq.emailPlaceholder': 'Work Email Address *',
     'rfq.phonePlaceholder': 'WhatsApp / Phone',
     'rfq.destinationPlaceholder': 'Shipping Country & City (for freight estimate)',
     'rfq.requirementsPlaceholder': 'Customization requirements (Custom logo, Pantone color, packaging, target price)...',
     'rfq.clearAll': 'Clear all',
     'rfq.remove': 'Remove',
+
+    // Section Hints
+    'collections.swipeHint': 'Swipe to explore all silhouettes',
+    'collections.scrollHint': 'Scroll horizontally or use arrows to explore all silhouettes',
+    'specs.swipeHint': 'Swipe to explore 5 technical specs',
+    'manufacturing.swipeHint': 'Swipe to view capabilities',
+
+    // Stages
+    'stage.overview': 'Overview',
+    'stage.specs': 'Specification',
+    'stage.collections': 'Silhouettes',
+    'stage.infrastructure': 'Infrastructure',
+    'stage.sampleRequest': 'Sample Request',
 
     // General
     'common.backToTop': 'TOP',
@@ -95,11 +114,15 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'catalog.sortMoq': 'Mindestmenge: aufsteigend',
     'catalog.sortTitle': 'Titel: A bis Z',
     'catalog.loadingMore': 'Weitere Modelle laden...',
+    'catalog.resetFilters': 'Filter zurücksetzen',
+    'catalog.browseAll': 'Alle ansehen',
+    'catalog.requestQuote': 'Angebot anfordern',
 
     // Product Detail Page (PDP)
     'pdp.addToQuote': 'Zur Anfrageliste hinzufügen',
     'pdp.buySampleAmazon': 'Muster bei Amazon bestellen',
     'pdp.downloadSpec': 'Technisches Datenblatt anfordern',
+    'pdp.downloadSpecSheet': 'Technisches Datenblatt herunterladen (PDF)',
     'pdp.specs': 'Fertigungsspezifikationen',
     'pdp.wholesaleTiers': 'Großhandelsstaffelpreise',
     'pdp.unitPrice': 'Stückpreis',
@@ -119,12 +142,27 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.emptyMessage': 'Ihre Anfrageliste ist leer. Wählen Sie Artikel aus dem Katalog.',
     'rfq.submitQuote': 'Offizielle Preisanfrage senden',
     'rfq.sampleRequest': 'Muster anfordern',
+    'rfq.companyPlaceholder': 'Unternehmen / Markenname *',
+    'rfq.buyerNamePlaceholder': 'Name des Einkäufers',
     'rfq.emailPlaceholder': 'Geschäftliche E-Mail-Adresse *',
     'rfq.phonePlaceholder': 'WhatsApp / Telefon',
     'rfq.destinationPlaceholder': 'Lieferland & Stadt (für Frachtkalkulation)',
     'rfq.requirementsPlaceholder': 'Anforderungen (eigenes Logo, Pantone-Farbe, Verpackung, Zielpreis)...',
     'rfq.clearAll': 'Alles leeren',
     'rfq.remove': 'Entfernen',
+
+    // Section Hints
+    'collections.swipeHint': 'Wischen, um alle Modelle zu entdecken',
+    'collections.scrollHint': 'Horizontal scrollen oder Pfeile nutzen',
+    'specs.swipeHint': 'Wischen für 5 technische Daten',
+    'manufacturing.swipeHint': 'Wischen für Fertigungskapazitäten',
+
+    // Stages
+    'stage.overview': 'Überblick',
+    'stage.specs': 'Spezifikation',
+    'stage.collections': 'Modelle',
+    'stage.infrastructure': 'Infrastruktur',
+    'stage.sampleRequest': 'Musteranfrage',
 
     // General
     'common.backToTop': 'NACH OBEN',
@@ -155,11 +193,15 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'catalog.sortMoq': 'Quantité min.: croissant',
     'catalog.sortTitle': 'Titre: A à Z',
     'catalog.loadingMore': 'Chargement de modèles supplémentaires...',
+    'catalog.resetFilters': 'Réinitialiser les filtres',
+    'catalog.browseAll': 'Tout parcourir',
+    'catalog.requestQuote': 'Demander un devis',
 
     // Product Detail Page (PDP)
     'pdp.addToQuote': 'Ajouter à la demande de devis',
     'pdp.buySampleAmazon': 'Acheter un échantillon sur Amazon',
     'pdp.downloadSpec': 'Demander la fiche technique',
+    'pdp.downloadSpecSheet': 'Télécharger la fiche technique (PDF)',
     'pdp.specs': 'Spécifications de fabrication',
     'pdp.wholesaleTiers': 'Tarifs dégressifs de gros',
     'pdp.unitPrice': 'Prix unitaire',
@@ -179,12 +221,27 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.emptyMessage': 'Votre panier de devis est vide. Sélectionnez des modèles dans le catalogue.',
     'rfq.submitQuote': 'Soumettre la demande de devis',
     'rfq.sampleRequest': 'Demander un échantillon',
+    'rfq.companyPlaceholder': 'Entreprise / Nom de marque *',
+    'rfq.buyerNamePlaceholder': 'Nom de l’acheteur',
     'rfq.emailPlaceholder': 'Adresse e-mail professionnelle *',
     'rfq.phonePlaceholder': 'WhatsApp / Téléphone',
     'rfq.destinationPlaceholder': 'Pays & Ville de livraison (pour devis transport)',
     'rfq.requirementsPlaceholder': 'Besoins de personnalisation (logo, couleur Pantone, emballage, prix cible)...',
     'rfq.clearAll': 'Tout effacer',
     'rfq.remove': 'Supprimer',
+
+    // Section Hints
+    'collections.swipeHint': 'Balayez pour découvrir tous les modèles',
+    'collections.scrollHint': 'Faites défiler horizontalement ou utilisez les flèches',
+    'specs.swipeHint': 'Balayez pour voir 5 spécifications',
+    'manufacturing.swipeHint': 'Balayez pour voir les capacités',
+
+    // Stages
+    'stage.overview': 'Aperçu',
+    'stage.specs': 'Spécifications',
+    'stage.collections': 'Silhouettes',
+    'stage.infrastructure': 'Infrastructure',
+    'stage.sampleRequest': 'Demande d’échantillons',
 
     // General
     'common.backToTop': 'HAUT',
@@ -215,11 +272,15 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'catalog.sortMoq': 'Pedido mín.: de menor a mayor',
     'catalog.sortTitle': 'Título: A a Z',
     'catalog.loadingMore': 'Cargando más estilos...',
+    'catalog.resetFilters': 'Restablecer filtros',
+    'catalog.browseAll': 'Explorar todo',
+    'catalog.requestQuote': 'Solicitar cotización',
 
     // Product Detail Page (PDP)
     'pdp.addToQuote': 'Añadir a la cotización',
     'pdp.buySampleAmazon': 'Comprar muestra en Amazon',
     'pdp.downloadSpec': 'Solicitar ficha técnica / PDF',
+    'pdp.downloadSpecSheet': 'Descargar ficha técnica (PDF)',
     'pdp.specs': 'Especificaciones de fabricación',
     'pdp.wholesaleTiers': 'Precios mayoristas por volumen',
     'pdp.unitPrice': 'Precio unitario',
@@ -239,12 +300,27 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.emptyMessage': 'Su cesta está vacía. Seleccione modelos del catálogo.',
     'rfq.submitQuote': 'Enviar cotización formal',
     'rfq.sampleRequest': 'Solicitar muestra de tejido',
+    'rfq.companyPlaceholder': 'Empresa / Nombre de marca *',
+    'rfq.buyerNamePlaceholder': 'Nombre del comprador',
     'rfq.emailPlaceholder': 'Correo electrónico corporativo *',
     'rfq.phonePlaceholder': 'WhatsApp / Teléfono',
     'rfq.destinationPlaceholder': 'País y ciudad de entrega (para estimación de flete)',
     'rfq.requirementsPlaceholder': 'Requisitos de personalización (logotipo, color Pantone, embalaje, precio objetivo)...',
     'rfq.clearAll': 'Borrar todo',
     'rfq.remove': 'Eliminar',
+
+    // Section Hints
+    'collections.swipeHint': 'Desliza para ver todos los estilos',
+    'collections.scrollHint': 'Desplázate horizontalmente o usa las flechas',
+    'specs.swipeHint': 'Desliza para ver 5 especificaciones técnicas',
+    'manufacturing.swipeHint': 'Desliza para ver las capacidades',
+
+    // Stages
+    'stage.overview': 'Descripción general',
+    'stage.specs': 'Especificaciones',
+    'stage.collections': 'Estilos',
+    'stage.infrastructure': 'Infraestructura',
+    'stage.sampleRequest': 'Solicitud de muestra',
 
     // General
     'common.backToTop': 'ARRIBA',

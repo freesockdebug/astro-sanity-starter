@@ -11,7 +11,7 @@ import {
   DEFAULT_FOOTER_COLUMNS,
   DEFAULT_LEGAL_LINKS,
 } from '@data/defaults';
-import { getLangFromUrl, useTranslations } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedPath } from '@i18n';
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
@@ -75,7 +75,7 @@ const legalLinks = rawLegalLinks.map((l: any) => ({
             {col.links?.map((link: any) => (
               <li>
                 <a
-                  href={link.url || "#"}
+                  href={getLocalizedPath(link.url || "#", currentLang)}
                   data-swatch-sku={(link.url === '#inquiry' || (link.label || '').toLowerCase().includes('swatch')) ? rfqSettings?.swatchKitSku : undefined}
                   class="hover:text-[#1d1d1f] hover:underline transition-colors block py-0.5 md:py-0"
                 >
@@ -97,7 +97,7 @@ const legalLinks = rawLegalLinks.map((l: any) => ({
         {legalLinks.map((link: any, idx: number) => (
           <div class="inline-flex items-center gap-2.5">
             {idx > 0 && <span class="text-black/15 select-none font-normal">|</span>}
-            <a href={link.url || "#"} class="hover:text-[#1d1d1f] hover:underline transition-colors">
+            <a href={getLocalizedPath(link.url || "#", currentLang)} class="hover:text-[#1d1d1f] hover:underline transition-colors">
               {link.label}
             </a>
           </div>

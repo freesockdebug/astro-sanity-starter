@@ -19,7 +19,7 @@ export default defineType({
     {
       title: 'Translations (多语言翻译)',
       name: 'translations',
-      options: {collapsible: true, collapsed: false},
+      options: {collapsible: true, collapsed: true},
     },
   ],
   fields: SUPPORTED_LANGUAGES.map((lang) => ({

@@ -7,6 +7,7 @@ import { SECTIONS, IMAGE, normalizeSections, extractHeroPreload } from '@data/bl
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
+import { getLangFromUrl, useTranslations } from '@i18n';
 
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
@@ -43,18 +44,21 @@ const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || DEFAULT_
 
 const heroPreload = extractHeroPreload(sections);
 
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
 // 100% Dynamic section resolver based strictly on Studio CMS configuration & order
 const SECTION_DEFAULTS: Record<string, { id: string; label: string }> = {
-  heroSection: { id: 'hero', label: 'Overview' },
-  hosieryHeroSection: { id: 'hero', label: 'Overview' },
-  featureMatrixSection: { id: 'specs', label: 'Specification' },
-  hosierySpecSection: { id: 'specs', label: 'Specification' },
-  productShowcaseSection: { id: 'collections', label: 'Silhouettes' },
-  hosieryCollectionSection: { id: 'collections', label: 'Silhouettes' },
-  manufacturingSection: { id: 'manufacturing', label: 'Infrastructure' },
-  hosieryManufacturingSection: { id: 'manufacturing', label: 'Infrastructure' },
-  inquirySection: { id: 'inquiry', label: 'Sample Request' },
-  hosieryInquirySection: { id: 'inquiry', label: 'Sample Request' },
+  heroSection: { id: 'hero', label: t('stage.overview') },
+  hosieryHeroSection: { id: 'hero', label: t('stage.overview') },
+  featureMatrixSection: { id: 'specs', label: t('stage.specs') },
+  hosierySpecSection: { id: 'specs', label: t('stage.specs') },
+  productShowcaseSection: { id: 'collections', label: t('stage.collections') },
+  hosieryCollectionSection: { id: 'collections', label: t('stage.collections') },
+  manufacturingSection: { id: 'manufacturing', label: t('stage.infrastructure') },
+  hosieryManufacturingSection: { id: 'manufacturing', label: t('stage.infrastructure') },
+  inquirySection: { id: 'inquiry', label: t('stage.sampleRequest') },
+  hosieryInquirySection: { id: 'inquiry', label: t('stage.sampleRequest') },
   customSection: { id: 'custom', label: 'Feature' },
 };
 
