@@ -72,7 +72,9 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.clearAll': 'Clear all',
     'rfq.remove': 'Remove',
 
-    // Section Hints
+    // Section Hints & Hero Buttons
+    'hero.requestSwatch': 'Request Swatch Kit',
+    'hero.exploreLineSheets': 'Explore Line Sheets',
     'collections.swipeHint': 'Swipe to explore all silhouettes',
     'collections.scrollHint': 'Scroll horizontally or use arrows to explore all silhouettes',
     'specs.swipeHint': 'Swipe to explore 5 technical specs',
@@ -151,7 +153,9 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.clearAll': 'Alles leeren',
     'rfq.remove': 'Entfernen',
 
-    // Section Hints
+    // Section Hints & Hero Buttons
+    'hero.requestSwatch': 'Muster-Set anfordern',
+    'hero.exploreLineSheets': 'Kollektionsübersicht erkunden',
     'collections.swipeHint': 'Wischen, um alle Modelle zu entdecken',
     'collections.scrollHint': 'Horizontal scrollen oder Pfeile nutzen',
     'specs.swipeHint': 'Wischen für 5 technische Daten',
@@ -230,7 +234,9 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.clearAll': 'Tout effacer',
     'rfq.remove': 'Supprimer',
 
-    // Section Hints
+    // Section Hints & Hero Buttons
+    'hero.requestSwatch': 'Demander un kit d’échantillons',
+    'hero.exploreLineSheets': 'Explorer le catalogue',
     'collections.swipeHint': 'Balayez pour découvrir tous les modèles',
     'collections.scrollHint': 'Faites défiler horizontalement ou utilisez les flèches',
     'specs.swipeHint': 'Balayez pour voir 5 spécifications',
@@ -309,7 +315,9 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.clearAll': 'Borrar todo',
     'rfq.remove': 'Eliminar',
 
-    // Section Hints
+    // Section Hints & Hero Buttons
+    'hero.requestSwatch': 'Solicitar kit de muestras',
+    'hero.exploreLineSheets': 'Explorar catálogo',
     'collections.swipeHint': 'Desliza para ver todos los estilos',
     'collections.scrollHint': 'Desplázate horizontalmente o usa las flechas',
     'specs.swipeHint': 'Desliza para ver 5 especificaciones técnicas',

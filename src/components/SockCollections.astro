@@ -86,7 +86,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
       <div class="pt-1 flex items-center justify-center gap-3">
         {showHeaderActionButton && (
           <a
-            href={actionButtonUrl}
+            href={getLocalizedPath(actionButtonUrl, currentLang)}
             data-swatch-sku={swatchSku}
             class="px-4 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm inline-flex items-center gap-1.5"
           >

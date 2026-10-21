@@ -1,6 +1,7 @@
 ---
 // src/components/CustomSection.astro
 import { SanityImageService } from '@utils/image';
+import { getLangFromUrl, getLocalizedPath } from '@i18n';
 
 interface ButtonItem {
   label: string;
@@ -82,6 +83,8 @@ const {
   layoutMode = 'flow',
   blocks = [],
 } = Astro.props;
+
+const currentLang = getLangFromUrl(Astro.url);
 
 // 1. 智能场景预设 (Smart Screen Presets) 自动降维：彻底省去记忆复杂 CSS 参数
 // 自动推断：如果未显式传 preset，但 sectionHeight 为 screen-fit 或 blocks 包含双图对比，则自动按 dual-compare 黄金空间比例渲染
@@ -324,7 +327,7 @@ function getSanityDim(img: any): { w: number; h: number; ratio: number } | null 
                     );
                   }
                   return (
-                    <a href={btn.url || '#inquiry'} class={`${baseClass} ${styleClass}`}>
+                    <a href={getLocalizedPath(btn.url || '#inquiry', currentLang)} class={`${baseClass} ${styleClass}`}>
                       <span>{btn.label}</span>
                       {btn.style === 'link' && <span>›</span>}
                     </a>
@@ -442,7 +445,7 @@ function getSanityDim(img: any): { w: number; h: number; ratio: number } | null 
               {block._type === 'buttonGroupBlock' && block.buttons && (
                 <div class="flex flex-wrap gap-4 items-center">
                   {block.buttons.map((btn) => (
-                    <a href={btn.url || '#inquiry'} class={`px-6 py-3 text-sm font-medium rounded-full shadow-sm ${btn.style === 'secondary' ? (isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-zinc-200 text-zinc-900') : (isDark ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white')}`}>
+                    <a href={getLocalizedPath(btn.url || '#inquiry', currentLang)} class={`px-6 py-3 text-sm font-medium rounded-full shadow-sm ${btn.style === 'secondary' ? (isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-zinc-200 text-zinc-900') : (isDark ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white')}`}>
                       {btn.label}
                     </a>
                   ))}
@@ -487,7 +490,7 @@ function getSanityDim(img: any): { w: number; h: number; ratio: number } | null 
               {block._type === 'buttonGroupBlock' && block.buttons && (
                 <div class="flex flex-wrap gap-4 items-center">
                   {block.buttons.map((btn) => (
-                    <a href={btn.url || '#inquiry'} class={`px-6 py-3 text-sm font-medium rounded-full shadow-sm ${btn.style === 'secondary' ? (isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-zinc-200 text-zinc-900') : (isDark ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white')}`}>
+                    <a href={getLocalizedPath(btn.url || '#inquiry', currentLang)} class={`px-6 py-3 text-sm font-medium rounded-full shadow-sm ${btn.style === 'secondary' ? (isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-zinc-200 text-zinc-900') : (isDark ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white')}`}>
                       {btn.label}
                     </a>
                   ))}

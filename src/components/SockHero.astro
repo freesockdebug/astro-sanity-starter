@@ -3,6 +3,7 @@
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_HERO, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
+import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
 
 interface Props {
   superTitle?: string;
@@ -32,11 +33,15 @@ const {
   secondaryButtonUrl = DEFAULT_HERO.secondaryButtonUrl,
 } = Astro.props;
 
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
 const rfqSettings = await fetchRfqSettings();
 const rawHeroImage = propHeroImage?.trim() || DEFAULT_FALLBACK_IMAGE;
 const heroImage = SanityImageService.hero(rawHeroImage, 1600);
 const heroSrcSet = SanityImageService.srcSet(rawHeroImage, [480, 800, 1200, 1600], { quality: 80 });
-const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_HERO.primaryButtonText;
+const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || t('hero.requestSwatch');
+const resolvedSecondaryText = (secondaryButtonText && secondaryButtonText !== DEFAULT_HERO.secondaryButtonText) ? secondaryButtonText : t('hero.exploreLineSheets');
 
 // Super Title handling: support custom text or clean default
 const cleanSuperTitle = propSuperTitle !== undefined
@@ -111,7 +116,7 @@ const showSecondaryButton = propShowSecondary !== undefined
       <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
         {showPrimaryButton && (
           <a
-            href={primaryButtonUrl}
+            href={getLocalizedPath(primaryButtonUrl, currentLang)}
             data-swatch-sku={swatchSku}
             class="w-full sm:w-auto px-6 py-2.5 rounded-full bg-[#1d1d1f] text-white text-xs sm:text-sm font-medium hover:bg-black transition-all shadow-sm"
           >
@@ -120,10 +125,10 @@ const showSecondaryButton = propShowSecondary !== undefined
         )}
         {showSecondaryButton && (
           <a
-            href={secondaryButtonUrl}
+            href={getLocalizedPath(secondaryButtonUrl, currentLang)}
             class="w-full sm:w-auto px-5 py-2.5 rounded-full text-[#1d1d1f] text-xs sm:text-sm font-medium hover:text-black hover:bg-zinc-100 transition-all inline-flex items-center justify-center gap-1"
           >
-            <span>{secondaryButtonText}</span>
+            <span>{resolvedSecondaryText}</span>
             <span aria-hidden="true">›</span>
           </a>
         )}

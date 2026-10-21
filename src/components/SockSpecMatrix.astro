@@ -3,7 +3,7 @@
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_SPEC_MATRIX, DEFAULT_RFQ } from '@data/defaults';
-import { getLangFromUrl, useTranslations } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedPath } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -271,7 +271,7 @@ const cleanDescription = (description || "").replace(/^\d+/, "").trim();
     <div class="apple-rail-narrow flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-0.5">
       {showPrimaryButton && (
         <a
-          href={primaryButtonUrl}
+          href={getLocalizedPath(primaryButtonUrl, currentLang)}
           data-swatch-sku={swatchSku}
           class="w-full sm:w-auto px-5 py-2 rounded-full bg-[#1d1d1f] text-white text-xs font-medium hover:bg-black transition-all shadow-sm text-center"
         >
@@ -280,7 +280,7 @@ const cleanDescription = (description || "").replace(/^\d+/, "").trim();
       )}
       {showSecondaryButton && (
         <a
-          href={secondaryButtonUrl}
+          href={getLocalizedPath(secondaryButtonUrl, currentLang)}
           class="w-full sm:w-auto px-4 py-2 rounded-full text-[#1d1d1f] text-xs font-medium hover:bg-white hover:shadow-sm border border-black/10 transition-all text-center"
         >
           {secondaryButtonText}

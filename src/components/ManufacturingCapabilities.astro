@@ -2,7 +2,7 @@
 // src/components/ManufacturingCapabilities.astro
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { DEFAULT_MANUFACTURING, DEFAULT_RFQ } from '@data/defaults';
-import { getLangFromUrl, useTranslations } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedPath } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -107,7 +107,7 @@ const footers = [
     {showActionButton && (
       <div class="mt-5 sm:mt-6 lg:mt-7 text-center">
         <a
-          href={actionButtonUrl || "#inquiry"}
+          href={getLocalizedPath(actionButtonUrl || "#inquiry", currentLang)}
           data-swatch-sku={swatchSku}
           class="inline-flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm group"
         >

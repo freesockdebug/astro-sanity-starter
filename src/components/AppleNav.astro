@@ -6,9 +6,10 @@ import { cleanBrandTitle, cleanEnglishText } from '@utils/text';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_BRAND_TITLE } from '@data/defaults';
 import LanguagePicker from './LanguagePicker.astro';
-import { getLangFromUrl, getLocalizedPath } from '@i18n';
+import { getLangFromUrl, getLocalizedPath, useTranslations, getLocalizedValue } from '@i18n';
 
 const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
 const config = Astro.props.config ?? await fetchData();
 const rfqSettings = await fetchRfqSettings();
 const header = config?.header;
@@ -27,6 +28,21 @@ const showNavActionButton = actionButton
     })
   : false;
 const navLinks = allLinks.filter((l: any) => l._type === 'actionLink' || l._type === undefined);
+
+// Helper to resolve localized navigation labels
+function getLocalizedNavLabel(link: any): string {
+  const url = link.url || '';
+  const val = getLocalizedValue(link.label, currentLang);
+  if (url.includes('product') || url.includes('#collection')) return t('nav.products');
+  if (url.includes('about')) return t('nav.about');
+  if (url.includes('private') || url.includes('oem')) return t('nav.privateLabel');
+  if (url.includes('contact')) return t('nav.contact');
+  if (url === '/' || url === '') return t('nav.home');
+  return cleanEnglishText(val) || link.label || '';
+}
+
+const actionBtnUrl = getLocalizedPath(actionButton?.url || '#inquiry', currentLang);
+const actionBtnText = getLocalizedValue(actionButton?.label, currentLang) || (isSwatchNav ? t('hero.requestSwatch') : actionButton?.label);
 
 // Apple-standard clean brand name: always prioritize pure brand identity
 const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
@@ -48,7 +64,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     <!-- Nav Links (Desktop - Apple Centered Style) -->
     <nav class="hidden md:flex items-center gap-7 text-xs font-normal text-[#1d1d1f]/75 tracking-normal">
       {navLinks.map((link: any) => (
-        <a href={getLocalizedPath(link.url, currentLang)} class="hover:text-[#1d1d1f] transition-colors">{cleanEnglishText(link.label)}</a>
+        <a href={getLocalizedPath(link.url, currentLang)} class="hover:text-[#1d1d1f] transition-colors">{getLocalizedNavLabel(link)}</a>
       ))}
     </nav>
 
@@ -76,11 +92,11 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
 
       {showNavActionButton && actionButton && (
         <a
-          href={actionButton.url || "#inquiry"}
+          href={actionBtnUrl}
           data-swatch-sku={rfqSettings?.swatchKitSku}
           class="hidden md:inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm"
         >
-          <span>{actionButton.label}</span>
+          <span>{actionBtnText}</span>
         </a>
       )}
 
@@ -100,15 +116,15 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
   <!-- Mobile Dropdown -->
   <div id="mobile-menu" class="hidden md:hidden px-6 pt-3 pb-6 bg-white/95 backdrop-blur-xl border-b border-black/5 space-y-3 text-sm">
     {navLinks.map((link: any) => (
-      <a href={getLocalizedPath(link.url, currentLang)} class="block py-1 text-zinc-700 hover:text-black">{link.label}</a>
+      <a href={getLocalizedPath(link.url, currentLang)} class="block py-1 text-zinc-700 hover:text-black">{getLocalizedNavLabel(link)}</a>
     ))}
     {showNavActionButton && actionButton && (
       <a
-        href={actionButton.url || "#inquiry"}
+        href={actionBtnUrl}
         data-swatch-sku={rfqSettings?.swatchKitSku}
         class="inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white"
       >
-        <span>{actionButton.label}</span>
+        <span>{actionBtnText}</span>
       </a>
     )}
     <!-- Mobile Language Selector -->

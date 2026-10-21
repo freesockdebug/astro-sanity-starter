@@ -57,12 +57,41 @@ export function switchLocalePath(currentPathname: string, targetLang: SupportedL
  * e.g. getLocalizedPath("/products", "de") -> "/de/products"
  * e.g. getLocalizedPath("/products", "en") -> "/products"
  */
-export function getLocalizedPath(path: string, lang: SupportedLocale = DEFAULT_LOCALE): string {
-  if (lang === DEFAULT_LOCALE) {
-    return path.startsWith('/') ? path : `/${path}`;
+export function getLocalizedPath(path: string = '', lang: SupportedLocale = DEFAULT_LOCALE): string {
+  if (!path) {
+    return lang === DEFAULT_LOCALE ? '/' : `/${lang}`;
   }
-  const clean = path.replace(/^\/+/, '');
-  return `/${lang}${clean ? `/${clean}` : ''}`;
+
+  // 1. External URLs (http/https/mailto/tel/javascript) left untouched
+  if (/^(?:https?:|\/\/|mailto:|tel:|javascript:)/i.test(path)) {
+    return path;
+  }
+
+  // 2. Pure in-page anchor (#something or #) left untouched
+  if (path.startsWith('#')) {
+    return path;
+  }
+
+  // 3. Separate hash and search query if any
+  const [pathnameAndSearch, hash] = path.split('#');
+  const [pathname, search] = (pathnameAndSearch || '').split('?');
+  const hashSuffix = hash !== undefined ? `#${hash}` : '';
+  const searchSuffix = search !== undefined ? `?${search}` : '';
+
+  // 4. Strip existing language prefix if present to avoid /de/de/
+  const segments = (pathname || '').split('/').filter(Boolean);
+  const first = segments[0] as SupportedLocale;
+  if (first && first in LANGUAGES) {
+    segments.shift();
+  }
+  const cleanPath = segments.join('/');
+
+  // 5. Construct localized path with identical slug
+  if (lang === DEFAULT_LOCALE) {
+    return `/${cleanPath}${searchSuffix}${hashSuffix}`;
+  }
+
+  return `/${lang}${cleanPath ? `/${cleanPath}` : ''}${searchSuffix}${hashSuffix}`;
 }
 
 /**
