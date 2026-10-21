@@ -11,7 +11,7 @@ import {
   DEFAULT_FOOTER_COLUMNS,
   DEFAULT_LEGAL_LINKS,
 } from '@data/defaults';
-import { getLangFromUrl, useTranslations, getLocalizedPath } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedPath, getLocalizedValue } from '@i18n';
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
@@ -23,7 +23,6 @@ const footer = config?.footer;
 
 const rawBrandTitle = header?.title || DEFAULT_BRAND_TITLE;
 const brandTitle = cleanBrandTitle(rawBrandTitle, DEFAULT_BRAND_TITLE);
-const rawFooterText = footer?.text || DEFAULT_COPYRIGHT_TEXT;
 
 const FOOTER_BIO_BY_LANG: Record<string, string> = {
   de: "Spezialisierter Hersteller von 200-Nadel-Luxusbekleidung, edler Seide, Kaschmir und nahtlosen Essentials für internationale Modemarken.",
@@ -44,82 +43,128 @@ const COLUMN_TRANSLATIONS: Record<string, Record<string, string>> = {
     "Product Lines": "Produktlinien",
     "B2B Services": "B2B-Dienstleistungen",
     "Certifications": "Zertifizierungen",
+    "Direct Inquiries": "Direktanfragen",
     "Overview": "Überblick",
     "Signature Weave": "Charakteristische Bindung",
+    "Hero Weave": "Charakteristische Bindung",
     "Technical Architecture": "Technische Architektur",
     "Ready-to-Order Archive": "Bestellbares Archiv",
+    "Ready-to-Order": "Bestellbares Archiv",
     "All Silhouettes Archive": "Alle Modelle",
     "Mulberry Silk Loafers": "Maulbeerseide-Modelle",
     "Ribbed Cashmere Crews": "Gerippte Kaschmirstrümpfe",
     "Seamless Essentials": "Nahtlose Basics",
+    "Order Swatch Book": "Musterbuch bestellen",
+    "Request Swatch Kit": "Musterkollektion anfordern",
+    "Order Swatch Kit": "Musterbuch bestellen",
     "Wholesale Quote (RFQ)": "Großhandelsanfrage (RFQ)",
+    "Request OEM Quote": "OEM-Angebot anfordern",
     "Custom Pantone Dyeing": "Individuelle Pantone-Färbung",
     "Private Label Packaging": "Private-Label-Verpackung",
-    "Rapid 72h Prototyping": "Express-Prototyping 72h"
+    "Rapid 72h Prototyping": "Express-Prototyping 72h",
+    "Factory Audit Tour": "Werksbesichtigung"
   },
   fr: {
     "Product Lines": "Lignes de Produits",
     "B2B Services": "Services B2B",
     "Certifications": "Certifications",
+    "Direct Inquiries": "Demandes Directes",
     "Overview": "Aperçu",
     "Signature Weave": "Tricot Signature",
+    "Hero Weave": "Tricot Signature",
     "Technical Architecture": "Architecture Technique",
     "Ready-to-Order Archive": "Catalogue Prêt-à-Commander",
+    "Ready-to-Order": "Catalogue Prêt-à-Commander",
     "All Silhouettes Archive": "Toutes les Silhouettes",
     "Mulberry Silk Loafers": "Mocassins Soie de Mûrier",
     "Ribbed Cashmere Crews": "Chaussettes Côtelées Cachemire",
     "Seamless Essentials": "Essentiels Sans Couture",
+    "Order Swatch Book": "Commander un Nuancier",
+    "Request Swatch Kit": "Demander un Nuancier",
+    "Order Swatch Kit": "Commander un Nuancier",
     "Wholesale Quote (RFQ)": "Devis de Gros (RFQ)",
+    "Request OEM Quote": "Demande de Devis OEM",
     "Custom Pantone Dyeing": "Teinture Pantone Dédiée",
     "Private Label Packaging": "Conditionnement Marque Blanche",
-    "Rapid 72h Prototyping": "Prototypage Express 72h"
+    "Rapid 72h Prototyping": "Prototypage Express 72h",
+    "Factory Audit Tour": "Visite d'Audit Usine"
   },
   es: {
     "Product Lines": "Líneas de Producto",
     "B2B Services": "Servicios B2B",
     "Certifications": "Certificaciones",
+    "Direct Inquiries": "Consultas Directas",
     "Overview": "Visión General",
     "Signature Weave": "Tejido Exclusivo",
+    "Hero Weave": "Tejido Exclusivo",
     "Technical Architecture": "Arquitectura Técnica",
     "Ready-to-Order Archive": "Catálogo Listo para Pedido",
+    "Ready-to-Order": "Catálogo Listo para Pedido",
     "All Silhouettes Archive": "Todas las Siluetas",
     "Mulberry Silk Loafers": "Pikis Seda de Morera",
     "Ribbed Cashmere Crews": "Calcetines Canalé Cachemira",
     "Seamless Essentials": "Básicos Sin Costuras",
+    "Order Swatch Book": "Pedir Muestrario",
+    "Request Swatch Kit": "Solicitar Kit de Muestras",
+    "Order Swatch Kit": "Pedir Muestrario",
     "Wholesale Quote (RFQ)": "Presupuesto Mayorista (RFQ)",
+    "Request OEM Quote": "Solicitar Presupuesto OEM",
     "Custom Pantone Dyeing": "Tintado Pantone Personalizado",
     "Private Label Packaging": "Empaque de Marca Blanca",
-    "Rapid 72h Prototyping": "Prototipado Rápido 72h"
+    "Rapid 72h Prototyping": "Prototipado Rápido 72h",
+    "Factory Audit Tour": "Visita de Auditoría a Fábrica"
   }
 };
 
-const footerBio = currentLang !== 'en' ? (FOOTER_BIO_BY_LANG[currentLang] || DEFAULT_FOOTER_BIO) : (footer?.description || DEFAULT_FOOTER_BIO);
-const statusBadge = currentLang !== 'en' ? (STATUS_BADGE_BY_LANG[currentLang] || DEFAULT_STATUS_BADGE) : (footer?.statusBadge || DEFAULT_STATUS_BADGE);
+// 1. Footer bio from Studio CMS or language fallback
+const cmsBio = getLocalizedValue(footer?.description, currentLang);
+const footerBio = cmsBio || (currentLang !== 'en' ? (FOOTER_BIO_BY_LANG[currentLang] || DEFAULT_FOOTER_BIO) : DEFAULT_FOOTER_BIO);
 
-const cleanFooterText = cleanEnglishText(rawFooterText) || DEFAULT_COPYRIGHT_TEXT;
+// 2. Status badge from Studio CMS or language fallback
+const cmsStatusBadge = getLocalizedValue(footer?.statusBadge, currentLang);
+const statusBadge = cmsStatusBadge || (currentLang !== 'en' ? (STATUS_BADGE_BY_LANG[currentLang] || DEFAULT_STATUS_BADGE) : DEFAULT_STATUS_BADGE);
 
+// 3. Copyright text from Studio CMS
+const rawFooterText = footer?.text;
+const cmsFooterText = getLocalizedValue(rawFooterText, currentLang);
+const cleanFooterText = cmsFooterText || cleanEnglishText(typeof rawFooterText === 'string' ? rawFooterText : '') || DEFAULT_COPYRIGHT_TEXT;
+
+// 4. Columns: prioritize Studio CMS multilingual title & link labels
 const colDict = COLUMN_TRANSLATIONS[currentLang] || {};
 const rawColumns = (footer?.columns && footer.columns.length > 0) ? footer.columns : DEFAULT_FOOTER_COLUMNS;
 const columns = rawColumns.map((col: any) => {
-  const cleanedTitle = cleanEnglishText(col.title);
+  const localizedTitle = getLocalizedValue(col.title, currentLang);
+  const fallbackEnglish = typeof col.title === 'string' ? col.title : (col.title?.en || '');
+  const cleanedTitle = cleanEnglishText(fallbackEnglish);
+  const finalTitle = localizedTitle || colDict[cleanedTitle] || fallbackEnglish;
+
   return {
     ...col,
-    title: colDict[cleanedTitle] || cleanedTitle,
+    title: finalTitle,
     links: col.links?.map((l: any) => {
-      const cleanedLabel = cleanEnglishText(l.label);
+      const localizedLabel = getLocalizedValue(l.label, currentLang);
+      const fallbackLinkEnglish = typeof l.label === 'string' ? l.label : (l.label?.en || '');
+      const cleanedLabel = cleanEnglishText(fallbackLinkEnglish);
+      const finalLabel = localizedLabel || colDict[cleanedLabel] || fallbackLinkEnglish;
+
       return {
         ...l,
-        label: colDict[cleanedLabel] || cleanedLabel
+        label: finalLabel
       };
     })
   };
 });
 
+// 5. Legal links: prioritize Studio CMS multilingual labels
 const rawLegalLinks = (footer?.legalLinks && footer.legalLinks.length > 0) ? footer.legalLinks : DEFAULT_LEGAL_LINKS;
-const legalLinks = rawLegalLinks.map((l: any) => ({
-  ...l,
-  label: cleanEnglishText(l.label)
-}));
+const legalLinks = rawLegalLinks.map((l: any) => {
+  const localizedLabel = getLocalizedValue(l.label, currentLang);
+  const fallbackLegalEnglish = typeof l.label === 'string' ? l.label : (l.label?.en || '');
+  return {
+    ...l,
+    label: localizedLabel || cleanEnglishText(fallbackLegalEnglish)
+  };
+});
 ---
 
 <footer class="bg-[#f5f5f7] text-[#86868b] py-6 sm:py-8 border-t border-black/10 text-[11px] sm:text-[12px] leading-normal font-normal">
@@ -152,7 +197,7 @@ const legalLinks = rawLegalLinks.map((l: any) => ({
               <li>
                 <a
                   href={getLocalizedPath(link.url || "#", currentLang)}
-                  data-swatch-sku={(link.url === '#inquiry' || (link.label || '').toLowerCase().includes('swatch')) ? rfqSettings?.swatchKitSku : undefined}
+                  data-swatch-sku={(link.url === '#inquiry' || (link.label || '').toLowerCase().includes('swatch') || (link.label || '').toLowerCase().includes('muster') || (link.label || '').toLowerCase().includes('nuancier') || (link.label || '').toLowerCase().includes('muestr')) ? rfqSettings?.swatchKitSku : undefined}
                   class="hover:text-[#1d1d1f] hover:underline transition-colors block py-0.5 md:py-0"
                 >
                   {link.label}
