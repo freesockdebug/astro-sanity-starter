@@ -22,6 +22,7 @@ export const PRODUCT_FIELDS = `{
   secondaryButtonText,
   "slug": slug.current,
   sku,
+  currency,
   tagline,
   moq,
   leadTime,
@@ -53,6 +54,7 @@ export const PRODUCT_CARD_FIELDS = `{
   shortTitle,
   "slug": slug.current,
   sku,
+  currency,
   tagline,
   moq,
   leadTime,
@@ -86,9 +88,12 @@ export interface NormalizedProduct {
   composition: string;
   gauge: string;
   moq: string;
+  moqQty: number;
+  unit: string;
   leadTime: string;
   price: string;
   currency: string;
+  currencySymbol: string;
   pricingTiers?: any[];
   colors: string[];
   isFeatured?: boolean;
@@ -97,14 +102,95 @@ export interface NormalizedProduct {
 }
 
 /**
+ * Maps standard currency code to display currency symbol
+ */
+export function getCurrencySymbol(currency?: string): string {
+  if (!currency) return '$';
+  const c = currency.trim().toUpperCase();
+  if (c === 'USD' || c === '$') return '$';
+  if (c === 'EUR' || c === '€') return '€';
+  if (c === 'GBP' || c === '£') return '£';
+  if (c === 'CNY' || c === 'RMB' || c === '¥') return '¥';
+  return currency.trim();
+}
+
+/**
+ * Resolves the minimum order quantity (MOQ) and unit.
+ * Priority: 1. Minimum quantity and unit from pricingTiers
+ *           2. Fallback to product.moq
+ *           3. Fallback to default '200 Pairs'
+ */
+export function resolveProductMoq(
+  pricingTiers?: any[],
+  fallbackMoq?: string
+): { quantity: number; unit: string; formatted: string } {
+  let minQty = Infinity;
+  let detectedUnit = '';
+
+  if (Array.isArray(pricingTiers) && pricingTiers.length > 0) {
+    for (const tier of pricingTiers) {
+      if (!tier || typeof tier !== 'object') continue;
+      const rawRange = String(tier.range || tier.quantity || '').trim();
+      const rawUnit = String(tier.unit || '').trim();
+
+      // Extract starting quantity: match first sequence of digits
+      const numMatch = rawRange.match(/([0-9][0-9,]*)/);
+      if (numMatch) {
+        const parsed = parseInt(numMatch[1].replace(/,/g, ''), 10);
+        if (!isNaN(parsed) && parsed > 0 && parsed < minQty) {
+          minQty = parsed;
+          if (rawUnit) {
+            detectedUnit = rawUnit;
+          } else {
+            // Try extracting unit name from range string (e.g. "100 - 499 Packs" -> "Packs")
+            const unitMatch = rawRange.match(/[0-9.,+-\s]+([a-zA-Z\u4e00-\u9fa5]+)/);
+            if (unitMatch && unitMatch[1]) {
+              detectedUnit = unitMatch[1].trim();
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (minQty !== Infinity) {
+    const finalUnit = detectedUnit || 'Pairs';
+    return {
+      quantity: minQty,
+      unit: finalUnit,
+      formatted: `${minQty} ${finalUnit}`
+    };
+  }
+
+  if (fallbackMoq && typeof fallbackMoq === 'string' && fallbackMoq.trim()) {
+    const cleanMoq = fallbackMoq.trim();
+    const numMatch = cleanMoq.match(/([0-9][0-9,]*)/);
+    const parsed = numMatch ? parseInt(numMatch[1].replace(/,/g, ''), 10) : 200;
+    const unitMatch = cleanMoq.match(/[0-9.,+-\s]+([a-zA-Z\u4e00-\u9fa5]+)/);
+    const finalUnit = unitMatch && unitMatch[1] ? unitMatch[1].trim() : 'Pairs';
+    return {
+      quantity: parsed || 200,
+      unit: finalUnit,
+      formatted: cleanMoq
+    };
+  }
+
+  return {
+    quantity: 200,
+    unit: 'Pairs',
+    formatted: '200 Pairs'
+  };
+}
+
+/**
  * Resolves the starting FOB wholesale price from the maximum tier unit price.
  * Single Source of Truth: directly derived from pricingTiers.
  */
-export function getMaxTierPrice(pricingTiers?: any[]): { currency: string; amount: string; formatted: string } | null {
+export function getMaxTierPrice(pricingTiers?: any[], productCurrency?: string): { currency: string; amount: string; formatted: string } | null {
   if (!Array.isArray(pricingTiers) || pricingTiers.length === 0) return null;
 
   let maxNum = -Infinity;
-  let detectedCurrency = '$';
+  let detectedCurrency = productCurrency ? getCurrencySymbol(productCurrency) : '$';
 
   for (const tier of pricingTiers) {
     const raw = typeof tier === 'object' && tier ? tier.price : tier;
@@ -116,7 +202,9 @@ export function getMaxTierPrice(pricingTiers?: any[]): { currency: string; amoun
         const num = parseFloat((isSymbolFirst ? match[2] : match[1]).replace(/,/g, ''));
         if (!isNaN(num) && num > maxNum) {
           maxNum = num;
-          detectedCurrency = symbol === '¥' ? '$' : symbol;
+          if (!productCurrency) {
+            detectedCurrency = symbol === '¥' ? '$' : symbol;
+          }
         }
       } else {
         const numOnly = parseFloat(raw.replace(/[^0-9.]/g, ''));
@@ -205,10 +293,17 @@ export class ProductService {
       ? rawShortTitle.replace(/\([^)]*\)/g, '').trim()
       : rawShortTitle || 'Curated Knit';
 
-    const tierPrice = getMaxTierPrice(sp.pricingTiers);
+    const rawCurrency = (sp.currency && typeof sp.currency === 'string' && sp.currency.trim())
+      ? sp.currency.trim()
+      : 'USD';
+    const currency = rawCurrency.toUpperCase();
+    const currencySymbol = getCurrencySymbol(rawCurrency);
+
+    const tierPrice = getMaxTierPrice(sp.pricingTiers, currency);
     const fallbackPrice = category === 'silk' ? '4.90' : category === 'cashmere' ? '6.80' : category === 'sheer' ? '3.80' : '3.20';
     const price = tierPrice ? tierPrice.amount : fallbackPrice;
-    const currency = tierPrice ? tierPrice.currency : '$';
+
+    const resolvedMoq = resolveProductMoq(sp.pricingTiers, sp.moq);
 
     return {
       id: slug,
@@ -220,10 +315,13 @@ export class ProductService {
       image,
       composition: (sp.specifications && sp.specifications[0]?.value) || sp.composition || 'Premium Textile Blend',
       gauge: (sp.specifications && sp.specifications[1]?.value) || sp.gauge || 'Fine Gauge Knit',
-      moq: sp.moq || '200 Pairs',
+      moq: resolvedMoq.formatted,
+      moqQty: resolvedMoq.quantity,
+      unit: resolvedMoq.unit,
       leadTime: sp.leadTime || '15-20 Days',
       price,
       currency,
+      currencySymbol,
       pricingTiers: sp.pricingTiers,
       colors,
       isFeatured: sp.isFeatured ?? true,

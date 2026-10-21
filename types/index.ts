@@ -57,8 +57,10 @@ export interface ProductSpecification {
 }
 
 export interface PricingTier {
+    range?: string;
     quantity?: string;
     price?: string;
+    unit?: string;
 }
 
 export interface ColorVariant {
@@ -88,6 +90,7 @@ export interface Product {
     shortTitle?: string | Record<string, string>;
     slug: string;
     sku?: string;
+    currency?: string;
     tagline?: string | Record<string, string>;
     statusBadge?: string | Record<string, string>;
     supportBadge?: string | Record<string, string>;

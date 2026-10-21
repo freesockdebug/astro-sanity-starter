@@ -2,7 +2,7 @@
 // src/pages/products/[slug].astro
 import Layout from '@layouts/Layout.astro';
 import { client } from '@utils/sanity-client';
-import { PRODUCT_FIELDS, PRODUCT_CARD_FIELDS, ProductService } from '@data/products';
+import { PRODUCT_FIELDS, PRODUCT_CARD_FIELDS, ProductService, resolveProductMoq, getCurrencySymbol } from '@data/products';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { cleanBrandTitle } from '@utils/text';
@@ -53,6 +53,9 @@ currentProduct.colors = currentProduct.colors || [];
 currentProduct.pricingTiers = currentProduct.pricingTiers || [];
 currentProduct.specifications = currentProduct.specifications || [];
 currentProduct.mainImage = currentProduct.mainImage || currentProduct.gallery[0]?.src || DEFAULT_FALLBACK_IMAGE;
+
+const resolvedMoq = resolveProductMoq(currentProduct.pricingTiers, currentProduct.moq);
+const currencySymbol = getCurrencySymbol(currentProduct.currency);
 
 const siteConfig = batchData?.siteConfig;
 const rfqSettings = batchData?.rfqSettings;
@@ -210,7 +213,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                       SKU: {currentProduct.sku}
                     </span>
                     <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-900 text-white shadow-xs font-medium">
-                      {currentProduct.moq}
+                      {resolvedMoq.formatted}
                     </span>
                   </div>
 
@@ -299,7 +302,9 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                   {currentProduct.pricingTiers.map((tier: any) => (
                     <div class="flex items-center justify-between text-xs sm:text-sm py-0.5 border-b border-zinc-200/50 last:border-none">
                       <span class="text-zinc-700 font-medium">{tier.range}</span>
-                      <span class="text-zinc-950 font-bold font-mono text-xs sm:text-sm">{tier.price}</span>
+                      <span class="text-zinc-950 font-bold font-mono text-xs sm:text-sm">
+                        {tier.price}{tier.unit ? ` / ${tier.unit}` : ''}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -371,7 +376,7 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
                     data-title={currentProductShortTitle}
                     data-sku={currentProduct.sku || "SKU"}
                     data-image={SanityImageService.thumbnail(currentProduct.gallery[0]?.src || DEFAULT_FALLBACK_IMAGE, 200)}
-                    data-moq={currentProduct.moq || DEFAULT_PRODUCT_DETAIL.fallbackMoq}
+                    data-moq={resolvedMoq.formatted}
                   >
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />

@@ -65,7 +65,9 @@ const minimalProducts = mergedProducts.map((p: any) => {
     composition: p.composition,
     price: p.price,
     currency: p.currency,
+    currencySymbol: p.currencySymbol || '$',
     moq: p.moq,
+    unit: p.unit || 'Pairs',
     sku: p.sku,
     tagline: getLocalizedValue(p.tagline, currentLang),
     gauge: p.gauge
@@ -255,11 +257,11 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
               <div class="flex flex-col">
                 <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
-                  <span class="text-[10px] font-mono">{item.currency || '$'}</span>
+                  <span class="text-[10px] font-mono">{item.currencySymbol || item.currency || '$'}</span>
                   <span class="text-sm font-mono tracking-tight font-bold">{item.price}</span>
-                  <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/pc</span>
+                  <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/{item.unit ? (item.unit.toLowerCase() === 'pairs' ? 'pair' : item.unit.toLowerCase().replace(/s$/, '')) : 'pair'}</span>
                 </div>
-                <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq || '200'}</span>
+                <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq}</span>
               </div>
 
               <button
@@ -459,11 +461,11 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
         <div class="flex flex-col">
           <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
-            <span class="text-[10px] font-mono">${item.currency || '$'}</span>
+            <span class="text-[10px] font-mono">${item.currencySymbol || item.currency || '$'}</span>
             <span class="text-sm font-mono tracking-tight font-bold">${item.price}</span>
-            <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/pc</span>
+            <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/${item.unit ? (item.unit.toLowerCase() === 'pairs' ? 'pair' : item.unit.toLowerCase().replace(/s$/, '')) : 'pair'}</span>
           </div>
-          <span class="text-[9px] text-[#52525b] font-mono mt-0.5">${moqPrefix} ${item.moq || '200'}</span>
+          <span class="text-[9px] text-[#52525b] font-mono mt-0.5">${moqPrefix} ${item.moq}</span>
         </div>
 
         <button

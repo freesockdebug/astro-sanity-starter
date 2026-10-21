@@ -119,8 +119,25 @@ export default defineType({
       group: 'gallery',
     }),
     defineField({
+      name: 'currency',
+      title: 'Currency (结算币种)',
+      description: '商品结算货币代码，如 USD ($), EUR (€), GBP (£), CNY (¥)。外贸标准默认 USD',
+      type: 'string',
+      initialValue: 'USD',
+      options: {
+        list: [
+          {title: 'USD ($) - US Dollar (外贸标准)', value: 'USD'},
+          {title: 'EUR (€) - Euro', value: 'EUR'},
+          {title: 'GBP (£) - British Pound', value: 'GBP'},
+          {title: 'CNY (¥) - Chinese Yuan', value: 'CNY'},
+        ],
+      },
+      group: 'wholesale',
+    }),
+    defineField({
       name: 'moq',
-      title: 'MOQ (最小起订量)',
+      title: 'MOQ (最小起订量备用文案)',
+      description: '前台优先读取阶梯价 (FOB Tiered Pricing) 里的最小订购量与单位。若无阶梯价则回退读取此字段',
       type: 'string',
       initialValue: '200 Units / Color',
       group: 'wholesale',
@@ -142,15 +159,32 @@ export default defineType({
           fields: [
             {name: 'range', title: 'Quantity Range (订购数量区间)', type: 'string'},
             {name: 'price', title: 'Unit Price (单价)', type: 'string'},
+            {
+              name: 'unit',
+              title: 'Unit (计量单位)',
+              description: '如 Pairs (双), Pcs (件), Packs (包), Sets (套)。留空默认 Pairs',
+              type: 'string',
+              initialValue: 'Pairs',
+              options: {
+                list: [
+                  {title: 'Pairs (双)', value: 'Pairs'},
+                  {title: 'Pcs (件/个)', value: 'Pcs'},
+                  {title: 'Packs (包)', value: 'Packs'},
+                  {title: 'Sets (套)', value: 'Sets'},
+                  {title: 'Dozens (打)', value: 'Dozens'},
+                ],
+              },
+            },
           ],
           preview: {
-            select: {title: 'range', subtitle: 'price'},
-            prepare({title, subtitle}: any) {
+            select: {title: 'range', subtitle: 'price', unit: 'unit'},
+            prepare({title, subtitle, unit}: any) {
               const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
               const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
+              const unitStr = unit ? ` / ${unit}` : '';
               return {
                 title: rawT ? String(rawT) : '未命名订购阶梯',
-                subtitle: rawS ? `单价: ${String(rawS)}` : undefined,
+                subtitle: rawS ? `单价: ${String(rawS)}${unitStr}` : undefined,
               }
             },
           },
