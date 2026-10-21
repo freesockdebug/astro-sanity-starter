@@ -9,10 +9,9 @@ export default defineType({
   fields: [
     defineField({
       name: 'title',
-      title: 'Category Title (类别名称)',
+      title: 'Category Title (类别名称 - 多语言)',
       description: 'e.g. Mulberry Silk, Cashmere & Wool, Sheer & Tights, Combed Cotton',
-      type: 'string',
-      validation: (Rule) => Rule.required(),
+      type: 'localeString',
     }),
     defineField({
       name: 'slug',
@@ -20,16 +19,16 @@ export default defineType({
       description: '用于前端陈列大厅分类筛选的 URL/key 标识，如 silk, cashmere, sheer, cotton, terry',
       type: 'slug',
       options: {
-        source: 'title',
+        source: (doc: any) =>
+          typeof doc?.title === 'object' && doc?.title ? doc.title.en : doc?.title,
         maxLength: 96,
       },
       validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'description',
-      title: 'Description (分类简介 / 材质特性说明)',
-      type: 'text',
-      rows: 2,
+      title: 'Description (分类简介 / 材质特性说明 - 多语言)',
+      type: 'localeText',
     }),
     defineField({
       name: 'order',
@@ -44,7 +43,7 @@ export default defineType({
       name: 'orderAsc',
       by: [
         {field: 'order', direction: 'asc'},
-        {field: 'title', direction: 'asc'},
+        {field: 'title.en', direction: 'asc'},
       ],
     },
   ],
@@ -52,6 +51,17 @@ export default defineType({
     select: {
       title: 'title',
       subtitle: 'slug.current',
+    },
+    prepare(selection: any) {
+      const {title, subtitle} = selection
+      const resolvedTitle =
+        typeof title === 'object' && title !== null
+          ? title.en || Object.values(title)[0] || 'Untitled'
+          : title || 'Untitled'
+      return {
+        title: resolvedTitle,
+        subtitle: subtitle ? `/${subtitle}` : undefined,
+      }
     },
   },
 })

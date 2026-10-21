@@ -117,7 +117,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                   : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/5'
               }`}
             >
-              <span>{cat.label}</span>
+              <span>{getLocalizedValue(cat.label, currentLang)}</span>
               <span class={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                 cat.id === 'all' ? 'bg-white/20 text-white' : 'bg-black/5 text-[#404040]'
               }`}>

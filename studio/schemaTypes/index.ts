@@ -21,6 +21,8 @@ import actionLink from './actionLink'
 import customImage from './customImage'
 import header from './header'
 import footer from './footer'
+import localeString from './localeString'
+import localeText from './localeText'
 
 export const documentTypes = [
   page,
@@ -47,6 +49,8 @@ export const objectTypes = [
   customImage,
   header,
   footer,
+  localeString,
+  localeText,
 ]
 
 export const schemaTypes = [

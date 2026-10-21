@@ -139,7 +139,10 @@ export class ProductService {
     } else if (typeof rawCategory === 'string' && rawCategory.trim()) {
       category = rawCategory.trim().toLowerCase();
     } else {
-      const text = `${sp.title || ''} ${sp.shortTitle || ''} ${sp.tagline || ''} ${sp.specifications?.[0]?.value || ''}`.toLowerCase();
+      const titleStr = typeof sp.title === 'object' && sp.title ? Object.values(sp.title).join(' ') : (sp.title || '');
+      const shortTitleStr = typeof sp.shortTitle === 'object' && sp.shortTitle ? Object.values(sp.shortTitle).join(' ') : (sp.shortTitle || '');
+      const taglineStr = typeof sp.tagline === 'object' && sp.tagline ? Object.values(sp.tagline).join(' ') : (sp.tagline || '');
+      const text = `${titleStr} ${shortTitleStr} ${taglineStr} ${sp.specifications?.[0]?.value || ''}`.toLowerCase();
       if (text.includes('silk') || text.includes('loafer')) category = 'silk';
       else if (text.includes('cashmere') || text.includes('merino') || text.includes('wool')) category = 'cashmere';
       else if (text.includes('sheer') || text.includes('tights') || text.includes('pantyhose')) category = 'sheer';
@@ -154,11 +157,16 @@ export class ProductService {
       ? sp.colors.map((c: any) => (typeof c === 'string' ? c : c?.hex || '#1c1917'))
       : ['#1c1917', '#e7e5e4'];
 
+    const rawShortTitle = sp.shortTitle || sp.title;
+    const cleanShortTitle = typeof rawShortTitle === 'string'
+      ? rawShortTitle.replace(/\([^)]*\)/g, '').trim()
+      : rawShortTitle || 'Curated Knit';
+
     return {
       id: slug,
       slug,
       title: sp.title || 'Curated Knit Silhouette',
-      shortTitle: (sp.shortTitle || sp.title || 'Curated Knit').replace(/\([^)]*\)/g, '').trim(),
+      shortTitle: cleanShortTitle,
       tagline: sp.tagline || 'Wholesale Ready White-Label Silhouette',
       category,
       image,
@@ -280,8 +288,9 @@ export class ProductService {
     if (sanityCats && sanityCats.length > 0) {
       sanityCats.forEach((cat: any) => {
         const catSlug = cat.slug || cat._id;
+        const catTitleEn = typeof cat.title === 'object' && cat.title ? cat.title.en : cat.title;
         const count = products.filter(
-          (p) => p.category === catSlug || p.category === cat.title?.toLowerCase()
+          (p) => p.category === catSlug || (catTitleEn && p.category === catTitleEn.toLowerCase())
         ).length;
         categories.push({
           id: catSlug,

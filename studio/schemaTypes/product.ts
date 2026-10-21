@@ -15,9 +15,8 @@ export default defineType({
   fields: [
     defineField({
       name: 'title',
-      title: 'Product Title (产品名称)',
-      type: 'string',
-      validation: (Rule) => Rule.required(),
+      title: 'Product Title (产品名称 - 多语言)',
+      type: 'localeString',
       group: 'basic',
     }),
     defineField({
@@ -25,7 +24,8 @@ export default defineType({
       title: 'Slug (URL 路径标识)',
       type: 'slug',
       options: {
-        source: 'title',
+        source: (doc: any) =>
+          typeof doc?.title === 'object' && doc?.title ? doc.title.en : doc?.title,
         maxLength: 96,
       },
       validation: (Rule) => Rule.required(),
@@ -39,16 +39,15 @@ export default defineType({
     }),
     defineField({
       name: 'tagline',
-      title: 'Tagline (一句话卖点/材质概述)',
-      type: 'text',
-      rows: 2,
+      title: 'Tagline (一句话卖点/材质概述 - 多语言)',
+      type: 'localeText',
       group: 'basic',
     }),
     defineField({
       name: 'shortTitle',
-      title: 'Short Display Title (首页卡片短标题)',
+      title: 'Short Display Title (首页卡片短标题 - 多语言)',
       description: '例如：Double Ruffle Lace。若留空则自动根据主标题展示。',
-      type: 'string',
+      type: 'localeString',
       group: 'basic',
     }),
     defineField({
@@ -271,6 +270,18 @@ export default defineType({
       title: 'title',
       subtitle: 'sku',
       media: 'mainImage',
+    },
+    prepare(selection: any) {
+      const {title, subtitle, media} = selection
+      const resolvedTitle =
+        typeof title === 'object' && title !== null
+          ? title.en || Object.values(title)[0] || 'Untitled'
+          : title || 'Untitled'
+      return {
+        title: resolvedTitle,
+        subtitle: subtitle ? `SKU: ${subtitle}` : undefined,
+        media,
+      }
     },
   },
 })
