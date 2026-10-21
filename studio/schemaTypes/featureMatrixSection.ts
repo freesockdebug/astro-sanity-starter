@@ -46,47 +46,73 @@ export default defineType({
     }),
     defineField({
       name: 'badge',
-      title: 'Badge Label (上标分类)',
-      type: 'string',
-      initialValue: 'Engineered Construction',
+      title: 'Badge Label (上标分类 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Engineered Construction',
+        de: 'Technische Architektur',
+        fr: 'Architecture Technique',
+        es: 'Arquitectura Técnica'
+      },
     }),
     defineField({
       name: 'title',
-      title: 'Title (Apple 风格主标题)',
-      type: 'string',
-      initialValue: 'Specification Matrix',
+      title: 'Title (Apple 风格主标题 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Specification Matrix',
+        de: 'Präzision bis auf den Mikrometer.',
+        fr: 'Façonné au micron près.',
+        es: 'Diseñado al milímetro.'
+      },
     }),
     defineField({
       name: 'description',
-      title: 'Subtitle / Description (浅灰叙事副标题)',
-      type: 'text',
-      rows: 2,
-      initialValue:
-        'We treat the architectural construction of luxury knitwear with the exactitude of horology. Every seam, tension zone, and yarn twist is calibrated for zero friction.',
+      title: 'Subtitle / Description (浅灰叙事副标题 - 多语言)',
+      type: 'localeText',
+      initialValue: {
+        en: 'We treat the architectural construction of luxury knitwear with the exactitude of horology. Every seam, tension zone, and yarn twist is calibrated for zero friction.',
+        de: 'Jeder Faden ist auf maximale Langlebigkeit im Einzelhandel und reibungsfreien Tragekomfort ausgelegt.',
+        fr: 'Chaque fil est conçu pour une longévité commerciale irréprochable et un confort sans friction.',
+        es: 'Cada fibra está optimizada para ofrecer máxima durabilidad comercial y un tacto sin fricción.'
+      },
     }),
     // Bento 1
     defineField({
       name: 'bento1Tag',
-      title: 'Bento 1 Tag (上标，如 Yarn Architecture)',
-      type: 'string',
+      title: 'Bento 1 Tag (上标 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento1',
-      initialValue: 'Yarn Architecture',
+      initialValue: {
+        en: 'Yarn Architecture',
+        de: 'Garn-Architektur',
+        fr: 'Architecture du Fil',
+        es: 'Estructura del Hilo'
+      },
     }),
     defineField({
       name: 'bento1Title',
-      title: 'Bento 1 Title (标题，如 60s/2 Double-Ply Combed Cotton.)',
-      type: 'string',
+      title: 'Bento 1 Title (标题 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento1',
-      initialValue: '60s/2 Double-Ply Combed Cotton.',
+      initialValue: {
+        en: '60s/2 Double-Ply Combed Cotton.',
+        de: '60s/2 Zweifach gekämmte Baumwolle.',
+        fr: 'Coton Peigné Double Retors 60s/2.',
+        es: 'Algodón Peinado de Doble Cabo 60s/2.'
+      },
     }),
     defineField({
       name: 'bento1Description',
-      title: 'Bento 1 Description (说明文案)',
-      type: 'text',
-      rows: 2,
+      title: 'Bento 1 Description (说明文案 - 多语言)',
+      type: 'localeText',
       fieldset: 'bento1',
-      initialValue:
-        'Ultra-long staple combed fibers spun for anti-pilling longevity (Grade 4.5) and a breathable, second-skin handfeel across 50+ wash cycles.',
+      initialValue: {
+        en: 'Ultra-long staple combed fibers spun for anti-pilling longevity (Grade 4.5) and a breathable, second-skin handfeel across 50+ wash cycles.',
+        de: 'Extralangstapelige gekämmte Fasern für langanhaltenden Anti-Pilling-Schutz (Stufe 4.5) und ein seidiges Zweite-Haut-Gefühl über 50+ Waschzyklen.',
+        fr: 'Fibres peignées extra-longues pour une tenue anti-boulochage durable (Grade 4.5) et un toucher seconde peau sur plus de 50 lavages.',
+        es: 'Fibras peinadas de fibra extralarga para evitar la formación de bolitas (Grado 4.5) y un tacto de segunda piel tras más de 50 lavados.'
+      },
     }),
     defineField({
       name: 'macroImage',
@@ -99,10 +125,15 @@ export default defineType({
     // Bento 2
     defineField({
       name: 'bento2Tag',
-      title: 'Bento 2 Tag (上标，如 Toe Closure)',
-      type: 'string',
+      title: 'Bento 2 Tag (上标 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento2',
-      initialValue: 'Toe Closure',
+      initialValue: {
+        en: 'Toe Closure',
+        de: 'Spitzenverarbeitung',
+        fr: 'Finition Pointeur',
+        es: 'Cierre de Puntera'
+      },
     }),
     defineField({
       name: 'bento2Stat',
@@ -120,42 +151,65 @@ export default defineType({
     }),
     defineField({
       name: 'bento2Title',
-      title: 'Bento 2 Title (主标题，如 Hand-Linked Seamless)',
-      type: 'string',
+      title: 'Bento 2 Title (主标题 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento2',
-      initialValue: 'Hand-Linked Seamless',
+      initialValue: {
+        en: 'Hand-Linked Seamless',
+        de: 'Handgekettelt Nahtlos',
+        fr: 'Rémaillage Main Sans Couture',
+        es: 'Remallado a Mano Sin Costuras'
+      },
     }),
     defineField({
       name: 'bento2Description',
-      title: 'Bento 2 Description (说明文案)',
-      type: 'text',
-      rows: 2,
+      title: 'Bento 2 Description (说明文案 - 多语言)',
+      type: 'localeText',
       fieldset: 'bento2',
-      initialValue:
-        'Individual loop-by-loop manual interlocking eliminates interior ridges for zero pressure on toes.',
+      initialValue: {
+        en: 'Individual loop-by-loop manual interlocking eliminates interior ridges for zero pressure on toes.',
+        de: 'Masche-für-Masche manuell verknüpft – verhindert störende Innennähte für druckfreien Tragekomfort an den Zehen.',
+        fr: 'Fermeture maille par maille éliminant tout bourrelet intérieur pour une pression nulle sur les orteils.',
+        es: 'Enlazado bucle a bucle que suprime los rebordes interiores para eliminar cualquier presión en los dedos.'
+      },
     }),
     defineField({
       name: 'bento2BadgeText',
-      title: 'Bento 2 Badge Text (左下认证，如 OEKO-TEX® 100 Class I)',
-      type: 'string',
+      title: 'Bento 2 Badge Text (左下认证 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento2',
-      initialValue: 'OEKO-TEX® 100 Class I',
+      initialValue: {
+        en: 'OEKO-TEX® 100 Class I',
+        de: 'OEKO-TEX® 100 Klasse I',
+        fr: 'OEKO-TEX® 100 Classe I',
+        es: 'OEKO-TEX® 100 Clase I'
+      },
     }),
     defineField({
       name: 'bento2BadgeStatus',
-      title: 'Bento 2 Badge Status (右下绿字，如 Certified Safe)',
-      type: 'string',
+      title: 'Bento 2 Badge Status (右下绿字 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento2',
-      initialValue: 'Certified Safe',
+      initialValue: {
+        en: 'Certified Safe',
+        de: 'Zertifiziert sicher',
+        fr: 'Certifié sans risque',
+        es: 'Seguridad certificada'
+      },
     }),
 
     // Bento 3
     defineField({
       name: 'bento3Tag',
-      title: 'Bento 3 Tag (上标，如 Machine Gauge)',
-      type: 'string',
+      title: 'Bento 3 Tag (上标 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento3',
-      initialValue: 'Machine Gauge',
+      initialValue: {
+        en: 'Machine Gauge',
+        de: 'Maschinenteilung',
+        fr: 'Jauge Machine',
+        es: 'Galga de Maquinaria'
+      },
     }),
     defineField({
       name: 'bento3Stat',
@@ -173,81 +227,117 @@ export default defineType({
     }),
     defineField({
       name: 'bento3Title',
-      title: 'Bento 3 Title (主标题，如 Lonati Cylinders)',
-      type: 'string',
+      title: 'Bento 3 Title (主标题 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento3',
-      initialValue: 'Lonati Cylinders',
+      initialValue: {
+        en: 'Lonati Cylinders',
+        de: 'Lonati-Zylinder',
+        fr: 'Cylindres Lonati',
+        es: 'Cilindros Lonati'
+      },
     }),
     defineField({
       name: 'bento3Description',
-      title: 'Bento 3 Description (说明文案)',
-      type: 'text',
-      rows: 2,
+      title: 'Bento 3 Description (说明文案 - 多语言)',
+      type: 'localeText',
       fieldset: 'bento3',
-      initialValue:
-        'Italian high-density circular knit delivering refined micro-rib clarity with zero distortion.',
+      initialValue: {
+        en: 'Italian high-density circular knit delivering refined micro-rib clarity with zero distortion.',
+        de: 'Italienischer hochdichter Rundstrick für gestochen scharfe Feinripp-Strukturen ohne Verzug.',
+        fr: 'Tricotage circulaire italien haute densité offrant une netteté absolue des micro-côtes sans déformation.',
+        es: 'Tejido circular italiano de alta densidad que ofrece canales micro-rib de máxima nitidez sin deformación.'
+      },
     }),
     defineField({
       name: 'bento3FooterNote',
-      title: 'Bento 3 Footer Note (底部参数说明，如 Tolerance: ±0.5% Needle Pitch)',
-      type: 'string',
+      title: 'Bento 3 Footer Note (底部参数说明 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento3',
-      initialValue: 'Tolerance: ±0.5% Needle Pitch',
+      initialValue: {
+        en: 'Tolerance: ±0.5% Needle Pitch',
+        de: 'Toleranz: ±0,5% Nadelteilung',
+        fr: 'Tolérance: ±0,5% d’écartement d’aiguilles',
+        es: 'Tolerancia: ±0,5% en paso de aguja'
+      },
     }),
 
     // Bento 4
     defineField({
       name: 'bento4Tag',
-      title: 'Bento 4 Tag (上标，如 Color Fastness)',
-      type: 'string',
+      title: 'Bento 4 Tag (上标 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento4',
-      initialValue: 'Color Fastness',
+      initialValue: {
+        en: 'Elasticity & Recovery',
+        de: 'Elastizität',
+        fr: 'Élasticité',
+        es: 'Elasticidad'
+      },
     }),
     defineField({
       name: 'bento4Stat',
-      title: 'Bento 4 Stat (大数值，如 Grade 4+)',
+      title: 'Bento 4 Stat (大数值，如 ZeroMark)',
       type: 'string',
       fieldset: 'bento4',
-      initialValue: 'Grade 4+',
+      initialValue: 'ZeroMark',
     }),
     defineField({
       name: 'bento4Unit',
-      title: 'Bento 4 Unit (单位，如 Wash)',
+      title: 'Bento 4 Unit (单位，如 Band)',
       type: 'string',
       fieldset: 'bento4',
-      initialValue: 'Wash',
+      initialValue: 'Band',
     }),
     defineField({
       name: 'bento4Title',
-      title: 'Bento 4 Title (主标题，如 Low-Impact Eco Dyes.)',
-      type: 'string',
+      title: 'Bento 4 Title (主标题 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento4',
-      initialValue: 'Low-Impact Eco Dyes.',
+      initialValue: {
+        en: 'Lycra Soft-Stretch Welt',
+        de: 'Lycra Soft-Stretch',
+        fr: 'Lycra Soft-Stretch',
+        es: 'Lycra Soft-Stretch'
+      },
     }),
     defineField({
       name: 'bento4Description',
-      title: 'Bento 4 Description (说明文案)',
-      type: 'text',
-      rows: 2,
+      title: 'Bento 4 Description (说明文案 - 多语言)',
+      type: 'localeText',
       fieldset: 'bento4',
-      initialValue:
-        'Custom pantone formulation with non-toxic reactive dyes ensuring Grade 4+ wash fastness without bleeding.',
+      initialValue: {
+        en: 'Graduated tension cuff holds securely without calf indents or vascular restriction.',
+        de: 'Abgestufte Schaftspannung für sicheren Halt ohne Wadenabdrücke oder Einschnürungen.',
+        fr: 'Bord-côte à tension progressive assurant une tenue parfaite sans marquer ni comprimer le mollet.',
+        es: 'Puño con tensión progresiva que sujeta firmemente sin marcar ni oprimir la pantorrilla.'
+      },
     }),
     defineField({
       name: 'bento4FooterNote',
-      title: 'Bento 4 Footer Note (底部参数说明，如 OEKO-TEX & REACH Compliant)',
-      type: 'string',
+      title: 'Bento 4 Footer Note (底部参数说明 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento4',
-      initialValue: 'OEKO-TEX & REACH Compliant',
+      initialValue: {
+        en: 'Anti-Slip Silicone Compatible',
+        de: 'Kompatibel mit rutschfestem Silikon',
+        fr: 'Compatible avec bande silicone antiglisse',
+        es: 'Compatible con inserciones de silicona antideslizante'
+      },
     }),
 
     // Bento 5
     defineField({
       name: 'bento5Tag',
-      title: 'Bento 5 Tag (上标，如 Sampling Speed)',
-      type: 'string',
+      title: 'Bento 5 Tag (上标 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento5',
-      initialValue: 'Sampling Speed',
+      initialValue: {
+        en: 'Sampling Speed',
+        de: 'Mustergeschwindigkeit',
+        fr: 'Vitesse d’Échantillonnage',
+        es: 'Velocidad de Muestreo'
+      },
     }),
     defineField({
       name: 'bento5Stat',
@@ -265,26 +355,39 @@ export default defineType({
     }),
     defineField({
       name: 'bento5Title',
-      title: 'Bento 5 Title (主标题，如 Global Courier Dispatch)',
-      type: 'string',
+      title: 'Bento 5 Title (主标题 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento5',
-      initialValue: 'Global Courier Dispatch',
+      initialValue: {
+        en: 'Global Courier Dispatch',
+        de: 'Globaler Kurierversand',
+        fr: 'Expédition Express Mondiale',
+        es: 'Envío Courier Global'
+      },
     }),
     defineField({
       name: 'bento5Description',
-      title: 'Bento 5 Description (说明文案)',
-      type: 'text',
-      rows: 2,
+      title: 'Bento 5 Description (说明文案 - 多语言)',
+      type: 'localeText',
       fieldset: 'bento5',
-      initialValue:
-        'Curated fabric swatch books and custom lab dip samples dispatched via DHL Express in 48 hours.',
+      initialValue: {
+        en: 'Curated fabric swatch books and custom lab dip samples dispatched via DHL Express in 48 hours.',
+        de: 'Kuratierte Stoffmusterbücher und individuelle Farbmusterabzüge innerhalb von 48 Stunden per DHL Express versandt.',
+        fr: 'Nuanciers de tissus et échantillons de teinture sur mesure expédiés en 48 heures via DHL Express.',
+        es: 'Muestrarios de tejidos seleccionados y pruebas de laboratorio enviadas en 48 horas mediante DHL Express.'
+      },
     }),
     defineField({
       name: 'bento5FooterNote',
-      title: 'Bento 5 Footer Note (底部参数说明，如 Bulk Lead: 14 – 18 Working Days)',
-      type: 'string',
+      title: 'Bento 5 Footer Note (底部参数说明 - 多语言)',
+      type: 'localeString',
       fieldset: 'bento5',
-      initialValue: 'Bulk Lead: 14 – 18 Working Days',
+      initialValue: {
+        en: 'Bulk Lead: 14 – 18 Working Days',
+        de: 'Großauftrag-Lieferzeit: 14 – 18 Werktage',
+        fr: 'Délai de production de gros: 14 – 18 jours ouvrés',
+        es: 'Plazo de pedidos mayoristas: 14 – 18 días laborables'
+      },
     }),
     defineField({
       name: 'showPrimaryButton',
@@ -296,9 +399,14 @@ export default defineType({
     }),
     defineField({
       name: 'primaryButtonText',
-      title: 'Primary Button Text (主按钮文字)',
-      type: 'string',
-      initialValue: 'Request Swatch Kit',
+      title: 'Primary Button Text (主按钮文字 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Request Swatch Kit',
+        de: 'Musterdossier anfordern',
+        fr: 'Demander le dossier d’échantillons',
+        es: 'Solicitar dossier de muestras'
+      },
       fieldset: 'buttons',
     }),
     defineField({
@@ -325,9 +433,14 @@ export default defineType({
     }),
     defineField({
       name: 'secondaryButtonText',
-      title: 'Secondary Button Text (副按钮文字)',
-      type: 'string',
-      initialValue: 'Download B2B Line Sheet (PDF)',
+      title: 'Secondary Button Text (副按钮文字 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Download B2B Line Sheet (PDF)',
+        de: 'Kollektionen erkunden',
+        fr: 'Explorer les collections',
+        es: 'Explorar colecciones'
+      },
       fieldset: 'buttons',
     }),
     defineField({
@@ -346,10 +459,12 @@ export default defineType({
       media: 'macroImage',
     },
     prepare({title, adminLabel, badge, media}) {
-      const name = adminLabel ? adminLabel : (title || '核心工艺与规格');
+      const rawTitle = typeof title === 'object' && title ? (title.en || Object.values(title)[0]) : title;
+      const rawBadge = typeof badge === 'object' && badge ? (badge.en || Object.values(badge)[0]) : badge;
+      const name = adminLabel ? adminLabel : (rawTitle || '核心工艺与规格');
       return {
         title: `📐 [特性规格矩阵] ${name}`,
-        subtitle: `类型: featureMatrixSection · 标签: ${badge || 'Technical Specs'}`,
+        subtitle: `类型: featureMatrixSection · 标签: ${rawBadge || 'Technical Specs'}`,
         media,
       }
     },

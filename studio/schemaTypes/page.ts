@@ -20,9 +20,8 @@ export default defineType({
   fields: [
     defineField({
       name: 'title',
-      title: 'Title',
-      type: 'string',
-      validation: (Rule) => Rule.required(),
+      title: 'Title (页面标题 - 多语言)',
+      type: 'localeString',
       group: 'content',
     }),
     defineField({
@@ -31,7 +30,8 @@ export default defineType({
       description: 'Should not contain a leading slash and must contain a trailing slash.',
       type: 'slug',
       options: {
-        source: 'title',
+        source: (doc: any) =>
+          typeof doc?.title === 'object' && doc?.title ? (doc.title.en || Object.values(doc.title)[0]) : doc?.title,
         maxLength: 96,
       },
       validation: (Rule) => Rule.required(),
@@ -54,10 +54,9 @@ export default defineType({
     }),
     defineField({
       name: 'metaTitle',
-      title: 'Title',
+      title: 'SEO Meta Title (网页标题 - 多语言)',
       description: 'A page title for SEO and social sharing. Ideally between 15 and 70 characters.',
-      type: 'string',
-      validation: (Rule) => Rule.max(70).warning('Consider shortening the title'),
+      type: 'localeString',
       group: 'seo',
     }),
     defineField({
@@ -71,12 +70,10 @@ export default defineType({
     }),
     defineField({
       name: 'metaDescription',
-      title: 'Description',
+      title: 'SEO Meta Description (网页描述 - 多语言)',
       description:
         'A short paragraph for SEO and social sharing. Ideally between 70 and 160 characters.',
-      type: 'text',
-      rows: 3,
-      validation: (Rule) => Rule.max(160).warning('Consider shortening the description'),
+      type: 'localeText',
       group: 'seo',
     }),
     defineField({

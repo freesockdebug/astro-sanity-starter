@@ -358,7 +358,39 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
       });
     }
 
-    // 5. Automatic High-Precision Multilingual Content Injection for Sections
+    // 5. Universal CMS Localized Field Resolution & Multilingual Fallback
+    const ALL_SECTION_TEXT_FIELDS = [
+      'title', 'headline', 'subline', 'subtitle', 'badge', 'superTitle', 'description',
+      'primaryButtonText', 'secondaryButtonText', 'actionButtonText', 'buttonText',
+      'cardDetailsButtonText', 'successTitle', 'successMessage',
+      'bento1Tag', 'bento1Title', 'bento1Description',
+      'bento2Tag', 'bento2Title', 'bento2Description', 'bento2BadgeText', 'bento2BadgeStatus',
+      'bento3Tag', 'bento3Title', 'bento3Description', 'bento3FooterNote',
+      'bento4Tag', 'bento4Title', 'bento4Description', 'bento4FooterNote',
+      'bento5Tag', 'bento5Title', 'bento5Description', 'bento5FooterNote',
+    ];
+
+    // First: resolve any CMS object fields (localeString/localeText) to the active language
+    ALL_SECTION_TEXT_FIELDS.forEach((f) => {
+      if (s[f] && typeof s[f] === 'object') {
+        const val = getLocalizedValue(s[f], lang);
+        if (val) s[f] = val;
+      }
+    });
+
+    // Also resolve capabilities if present as localized objects
+    if (Array.isArray(s.capabilities)) {
+      s.capabilities = s.capabilities.map((cap: any) => {
+        if (!cap || typeof cap !== 'object') return cap;
+        return {
+          ...cap,
+          title: cap.title && typeof cap.title === 'object' ? getLocalizedValue(cap.title, lang) : cap.title,
+          description: cap.description && typeof cap.description === 'object' ? getLocalizedValue(cap.description, lang) : cap.description,
+        };
+      });
+    }
+
+    // Second: if non-default locale and translation dictionary exists, fill in any missing fields
     if (lang && lang !== DEFAULT_LOCALE) {
       const transKey = s._type === 'hosieryHeroSection' ? 'heroSection'
         : s._type === 'hosierySpecSection' ? 'featureMatrixSection'
@@ -377,8 +409,8 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
                 if (!capTrans) return cap;
                 return {
                   ...cap,
-                  title: (cap.title && typeof cap.title === 'object' ? getLocalizedValue(cap.title, lang) : '') || capTrans.title || cap.title,
-                  description: (cap.description && typeof cap.description === 'object' ? getLocalizedValue(cap.description, lang) : '') || capTrans.description || cap.description,
+                  title: cap.title || capTrans.title,
+                  description: cap.description || capTrans.description,
                 };
               });
             } else {
@@ -387,16 +419,8 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
           } else if (key === 'categories' && Array.isArray(trans.categories)) {
             s.categories = trans.categories;
           } else {
-            // Priority: CMS localized object > professional dictionary > original
-            const cmsVal = s[key] && typeof s[key] === 'object' ? getLocalizedValue(s[key], lang) : '';
-            s[key] = cmsVal || trans[key] || s[key];
-          }
-        });
-      } else {
-        // Fallback for custom sections: resolve any object fields
-        ['title', 'headline', 'subline', 'subtitle', 'badge', 'superTitle', 'description', 'primaryButtonText', 'secondaryButtonText', 'actionButtonText'].forEach((f) => {
-          if (s[f] && typeof s[f] === 'object') {
-            s[f] = getLocalizedValue(s[f], lang);
+            // Priority: CMS value (already localized if object) > professional dictionary > original
+            s[key] = s[key] || trans[key];
           }
         });
       }

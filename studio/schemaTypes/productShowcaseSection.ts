@@ -21,23 +21,36 @@ export default defineType({
     }),
     defineField({
       name: 'badge',
-      title: 'Badge Label (上标标签)',
-      type: 'string',
-      initialValue: 'Capsule Catalog 2026',
+      title: 'Badge Label (上标标签 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Capsule Catalog 2026',
+        de: 'Kapsel-Katalog 2026',
+        fr: 'Catalogue Capsule 2026',
+        es: 'Catálogo Cápsula 2026'
+      },
     }),
     defineField({
       name: 'title',
-      title: 'Title (版块标题)',
-      type: 'string',
-      initialValue: 'Ready-to-Order Line Sheets',
+      title: 'Title (版块标题 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Ready-to-Order Line Sheets',
+        de: 'Sofort bestellbare Line-Sheets',
+        fr: 'Dossiers de Collections Prêts à Commander',
+        es: 'Líneas Listas para Pedido'
+      },
     }),
     defineField({
       name: 'subtitle',
-      title: 'Subtitle (简介说明)',
-      type: 'text',
-      rows: 2,
-      initialValue:
-        'Proprietary silhouettes developed for white-labeling, brand customization, and low-MOQ rapid wholesale reordering.',
+      title: 'Subtitle (简介说明 - 多语言)',
+      type: 'localeText',
+      initialValue: {
+        en: 'Proprietary silhouettes developed for white-labeling, brand customization, and low-MOQ rapid wholesale reordering.',
+        de: 'Exklusive Modelle, maßgeschneidert für White-Labeling, Marken-Individualisierung und flexible Nachbestellungen mit geringer Mindestmenge.',
+        fr: 'Silhouettes exclusives créées pour la marque blanche, la personnalisation sur mesure et le réassort rapide à faible quantité minimale.',
+        es: 'Siluetas exclusivas desarrolladas para marca blanca, personalización completa y reposiciones mayoristas rápidas con bajo pedido mínimo.'
+      },
     }),
     defineField({
       name: 'products',
@@ -61,9 +74,14 @@ export default defineType({
     }),
     defineField({
       name: 'actionButtonText',
-      title: 'Action Button Text (右上角操作按钮文字)',
-      type: 'string',
-      initialValue: 'Request Swatch Kit',
+      title: 'Action Button Text (右上角操作按钮文字 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Request Swatch Kit',
+        de: 'Muster-Set anfordern',
+        fr: 'Demander un kit d’échantillons',
+        es: 'Solicitar kit de muestras'
+      },
       fieldset: 'buttons',
     }),
     defineField({
@@ -90,9 +108,14 @@ export default defineType({
     }),
     defineField({
       name: 'cardDetailsButtonText',
-      title: 'Card Details Button Text (卡片左侧详情按钮文字)',
-      type: 'string',
-      initialValue: 'View Gallery & Specs',
+      title: 'Card Details Button Text (卡片左侧详情按钮文字 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'View Gallery & Specs',
+        de: 'Spezifikationen ansehen',
+        fr: 'Voir les spécifications',
+        es: 'Ver especificaciones'
+      },
       fieldset: 'buttons',
     }),
   ],
@@ -105,10 +128,12 @@ export default defineType({
     },
     prepare({title, adminLabel, badge, products}) {
       const count = Array.isArray(products) ? products.length : 0;
-      const name = adminLabel ? adminLabel : (title || '精选款式画册');
+      const rawT = typeof title === 'object' && title ? (title.en || Object.values(title)[0]) : title;
+      const rawB = typeof badge === 'object' && badge ? (badge.en || Object.values(badge)[0]) : badge;
+      const name = adminLabel ? adminLabel : (rawT || '精选款式画册');
       return {
         title: `🗂️ [产品展廊] ${name}`,
-        subtitle: `类型: productShowcaseSection · 款式数: ${count} 款 · 标签: ${badge || 'Capsule Catalog'}`,
+        subtitle: `类型: productShowcaseSection · 款式数: ${count} 款 · 标签: ${rawB || 'Capsule Catalog'}`,
       }
     },
   },

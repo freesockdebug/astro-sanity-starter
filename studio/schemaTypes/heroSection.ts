@@ -21,25 +21,37 @@ export default defineType({
     }),
     defineField({
       name: 'superTitle',
-      title: 'Super Title (顶部眉标/类别胶囊文字)',
-      type: 'string',
-      initialValue: 'B2B Manufacturing & Private Label Atelier',
+      title: 'Super Title (顶部眉标/类别胶囊文字 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'B2B Manufacturing & Private Label Atelier',
+        de: 'B2B-Herstellung & Private-Label-Atelier',
+        fr: 'Fabrication B2B & Atelier Marque Blanche',
+        es: 'Fabricación B2B y Taller de Marca Blanca'
+      },
     }),
     defineField({
       name: 'headline',
-      title: 'Main Headline (主标题 - 支持句号分隔两段灰度对比)',
-      type: 'string',
+      title: 'Main Headline (主标题 - 支持句号分隔两段灰度对比 - 多语言)',
+      type: 'localeString',
       description: '示例：Engineered Elegance. 200-Needle Micro Weave.（第二句将自动渲染为 Apple 标志性浅灰色）',
-      initialValue: 'Engineered Elegance. 200-Needle Micro Weave.',
-      validation: (Rule) => Rule.required(),
+      initialValue: {
+        en: 'Engineered Elegance. 200-Needle Micro Weave.',
+        de: 'Raffinierte Eleganz. 200-Nadel-Mikrostrick.',
+        fr: 'Élégance de Pointe. Maille 200 Aiguilles.',
+        es: 'Elegancia Técnica. Tejido Micro de 200 Agujas.'
+      },
     }),
     defineField({
       name: 'subline',
-      title: 'Subline / Tagline (核心叙事副标题)',
-      type: 'text',
-      rows: 2,
-      initialValue:
-        'Knitted on Italian Lonati machinery with 100% artisan hand-linked seamless toes. Built for modern private-label brands and luxury retail.',
+      title: 'Subline / Tagline (核心叙事副标题 - 多语言)',
+      type: 'localeText',
+      initialValue: {
+        en: 'Knitted on Italian Lonati machinery with 100% artisan hand-linked seamless toes. Built for modern private-label brands and luxury retail.',
+        de: 'Gestrickt auf italienischen Lonati-Maschinen mit 100% handgekettelter, nahtloser Spitze. Entwickelt für moderne Modemarken und den anspruchsvollen Einzelhandel.',
+        fr: 'Tricoté sur des métiers circulaires italiens Lonati avec pointes remaillées main sans couture. Conçu pour les marques haut de gamme et le retail de luxe.',
+        es: 'Tejido en maquinaria italiana Lonati con punteras remalladas a mano 100% sin costuras. Diseñado para marcas de moda contemporáneas y comercio minorista de lujo.'
+      },
     }),
     defineField({
       name: 'heroImage',
@@ -57,9 +69,14 @@ export default defineType({
     }),
     defineField({
       name: 'primaryButtonText',
-      title: 'Primary Button Text (主按钮文字)',
-      type: 'string',
-      initialValue: 'Request Swatch Kit',
+      title: 'Primary Button Text (主按钮文字 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Request Swatch Kit',
+        de: 'Musterdossier anfordern',
+        fr: 'Demander le dossier d’échantillons',
+        es: 'Solicitar dossier de muestras'
+      },
       fieldset: 'buttons',
     }),
     defineField({
@@ -86,9 +103,14 @@ export default defineType({
     }),
     defineField({
       name: 'secondaryButtonText',
-      title: 'Secondary Button Text (次按钮文字)',
-      type: 'string',
-      initialValue: 'Explore Capsule Lines',
+      title: 'Secondary Button Text (次按钮文字 - 多语言)',
+      type: 'localeString',
+      initialValue: {
+        en: 'Explore Capsule Lines',
+        de: 'Kollektionen erkunden',
+        fr: 'Explorer les collections',
+        es: 'Explorar colecciones'
+      },
       fieldset: 'buttons',
     }),
     defineField({
@@ -108,10 +130,12 @@ export default defineType({
       media: 'heroImage',
     },
     prepare({headline, adminLabel, btn, showBtn, media}) {
-      const name = adminLabel ? adminLabel : (headline ? headline.split('.')[0] : '未命名首屏');
+      const rawH = typeof headline === 'object' && headline ? (headline.en || Object.values(headline)[0]) : headline;
+      const rawBtn = typeof btn === 'object' && btn ? (btn.en || Object.values(btn)[0]) : btn;
+      const name = adminLabel ? adminLabel : (rawH ? String(rawH).split('.')[0] : '未命名首屏');
       return {
         title: `🌟 [主视觉首屏] ${name}`,
-        subtitle: `类型: heroSection · 主按钮: ${showBtn ? (btn || '开启') : '隐藏'} · ${headline || ''}`,
+        subtitle: `类型: heroSection · 主按钮: ${showBtn ? (rawBtn || '开启') : '隐藏'} · ${rawH || ''}`,
         media,
       }
     },

@@ -27,6 +27,5 @@ export default defineType({
     title: lang.title,
     type: 'string',
     fieldset: lang.isDefault ? undefined : 'translations',
-    validation: (Rule: any) => (lang.isDefault ? Rule.required() : Rule.optional()),
   })),
 })
