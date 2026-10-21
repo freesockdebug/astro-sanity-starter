@@ -56,10 +56,10 @@ export default defineType({
       title: 'title',
       media: 'logo.image.asset',
     },
-    prepare(selection) {
+    prepare(selection: any) {
       return {
-        title: selection.title,
-        media: selection.media,
+        title: selection?.title ? String(selection.title) : 'Header',
+        media: selection?.media,
       }
     },
   },

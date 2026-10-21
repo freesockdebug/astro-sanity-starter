@@ -22,10 +22,10 @@ export default defineType({
       name: 'image.asset.originalFilename',
       media: 'image.asset',
     },
-    prepare(selection) {
+    prepare(selection: any) {
       return {
-        title: selection.name,
-        media: selection.media,
+        title: selection?.name ? String(selection.name) : 'Image Asset',
+        media: selection?.media,
       }
     },
   },

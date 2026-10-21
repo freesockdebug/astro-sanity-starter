@@ -129,13 +129,14 @@ export default defineType({
       showBtn: 'showPrimaryButton',
       media: 'heroImage',
     },
-    prepare({headline, adminLabel, btn, showBtn, media}) {
-      const rawH = typeof headline === 'object' && headline ? (headline.en || Object.values(headline)[0]) : headline;
-      const rawBtn = typeof btn === 'object' && btn ? (btn.en || Object.values(btn)[0]) : btn;
-      const name = adminLabel ? adminLabel : (rawH ? String(rawH).split('.')[0] : '未命名首屏');
+    prepare({headline, adminLabel, btn, showBtn, media}: any) {
+      const rawH = typeof headline === 'string' ? headline : typeof headline === 'object' && headline ? (headline.en || headline.zh || Object.values(headline)[0]) : headline;
+      const rawBtn = typeof btn === 'string' ? btn : typeof btn === 'object' && btn ? (btn.en || btn.zh || Object.values(btn)[0]) : btn;
+      const name = adminLabel || (rawH ? String(rawH).split('.')[0] : '未命名首屏');
+      const safeH = rawH ? String(rawH) : '';
       return {
-        title: `🌟 [主视觉首屏] ${name}`,
-        subtitle: `类型: heroSection · 主按钮: ${showBtn ? (rawBtn || '开启') : '隐藏'} · ${rawH || ''}`,
+        title: `🌟 [主视觉首屏] ${String(name)}`,
+        subtitle: `类型: heroSection · 主按钮: ${showBtn ? (rawBtn ? String(rawBtn) : '开启') : '隐藏'} · ${safeH}`,
         media,
       }
     },

@@ -49,17 +49,22 @@ export default defineType({
   ],
   preview: {
     select: {
-      title: 'title',
+      titleEn: 'title.en',
+      rawTitle: 'title',
       subtitle: 'slug.current',
     },
     prepare(selection: any) {
-      const {title, subtitle} = selection
+      const {titleEn, rawTitle, subtitle} = selection
       const resolvedTitle =
-        typeof title === 'object' && title !== null
-          ? title.en || Object.values(title)[0] || 'Untitled'
-          : title || 'Untitled'
+        titleEn ||
+        (typeof rawTitle === 'string'
+          ? rawTitle
+          : rawTitle && typeof rawTitle === 'object'
+            ? rawTitle.zh || rawTitle.de || rawTitle.fr || rawTitle.es || Object.values(rawTitle)[0]
+            : null) ||
+        'Untitled'
       return {
-        title: resolvedTitle,
+        title: String(resolvedTitle),
         subtitle: subtitle ? `/${subtitle}` : undefined,
       }
     },

@@ -152,6 +152,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'range', subtitle: 'price'},
+            prepare({title, subtitle}) {
+              return {
+                title: title || '未命名订购阶梯',
+                subtitle: subtitle ? `单价: ${subtitle}` : undefined,
+              }
+            },
           },
         },
       ],
@@ -170,6 +176,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'name', subtitle: 'hex'},
+            prepare({title, subtitle}) {
+              return {
+                title: title || '未命名颜色',
+                subtitle: subtitle ? `色值: ${subtitle}` : undefined,
+              }
+            },
           },
         },
       ],
@@ -216,6 +228,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'label', subtitle: 'value'},
+            prepare({title, subtitle}) {
+              return {
+                title: title || '未命名参数',
+                subtitle: subtitle || undefined,
+              }
+            },
           },
         },
       ],
@@ -268,18 +286,21 @@ export default defineType({
   ],
   preview: {
     select: {
-      title: 'title',
+      titleEn: 'title.en',
+      rawTitle: 'title',
       subtitle: 'sku',
       media: 'mainImage',
     },
     prepare(selection: any) {
-      const {title, subtitle, media} = selection
+      const {titleEn, rawTitle, subtitle, media} = selection
       const resolvedTitle =
-        typeof title === 'object' && title !== null
-          ? title.en || Object.values(title)[0] || 'Untitled'
-          : title || 'Untitled'
+        titleEn ||
+        (typeof rawTitle === 'object' && rawTitle !== null
+          ? rawTitle.en || Object.values(rawTitle)[0]
+          : rawTitle) ||
+        'Untitled Product'
       return {
-        title: resolvedTitle,
+        title: String(resolvedTitle),
         subtitle: subtitle ? `SKU: ${subtitle}` : undefined,
         media,
       }

@@ -86,13 +86,20 @@ export default defineType({
   ],
   preview: {
     select: {
-      title: 'title',
+      titleEn: 'title.en',
+      rawTitle: 'title',
       subtitle: 'slug.current',
     },
-    prepare({title, subtitle}) {
+    prepare({titleEn, rawTitle, subtitle}: any) {
+      const resolvedTitle =
+        titleEn ||
+        (typeof rawTitle === 'object' && rawTitle !== null
+          ? rawTitle.en || Object.values(rawTitle)[0]
+          : rawTitle) ||
+        'Untitled Page'
       return {
-        title: title,
-        subtitle: subtitle ? subtitle : '',
+        title: String(resolvedTitle),
+        subtitle: subtitle ? `/${subtitle}` : '',
       }
     },
   },

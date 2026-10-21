@@ -69,11 +69,19 @@ export default defineType({
                   ],
                   preview: {
                     select: {titleEn: 'label.en', rawTitle: 'label', subtitle: 'url'},
-                    prepare({titleEn, rawTitle, subtitle}) {
-                      const resolvedTitle = typeof rawTitle === 'string' ? rawTitle : titleEn;
+                    prepare({titleEn, rawTitle, subtitle}: any) {
+                      const resolvedTitle =
+                        titleEn ||
+                        (typeof rawTitle === 'string'
+                          ? rawTitle
+                          : rawTitle && typeof rawTitle === 'object'
+                            ? rawTitle.zh || rawTitle.de || rawTitle.fr || rawTitle.es || Object.values(rawTitle)[0]
+                            : null) ||
+                        subtitle ||
+                        'Link';
                       return {
-                        title: resolvedTitle || subtitle || 'Link',
-                        subtitle,
+                        title: String(resolvedTitle),
+                        subtitle: subtitle ? String(subtitle) : undefined,
                       }
                     },
                   },
@@ -83,10 +91,17 @@ export default defineType({
           ],
           preview: {
             select: {titleEn: 'title.en', rawTitle: 'title'},
-            prepare({titleEn, rawTitle}) {
-              const resolvedTitle = typeof rawTitle === 'string' ? rawTitle : titleEn;
+            prepare({titleEn, rawTitle}: any) {
+              const resolvedTitle =
+                titleEn ||
+                (typeof rawTitle === 'string'
+                  ? rawTitle
+                  : rawTitle && typeof rawTitle === 'object'
+                    ? rawTitle.zh || rawTitle.de || rawTitle.fr || rawTitle.es || Object.values(rawTitle)[0]
+                    : null) ||
+                'Column';
               return {
-                title: resolvedTitle || 'Column',
+                title: String(resolvedTitle),
               }
             },
           },
@@ -189,11 +204,19 @@ export default defineType({
           ],
           preview: {
             select: {titleEn: 'label.en', rawTitle: 'label', subtitle: 'url'},
-            prepare({titleEn, rawTitle, subtitle}) {
-              const resolvedTitle = typeof rawTitle === 'string' ? rawTitle : titleEn;
+            prepare({titleEn, rawTitle, subtitle}: any) {
+              const resolvedTitle =
+                titleEn ||
+                (typeof rawTitle === 'string'
+                  ? rawTitle
+                  : rawTitle && typeof rawTitle === 'object'
+                    ? rawTitle.zh || rawTitle.de || rawTitle.fr || rawTitle.es || Object.values(rawTitle)[0]
+                    : null) ||
+                subtitle ||
+                'Legal Link';
               return {
-                title: resolvedTitle || subtitle || 'Legal Link',
-                subtitle,
+                title: String(resolvedTitle),
+                subtitle: subtitle ? String(subtitle) : undefined,
               }
             },
           },
@@ -223,10 +246,17 @@ export default defineType({
       textEn: 'text.en',
       rawText: 'text',
     },
-    prepare({textEn, rawText}) {
-      const resolved = typeof rawText === 'string' ? rawText : textEn;
+    prepare({textEn, rawText}: any) {
+      const resolved =
+        textEn ||
+        (typeof rawText === 'string'
+          ? rawText
+          : rawText && typeof rawText === 'object'
+            ? rawText.zh || rawText.de || rawText.fr || rawText.es || Object.values(rawText)[0]
+            : null) ||
+        'Footer Configuration';
       return {
-        title: resolved || 'Footer Configuration',
+        title: String(resolved),
       }
     },
   },

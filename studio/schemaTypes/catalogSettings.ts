@@ -98,12 +98,26 @@ export default defineType({
       subtitleEn: 'subtitle.en',
       rawSubtitle: 'subtitle',
     },
-    prepare({titleEn, rawTitle, subtitleEn, rawSubtitle}) {
-      const resolvedTitle = typeof rawTitle === 'string' ? rawTitle : titleEn;
-      const resolvedSubtitle = typeof rawSubtitle === 'string' ? rawSubtitle : subtitleEn;
+    prepare({titleEn, rawTitle, subtitleEn, rawSubtitle}: any) {
+      const resolvedTitle =
+        titleEn ||
+        (typeof rawTitle === 'string'
+          ? rawTitle
+          : rawTitle && typeof rawTitle === 'object'
+            ? rawTitle.zh || rawTitle.de || rawTitle.fr || rawTitle.es || Object.values(rawTitle)[0]
+            : null) ||
+        'Catalog Hall Settings';
+      const resolvedSubtitle =
+        subtitleEn ||
+        (typeof rawSubtitle === 'string'
+          ? rawSubtitle
+          : rawSubtitle && typeof rawSubtitle === 'object'
+            ? rawSubtitle.zh || rawSubtitle.de || rawSubtitle.fr || rawSubtitle.es || Object.values(rawSubtitle)[0]
+            : null) ||
+        'Product Archive & Filters';
       return {
-        title: resolvedTitle || 'Catalog Hall Settings',
-        subtitle: resolvedSubtitle || 'Product Archive & Filters',
+        title: String(resolvedTitle),
+        subtitle: String(resolvedSubtitle),
       }
     },
   },

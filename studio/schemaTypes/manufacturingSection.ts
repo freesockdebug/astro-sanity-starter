@@ -65,12 +65,12 @@ export default defineType({
           ],
           preview: {
             select: {title: 'title', subtitle: 'description'},
-            prepare({title, subtitle}) {
-              const rawT = typeof title === 'object' && title ? (title.en || Object.values(title)[0]) : title;
-              const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || Object.values(subtitle)[0]) : subtitle;
+            prepare({title, subtitle}: any) {
+              const rawT = typeof title === 'string' ? title : typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+              const rawS = typeof subtitle === 'string' ? subtitle : typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
               return {
-                title: rawT || '制造能力项',
-                subtitle: rawS || '',
+                title: String(rawT || '制造能力项'),
+                subtitle: rawS ? String(rawS) : undefined,
               };
             },
           },
@@ -181,13 +181,13 @@ export default defineType({
       badge: 'badge',
       btn: 'actionButtonText',
     },
-    prepare({headline, adminLabel, badge, btn}) {
-      const rawH = typeof headline === 'object' && headline ? (headline.en || Object.values(headline)[0]) : headline;
-      const rawB = typeof badge === 'object' && badge ? (badge.en || Object.values(badge)[0]) : badge;
-      const name = adminLabel ? adminLabel : (rawH || '制造实力基础设施');
+    prepare({headline, adminLabel, badge, btn}: any) {
+      const rawH = typeof headline === 'string' ? headline : typeof headline === 'object' && headline ? (headline.en || headline.zh || Object.values(headline)[0]) : headline;
+      const rawB = typeof badge === 'string' ? badge : typeof badge === 'object' && badge ? (badge.en || badge.zh || Object.values(badge)[0]) : badge;
+      const name = adminLabel || rawH || '制造实力基础设施';
       return {
-        title: `🏭 [制造实力] ${name}`,
-        subtitle: `类型: manufacturingSection · 标签: ${rawB || 'OEM/ODM Capabilities'}`,
+        title: `🏭 [制造实力] ${String(name)}`,
+        subtitle: `类型: manufacturingSection · 标签: ${rawB ? String(rawB) : 'OEM/ODM Capabilities'}`,
       }
     },
   },

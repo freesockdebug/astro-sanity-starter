@@ -40,11 +40,19 @@ export default defineType({
       rawLabel: 'label',
       subtitle: 'url',
     },
-    prepare({titleEn, rawLabel, subtitle}) {
-      const resolved = typeof rawLabel === 'string' ? rawLabel : titleEn;
+    prepare({titleEn, rawLabel, subtitle}: any) {
+      const resolved =
+        titleEn ||
+        (typeof rawLabel === 'string'
+          ? rawLabel
+          : rawLabel && typeof rawLabel === 'object'
+            ? rawLabel.zh || rawLabel.de || rawLabel.fr || rawLabel.es || Object.values(rawLabel)[0]
+            : null) ||
+        subtitle ||
+        'Link'
       return {
-        title: resolved || subtitle || 'Link',
-        subtitle: subtitle || 'Link',
+        title: String(resolved),
+        subtitle: subtitle ? String(subtitle) : 'Link',
       }
     },
   },

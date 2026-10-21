@@ -122,9 +122,9 @@ export default defineType({
     select: {
       title: 'header.title',
     },
-    prepare(selection) {
+    prepare(selection: any) {
       return {
-        title: selection.title,
+        title: selection?.title ? String(selection.title) : 'Site Configuration',
       }
     },
   },

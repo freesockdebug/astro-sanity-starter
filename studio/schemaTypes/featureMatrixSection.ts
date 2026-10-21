@@ -458,13 +458,13 @@ export default defineType({
       badge: 'badge',
       media: 'macroImage',
     },
-    prepare({title, adminLabel, badge, media}) {
-      const rawTitle = typeof title === 'object' && title ? (title.en || Object.values(title)[0]) : title;
-      const rawBadge = typeof badge === 'object' && badge ? (badge.en || Object.values(badge)[0]) : badge;
-      const name = adminLabel ? adminLabel : (rawTitle || '核心工艺与规格');
+    prepare({title, adminLabel, badge, media}: any) {
+      const rawTitle = typeof title === 'string' ? title : typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+      const rawBadge = typeof badge === 'string' ? badge : typeof badge === 'object' && badge ? (badge.en || badge.zh || Object.values(badge)[0]) : badge;
+      const name = adminLabel || rawTitle || '核心工艺与规格';
       return {
-        title: `📐 [特性规格矩阵] ${name}`,
-        subtitle: `类型: featureMatrixSection · 标签: ${rawBadge || 'Technical Specs'}`,
+        title: `📐 [特性规格矩阵] ${String(name)}`,
+        subtitle: `类型: featureMatrixSection · 标签: ${rawBadge ? String(rawBadge) : 'Technical Specs'}`,
         media,
       }
     },

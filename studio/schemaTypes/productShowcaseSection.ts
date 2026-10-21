@@ -126,14 +126,14 @@ export default defineType({
       badge: 'badge',
       products: 'products',
     },
-    prepare({title, adminLabel, badge, products}) {
+    prepare({title, adminLabel, badge, products}: any) {
       const count = Array.isArray(products) ? products.length : 0;
-      const rawT = typeof title === 'object' && title ? (title.en || Object.values(title)[0]) : title;
-      const rawB = typeof badge === 'object' && badge ? (badge.en || Object.values(badge)[0]) : badge;
-      const name = adminLabel ? adminLabel : (rawT || '精选款式画册');
+      const rawT = typeof title === 'string' ? title : typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
+      const rawB = typeof badge === 'string' ? badge : typeof badge === 'object' && badge ? (badge.en || badge.zh || Object.values(badge)[0]) : badge;
+      const name = adminLabel || rawT || '精选款式画册';
       return {
-        title: `🗂️ [产品展廊] ${name}`,
-        subtitle: `类型: productShowcaseSection · 款式数: ${count} 款 · 标签: ${rawB || 'Capsule Catalog'}`,
+        title: `🗂️ [产品展廊] ${String(name)}`,
+        subtitle: `类型: productShowcaseSection · 款式数: ${count} 款 · 标签: ${rawB ? String(rawB) : 'Capsule Catalog'}`,
       }
     },
   },

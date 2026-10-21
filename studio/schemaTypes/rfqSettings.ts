@@ -283,6 +283,12 @@ export default defineType({
               title: 'title',
               subtitle: 'sku',
             },
+            prepare({ title, subtitle }: any) {
+              return {
+                title: title ? String(title) : '未命名样卡',
+                subtitle: subtitle ? `SKU: ${String(subtitle)}` : undefined,
+              }
+            },
           },
         },
       ],
@@ -313,12 +319,26 @@ export default defineType({
       subtitleEn: 'drawerSubtitle.en',
       rawSubtitle: 'drawerSubtitle',
     },
-    prepare({ titleEn, rawTitle, subtitleEn, rawSubtitle }) {
-      const resolvedTitle = typeof rawTitle === 'string' ? rawTitle : titleEn;
-      const resolvedSubtitle = typeof rawSubtitle === 'string' ? rawSubtitle : subtitleEn;
+    prepare({ titleEn, rawTitle, subtitleEn, rawSubtitle }: any) {
+      const resolvedTitle =
+        titleEn ||
+        (typeof rawTitle === 'string'
+          ? rawTitle
+          : rawTitle && typeof rawTitle === 'object'
+            ? rawTitle.zh || rawTitle.de || rawTitle.fr || rawTitle.es || Object.values(rawTitle)[0]
+            : null) ||
+        'B2B RFQ Settings';
+      const resolvedSubtitle =
+        subtitleEn ||
+        (typeof rawSubtitle === 'string'
+          ? rawSubtitle
+          : rawSubtitle && typeof rawSubtitle === 'object'
+            ? rawSubtitle.zh || rawSubtitle.de || rawSubtitle.fr || rawSubtitle.es || Object.values(rawSubtitle)[0]
+            : null) ||
+        '全站按钮显隐与询盘车文案配置';
       return {
-        title: resolvedTitle || 'B2B RFQ Settings',
-        subtitle: resolvedSubtitle || '全站按钮显隐与询盘车文案配置',
+        title: String(resolvedTitle),
+        subtitle: String(resolvedSubtitle),
       };
     },
   },

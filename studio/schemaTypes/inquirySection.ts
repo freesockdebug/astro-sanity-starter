@@ -129,14 +129,14 @@ export default defineType({
       badge: 'badge',
       btn: 'buttonText',
     },
-    prepare({headline, adminLabel, badge, btn}) {
-      const rawH = typeof headline === 'object' && headline ? (headline.en || Object.values(headline)[0]) : headline;
-      const rawB = typeof badge === 'object' && badge ? (badge.en || Object.values(badge)[0]) : badge;
-      const rawBtn = typeof btn === 'object' && btn ? (btn.en || Object.values(btn)[0]) : btn;
-      const name = adminLabel ? adminLabel : (rawH || '商务咨询与样卡');
+    prepare({headline, adminLabel, badge, btn}: any) {
+      const rawH = typeof headline === 'string' ? headline : typeof headline === 'object' && headline ? (headline.en || headline.zh || Object.values(headline)[0]) : headline;
+      const rawB = typeof badge === 'string' ? badge : typeof badge === 'object' && badge ? (badge.en || badge.zh || Object.values(badge)[0]) : badge;
+      const rawBtn = typeof btn === 'string' ? btn : typeof btn === 'object' && btn ? (btn.en || btn.zh || Object.values(btn)[0]) : btn;
+      const name = adminLabel || rawH || '商务咨询与样卡';
       return {
-        title: `📩 [商务咨询转化] ${name}`,
-        subtitle: `类型: inquirySection · 标签: ${rawB || 'Sample Room'} · 按钮: ${rawBtn || 'Request Swatch Kit'}`,
+        title: `📩 [商务咨询转化] ${String(name)}`,
+        subtitle: `类型: inquirySection · 标签: ${rawB ? String(rawB) : 'Sample Room'} · 按钮: ${rawBtn ? String(rawBtn) : 'Request Swatch Kit'}`,
       }
     },
   },
