@@ -1,7 +1,8 @@
 ---
 // src/pages/[lang]/index.astro
 import HomePage from '../index.astro';
-import { LANGUAGES, type SupportedLocale } from '@i18n';
+import CatchAllPage from '../[...slug].astro';
+import { LANGUAGES } from '@i18n';
 
 export const prerender = false;
 const { lang } = Astro.params;
@@ -11,9 +12,16 @@ if (!lang || lang.startsWith('_') || lang.includes('.')) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-if (!(lang in LANGUAGES) || lang === 'en') {
+// English prefix redirects to canonical root /
+if (lang === 'en') {
   return Astro.redirect('/');
 }
+
+// If lang is a supported locale (de, fr, es), render the localized homepage.
+// Otherwise, it is a single-segment CMS page slug (e.g. /about, /private-label, /contact).
+// Render CatchAllPage so its content is never hijacked or lost.
+const isSupportedLocale = lang in LANGUAGES;
 ---
 
-<HomePage />
+{isSupportedLocale ? <HomePage /> : <CatchAllPage />}
+

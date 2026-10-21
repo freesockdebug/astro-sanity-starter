@@ -6,7 +6,7 @@ import { client } from '@utils/sanity-client';
 import { SECTIONS, IMAGE, normalizeSections, extractHeroPreload } from '@data/blocks';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
-import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
+import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE, DEFAULT_HERO, DEFAULT_SPEC_MATRIX, DEFAULT_MANUFACTURING } from '@data/defaults';
 import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
 
 export const prerender = false;
@@ -39,7 +39,16 @@ const t = useTranslations(currentLang);
 
 const homeData = batchData?.page;
 
-const sections = normalizeSections(homeData?.sections || [], currentLang);
+let sections = normalizeSections(homeData?.sections || [], currentLang);
+if (!sections || sections.length === 0) {
+  sections = normalizeSections([
+    { _type: 'heroSection', ...DEFAULT_HERO },
+    { _type: 'featureMatrixSection', ...DEFAULT_SPEC_MATRIX },
+    { _type: 'productShowcaseSection' },
+    { _type: 'manufacturingSection', ...DEFAULT_MANUFACTURING },
+    { _type: 'inquirySection' },
+  ], currentLang);
+}
 const heroSection = sections.find((s: any) => s._type === 'heroSection' || s._type === 'hosieryHeroSection');
 const metaTitle = (homeData?.metaTitle && typeof homeData.metaTitle === 'object' ? getLocalizedValue(homeData.metaTitle, currentLang) : '') || homeData?.metaTitle || DEFAULT_META_TITLE;
 const metaDescription = (homeData?.metaDescription && typeof homeData.metaDescription === 'object' ? getLocalizedValue(homeData.metaDescription, currentLang) : '') || homeData?.metaDescription || DEFAULT_META_DESCRIPTION;

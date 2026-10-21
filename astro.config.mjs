@@ -29,7 +29,7 @@ export default defineConfig({
             allowedHosts: true
         },
         optimizeDeps: {
-            exclude: ['marked', '@sanity/client']
+            exclude: ['marked', '@sanity/client', 'ua-parser-js', '@nanostores/persistent']
         }
     },
     server: {

@@ -13,14 +13,14 @@ import { getLangFromUrl, getLocalizedValue } from '@i18n';
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
-const { slug } = Astro.params;
+const rawSlug = Astro.params.slug || Astro.params.lang || Astro.url.pathname.replace(/^\//, '');
 
 // Fast 404 for static asset extensions to prevent unnecessary CMS roundtrips or MIME confusion
-if (slug && /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml|json)$/i.test(slug)) {
+if (rawSlug && /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml|json)$/i.test(rawSlug)) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
-const formattedSlug = !slug || slug === '/' ? '/' : (slug.startsWith('/') ? slug : `/${slug}`);
+const formattedSlug = !rawSlug || rawSlug === '/' ? '/' : (rawSlug.startsWith('/') ? rawSlug : `/${rawSlug}`);
 const unslashed = formattedSlug.replace(/^\//, '');
 
 // Scheme 2: Single Aggregated GROQ Query - combines 3 independent API calls into 1 single roundtrip
