@@ -6,7 +6,9 @@ import { cleanBrandTitle, cleanEnglishText } from '@utils/text';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_BRAND_TITLE } from '@data/defaults';
 import LanguagePicker from './LanguagePicker.astro';
+import { getLangFromUrl, getLocalizedPath } from '@i18n';
 
+const currentLang = getLangFromUrl(Astro.url);
 const config = Astro.props.config ?? await fetchData();
 const rfqSettings = await fetchRfqSettings();
 const header = config?.header;
@@ -33,7 +35,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
 <header class="fixed top-0 left-0 right-0 z-50 apple-nav transition-all duration-300">
   <div class="apple-rail-header h-12 flex items-center justify-between">
     <!-- Brand / Logo (Pure Apple Minimalism) -->
-    <a href="/" class="flex items-center gap-2 group flex-shrink-0">
+    <a href={getLocalizedPath('/', currentLang)} class="flex items-center gap-2 group flex-shrink-0">
       {logoImage ? (
         <img src={logoImage} alt={resolvedBrandTitle} class="h-6 w-auto object-contain" loading="eager" decoding="async" />
       ) : (
@@ -46,7 +48,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     <!-- Nav Links (Desktop - Apple Centered Style) -->
     <nav class="hidden md:flex items-center gap-7 text-xs font-normal text-[#1d1d1f]/75 tracking-normal">
       {navLinks.map((link: any) => (
-        <a href={link.url} class="hover:text-[#1d1d1f] transition-colors">{cleanEnglishText(link.label)}</a>
+        <a href={getLocalizedPath(link.url, currentLang)} class="hover:text-[#1d1d1f] transition-colors">{cleanEnglishText(link.label)}</a>
       ))}
     </nav>
 
@@ -98,7 +100,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
   <!-- Mobile Dropdown -->
   <div id="mobile-menu" class="hidden md:hidden px-6 pt-3 pb-6 bg-white/95 backdrop-blur-xl border-b border-black/5 space-y-3 text-sm">
     {navLinks.map((link: any) => (
-      <a href={link.url} class="block py-1 text-zinc-700 hover:text-black">{link.label}</a>
+      <a href={getLocalizedPath(link.url, currentLang)} class="block py-1 text-zinc-700 hover:text-black">{link.label}</a>
     ))}
     {showNavActionButton && actionButton && (
       <a

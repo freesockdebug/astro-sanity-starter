@@ -5,6 +5,7 @@ import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_COLLECTIONS, DEFAULT_RFQ, DEFAULT_HERO } from '@data/defaults';
+import { getLangFromUrl, getLocalizedPath, getLocalizedValue, useTranslations } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -20,6 +21,9 @@ interface Props {
   products?: any[];
 }
 
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
 const {
   badge = DEFAULT_COLLECTIONS.badge,
   title = DEFAULT_COLLECTIONS.title,
@@ -29,7 +33,7 @@ const {
   actionButtonText: propActionText,
   actionButtonUrl = DEFAULT_HERO.primaryButtonUrl,
   showCardQuoteButton: propShowCardQuote,
-  cardDetailsButtonText = DEFAULT_COLLECTIONS.cardDetailsButtonText,
+  cardDetailsButtonText = t('catalog.viewDetail'),
   cardQuoteButtonText,
   products: propProducts
 } = Astro.props;
@@ -44,11 +48,15 @@ const normalizedProducts = propProducts !== undefined
   ? propProducts.map((p: any) => ProductService.normalize(p, 480))
   : await fetchNormalizedProducts(480);
 
-const activeCollections = normalizedProducts.map((p) => ({
-  ...p,
-  title: p.shortTitle || p.title,
-  fullTitle: p.title
-}));
+const activeCollections = normalizedProducts.map((p) => {
+  const localizedTitle = getLocalizedValue(p.title, currentLang);
+  const localizedShortTitle = getLocalizedValue(p.shortTitle, currentLang) || localizedTitle;
+  return {
+    ...p,
+    title: localizedShortTitle,
+    fullTitle: localizedTitle
+  };
+});
 
 const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
 const showHeaderActionButton = RfqSettingsService.isButtonVisible({
@@ -129,7 +137,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
           <div class="flex-1 min-h-0 flex flex-col">
             <!-- Card Header: Title & Specs Subtitle (Standardized height to align across all cards) -->
             <div class="shrink-0 h-[44px] flex flex-col justify-center">
-              <a href={`/products/${item.id}`} class="block">
+              <a href={getLocalizedPath(`/products/${item.id}`, currentLang)} class="block">
                 <h3 class="text-base sm:text-lg font-semibold text-[#1d1d1f] tracking-tight group-hover:text-black transition-colors line-clamp-1 leading-snug">
                   {item.title}
                 </h3>
@@ -139,7 +147,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
 
             <!-- Card Image Box: Strict 1:1 square on mobile to prevent height variance; flex-1 auto-fit on desktop -->
             <a
-              href={`/products/${item.id}`}
+              href={getLocalizedPath(`/products/${item.id}`, currentLang)}
               class="block relative w-full aspect-square lg:aspect-auto lg:flex-1 lg:min-h-0 rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-inner my-2.5 group-hover:shadow-md transition-shadow shrink-0 lg:shrink"
             >
               <img
@@ -184,7 +192,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
           <!-- Bottom Action: Refined Apple Clean Pill -->
           <div class="shrink-0 mt-3 pt-2.5 border-t border-black/5 flex items-center justify-between">
             <a
-              href={`/products/${item.id}`}
+              href={getLocalizedPath(`/products/${item.id}`, currentLang)}
               class="text-xs font-semibold text-[#1d1d1f] hover:underline inline-flex items-center gap-1"
             >
               <span>{cardDetailsButtonText}</span>

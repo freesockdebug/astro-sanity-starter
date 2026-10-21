@@ -51,22 +51,26 @@ const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
 
 const BATCH_SIZE = 20;
 const initialProducts = mergedProducts.slice(0, BATCH_SIZE);
-const minimalProducts = mergedProducts.map((p: any) => ({
-  id: p.id,
-  slug: p.slug,
-  title: p.title,
-  shortTitle: p.shortTitle,
-  category: p.category,
-  image: p.image,
-  colors: p.colors,
-  leadTime: p.leadTime,
-  composition: p.composition,
-  wholesalePrice: p.wholesalePrice,
-  moq: p.moq,
-  sku: p.sku,
-  tagline: p.tagline,
-  gauge: p.gauge
-}));
+const minimalProducts = mergedProducts.map((p: any) => {
+  const locTitle = getLocalizedValue(p.title, currentLang);
+  const locShortTitle = getLocalizedValue(p.shortTitle, currentLang) || locTitle;
+  return {
+    id: p.id,
+    slug: p.slug,
+    title: locTitle,
+    shortTitle: locShortTitle,
+    category: p.category,
+    image: p.image,
+    colors: p.colors,
+    leadTime: p.leadTime,
+    composition: p.composition,
+    wholesalePrice: p.wholesalePrice,
+    moq: p.moq,
+    sku: p.sku,
+    tagline: getLocalizedValue(p.tagline, currentLang),
+    gauge: p.gauge
+  };
+});
 const catalogJson = JSON.stringify(minimalProducts);
 
 const firstCardImg = mergedProducts[0]?.image;
@@ -169,9 +173,9 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             aria-label="Sort product catalog"
             class="px-2.5 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 text-[#1d1d1f] focus:outline-none focus:border-black cursor-pointer font-medium"
           >
-            <option value="featured">Featured Styles</option>
-            <option value="moq-asc">MOQ: Low to High</option>
-            <option value="title-asc">Title: A to Z</option>
+            <option value="featured">{t('catalog.sortFeatured')}</option>
+            <option value="moq-asc">{t('catalog.sortMoq')}</option>
+            <option value="title-asc">{t('catalog.sortTitle')}</option>
           </select>
 
           <!-- Active Category Indicator Hook (Preserved for reactive script compatibility) -->
@@ -303,7 +307,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
           </svg>
-          <span>Loading more styles...</span>
+          <span>{t('catalog.loadingMore')}</span>
         </div>
 
         <!-- End-of-List Divider (Compact padding) -->
@@ -320,7 +324,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   <script type="application/json" id="catalog-products-data" set:html={catalogJson}></script>
 </Layout>
 
-<script define:vars={{ cardQuoteText }}>
+<script define:vars={{ cardQuoteText, currentLang }}>
   // Catalog State Management
   const catalogDataEl = document.getElementById('catalog-products-data');
   const allProducts = catalogDataEl ? JSON.parse(catalogDataEl.textContent || '[]') : [];
@@ -396,6 +400,8 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     const card = document.createElement('div');
     card.className = "group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between";
 
+    const productUrlPrefix = currentLang && currentLang !== 'en' ? `/${currentLang}/products/` : '/products/';
+
     const colorDots = (item.colors || [])
       .slice(0, 4)
       .map(
@@ -410,7 +416,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       <div class="flex-1 min-h-0 flex flex-col">
         <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with rounded corners -->
         <a
-          href="/products/${item.slug}"
+          href="${productUrlPrefix}${item.slug}"
           class="block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] my-0 group-hover:opacity-95 transition-all shrink-0"
         >
           <img
@@ -437,7 +443,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
         <!-- 3. Taobao Title: Strict 2-line clamp with fixed 36px height (18px line-height) -->
         <div class="shrink-0 h-[36px] mt-0.5 px-0.5">
-          <a href="/products/${item.slug}" class="block">
+          <a href="${productUrlPrefix}${item.slug}" class="block">
             <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-[18px]" title="${item.title}">
               ${item.shortTitle || item.title}
             </h3>

@@ -2,20 +2,24 @@
 // src/components/QuoteDrawer.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { DEFAULT_RFQ } from '@data/defaults';
+import { getLangFromUrl, useTranslations } from '@i18n';
 
 interface Props {
   settings?: any;
 }
 
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
 const { settings } = Astro.props;
 const rfqSettings = settings ?? (await fetchRfqSettings());
 
-const drawerTitle = rfqSettings?.drawerTitle || DEFAULT_RFQ.drawerTitle;
+const drawerTitle = rfqSettings?.drawerTitle || t('rfq.drawerTitle');
 const drawerSubtitle = rfqSettings?.drawerSubtitle || DEFAULT_RFQ.drawerSubtitle;
 const drawerStatus = rfqSettings?.drawerStatus || DEFAULT_RFQ.drawerStatus;
 const drawerEmptyTitle = rfqSettings?.drawerEmptyTitle || DEFAULT_RFQ.drawerEmptyTitle;
-const drawerEmptyDesc = rfqSettings?.drawerEmptyDesc || DEFAULT_RFQ.drawerEmptyDesc;
-const submitButtonText = rfqSettings?.drawerSubmitButtonText || DEFAULT_RFQ.drawerSubmitButtonText;
+const drawerEmptyDesc = rfqSettings?.drawerEmptyDesc || t('rfq.emptyMessage');
+const submitButtonText = rfqSettings?.drawerSubmitButtonText || t('rfq.submitQuote');
 const successFeedbackMessage = rfqSettings?.drawerSuccessMessage || DEFAULT_RFQ.drawerSuccessMessage;
 const swatchKitSku = rfqSettings?.swatchKitSku || DEFAULT_RFQ.swatchKitSku;
 const swatchKitTitle = rfqSettings?.swatchKitTitle || DEFAULT_RFQ.swatchKitTitle;
@@ -36,6 +40,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
   data-swatch-desc={swatchKitDesc}
   data-swatch-image={swatchKitImageUrl}
   data-swatch-moq={swatchKitMoq}
+  data-remove-text={t('rfq.remove')}
 >
   <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" aria-label="Toggle Request for Quote Drawer" />
   
@@ -62,9 +67,9 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
             <button
               id="btn-clear-cart"
               type="button"
-              class="text-xs text-[#86868b] hover:text-rose-600 transition-colors hidden"
+              class="text-xs text-[#86868b] hover:text-rose-600 transition-colors hidden cursor-pointer"
             >
-              Clear all
+              {t('rfq.clearAll')}
             </button>
             <label
               for="quote-drawer-toggle"
@@ -129,14 +134,14 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
               name="email"
               required
               aria-label="Work Email Address (Required)"
-              placeholder="Work Email Address *"
+              placeholder={t('rfq.emailPlaceholder')}
               class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
             <input
               type="text"
               name="whatsapp"
               aria-label="WhatsApp or Phone Number"
-              placeholder="WhatsApp / Phone"
+              placeholder={t('rfq.phonePlaceholder')}
               class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
           </div>
@@ -145,7 +150,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
             type="text"
             name="destination"
             aria-label="Shipping Country and City"
-            placeholder="Shipping Country & City (for freight estimate)"
+            placeholder={t('rfq.destinationPlaceholder')}
             class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
           />
 
@@ -153,7 +158,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
             name="message"
             rows="2"
             aria-label="Customization requirements"
-            placeholder="Customization requirements (Custom logo, Pantone color, packaging, target price)..."
+            placeholder={t('rfq.requirementsPlaceholder')}
             class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b] resize-none"
           ></textarea>
 
@@ -375,6 +380,9 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     const submit = formSection.querySelector('button[type="submit"]') as HTMLButtonElement | null;
     if (submit) submit.disabled = false;
 
+    const rootEl = document.getElementById('quote-drawer-root');
+    const removeText = rootEl?.dataset.removeText || 'Remove';
+
     container.innerHTML = items
       .map(
         (item) => `
@@ -414,7 +422,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
               data-variant="${item.variant}"
               class="text-[11px] text-[#86868b] hover:text-rose-600 transition-colors"
             >
-              Remove
+              ${removeText}
             </button>
           </div>
         </div>

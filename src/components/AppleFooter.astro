@@ -11,6 +11,10 @@ import {
   DEFAULT_FOOTER_COLUMNS,
   DEFAULT_LEGAL_LINKS,
 } from '@data/defaults';
+import { getLangFromUrl, useTranslations } from '@i18n';
+
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
 
 const config = Astro.props.config ?? await fetchData();
 const rfqSettings = await fetchRfqSettings();
@@ -118,7 +122,7 @@ const legalLinks = rawLegalLinks.map((l: any) => ({
     >
       <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
     </svg>
-    <span class="text-[8px] sm:text-[9px] font-bold tracking-wider uppercase text-[#86868b] group-hover:text-black transition-colors leading-tight mt-0.5">TOP</span>
+    <span class="text-[8px] sm:text-[9px] font-bold tracking-wider uppercase text-[#86868b] group-hover:text-black transition-colors leading-tight mt-0.5">{t('common.backToTop')}</span>
   </button>
 </footer>
 

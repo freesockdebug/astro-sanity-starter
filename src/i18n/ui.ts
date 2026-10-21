@@ -31,6 +31,10 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'catalog.quickInquiry': 'Quick Inquiry',
     'catalog.leadTime': 'Sampling Lead: 48h',
     'catalog.moqPrefix': 'MOQ',
+    'catalog.sortFeatured': 'Featured Styles',
+    'catalog.sortMoq': 'MOQ: Low to High',
+    'catalog.sortTitle': 'Title: A to Z',
+    'catalog.loadingMore': 'Loading more styles...',
 
     // Product Detail Page (PDP)
     'pdp.addToQuote': 'Add to Quote Basket',
@@ -55,6 +59,12 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.emptyMessage': 'Your inquiry basket is empty. Select styles from the catalog.',
     'rfq.submitQuote': 'Submit Official RFQ',
     'rfq.sampleRequest': 'Request Swatch & Prototype',
+    'rfq.emailPlaceholder': 'Work Email Address *',
+    'rfq.phonePlaceholder': 'WhatsApp / Phone',
+    'rfq.destinationPlaceholder': 'Shipping Country & City (for freight estimate)',
+    'rfq.requirementsPlaceholder': 'Customization requirements (Custom logo, Pantone color, packaging, target price)...',
+    'rfq.clearAll': 'Clear all',
+    'rfq.remove': 'Remove',
 
     // General
     'common.backToTop': 'TOP',
@@ -81,6 +91,10 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'catalog.quickInquiry': 'Schnellanfrage',
     'catalog.leadTime': 'Musterzeit: 48 Std.',
     'catalog.moqPrefix': 'Mindestmenge',
+    'catalog.sortFeatured': 'Empfohlene Modelle',
+    'catalog.sortMoq': 'Mindestmenge: aufsteigend',
+    'catalog.sortTitle': 'Titel: A bis Z',
+    'catalog.loadingMore': 'Weitere Modelle laden...',
 
     // Product Detail Page (PDP)
     'pdp.addToQuote': 'Zur Anfrageliste hinzufügen',
@@ -105,6 +119,12 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.emptyMessage': 'Ihre Anfrageliste ist leer. Wählen Sie Artikel aus dem Katalog.',
     'rfq.submitQuote': 'Offizielle Preisanfrage senden',
     'rfq.sampleRequest': 'Muster anfordern',
+    'rfq.emailPlaceholder': 'Geschäftliche E-Mail-Adresse *',
+    'rfq.phonePlaceholder': 'WhatsApp / Telefon',
+    'rfq.destinationPlaceholder': 'Lieferland & Stadt (für Frachtkalkulation)',
+    'rfq.requirementsPlaceholder': 'Anforderungen (eigenes Logo, Pantone-Farbe, Verpackung, Zielpreis)...',
+    'rfq.clearAll': 'Alles leeren',
+    'rfq.remove': 'Entfernen',
 
     // General
     'common.backToTop': 'NACH OBEN',
@@ -131,6 +151,10 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'catalog.quickInquiry': 'Demande rapide',
     'catalog.leadTime': 'Délai échantillon: 48h',
     'catalog.moqPrefix': 'Quantité min.',
+    'catalog.sortFeatured': 'Modèles en vedette',
+    'catalog.sortMoq': 'Quantité min.: croissant',
+    'catalog.sortTitle': 'Titre: A à Z',
+    'catalog.loadingMore': 'Chargement de modèles supplémentaires...',
 
     // Product Detail Page (PDP)
     'pdp.addToQuote': 'Ajouter à la demande de devis',
@@ -155,6 +179,12 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.emptyMessage': 'Votre panier de devis est vide. Sélectionnez des modèles dans le catalogue.',
     'rfq.submitQuote': 'Soumettre la demande de devis',
     'rfq.sampleRequest': 'Demander un échantillon',
+    'rfq.emailPlaceholder': 'Adresse e-mail professionnelle *',
+    'rfq.phonePlaceholder': 'WhatsApp / Téléphone',
+    'rfq.destinationPlaceholder': 'Pays & Ville de livraison (pour devis transport)',
+    'rfq.requirementsPlaceholder': 'Besoins de personnalisation (logo, couleur Pantone, emballage, prix cible)...',
+    'rfq.clearAll': 'Tout effacer',
+    'rfq.remove': 'Supprimer',
 
     // General
     'common.backToTop': 'HAUT',
@@ -181,6 +211,10 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'catalog.quickInquiry': 'Consulta rápida',
     'catalog.leadTime': 'Plazo de muestra: 48h',
     'catalog.moqPrefix': 'Pedido mín.',
+    'catalog.sortFeatured': 'Modelos destacados',
+    'catalog.sortMoq': 'Pedido mín.: de menor a mayor',
+    'catalog.sortTitle': 'Título: A a Z',
+    'catalog.loadingMore': 'Cargando más estilos...',
 
     // Product Detail Page (PDP)
     'pdp.addToQuote': 'Añadir a la cotización',
@@ -205,6 +239,12 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'rfq.emptyMessage': 'Su cesta está vacía. Seleccione modelos del catálogo.',
     'rfq.submitQuote': 'Enviar cotización formal',
     'rfq.sampleRequest': 'Solicitar muestra de tejido',
+    'rfq.emailPlaceholder': 'Correo electrónico corporativo *',
+    'rfq.phonePlaceholder': 'WhatsApp / Teléfono',
+    'rfq.destinationPlaceholder': 'País y ciudad de entrega (para estimación de flete)',
+    'rfq.requirementsPlaceholder': 'Requisitos de personalización (logotipo, color Pantone, embalaje, precio objetivo)...',
+    'rfq.clearAll': 'Borrar todo',
+    'rfq.remove': 'Eliminar',
 
     // General
     'common.backToTop': 'ARRIBA',
