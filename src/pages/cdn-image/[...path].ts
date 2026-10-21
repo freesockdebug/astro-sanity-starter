@@ -29,7 +29,8 @@ export const GET: APIRoute = async ({ params, request, url }) => {
       headers: {
         'Accept': request.headers.get('Accept') || 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'User-Agent': request.headers.get('User-Agent') || 'Mozilla/5.0 (compatible; Cloudflare-Image-Proxy)'
-      }
+      },
+      signal: AbortSignal.timeout(6000)
     });
 
     if (!upstreamRes.ok) {
