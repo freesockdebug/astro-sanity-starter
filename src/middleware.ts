@@ -16,11 +16,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
 
-  // 2. Bypass cache for APIs, Sanity Studio admin, dynamic auth, and static asset chunks
+  // 2. Intercept missing /_astro/ static assets: if an asset request reaches SSR Worker,
+  // it does not exist in the static bucket. Return explicit 404 to prevent falling through to dynamic HTML routes.
+  if (pathname.startsWith('/_astro/')) {
+    return new Response('Asset Not Found', {
+      status: 404,
+      statusText: 'Not Found',
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    });
+  }
+
+  // 3. Bypass cache for APIs, Sanity Studio admin, dynamic auth, and static asset chunks
   if (
     pathname.startsWith('/api/') ||
     pathname.startsWith('/studio') ||
-    pathname.startsWith('/_astro/') ||
     pathname.startsWith('/cdn-image/') ||
     pathname === '/favicon.ico' ||
     pathname === '/robots.txt' ||
@@ -80,11 +92,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
       const edgeHeaders = new Headers(cloned.headers);
 
       // Instruct Cloudflare Edge Cache & Browser:
-      // Browser: max-age=0, must-revalidate (browser always gets fresh or revalidated from edge)
-      // Edge / CDN: s-maxage=86400 (cache at edge for 24 hours), SWR for 7 days
-      edgeHeaders.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
-      edgeHeaders.set('Cloudflare-CDN-Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
-      edgeHeaders.set('CDN-Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+      // Browser: max-age=0, must-revalidate (browser always revalidates or gets fresh)
+      // Edge / CDN: s-maxage=300 (cache at CDN edge for 5 min, eliminating origin storms while preventing stale HTML asset desync), SWR for 1 hour
+      edgeHeaders.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
+      edgeHeaders.delete('Cloudflare-CDN-Cache-Control');
+      edgeHeaders.delete('CDN-Cache-Control');
       edgeHeaders.set('X-Edge-Cache', 'MISS');
 
       const responseToCache = new Response(cloned.body, {

@@ -10,7 +10,7 @@ import { DEFAULT_CATALOG, DEFAULT_RFQ } from '@data/defaults';
 import { getLangFromUrl, useTranslations, getLocalizedValue, getLocalizedPath } from '@i18n';
 
 export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);

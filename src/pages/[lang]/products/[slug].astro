@@ -6,7 +6,12 @@ import { LANGUAGES } from '@i18n';
 export const prerender = false;
 const { lang, slug } = Astro.params;
 
-if (!lang || !(lang in LANGUAGES) || lang === 'en') {
+// Guard against static assets, hidden paths, or file extensions falling into dynamic lang product detail
+if (!lang || lang.startsWith('_') || lang.includes('.') || slug?.includes('.')) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+if (!(lang in LANGUAGES) || lang === 'en') {
   return Astro.redirect(`/products/${slug || ''}`);
 }
 ---

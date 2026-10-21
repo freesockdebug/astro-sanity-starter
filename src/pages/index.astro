@@ -10,7 +10,7 @@ import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE } 
 import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
 
 export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
 // Scheme 2: Single Aggregated GROQ Query - fetches page, siteConfig, and rfqSettings in 1 network roundtrip
 let batchData: any = null;

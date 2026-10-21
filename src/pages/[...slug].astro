@@ -11,9 +11,15 @@ import { normalizeSections, extractHeroPreload } from '@data/blocks';
 import { getLangFromUrl, getLocalizedValue } from '@i18n';
 
 export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
 const { slug } = Astro.params;
+
+// Fast 404 for static asset extensions to prevent unnecessary CMS roundtrips or MIME confusion
+if (slug && /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml|json)$/i.test(slug)) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
 const formattedSlug = !slug || slug === '/' ? '/' : (slug.startsWith('/') ? slug : `/${slug}`);
 const unslashed = formattedSlug.replace(/^\//, '');
 
