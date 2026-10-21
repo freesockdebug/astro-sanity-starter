@@ -39,9 +39,8 @@ const {
 } = Astro.props;
 
 const siteConfig = await fetchSiteConfig();
-const rfqSettings = await fetchRfqSettings();
-const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText;
-const resolvedCardQuoteText = cardQuoteButtonText || rfqSettings?.cardQuoteBtnText || t('catalog.requestQuote');
+const actionButtonText = propActionText?.trim() || (currentLang !== 'en' ? t('hero.requestSwatch') : (rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText));
+const resolvedCardQuoteText = cardQuoteButtonText || (currentLang !== 'en' ? t('catalog.requestQuote') : (rfqSettings?.cardQuoteBtnText || t('catalog.requestQuote')));
 
 // Only display products added to this section in Sanity Studio; unadded products fall back to normalized catalog
 const normalizedProducts = propProducts !== undefined

@@ -8,6 +8,7 @@ import { PAGE_QUERY_OBJ } from '@data/page';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { normalizeSections, extractHeroPreload } from '@data/blocks';
+import { getLangFromUrl, getLocalizedValue } from '@i18n';
 
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
@@ -40,9 +41,13 @@ if (!page) {
     return new Response("404 Not Found", { status: 404, statusText: "Not Found" });
 }
 
+const currentLang = getLangFromUrl(Astro.url);
 const { title, sections: rawSections, metaTitle, metaDescription, socialImage } = page;
-const sections = normalizeSections(rawSections);
+const sections = normalizeSections(rawSections, currentLang);
 const heroPreload = extractHeroPreload(sections);
+const localizedTitle = (title && typeof title === 'object' ? getLocalizedValue(title, currentLang) : '') || title;
+const localizedMetaTitle = (metaTitle && typeof metaTitle === 'object' ? getLocalizedValue(metaTitle, currentLang) : '') || metaTitle;
+const localizedMetaDescription = (metaDescription && typeof metaDescription === 'object' ? getLocalizedValue(metaDescription, currentLang) : '') || metaDescription;
 ---
 
 {

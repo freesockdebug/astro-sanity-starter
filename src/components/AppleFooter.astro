@@ -24,20 +24,96 @@ const footer = config?.footer;
 const rawBrandTitle = header?.title || DEFAULT_BRAND_TITLE;
 const brandTitle = cleanBrandTitle(rawBrandTitle, DEFAULT_BRAND_TITLE);
 const rawFooterText = footer?.text || DEFAULT_COPYRIGHT_TEXT;
-const footerBio = footer?.description || DEFAULT_FOOTER_BIO;
-const statusBadge = footer?.statusBadge || DEFAULT_STATUS_BADGE;
+
+const FOOTER_BIO_BY_LANG: Record<string, string> = {
+  de: "Spezialisierter Hersteller von 200-Nadel-Luxusbekleidung, edler Seide, Kaschmir und nahtlosen Essentials für internationale Modemarken.",
+  fr: "Fabricant spécialisé en maille de luxe 200 aiguilles, soies fines, cachemire et essentiels sans couture pour marques de mode mondiales.",
+  es: "Fabricante especializado en prendas de lujo de 200 agujas, sedas finas, cachemira y básicos sin costuras para marcas de moda globales.",
+  en: DEFAULT_FOOTER_BIO
+};
+
+const STATUS_BADGE_BY_LANG: Record<string, string> = {
+  de: "Musterraum: 48h weltweiter Expressversand aktiv",
+  fr: "Atelier d'échantillons : Expédition mondiale 48h active",
+  es: "Sala de muestras: Envío global 48h activo",
+  en: DEFAULT_STATUS_BADGE
+};
+
+const COLUMN_TRANSLATIONS: Record<string, Record<string, string>> = {
+  de: {
+    "Product Lines": "Produktlinien",
+    "B2B Services": "B2B-Dienstleistungen",
+    "Certifications": "Zertifizierungen",
+    "Overview": "Überblick",
+    "Signature Weave": "Charakteristische Bindung",
+    "Technical Architecture": "Technische Architektur",
+    "Ready-to-Order Archive": "Bestellbares Archiv",
+    "All Silhouettes Archive": "Alle Modelle",
+    "Mulberry Silk Loafers": "Maulbeerseide-Modelle",
+    "Ribbed Cashmere Crews": "Gerippte Kaschmirstrümpfe",
+    "Seamless Essentials": "Nahtlose Basics",
+    "Wholesale Quote (RFQ)": "Großhandelsanfrage (RFQ)",
+    "Custom Pantone Dyeing": "Individuelle Pantone-Färbung",
+    "Private Label Packaging": "Private-Label-Verpackung",
+    "Rapid 72h Prototyping": "Express-Prototyping 72h"
+  },
+  fr: {
+    "Product Lines": "Lignes de Produits",
+    "B2B Services": "Services B2B",
+    "Certifications": "Certifications",
+    "Overview": "Aperçu",
+    "Signature Weave": "Tricot Signature",
+    "Technical Architecture": "Architecture Technique",
+    "Ready-to-Order Archive": "Catalogue Prêt-à-Commander",
+    "All Silhouettes Archive": "Toutes les Silhouettes",
+    "Mulberry Silk Loafers": "Mocassins Soie de Mûrier",
+    "Ribbed Cashmere Crews": "Chaussettes Côtelées Cachemire",
+    "Seamless Essentials": "Essentiels Sans Couture",
+    "Wholesale Quote (RFQ)": "Devis de Gros (RFQ)",
+    "Custom Pantone Dyeing": "Teinture Pantone Dédiée",
+    "Private Label Packaging": "Conditionnement Marque Blanche",
+    "Rapid 72h Prototyping": "Prototypage Express 72h"
+  },
+  es: {
+    "Product Lines": "Líneas de Producto",
+    "B2B Services": "Servicios B2B",
+    "Certifications": "Certificaciones",
+    "Overview": "Visión General",
+    "Signature Weave": "Tejido Exclusivo",
+    "Technical Architecture": "Arquitectura Técnica",
+    "Ready-to-Order Archive": "Catálogo Listo para Pedido",
+    "All Silhouettes Archive": "Todas las Siluetas",
+    "Mulberry Silk Loafers": "Pikis Seda de Morera",
+    "Ribbed Cashmere Crews": "Calcetines Canalé Cachemira",
+    "Seamless Essentials": "Básicos Sin Costuras",
+    "Wholesale Quote (RFQ)": "Presupuesto Mayorista (RFQ)",
+    "Custom Pantone Dyeing": "Tintado Pantone Personalizado",
+    "Private Label Packaging": "Empaque de Marca Blanca",
+    "Rapid 72h Prototyping": "Prototipado Rápido 72h"
+  }
+};
+
+const footerBio = currentLang !== 'en' ? (FOOTER_BIO_BY_LANG[currentLang] || DEFAULT_FOOTER_BIO) : (footer?.description || DEFAULT_FOOTER_BIO);
+const statusBadge = currentLang !== 'en' ? (STATUS_BADGE_BY_LANG[currentLang] || DEFAULT_STATUS_BADGE) : (footer?.statusBadge || DEFAULT_STATUS_BADGE);
 
 const cleanFooterText = cleanEnglishText(rawFooterText) || DEFAULT_COPYRIGHT_TEXT;
 
+const colDict = COLUMN_TRANSLATIONS[currentLang] || {};
 const rawColumns = (footer?.columns && footer.columns.length > 0) ? footer.columns : DEFAULT_FOOTER_COLUMNS;
-const columns = rawColumns.map((col: any) => ({
-  ...col,
-  title: cleanEnglishText(col.title),
-  links: col.links?.map((l: any) => ({
-    ...l,
-    label: cleanEnglishText(l.label)
-  }))
-}));
+const columns = rawColumns.map((col: any) => {
+  const cleanedTitle = cleanEnglishText(col.title);
+  return {
+    ...col,
+    title: colDict[cleanedTitle] || cleanedTitle,
+    links: col.links?.map((l: any) => {
+      const cleanedLabel = cleanEnglishText(l.label);
+      return {
+        ...l,
+        label: colDict[cleanedLabel] || cleanedLabel
+      };
+    })
+  };
+});
 
 const rawLegalLinks = (footer?.legalLinks && footer.legalLinks.length > 0) ? footer.legalLinks : DEFAULT_LEGAL_LINKS;
 const legalLinks = rawLegalLinks.map((l: any) => ({

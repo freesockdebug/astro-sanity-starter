@@ -106,7 +106,8 @@ const rfqSettings = await fetchRfqSettings();
 const rawMacroImage = propMacroImage?.trim() || DEFAULT_SPEC_MATRIX.macroImage;
 const macroImage = SanityImageService.macro(rawMacroImage, 1200);
 const macroSrcSet = SanityImageService.srcSet(rawMacroImage, [360, 600, 1000]);
-const primaryButtonText = propPrimaryText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText;
+const primaryButtonText = propPrimaryText?.trim() || (currentLang !== 'en' ? t('hero.requestSwatch') : (rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText));
+const resolvedSecondaryText = (secondaryButtonText && secondaryButtonText !== DEFAULT_SPEC_MATRIX.secondaryButtonText) ? secondaryButtonText : (currentLang !== 'en' ? t('hero.exploreLineSheets') : secondaryButtonText);
 
 const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";
 const showPrimaryButton = propShowPrimary !== undefined
@@ -283,7 +284,7 @@ const cleanDescription = (description || "").replace(/^\d+/, "").trim();
           href={getLocalizedPath(secondaryButtonUrl, currentLang)}
           class="w-full sm:w-auto px-4 py-2 rounded-full text-[#1d1d1f] text-xs font-medium hover:bg-white hover:shadow-sm border border-black/10 transition-all text-center"
         >
-          {secondaryButtonText}
+          {resolvedSecondaryText}
         </a>
       )}
     </div>

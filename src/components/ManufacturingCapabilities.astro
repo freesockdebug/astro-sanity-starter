@@ -29,7 +29,7 @@ const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
 const rfqSettings = await fetchRfqSettings();
-const actionButtonText = propActionText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText;
+const actionButtonText = propActionText?.trim() || (currentLang !== 'en' ? t('hero.requestSwatch') : (rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_RFQ.heroSwatchBtnText));
 
 const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
 const showActionButton = RfqSettingsService.isButtonVisible({
@@ -51,12 +51,33 @@ function extractCleanTitle(title: string) {
   return (title || "").replace(/^([0-9]+[a-zA-Z+]*\s*)/, '').trim() || title;
 }
 
-const footers = [
-  "Lonati Single & Double Cylinders",
-  "CAD to Sample with DHL Express",
-  "Pantone Dyeing & Custom Packaging",
-  "Sedex, BSCI & OEKO-TEX 100"
-];
+const FOOTERS_BY_LANG: Record<string, string[]> = {
+  de: [
+    "Lonati Ein- & Doppelzylinder",
+    "CAD bis Musterversand mit DHL Express",
+    "Pantone-Färbung & Private-Label-Verpackung",
+    "Sedex, BSCI & OEKO-TEX 100"
+  ],
+  fr: [
+    "Monocylindre & double cylindre Lonati",
+    "Du patronage CAO à l'envoi DHL Express",
+    "Teinture Pantone & packaging sur mesure",
+    "Certifié Sedex, BSCI & OEKO-TEX 100"
+  ],
+  es: [
+    "Cilindros simples y dobles Lonati",
+    "Del patronaje CAD al envío DHL Express",
+    "Tintado Pantone y embalaje personalizado",
+    "Certificado Sedex, BSCI y OEKO-TEX 100"
+  ],
+  en: [
+    "Lonati Single & Double Cylinders",
+    "CAD to Sample with DHL Express",
+    "Pantone Dyeing & Custom Packaging",
+    "Sedex, BSCI & OEKO-TEX 100"
+  ]
+};
+const footers = FOOTERS_BY_LANG[currentLang] || FOOTERS_BY_LANG.en;
 ---
 
 <section id="manufacturing" class="bg-white text-[#1d1d1f] border-t border-black/5 py-8 sm:py-10 lg:py-12">

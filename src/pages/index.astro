@@ -7,7 +7,7 @@ import { SECTIONS, IMAGE, normalizeSections, extractHeroPreload } from '@data/bl
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
-import { getLangFromUrl, useTranslations } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
 
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
@@ -34,18 +34,18 @@ try {
 if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
 if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
 
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
 const homeData = batchData?.page;
 
-const sections = normalizeSections(homeData?.sections || []);
+const sections = normalizeSections(homeData?.sections || [], currentLang);
 const heroSection = sections.find((s: any) => s._type === 'heroSection' || s._type === 'hosieryHeroSection');
-const metaTitle = homeData?.metaTitle || DEFAULT_META_TITLE;
-const metaDescription = homeData?.metaDescription || DEFAULT_META_DESCRIPTION;
+const metaTitle = (homeData?.metaTitle && typeof homeData.metaTitle === 'object' ? getLocalizedValue(homeData.metaTitle, currentLang) : '') || homeData?.metaTitle || DEFAULT_META_TITLE;
+const metaDescription = (homeData?.metaDescription && typeof homeData.metaDescription === 'object' ? getLocalizedValue(homeData.metaDescription, currentLang) : '') || homeData?.metaDescription || DEFAULT_META_DESCRIPTION;
 const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || DEFAULT_FALLBACK_IMAGE;
 
 const heroPreload = extractHeroPreload(sections);
-
-const currentLang = getLangFromUrl(Astro.url);
-const t = useTranslations(currentLang);
 
 // 100% Dynamic section resolver based strictly on Studio CMS configuration & order
 const SECTION_DEFAULTS: Record<string, { id: string; label: string }> = {

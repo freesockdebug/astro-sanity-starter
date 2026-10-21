@@ -2,6 +2,7 @@
 // src/components/SwatchInquiry.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { DEFAULT_SWATCH_INQUIRY } from '@data/defaults';
+import { getLangFromUrl, useTranslations } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -25,10 +26,45 @@ const {
   showButton: propShowButton,
 } = Astro.props;
 
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
 const rfqSettings = await fetchRfqSettings();
 const showInquirySection = propShowSection !== undefined ? propShowSection : (rfqSettings?.showInquirySection ?? true);
 const showSwatchButton = propShowButton !== undefined ? Boolean(propShowButton) : true;
-const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_SWATCH_INQUIRY.buttonText;
+const displayButtonText = propButtonText?.trim() || (currentLang !== 'en' ? t('hero.requestSwatch') : (rfqSettings?.heroSwatchBtnText?.trim() || DEFAULT_SWATCH_INQUIRY.buttonText));
+
+const I18N_COPY: Record<string, { tagText: string; tagSubtitle: string; verified: string; included: string; note: string }> = {
+  de: {
+    tagText: 'Physisches Muster-Dossier',
+    tagSubtitle: 'Kuratierte Garnringe, Stoffmuster & DHL-Expressversand',
+    verified: 'Kostenlos für verifizierte Marken',
+    included: 'Im Muster-Dossier enthalten:',
+    note: 'Prioritätsprüfung für Modemarken & Einkaufsbüros'
+  },
+  fr: {
+    tagText: 'Dossier d’Échantillons Physiques',
+    tagSubtitle: 'Nuanciers de fils, échantillons de tissus et envoi DHL Express',
+    verified: 'Offert aux marques vérifiées',
+    included: 'Inclus dans le dossier d’échantillons :',
+    note: 'Traitement prioritaire pour marques de mode et bureaux d’achat'
+  },
+  es: {
+    tagText: 'Dossier de Muestras Físicas',
+    tagSubtitle: 'Anillas de hilo, muestrarios de tejido y envío por DHL Express',
+    verified: 'Gratis para marcas verificadas',
+    included: 'Incluido en el dossier de muestras:',
+    note: 'Gestión prioritaria para marcas de moda y oficinas de compras'
+  },
+  en: {
+    tagText: 'Physical Sample Dossier',
+    tagSubtitle: 'Curated Yarn Rings, Fabric Swatches & DHL Air Dispatch',
+    verified: 'Free for Verified Brands',
+    included: 'Included in Sample Dossier:',
+    note: 'Priority Handling for Fashion Labels & Buying Offices'
+  }
+};
+const copy = I18N_COPY[currentLang] || I18N_COPY.en;
 ---
 
 {showInquirySection && (
@@ -51,9 +87,9 @@ const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnTe
           />
         </picture>
         <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent flex flex-col justify-end p-4 sm:p-5 text-white">
-          <span class="text-[10px] font-mono tracking-widest uppercase text-white/80">Physical Sample Dossier</span>
+          <span class="text-[10px] font-mono tracking-widest uppercase text-white/80">{copy.tagText}</span>
           <p class="text-xs sm:text-sm font-semibold mt-0.5 text-white">
-            Curated Yarn Rings, Fabric Swatches & DHL Air Dispatch
+            {copy.tagSubtitle}
           </p>
         </div>
       </div>
@@ -66,7 +102,7 @@ const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnTe
             <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-mono">
               48h Express
             </span>
-            <span class="hidden sm:inline-block text-[10px] text-zinc-400 font-mono">· Free for Verified Brands</span>
+            <span class="hidden sm:inline-block text-[10px] text-zinc-400 font-mono">· {copy.verified}</span>
           </div>
           
           <h2 class="text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight text-[#1d1d1f] mt-1">
@@ -80,7 +116,7 @@ const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnTe
         <!-- Included Fabric Silhouettes Pills (Snug & Compact) -->
         <div class="pt-2 border-t border-black/5">
           <span class="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1.5">
-            Included in Sample Dossier:
+            {copy.included}
           </span>
           <div class="flex flex-wrap gap-1.5">
             {categories.map((cat: string) => (
@@ -107,7 +143,7 @@ const displayButtonText = propButtonText?.trim() || rfqSettings?.heroSwatchBtnTe
             </button>
           )}
           <p class="text-[11px] text-[#86868b]">
-            Priority Handling for Fashion Labels & Buying Offices
+            {copy.note}
           </p>
         </div>
 

@@ -1,7 +1,7 @@
 ---
 // src/components/CustomSection.astro
 import { SanityImageService } from '@utils/image';
-import { getLangFromUrl, getLocalizedPath } from '@i18n';
+import { getLangFromUrl, getLocalizedPath, getLocalizedValue } from '@i18n';
 
 interface ButtonItem {
   label: string;
@@ -81,10 +81,46 @@ const {
   verticalAlign = 'center',
   preventOverflow = true,
   layoutMode = 'flow',
-  blocks = [],
+  blocks: propBlocks = [],
 } = Astro.props;
 
 const currentLang = getLangFromUrl(Astro.url);
+const loc = (val: any) => (val && typeof val === 'object' ? getLocalizedValue(val, currentLang) : val) || '';
+
+const blocks: BlockItem[] = (propBlocks || []).map((rawBlock: any) => {
+  if (!rawBlock || typeof rawBlock !== 'object') return rawBlock;
+  return {
+    ...rawBlock,
+    headline: loc(rawBlock.headline),
+    subtitle: loc(rawBlock.subtitle),
+    badge: loc(rawBlock.badge),
+    caption: loc(rawBlock.caption),
+    quote: loc(rawBlock.quote),
+    author: loc(rawBlock.author),
+    company: loc(rawBlock.company),
+    cards: Array.isArray(rawBlock.cards)
+      ? rawBlock.cards.map((c: any) => ({
+          ...c,
+          title: loc(c?.title),
+          desc: loc(c?.desc),
+          tag: loc(c?.tag),
+        }))
+      : rawBlock.cards,
+    metrics: Array.isArray(rawBlock.metrics)
+      ? rawBlock.metrics.map((m: any) => ({
+          ...m,
+          label: loc(m?.label),
+          desc: loc(m?.desc),
+        }))
+      : rawBlock.metrics,
+    buttons: Array.isArray(rawBlock.buttons)
+      ? rawBlock.buttons.map((b: any) => ({
+          ...b,
+          label: loc(b?.label),
+        }))
+      : rawBlock.buttons,
+  };
+});
 
 // 1. 智能场景预设 (Smart Screen Presets) 自动降维：彻底省去记忆复杂 CSS 参数
 // 自动推断：如果未显式传 preset，但 sectionHeight 为 screen-fit 或 blocks 包含双图对比，则自动按 dual-compare 黄金空间比例渲染
