@@ -17,6 +17,10 @@ export default defineType({
       title: 'SEO',
     },
     {
+      name: 'performance',
+      title: '性能与边缘缓存 (Performance & Cache)',
+    },
+    {
       name: 'integrations',
       title: '小部件与通知 (Widgets & Alerts)',
     },
@@ -42,12 +46,32 @@ export default defineType({
     }),
     defineField({
       name: 'enableImageProxy',
-      title: 'Enable Cloudflare Image Proxy & Cache',
+      title: '启用 Cloudflare 图片边缘代理与长效缓存',
       description:
-        'When enabled, Sanity images route through Cloudflare Edge Cache (/cdn-image) with 1-year immutable caching. This saves Sanity bandwidth and transformation quotas.',
+        '开启后，Sanity 图片统一经由 Cloudflare 边缘代理 (/cdn-image) 提供服务并享有 1 年强缓存，极大降低 Sanity 流量与转换配额消耗。',
       type: 'boolean',
       initialValue: true,
-      group: 'content',
+      group: 'performance',
+    }),
+    defineField({
+      name: 'edgeCacheTtl',
+      title: 'HTML 页面边缘缓存有效期 (Edge Cache TTL - 秒)',
+      description:
+        'Cloudflare 全球边缘 CDN 对 HTML 页面的缓存时长。推荐 300 秒（5 分钟），既能保证极致首屏速度（TTFB ~20ms），又能有效防止部署新版本时因旧缓存导致静态资源错乱。设置为 0 表示实时穿透（不缓存）。',
+      type: 'number',
+      initialValue: 300,
+      options: {
+        list: [
+          { title: '0 秒 (实时穿透 - 不缓存)', value: 0 },
+          { title: '60 秒 (1 分钟 - 频繁调试更新)', value: 60 },
+          { title: '300 秒 (5 分钟 - 推荐黄金标准)', value: 300 },
+          { title: '900 秒 (15 分钟 - 低频变动)', value: 900 },
+          { title: '1800 秒 (30 分钟)', value: 1800 },
+          { title: '3600 秒 (1 小时)', value: 3600 },
+          { title: '86400 秒 (24 小时 - 长效锁定，需配合自动 Purge)', value: 86400 },
+        ],
+      },
+      group: 'performance',
     }),
     defineField({
       name: 'titleSuffix',

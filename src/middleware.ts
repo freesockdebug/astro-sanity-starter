@@ -1,5 +1,6 @@
 // src/middleware.ts
 import { defineMiddleware } from 'astro:middleware';
+import { SiteConfigService } from '@data/siteConfig';
 
 /**
  * Cloudflare Edge Cache Middleware for HTML Pages
@@ -93,13 +94,31 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const contentType = response.headers.get('content-type') || '';
   if (cache && response.status === 200 && contentType.includes('text/html')) {
     try {
+      const siteConfig = await SiteConfigService.getConfig();
+      const edgeTtl = typeof siteConfig?.edgeCacheTtl === 'number' && siteConfig.edgeCacheTtl >= 0
+        ? siteConfig.edgeCacheTtl
+        : 300;
+
+      // When Studio configures 0s (real-time mode), bypass edge caching
+      if (edgeTtl === 0) {
+        const bypassHeaders = new Headers(response.headers);
+        bypassHeaders.set('Cache-Control', 'public, max-age=0, no-cache, no-store, must-revalidate');
+        bypassHeaders.set('X-Edge-Cache', 'BYPASS');
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: bypassHeaders,
+        });
+      }
+
+      const swr = Math.max(edgeTtl * 10, 3600);
       const cloned = response.clone();
       const edgeHeaders = new Headers(cloned.headers);
 
       // Instruct Cloudflare Edge Cache & Browser:
-      // Browser: max-age=0, must-revalidate (browser always revalidates or gets fresh)
-      // Edge / CDN: s-maxage=300 (cache at CDN edge for 5 min, eliminating origin storms while preventing stale HTML asset desync), SWR for 1 hour
-      edgeHeaders.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
+      // Browser: max-age=0, must-revalidate (browser always gets fresh)
+      // Edge / CDN: s-maxage=${edgeTtl} (configured via Studio), SWR for ${swr}s
+      edgeHeaders.set('Cache-Control', `public, max-age=0, s-maxage=${edgeTtl}, stale-while-revalidate=${swr}`);
       edgeHeaders.delete('Cloudflare-CDN-Cache-Control');
       edgeHeaders.delete('CDN-Cache-Control');
       edgeHeaders.set('X-Edge-Cache', 'MISS');

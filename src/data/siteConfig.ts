@@ -14,6 +14,7 @@ export const CONFIG_QUERY_OBJ = `{
   footer,
   titleSuffix,
   enableImageProxy,
+  edgeCacheTtl,
   enableWhatsApp,
   whatsAppNumber,
   whatsAppPrefillText,

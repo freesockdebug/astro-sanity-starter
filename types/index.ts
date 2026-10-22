@@ -180,6 +180,7 @@ export interface SiteConfig {
     titleSuffix?: string;
     rfqConfig?: RfqSettings;
     enableImageProxy?: boolean;
+    edgeCacheTtl?: number;
 
     // Widget 1: WhatsApp Click-to-Chat Widget
     enableWhatsApp?: boolean;
