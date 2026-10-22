@@ -238,22 +238,24 @@ export interface CatalogCategoryItem {
 export class ProductService {
   private static cachedProducts: Product[] | null = null;
   private static cacheTimestamp: number = 0;
+  private static inflightProductsPromise: Promise<Product[]> | null = null;
   private static cachedCategories: any[] | null = null;
   private static categoryCacheTimestamp: number = 0;
+  private static inflightCategoriesPromise: Promise<any[]> | null = null;
   private static readonly CACHE_TTL_MS = 10_000;
 
   public static seed(data: { products?: Product[]; categories?: any[]; catalogSettings?: any }): void {
     const now = Date.now();
-    if (data.products) {
-      this.cachedProducts = data.products;
+    if (data.products !== undefined) {
+      this.cachedProducts = data.products || [];
       this.cacheTimestamp = now;
     }
-    if (data.categories) {
-      this.cachedCategories = data.categories;
+    if (data.categories !== undefined) {
+      this.cachedCategories = data.categories || [];
       this.categoryCacheTimestamp = now;
     }
-    if (data.catalogSettings) {
-      this.cachedCatalogSettings = data.catalogSettings;
+    if (data.catalogSettings !== undefined) {
+      this.cachedCatalogSettings = data.catalogSettings || null;
       this.catalogSettingsTimestamp = now;
     }
   }
@@ -350,15 +352,27 @@ export class ProductService {
       return this.cachedProducts;
     }
 
-    try {
-      const data = await client.fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_FIELDS}`);
-      this.cachedProducts = data || [];
-      this.cacheTimestamp = now;
-      return this.cachedProducts;
-    } catch (err: any) {
-      console.error('ProductService.getAll failed to fetch products from Sanity:', err?.message);
-      return this.cachedProducts || [];
+    if (!forceRefresh && this.inflightProductsPromise) {
+      return this.inflightProductsPromise;
     }
+
+    this.inflightProductsPromise = (async () => {
+      try {
+        const data = await client.fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`);
+        this.cachedProducts = data || [];
+        this.cacheTimestamp = Date.now();
+        return this.cachedProducts;
+      } catch (err: any) {
+        console.error('ProductService.getAll failed to fetch products from Sanity:', err?.message);
+        this.cachedProducts = this.cachedProducts || [];
+        this.cacheTimestamp = Date.now();
+        return this.cachedProducts;
+      } finally {
+        this.inflightProductsPromise = null;
+      }
+    })();
+
+    return this.inflightProductsPromise;
   }
 
   /**
@@ -370,15 +384,27 @@ export class ProductService {
       return this.cachedCategories;
     }
 
-    try {
-      const data = await client.fetch<any[]>(`*[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS}`);
-      this.cachedCategories = data || [];
-      this.categoryCacheTimestamp = now;
-      return this.cachedCategories;
-    } catch (err: any) {
-      console.error('ProductService.getCategories failed to fetch categories from Sanity:', err?.message);
-      return this.cachedCategories || [];
+    if (!forceRefresh && this.inflightCategoriesPromise) {
+      return this.inflightCategoriesPromise;
     }
+
+    this.inflightCategoriesPromise = (async () => {
+      try {
+        const data = await client.fetch<any[]>(`*[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS}`);
+        this.cachedCategories = data || [];
+        this.categoryCacheTimestamp = Date.now();
+        return this.cachedCategories;
+      } catch (err: any) {
+        console.error('ProductService.getCategories failed to fetch categories from Sanity:', err?.message);
+        this.cachedCategories = this.cachedCategories || [];
+        this.categoryCacheTimestamp = Date.now();
+        return this.cachedCategories;
+      } finally {
+        this.inflightCategoriesPromise = null;
+      }
+    })();
+
+    return this.inflightCategoriesPromise;
   }
 
   /**
@@ -413,10 +439,11 @@ export class ProductService {
     try {
       const data = await client.fetch<any>(`*[_type == "catalogSettings"][0]`);
       this.cachedCatalogSettings = data || null;
-      this.catalogSettingsTimestamp = now;
+      this.catalogSettingsTimestamp = Date.now();
       return this.cachedCatalogSettings;
     } catch (err: any) {
       console.error('ProductService.getCatalogSettings failed:', err?.message);
+      this.catalogSettingsTimestamp = Date.now();
       return this.cachedCatalogSettings || null;
     }
   }

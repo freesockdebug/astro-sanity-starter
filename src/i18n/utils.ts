@@ -94,22 +94,121 @@ export function getLocalizedPath(path: string = '', lang: SupportedLocale = DEFA
   return `/${lang}${cleanPath ? `/${cleanPath}` : ''}${searchSuffix}${hashSuffix}`;
 }
 
+const COMMON_CMS_TERM_TRANSLATIONS: Record<Exclude<SupportedLocale, 'en'>, Record<string, string>> = {
+  de: {
+    'Composition': 'Materialzusammensetzung',
+    'Needle Count': 'Nadelanzahl',
+    'Needle Gauge': 'Nadelstärke',
+    'Toe Closure': 'Spitzennaht',
+    'Toe Linking': 'Spitzenverarbeitung',
+    'Weight': 'Gewicht',
+    'Sizing': 'Größenlauf',
+    'Sizing Standard': 'Größenstandard',
+    'Care': 'Pflegehinweis',
+    'Care Instructions': 'Pflegehinweise',
+    'Certifications': 'Zertifizierungen',
+    'Origin': 'Herkunft',
+    'Packaging': 'Verpackung',
+    'MOQ': 'Mindestmenge',
+    'Lead Time': 'Lieferzeit',
+    'Silk Series': 'Seiden-Serie',
+    'Cashmere & Wool': 'Kaschmir & Wolle',
+    '15D Sheer Series': '15D Feinstrumpf',
+    'Combed Cotton': 'Gekämmte Baumwolle',
+    'Athletic Terry': 'Sport-Frottee',
+  },
+  fr: {
+    'Composition': 'Composition',
+    'Needle Count': 'Nombre d’aiguilles',
+    'Needle Gauge': 'Jauge d’aiguille',
+    'Toe Closure': 'Fermeture pointe',
+    'Toe Linking': 'Rémaillage pointe',
+    'Weight': 'Poids',
+    'Sizing': 'Pointures',
+    'Sizing Standard': 'Norme de taille',
+    'Care': 'Entretien',
+    'Care Instructions': 'Conseils d’entretien',
+    'Certifications': 'Certifications',
+    'Origin': 'Origine',
+    'Packaging': 'Conditionnement',
+    'MOQ': 'Quantité min.',
+    'Lead Time': 'Délai de production',
+    'Silk Series': 'Série Soie',
+    'Cashmere & Wool': 'Cachemire & Laine',
+    '15D Sheer Series': 'Série Voile 15D',
+    'Combed Cotton': 'Coton Peigné',
+    'Athletic Terry': 'Éponge Sport',
+  },
+  es: {
+    'Composition': 'Composición',
+    'Needle Count': 'Número de agujas',
+    'Needle Gauge': 'Grosor de aguja',
+    'Toe Closure': 'Cierre de puntera',
+    'Toe Linking': 'Remallado de puntera',
+    'Weight': 'Peso',
+    'Sizing': 'Tallas',
+    'Sizing Standard': 'Estándar de tallas',
+    'Care': 'Cuidado',
+    'Care Instructions': 'Instrucciones de lavado',
+    'Certifications': 'Certificaciones',
+    'Origin': 'Origen',
+    'Packaging': 'Embalaje',
+    'MOQ': 'Pedido mín.',
+    'Lead Time': 'Plazo de entrega',
+    'Silk Series': 'Serie Seda',
+    'Cashmere & Wool': 'Cachemira y Lana',
+    '15D Sheer Series': 'Serie Fina 15D',
+    'Combed Cotton': 'Algodón Peinado',
+    'Athletic Terry': 'Rizo Deportivo',
+  },
+};
+
 /**
  * Gracefully extract localized text from Sanity CMS field
  * Supports:
  * 1. Multilingual object: { en: "Silk Sock", de: "Seidensocke" }
- * 2. Legacy flat string: "Silk Sock"
- * 3. Fallback to English, then to any available language
+ * 2. Localized fallback for non-default locales when CMS only has English or flat string
+ * 3. Legacy flat string: "Silk Sock"
  */
-export function getLocalizedValue(field: any, lang: SupportedLocale = DEFAULT_LOCALE): string {
-  if (!field) return '';
-  if (typeof field === 'string') return field;
+export function getLocalizedValue(
+  field: any,
+  lang: SupportedLocale = DEFAULT_LOCALE,
+  fallback?: string
+): string {
+  if (!field) return fallback || '';
+
   if (typeof field === 'object') {
-    if (field[lang]) return String(field[lang]);
-    if (field[DEFAULT_LOCALE]) return String(field[DEFAULT_LOCALE]);
+    const targetVal = field[lang];
+    if (typeof targetVal === 'string' && targetVal.trim()) {
+      return targetVal.trim();
+    }
+    if (lang !== DEFAULT_LOCALE && fallback) {
+      return fallback;
+    }
+    if (typeof field[DEFAULT_LOCALE] === 'string' && field[DEFAULT_LOCALE].trim()) {
+      const enVal = field[DEFAULT_LOCALE].trim();
+      if (lang !== DEFAULT_LOCALE) {
+        const mapped = COMMON_CMS_TERM_TRANSLATIONS[lang]?.[enVal];
+        if (mapped) return mapped;
+      }
+      return enVal;
+    }
     // Fallback to first available value in object
-    const values = Object.values(field).filter((v) => typeof v === 'string');
-    if (values.length > 0) return String(values[0]);
+    const values = Object.values(field).filter((v) => typeof v === 'string' && v.trim());
+    if (values.length > 0) return String(values[0]).trim();
+    return fallback || '';
   }
-  return '';
+
+  if (typeof field === 'string') {
+    const trimmed = field.trim();
+    if (!trimmed) return fallback || '';
+    if (lang !== DEFAULT_LOCALE) {
+      if (fallback) return fallback;
+      const mapped = COMMON_CMS_TERM_TRANSLATIONS[lang]?.[trimmed];
+      if (mapped) return mapped;
+    }
+    return trimmed;
+  }
+
+  return fallback || '';
 }

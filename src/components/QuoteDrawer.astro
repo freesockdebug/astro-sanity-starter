@@ -14,16 +14,16 @@ const t = useTranslations(currentLang);
 const { settings } = Astro.props;
 const rfqSettings = settings ?? (await fetchRfqSettings());
 
-const drawerTitle = getLocalizedValue(rfqSettings?.drawerTitle, currentLang) || t('rfq.drawerTitle');
-const drawerSubtitle = getLocalizedValue(rfqSettings?.drawerSubtitle, currentLang) || DEFAULT_RFQ.drawerSubtitle;
-const drawerStatus = getLocalizedValue(rfqSettings?.drawerStatus, currentLang) || DEFAULT_RFQ.drawerStatus;
-const drawerEmptyTitle = getLocalizedValue(rfqSettings?.drawerEmptyTitle, currentLang) || DEFAULT_RFQ.drawerEmptyTitle;
-const drawerEmptyDesc = getLocalizedValue(rfqSettings?.drawerEmptyDesc, currentLang) || t('rfq.emptyMessage');
-const submitButtonText = getLocalizedValue(rfqSettings?.drawerSubmitButtonText, currentLang) || t('rfq.submitQuote');
-const successFeedbackMessage = getLocalizedValue(rfqSettings?.drawerSuccessMessage, currentLang) || DEFAULT_RFQ.drawerSuccessMessage;
+const drawerTitle = getLocalizedValue(rfqSettings?.drawerTitle, currentLang, t('rfq.drawerTitle'));
+const drawerSubtitle = getLocalizedValue(rfqSettings?.drawerSubtitle, currentLang, t('rfq.drawerSubtitle'));
+const drawerStatus = getLocalizedValue(rfqSettings?.drawerStatus, currentLang, t('rfq.statusText'));
+const drawerEmptyTitle = getLocalizedValue(rfqSettings?.drawerEmptyTitle, currentLang, t('rfq.emptyTitle'));
+const drawerEmptyDesc = getLocalizedValue(rfqSettings?.drawerEmptyDesc, currentLang, t('rfq.emptyMessage'));
+const submitButtonText = getLocalizedValue(rfqSettings?.drawerSubmitButtonText, currentLang, t('rfq.submitQuote'));
+const successFeedbackMessage = getLocalizedValue(rfqSettings?.drawerSuccessMessage, currentLang, t('rfq.successMessage'));
 const swatchKitSku = rfqSettings?.swatchKitSku || DEFAULT_RFQ.swatchKitSku;
-const swatchKitTitle = getLocalizedValue(rfqSettings?.swatchKitTitle, currentLang) || DEFAULT_RFQ.swatchKitTitle;
-const swatchKitDesc = getLocalizedValue(rfqSettings?.swatchKitDesc, currentLang) || DEFAULT_RFQ.swatchKitDesc;
+const swatchKitTitle = getLocalizedValue(rfqSettings?.swatchKitTitle, currentLang, t('rfq.swatchKitTitle'));
+const swatchKitDesc = getLocalizedValue(rfqSettings?.swatchKitDesc, currentLang, t('rfq.swatchKitSubtitle'));
 const swatchKitImageUrl = rfqSettings?.swatchKitImage?.asset?.url || rfqSettings?.swatchKitImageUrl || DEFAULT_RFQ.swatchKitImageUrl;
 const swatchKitMoq = rfqSettings?.swatchKitMoq || DEFAULT_RFQ.swatchKitMoq;
 
@@ -44,8 +44,13 @@ const turnstileSiteKey =
   data-swatch-image={swatchKitImageUrl}
   data-swatch-moq={swatchKitMoq}
   data-remove-text={t('rfq.remove')}
+  data-confirm-clear={t('rfq.confirmClear')}
+  data-submitting-text={t('rfq.submitting')}
+  data-security-error={t('rfq.securityCheckError')}
+  data-network-error={t('rfq.networkError')}
+  data-empty-error={t('rfq.emptyMessage')}
 >
-  <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" aria-label="Toggle Request for Quote Drawer" />
+  <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" aria-label={drawerTitle} />
   
   <div class="drawer-side">
     <!-- Click backdrop to close -->
@@ -118,14 +123,14 @@ const turnstileSiteKey =
               type="text"
               name="company"
               required
-              aria-label="Company or Brand Name (Required)"
+              aria-label={t('rfq.companyPlaceholder')}
               placeholder={t('rfq.companyPlaceholder')}
               class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
             <input
               type="text"
               name="buyer_name"
-              aria-label="Buyer Name"
+              aria-label={t('rfq.buyerNamePlaceholder')}
               placeholder={t('rfq.buyerNamePlaceholder')}
               class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
@@ -136,14 +141,14 @@ const turnstileSiteKey =
               type="email"
               name="email"
               required
-              aria-label="Work Email Address (Required)"
+              aria-label={t('rfq.emailPlaceholder')}
               placeholder={t('rfq.emailPlaceholder')}
               class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
             <input
               type="text"
               name="whatsapp"
-              aria-label="WhatsApp or Phone Number"
+              aria-label={t('rfq.phonePlaceholder')}
               placeholder={t('rfq.phonePlaceholder')}
               class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
             />
@@ -152,7 +157,7 @@ const turnstileSiteKey =
           <input
             type="text"
             name="destination"
-            aria-label="Shipping Country and City"
+            aria-label={t('rfq.destinationPlaceholder')}
             placeholder={t('rfq.destinationPlaceholder')}
             class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b]"
           />
@@ -160,7 +165,7 @@ const turnstileSiteKey =
           <textarea
             name="message"
             rows="2"
-            aria-label="Customization requirements"
+            aria-label={t('rfq.requirementsPlaceholder')}
             placeholder={t('rfq.requirementsPlaceholder')}
             class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b] resize-none"
           ></textarea>
@@ -348,6 +353,7 @@ const turnstileSiteKey =
     }
   });
 
+  const rootEl = document.getElementById('quote-drawer-root');
   const container = document.getElementById('quote-items-container');
   const emptyState = document.getElementById('quote-empty-state');
   const badgeCount = document.getElementById('quote-badge-count');
@@ -399,7 +405,6 @@ const turnstileSiteKey =
     const submit = formSection.querySelector('button[type="submit"]') as HTMLButtonElement | null;
     if (submit) submit.disabled = false;
 
-    const rootEl = document.getElementById('quote-drawer-root');
     const removeText = escapeHtml(rootEl?.dataset.removeText || 'Remove');
 
     container.innerHTML = items
@@ -498,7 +503,7 @@ const turnstileSiteKey =
     }
     btnClear.dataset.originalText = btnClear.textContent || 'Clear all';
     btnClear.dataset.confirming = 'true';
-    btnClear.textContent = 'Confirm clear?';
+    btnClear.textContent = rootEl?.dataset.confirmClear || 'Confirm?';
     clearConfirmTimer = setTimeout(() => {
       if (btnClear) {
         btnClear.dataset.confirming = 'false';
@@ -514,7 +519,7 @@ const turnstileSiteKey =
     if (items.length === 0) {
       if (alertBox) {
         alertBox.className = 'p-3 rounded-xl text-xs bg-amber-50 text-amber-800 border border-amber-200 block';
-        alertBox.textContent = 'Your quote basket is empty. Please add at least one style before submitting.';
+        alertBox.textContent = rootEl?.dataset.emptyError || 'Your quote basket is empty.';
       }
       return;
     }
@@ -524,7 +529,7 @@ const turnstileSiteKey =
     if (!turnstileToken) {
       if (alertBox) {
         alertBox.className = 'p-3 rounded-xl text-xs bg-amber-50 text-amber-800 border border-amber-200 block';
-        alertBox.textContent = 'Please complete the Cloudflare security verification before submitting.';
+        alertBox.textContent = rootEl?.dataset.securityError || 'Please complete the security check below.';
       }
       return;
     }
@@ -545,7 +550,7 @@ const turnstileSiteKey =
 
     if (submitBtn && submitText) {
       submitBtn.disabled = true;
-      submitText.textContent = 'Submitting Quote Request...';
+      submitText.textContent = rootEl?.dataset.submittingText || 'Submitting Official RFQ...';
     }
 
     try {
@@ -560,7 +565,7 @@ const turnstileSiteKey =
       if (res.ok && data.success) {
         if (alertBox) {
           alertBox.className = 'p-3 rounded-xl text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 block';
-          alertBox.textContent = submitBtn?.dataset.successMessage || '✓ Quote request received! Our B2B specialist will reply within 24 hours.';
+          alertBox.textContent = submitBtn?.dataset.successMessage || '✓ Official RFQ Received!';
         }
         rfqForm.reset();
         clearQuote();
@@ -580,7 +585,7 @@ const turnstileSiteKey =
     } catch (err: any) {
       if (alertBox) {
         alertBox.className = 'p-3 rounded-xl text-xs bg-rose-50 text-rose-800 border border-rose-200 block';
-        alertBox.textContent = `Submission failed: ${err.message || 'Please check your connection and try again.'}`;
+        alertBox.textContent = err.message || rootEl?.dataset.networkError || 'Network error occurred.';
       }
       // Only reset Turnstile on submission failure so user can re-verify and retry
       if (typeof (window as any).turnstile !== 'undefined') {
@@ -593,7 +598,7 @@ const turnstileSiteKey =
     } finally {
       if (submitBtn && submitText) {
         submitBtn.disabled = false;
-        submitText.textContent = submitBtn.dataset.defaultText || 'Submit Request for Quote';
+        submitText.textContent = submitBtn.dataset.defaultText || 'Submit Official RFQ';
       }
     }
   });

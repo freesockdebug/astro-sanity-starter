@@ -29,7 +29,7 @@ const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
 const rfqSettings = await fetchRfqSettings();
-const actionButtonText = propActionText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang) || t('hero.requestSwatch');
+const actionButtonText = propActionText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
 
 const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
 const showActionButton = RfqSettingsService.isButtonVisible({

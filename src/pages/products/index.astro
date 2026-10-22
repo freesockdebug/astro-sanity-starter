@@ -29,13 +29,13 @@ try {
   console.error("Failed to batch-fetch catalog data from Sanity:", e);
 }
 
-// Pre-populate service caches so Layout, QuoteDrawer, and Filter tabs make 0 additional API requests
-if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
-if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
+// Pre-populate service caches unconditionally so Layout, QuoteDrawer, and Filter tabs make 0 additional API requests
+SiteConfigService.seed(batchData?.siteConfig);
+RfqSettingsService.seed(batchData?.rfqSettings);
 ProductService.seed({
-  products: batchData?.products,
-  categories: batchData?.categories,
-  catalogSettings: batchData?.catalogSettings
+  products: batchData?.products || [],
+  categories: batchData?.categories || [],
+  catalogSettings: batchData?.catalogSettings || null
 });
 
 const mergedProducts = (batchData?.products || []).map((p: any) => ProductService.normalize(p, 480));
@@ -43,8 +43,9 @@ const siteConfig = batchData?.siteConfig;
 const rfqSettings = batchData?.rfqSettings;
 const catalogSettings = batchData?.catalogSettings;
 
-const cardQuoteText = getLocalizedValue(rfqSettings?.cardQuoteBtnText, currentLang) || DEFAULT_RFQ.cardQuoteBtnText;
-const allLabel = getLocalizedValue(catalogSettings?.allSilhouettesLabel, currentLang) || DEFAULT_CATALOG.allSilhouettesLabel;
+const cardQuoteText = getLocalizedValue(rfqSettings?.cardQuoteBtnText, currentLang, t('catalog.cardQuoteBtn'));
+const allLabel = getLocalizedValue(catalogSettings?.allSilhouettesLabel, currentLang, t('catalog.allSilhouettes'));
+const unitPairLabel = t('catalog.unitPair');
 
 // 2. Resolve aggregated categories & counts via data service layer (instantly from memory)
 const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
@@ -62,7 +63,7 @@ const minimalProducts = mergedProducts.map((p: any) => {
     image: p.image,
     colors: p.colors,
     leadTime: p.leadTime,
-    composition: p.composition,
+    composition: getLocalizedValue(p.composition, currentLang),
     price: p.price,
     currency: p.currency,
     currencySymbol: p.currencySymbol || '$',
@@ -87,8 +88,8 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 ---
 
 <Layout
-  title={getLocalizedValue(catalogSettings?.metaTitle, currentLang) || DEFAULT_CATALOG.metaTitle}
-  description={getLocalizedValue(catalogSettings?.metaDescription, currentLang) || DEFAULT_CATALOG.metaDescription}
+  title={getLocalizedValue(catalogSettings?.metaTitle, currentLang, t('catalog.title'))}
+  description={getLocalizedValue(catalogSettings?.metaDescription, currentLang, t('catalog.subtitle'))}
   image={mergedProducts[0]?.image}
   preloadHeroImage={catalogHeroPreload}
 >
@@ -98,13 +99,13 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     <!-- 1. Catalog Hero Header (Apple Rail Narrow) -->
     <section class="catalog-hero-header apple-rail-narrow text-center mb-6 sm:mb-9 space-y-1.5 sm:space-y-2.5">
       <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-semibold text-[#52525b] uppercase tracking-wider">
-        <span>{getLocalizedValue(catalogSettings?.badgeText, currentLang) || DEFAULT_CATALOG.badgeText}</span>
+        <span>{getLocalizedValue(catalogSettings?.badgeText, currentLang, t('catalog.badge'))}</span>
       </div>
       <h1 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
-        {getLocalizedValue(catalogSettings?.title, currentLang) || DEFAULT_CATALOG.title}
+        {getLocalizedValue(catalogSettings?.title, currentLang, t('catalog.title'))}
       </h1>
       <p class="text-xs sm:text-sm text-[#52525b] max-w-xl mx-auto font-normal leading-relaxed">
-        {getLocalizedValue(catalogSettings?.subtitle, currentLang) || DEFAULT_CATALOG.subtitle}
+        {getLocalizedValue(catalogSettings?.subtitle, currentLang, t('catalog.subtitle'))}
       </p>
     </section>
 
@@ -147,33 +148,33 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
           <!-- Realtime Search Input -->
           <div class="relative flex-1 md:w-48 lg:w-52">
-            <label for="catalog-search-input" class="sr-only">Search product catalog</label>
+            <label for="catalog-search-input" class="sr-only">{t('catalog.searchPlaceholder')}</label>
             <svg class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
               id="catalog-search-input"
-              aria-label="Search product silhouettes or SKUs"
-              placeholder={getLocalizedValue(catalogSettings?.searchPlaceholder, currentLang) || DEFAULT_CATALOG.searchPlaceholder}
+              aria-label={t('catalog.searchPlaceholder')}
+              placeholder={getLocalizedValue(catalogSettings?.searchPlaceholder, currentLang, t('catalog.searchPlaceholder'))}
               class="w-full pl-8 pr-7 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b] transition-all"
             />
             <button
               type="button"
               id="catalog-search-clear"
-              aria-label="Clear search text"
+              aria-label={t('rfq.clearAll')}
               class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-[#52525b] hover:text-black text-xs"
-              title="Clear search"
+              title={t('rfq.clearAll')}
             >
               ✕
             </button>
           </div>
 
           <!-- Sort Select -->
-          <label for="catalog-sort-select" class="sr-only">Sort products</label>
+          <label for="catalog-sort-select" class="sr-only">{t('catalog.sortFeatured')}</label>
           <select
             id="catalog-sort-select"
-            aria-label="Sort product catalog"
+            aria-label={t('catalog.sortFeatured')}
             class="px-2.5 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 text-[#1d1d1f] focus:outline-none focus:border-black cursor-pointer font-medium"
           >
             <option value="featured">{t('catalog.sortFeatured')}</option>
@@ -259,7 +260,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                 <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
                   <span class="text-[10px] font-mono">{item.currencySymbol || item.currency || '$'}</span>
                   <span class="text-sm font-mono tracking-tight font-bold">{item.price}</span>
-                  <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/{item.unit ? (item.unit.toLowerCase() === 'pairs' ? 'pair' : item.unit.toLowerCase().replace(/s$/, '')) : 'pair'}</span>
+                  <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/{unitPairLabel}</span>
                 </div>
                 <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq}</span>
               </div>
@@ -289,9 +290,9 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h3 class="text-base font-semibold text-[#1d1d1f]">{getLocalizedValue(catalogSettings?.emptyStateHeading, currentLang) || DEFAULT_CATALOG.emptyStateHeading}</h3>
+        <h3 class="text-base font-semibold text-[#1d1d1f]">{getLocalizedValue(catalogSettings?.emptyStateHeading, currentLang, t('catalog.emptyHeading'))}</h3>
         <p class="text-xs text-[#86868b] max-w-sm mx-auto">
-          {getLocalizedValue(catalogSettings?.emptyStateText, currentLang) || DEFAULT_CATALOG.emptyStateText}
+          {getLocalizedValue(catalogSettings?.emptyStateText, currentLang, t('catalog.emptyText'))}
         </p>
         <button
           type="button"
@@ -316,7 +317,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
         <!-- End-of-List Divider (Compact padding) -->
         <div id="catalog-all-loaded-notice" class="hidden items-center justify-center gap-3 text-xs text-[#86868b] select-none">
           <span class="w-10 sm:w-16 h-px bg-black/10"></span>
-          <span class="font-normal tracking-wide">{getLocalizedValue(catalogSettings?.endOfCatalogText, currentLang) || DEFAULT_CATALOG.endOfCatalogText}</span>
+          <span class="font-normal tracking-wide">{getLocalizedValue(catalogSettings?.endOfCatalogText, currentLang, t('catalog.endOfList'))}</span>
           <span class="w-10 sm:w-16 h-px bg-black/10"></span>
         </div>
       </div>
@@ -327,7 +328,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   <script type="application/json" id="catalog-products-data" set:html={catalogJson}></script>
 </Layout>
 
-<script define:vars={{ cardQuoteText, currentLang, moqPrefix: t('catalog.moqPrefix') }}>
+<script define:vars={{ cardQuoteText, currentLang, moqPrefix: t('catalog.moqPrefix'), unitPairLabel }}>
   // Catalog State Management
   const catalogDataEl = document.getElementById('catalog-products-data');
   const allProducts = catalogDataEl ? JSON.parse(catalogDataEl.textContent || '[]') : [];
@@ -463,7 +464,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
           <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
             <span class="text-[10px] font-mono">${item.currencySymbol || item.currency || '$'}</span>
             <span class="text-sm font-mono tracking-tight font-bold">${item.price}</span>
-            <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/${item.unit ? (item.unit.toLowerCase() === 'pairs' ? 'pair' : item.unit.toLowerCase().replace(/s$/, '')) : 'pair'}</span>
+            <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/${unitPairLabel}</span>
           </div>
           <span class="text-[9px] text-[#52525b] font-mono mt-0.5">${moqPrefix} ${item.moq}</span>
         </div>

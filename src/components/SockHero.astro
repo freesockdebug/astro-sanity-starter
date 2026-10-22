@@ -40,7 +40,7 @@ const rfqSettings = await fetchRfqSettings();
 const rawHeroImage = propHeroImage?.trim() || DEFAULT_FALLBACK_IMAGE;
 const heroImage = SanityImageService.hero(rawHeroImage, 1600);
 const heroSrcSet = SanityImageService.srcSet(rawHeroImage, [480, 800, 1200, 1600], { quality: 80 });
-const primaryButtonText = propPrimaryText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang) || t('hero.requestSwatch');
+const primaryButtonText = propPrimaryText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
 const resolvedSecondaryText = (secondaryButtonText && secondaryButtonText !== DEFAULT_HERO.secondaryButtonText) ? secondaryButtonText : t('hero.exploreLineSheets');
 
 // Super Title handling: support custom text or clean default

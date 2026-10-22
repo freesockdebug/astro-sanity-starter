@@ -4,6 +4,8 @@
  * Apple-style Minimalist Vertical Stage Navigator
  * Positioned cleanly along the right flank of the page content block.
  */
+import { getLangFromUrl, useTranslations } from '@i18n';
+
 interface Props {
   stages?: Array<{
     id: string;
@@ -12,12 +14,15 @@ interface Props {
   }>;
 }
 
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
 const defaultStages = [
-  { id: 'hero', num: '01', label: 'Overview' },
-  { id: 'specs', num: '02', label: 'Specification' },
-  { id: 'collections', num: '03', label: 'Silhouettes' },
-  { id: 'manufacturing', num: '04', label: 'Infrastructure' },
-  { id: 'inquiry', num: '05', label: 'Sample Request' }
+  { id: 'hero', num: '01', label: t('stage.overview') },
+  { id: 'specs', num: '02', label: t('stage.specs') },
+  { id: 'collections', num: '03', label: t('stage.collections') },
+  { id: 'manufacturing', num: '04', label: t('stage.infrastructure') },
+  { id: 'inquiry', num: '05', label: t('stage.sampleRequest') }
 ];
 
 const { stages = defaultStages } = Astro.props;

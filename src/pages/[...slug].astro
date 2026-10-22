@@ -38,9 +38,9 @@ try {
   console.error(`Failed to batch-fetch page data for ${formattedSlug}:`, e);
 }
 
-// Pre-populate service caches so Layout, AppleNav, QuoteDrawer, and sections make 0 additional API requests
-if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
-if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
+// Pre-populate service caches unconditionally so Layout, AppleNav, QuoteDrawer, and sections make 0 additional API requests
+SiteConfigService.seed(batchData?.siteConfig);
+RfqSettingsService.seed(batchData?.rfqSettings);
 
 const page: Page = batchData?.page;
 if (!page) {

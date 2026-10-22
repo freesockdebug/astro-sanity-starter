@@ -33,14 +33,14 @@ try {
   console.error(`Failed to batch-fetch product data for ${slug}:`, e);
 }
 
-// Pre-populate service caches so Layout, QuoteDrawer, and recommendations make 0 additional API requests
-if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
-if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
-if (batchData?.allProducts) ProductService.seed({ products: batchData.allProducts });
+// Pre-populate service caches unconditionally so Layout, QuoteDrawer, and recommendations make 0 additional API requests
+SiteConfigService.seed(batchData?.siteConfig);
+RfqSettingsService.seed(batchData?.rfqSettings);
+ProductService.seed({ products: batchData?.allProducts || [] });
 
 const currentProduct = batchData?.product;
 if (!currentProduct) {
-  return Astro.redirect('/#collections');
+  return Astro.redirect(getLocalizedPath('/#collections', currentLang));
 }
 
 const allProducts = batchData?.allProducts || [];
@@ -56,6 +56,7 @@ currentProduct.mainImage = currentProduct.mainImage || currentProduct.gallery[0]
 
 const resolvedMoq = resolveProductMoq(currentProduct.pricingTiers, currentProduct.moq);
 const currencySymbol = getCurrencySymbol(currentProduct.currency);
+const unitPairLabel = t('catalog.unitPair');
 
 const siteConfig = batchData?.siteConfig;
 const rfqSettings = batchData?.rfqSettings;
@@ -68,7 +69,7 @@ const collectionsLink = navLinks.find((l: any) =>
   l.url?.includes('collection') || 
   l.url?.includes('product')
 );
-const productsNavLabel = getLocalizedValue(collectionsLink?.label, currentLang) || t('nav.products');
+const productsNavLabel = getLocalizedValue(collectionsLink?.label, currentLang, t('nav.products'));
 const productsNavUrl = collectionsLink?.url || "/products";
 
 const currentIndex = allProducts.findIndex((p: any) => p.slug === slug);
@@ -85,12 +86,20 @@ const currentProductTagline = getLocalizedValue(currentProduct.tagline, currentL
 const prevProductTitle = getLocalizedValue(prevProduct.shortTitle || prevProduct.title, currentLang);
 const nextProductTitle = getLocalizedValue(nextProduct.shortTitle || nextProduct.title, currentLang);
 
-const addToQuoteBtnText = getLocalizedValue(currentProduct.addToQuoteButtonText, currentLang) || getLocalizedValue(rfqSettings?.btnAddToQuoteText, currentLang) || t('pdp.addToQuote');
+const addToQuoteBtnText = getLocalizedValue(
+  currentProduct.addToQuoteButtonText,
+  currentLang,
+  getLocalizedValue(rfqSettings?.btnAddToQuoteText, currentLang, t('pdp.addToQuote'))
+);
 
 // Amazon Sample Buying Link Resolution
 const rawAmazonUrl = currentProduct.amazonUrl || (currentProduct.amazonAsin ? `https://www.amazon.com/dp/${currentProduct.amazonAsin.trim()}` : null);
 const amazonSampleUrl = rawAmazonUrl || rfqSettings?.defaultAmazonStoreUrl || `https://www.amazon.com/s?k=${encodeURIComponent(currentProductTitle || DEFAULT_BRAND_TITLE)}`;
-const sampleButtonText = getLocalizedValue(currentProduct.sampleButtonText, currentLang) || getLocalizedValue(rfqSettings?.btnSampleAmazonText, currentLang) || t('pdp.buySampleAmazon');
+const sampleButtonText = getLocalizedValue(
+  currentProduct.sampleButtonText,
+  currentLang,
+  getLocalizedValue(rfqSettings?.btnSampleAmazonText, currentLang, t('pdp.buySampleAmazon'))
+);
 
 const showAddToQuoteButton = rfqSettings?.showProductAddToQuoteButton ?? true;
 const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
@@ -165,7 +174,7 @@ const productStructuredData: Record<string, any> = {
               <a
                 href={getLocalizedPath(`/products/${prevProduct.slug}`, currentLang)}
                 class="px-2.5 py-1 rounded-full border border-black/10 hover:border-black/25 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] transition-all flex items-center gap-1 shadow-2xs group"
-                title={`Previous: ${prevProductTitle}`}
+                title={`${t('pdp.prev')}: ${prevProductTitle}`}
               >
                 <svg class="w-3 h-3 text-[#86868b] group-hover:text-black transform group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
@@ -180,7 +189,7 @@ const productStructuredData: Record<string, any> = {
               <a
                 href={getLocalizedPath(`/products/${nextProduct.slug}`, currentLang)}
                 class="px-2.5 py-1 rounded-full border border-black/10 hover:border-black/25 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] transition-all flex items-center gap-1 shadow-2xs group"
-                title={`Next: ${nextProductTitle}`}
+                title={`${t('pdp.next')}: ${nextProductTitle}`}
               >
                 <span class="hidden sm:inline text-[11px]">{t('pdp.next')}</span>
                 <svg class="w-3 h-3 text-[#86868b] group-hover:text-black transform group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -208,12 +217,11 @@ const productStructuredData: Record<string, any> = {
                       aria-label={`View image ${idx + 1}`}
                       class={`carousel-thumb shrink-0 w-14 h-14 sm:w-15 sm:h-15 lg:w-[68px] lg:h-[68px] xl:w-[74px] xl:h-[74px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer bg-[#fafafa] flex items-center justify-center ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
                     >
-                      <img src={SanityImageService.thumbnail(img.src, 160)} alt={img.alt} class="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
+                      <img src={SanityImageService.thumbnail(img.src, 160)} alt={img.alt || currentProductTitle} class="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
                     </button>
                   ))}
                 </div>
 
-                <!-- Main Viewport Box with Controls (Fills full height on desktop, 100% full image with object-contain) -->
                 <!-- Main Viewport Box with Controls (Strict Responsive Aspect Ratio: Square on Mobile, 4:3 on Tablet, Full-Height on Desktop) -->
                 <div class="order-1 lg:order-2 relative w-full max-w-full flex-1 min-w-0 min-h-0 aspect-square sm:aspect-[4/3] lg:aspect-auto lg:h-full rounded-2xl overflow-hidden bg-[#fafafa] border border-zinc-200/80 shadow-xs group flex items-center justify-center">
                   <!-- Carousel Images Track (Native Scroll Snap for Silky Mobile Touch Swipe & Desktop Fluidity) -->
@@ -231,7 +239,7 @@ const productStructuredData: Record<string, any> = {
                           src={SanityImageService.hero(img.src, 1200)}
                           srcset={SanityImageService.srcSet(img.src, [480, 800, 1200]) || undefined}
                           sizes="(max-width: 1024px) 100vw, 800px"
-                          alt={img.alt}
+                          alt={img.alt || currentProductTitle}
                           class="absolute inset-0 m-auto max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)] max-h-[calc(100%-1rem)] sm:max-h-[calc(100%-2rem)] w-auto h-auto object-contain pointer-events-none select-none"
                           draggable="false"
                           loading={idx === 0 ? 'eager' : 'lazy'}
@@ -275,7 +283,7 @@ const productStructuredData: Record<string, any> = {
                       <button
                         type="button"
                         id="carousel-prev"
-                        aria-label="Previous slide"
+                        aria-label={t('pdp.prev')}
                         class="hidden sm:flex absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-zinc-900 shadow-sm backdrop-blur-md items-center justify-center transition-all opacity-80 group-hover:opacity-100 cursor-pointer"
                       >
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -286,7 +294,7 @@ const productStructuredData: Record<string, any> = {
                       <button
                         type="button"
                         id="carousel-next"
-                        aria-label="Next slide"
+                        aria-label={t('pdp.next')}
                         class="hidden sm:flex absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-zinc-900 shadow-sm backdrop-blur-md items-center justify-center transition-all opacity-80 group-hover:opacity-100 cursor-pointer"
                       >
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -300,7 +308,7 @@ const productStructuredData: Record<string, any> = {
               </div>
 
               <p class="text-[10px] text-zinc-400 font-mono text-center lg:text-left mt-1.5 shrink-0">
-                {getLocalizedValue(currentProduct.galleryHint, currentLang) || t('pdp.galleryHint') || DEFAULT_PRODUCT_DETAIL.galleryHint}
+                {getLocalizedValue(currentProduct.galleryHint, currentLang, t('pdp.galleryHint'))}
               </p>
             </div>
 
@@ -311,7 +319,7 @@ const productStructuredData: Record<string, any> = {
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 text-zinc-800 font-medium">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>{getLocalizedValue(currentProduct.statusBadge, currentLang) || t('pdp.statusBadge') || DEFAULT_PRODUCT_DETAIL.statusBadge}</span>
+                    <span>{getLocalizedValue(currentProduct.statusBadge, currentLang, t('pdp.statusBadge'))}</span>
                   </span>
                   {currentProduct.rating && (
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-stone-100 text-stone-700 border border-stone-200/60">
@@ -340,13 +348,13 @@ const productStructuredData: Record<string, any> = {
                         {tier.range}{tier.unit && !tier.range.toLowerCase().includes(tier.unit.toLowerCase()) ? ` ${tier.unit}` : ''}
                       </span>
                       <span class="text-zinc-950 font-bold font-mono text-xs sm:text-sm">
-                        {tier.price}{tier.unit ? ` / ${tier.unit.toLowerCase() === 'pairs' ? 'pair' : tier.unit.toLowerCase().replace(/s$/, '')}` : ''}
+                        {tier.price}{tier.unit ? ` / ${unitPairLabel}` : ''}
                       </span>
                     </div>
                   ))}
                 </div>
                 <p class="text-[10px] text-zinc-400 font-mono pt-0.5">
-                  {getLocalizedValue(currentProduct.priceNote, currentLang) || t('pdp.priceNote') || DEFAULT_PRODUCT_DETAIL.priceNote}
+                  {getLocalizedValue(currentProduct.priceNote, currentLang, t('pdp.priceNote'))}
                 </p>
               </div>
 
@@ -356,44 +364,47 @@ const productStructuredData: Record<string, any> = {
                 <div class="space-y-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">
-                      {getLocalizedValue(currentProduct.paletteTitle, currentLang) || t('pdp.paletteTitle') || DEFAULT_PRODUCT_DETAIL.paletteTitle}
+                      {getLocalizedValue(currentProduct.paletteTitle, currentLang, t('pdp.paletteTitle'))}
                     </span>
                     <span id="selected-color-name" class="text-xs font-medium text-zinc-900">
-                      {currentProduct.colors[0]?.name || "Default"}
+                      {getLocalizedValue(currentProduct.colors[0]?.name, currentLang) || "Default"}
                     </span>
                   </div>
                   <div class="flex items-center gap-1.5 flex-wrap">
-                    {currentProduct.colors.map((c: any, cIdx: number) => (
-                      <button
-                        type="button"
-                        class={`color-variant-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-all cursor-pointer ${
-                          cIdx === 0
-                            ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
-                            : 'border-zinc-200 bg-white text-zinc-800 hover:border-zinc-400'
-                        }`}
-                        data-color={c.name}
-                        data-hex={c.hex}
-                      >
-                        <span class="w-2.5 h-2.5 rounded-full border border-black/20" style={`background-color: ${c.hex}`}></span>
-                        <span>{c.name}</span>
-                      </button>
-                    ))}
+                    {currentProduct.colors.map((c: any, cIdx: number) => {
+                      const colorName = getLocalizedValue(c.name, currentLang);
+                      return (
+                        <button
+                          type="button"
+                          class={`color-variant-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-all cursor-pointer ${
+                            cIdx === 0
+                              ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                              : 'border-zinc-200 bg-white text-zinc-800 hover:border-zinc-400'
+                          }`}
+                          data-color={colorName}
+                          data-hex={c.hex}
+                        >
+                          <span class="w-2.5 h-2.5 rounded-full border border-black/20" style={`background-color: ${c.hex}`}></span>
+                          <span>{colorName}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 <!-- Quick Specs Micro Bento (High B2B credibility, compact) -->
                 <div class="grid grid-cols-3 gap-1.5 py-1.5 px-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 text-[11px]">
                   <div class="space-y-0.5">
-                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">Gauge</span>
-                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">200N Lonati</span>
+                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">{t('pdp.quickGaugeLabel')}</span>
+                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">{t('pdp.quickGaugeValue')}</span>
                   </div>
                   <div class="space-y-0.5 border-x border-black/5 px-2">
-                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">Toe Seam</span>
-                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">Hand-Linked</span>
+                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">{t('pdp.quickSeamLabel')}</span>
+                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">{t('pdp.quickSeamValue')}</span>
                   </div>
                   <div class="space-y-0.5 pl-1">
-                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">Sampling</span>
-                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">48h Dispatch</span>
+                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">{t('pdp.quickSamplingLabel')}</span>
+                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">{t('pdp.quickSamplingValue')}</span>
                   </div>
                 </div>
               </div>
@@ -430,7 +441,7 @@ const productStructuredData: Record<string, any> = {
                     rel="noopener noreferrer"
                     id="btn-amazon-sample"
                     class="w-full py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-semibold bg-[#f5f5f7] hover:bg-[#ff9900]/10 hover:border-[#ff9900]/40 text-[#1d1d1f] hover:text-[#111] border border-black/10 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
-                    title="Buy Sample directly on Amazon"
+                    title={sampleButtonText}
                   >
                     <svg class="w-4 h-4 text-[#232f3e] group-hover:text-[#ff9900] transition-colors" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M15.93 17.09c-2.83 2.08-6.94 3.19-10.51 3.19-4.99 0-9.48-1.92-12.87-5.13-.27-.25-.03-.6.29-.42 3.65 2.11 8.08 3.38 12.58 3.38 3.17 0 6.64-.72 9.81-2.22.48-.23.95.35.7.7v-.5zM16.8 15.65c-.36-.46-2.38-.22-3.3-.11-.28.03-.32-.2-.07-.37 1.63-1.14 4.3-.81 4.6.21.3 1.01-1.28 3.39-2.83 4.61-.24.19-.47.09-.36-.16.36-.8 1.48-3.09 1.96-4.18z"/>
@@ -458,7 +469,7 @@ const productStructuredData: Record<string, any> = {
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <span>{getLocalizedValue(currentProduct.secondaryButtonText, currentLang) || t('pdp.downloadSpecSheet')}</span>
+                    <span>{getLocalizedValue(currentProduct.secondaryButtonText, currentLang, t('pdp.downloadSpecSheet'))}</span>
                   </button>
                 </div>
                 )}
@@ -471,13 +482,13 @@ const productStructuredData: Record<string, any> = {
                   <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span class="truncate">{currentProduct.leadTime}</span>
+                  <span class="truncate">{getLocalizedValue(currentProduct.leadTime, currentLang)}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
                   <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
-                  <span class="truncate">{getLocalizedValue(currentProduct.supportBadge, currentLang) || t('pdp.supportBadge') || DEFAULT_PRODUCT_DETAIL.supportBadge}</span>
+                  <span class="truncate">{getLocalizedValue(currentProduct.supportBadge, currentLang, t('pdp.supportBadge'))}</span>
                 </div>
               </div>
             </div>
@@ -493,22 +504,22 @@ const productStructuredData: Record<string, any> = {
             <div class="flex items-center justify-between mb-3">
               <div>
                 <span class="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block">
-                  {getLocalizedValue(currentProduct.specsBadge, currentLang) || t('pdp.specsBadge') || DEFAULT_PRODUCT_DETAIL.specsBadge}
+                  {getLocalizedValue(currentProduct.specsBadge, currentLang, t('pdp.specsBadge'))}
                 </span>
                 <h2 class="text-lg sm:text-xl font-semibold tracking-tight text-zinc-950 mt-0.5">
-                  {getLocalizedValue(currentProduct.specsHeading, currentLang) || t('pdp.specs')}
+                  {getLocalizedValue(currentProduct.specsHeading, currentLang, t('pdp.specs'))}
                 </h2>
               </div>
               <span class="hidden sm:inline-block text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60">
-                ✓ 100% Lonati Verified
+                {t('pdp.lonatiVerified')}
               </span>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
               {currentProduct.specifications.map((spec: any) => (
                 <div class="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-[#f5f5f7] border border-black/5 hover:border-black/15 transition-all flex flex-col justify-between min-h-[88px]">
-                  <span class="text-[10px] font-mono uppercase tracking-wider text-[#86868b] block">{spec.label}</span>
-                  <span class="text-xs sm:text-[13px] font-semibold text-[#1d1d1f] mt-1.5 leading-snug line-clamp-3">{spec.value}</span>
+                  <span class="text-[10px] font-mono uppercase tracking-wider text-[#86868b] block">{getLocalizedValue(spec.label, currentLang)}</span>
+                  <span class="text-xs sm:text-[13px] font-semibold text-[#1d1d1f] mt-1.5 leading-snug line-clamp-3">{getLocalizedValue(spec.value, currentLang)}</span>
                 </div>
               ))}
             </div>

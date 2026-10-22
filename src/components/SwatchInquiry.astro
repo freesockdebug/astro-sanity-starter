@@ -32,7 +32,7 @@ const t = useTranslations(currentLang);
 const rfqSettings = await fetchRfqSettings();
 const showInquirySection = propShowSection !== undefined ? propShowSection : (rfqSettings?.showInquirySection ?? true);
 const showSwatchButton = propShowButton !== undefined ? Boolean(propShowButton) : true;
-const displayButtonText = propButtonText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang) || t('hero.requestSwatch');
+const displayButtonText = propButtonText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
 
 const I18N_COPY: Record<string, { tagText: string; tagSubtitle: string; verified: string; included: string; note: string }> = {
   de: {

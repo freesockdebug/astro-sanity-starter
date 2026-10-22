@@ -6,13 +6,14 @@ import { client } from '@utils/sanity-client';
 import { SECTIONS, IMAGE, normalizeSections, extractHeroPreload } from '@data/blocks';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
+import { PRODUCT_CARD_FIELDS, ProductService } from '@data/products';
 import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE, DEFAULT_HERO, DEFAULT_SPEC_MATRIX, DEFAULT_MANUFACTURING } from '@data/defaults';
 import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
 
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
-// Scheme 2: Single Aggregated GROQ Query - fetches page, siteConfig, and rfqSettings in 1 network roundtrip
+// Scheme 2: Single Aggregated GROQ Query - fetches page, siteConfig, rfqSettings, and fallback product cards in 1 network roundtrip
 let batchData: any = null;
 try {
   batchData = await client.fetch(`{
@@ -25,15 +26,17 @@ try {
       sections[]${SECTIONS}
     },
     "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
-    "rfqSettings": *[_type == "rfqSettings"][0]
+    "rfqSettings": *[_type == "rfqSettings"][0],
+    "products": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}
   }`);
 } catch (e) {
   console.error("Failed to batch-fetch homepage data from Sanity:", e);
 }
 
-// Pre-populate service caches so Layout, AppleNav, QuoteDrawer, and sections make 0 additional API requests
-if (batchData?.siteConfig) SiteConfigService.seed(batchData.siteConfig);
-if (batchData?.rfqSettings) RfqSettingsService.seed(batchData.rfqSettings);
+// Pre-populate service caches unconditionally so Layout, AppleNav, QuoteDrawer, and sections make 0 additional API requests
+SiteConfigService.seed(batchData?.siteConfig);
+RfqSettingsService.seed(batchData?.rfqSettings);
+ProductService.seed({ products: batchData?.products || [] });
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);

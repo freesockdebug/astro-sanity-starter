@@ -409,18 +409,30 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
       'bento5Tag', 'bento5Title', 'bento5Description', 'bento5FooterNote',
     ];
 
-    // First: resolve any CMS object fields (localeString/localeText) to the active language
+    // Track which fields had an explicit translation in Sanity CMS for the active non-default locale
+    const explicitCmsLangFields = new Set<string>();
     ALL_SECTION_TEXT_FIELDS.forEach((f) => {
       if (s[f] && typeof s[f] === 'object') {
+        if (typeof s[f][lang] === 'string' && s[f][lang].trim()) {
+          explicitCmsLangFields.add(f);
+        }
         const val = getLocalizedValue(s[f], lang);
         if (val) s[f] = val;
       }
     });
 
     // Also resolve capabilities if present as localized objects
+    const explicitCapTitleLang: boolean[] = [];
+    const explicitCapDescLang: boolean[] = [];
     if (Array.isArray(s.capabilities)) {
-      s.capabilities = s.capabilities.map((cap: any) => {
+      s.capabilities = s.capabilities.map((cap: any, idx: number) => {
         if (!cap || typeof cap !== 'object') return cap;
+        explicitCapTitleLang[idx] = Boolean(
+          cap.title && typeof cap.title === 'object' && typeof cap.title[lang] === 'string' && cap.title[lang].trim()
+        );
+        explicitCapDescLang[idx] = Boolean(
+          cap.description && typeof cap.description === 'object' && typeof cap.description[lang] === 'string' && cap.description[lang].trim()
+        );
         return {
           ...cap,
           title: cap.title && typeof cap.title === 'object' ? getLocalizedValue(cap.title, lang) : cap.title,
@@ -429,7 +441,7 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
       });
     }
 
-    // Second: if non-default locale and translation dictionary exists, fill in any missing fields
+    // Second: if non-default locale and translation dictionary exists, fill in any fields not explicitly localized in CMS
     if (lang && lang !== DEFAULT_LOCALE) {
       const transKey = s._type === 'hosieryHeroSection' ? 'heroSection'
         : s._type === 'hosierySpecSection' ? 'featureMatrixSection'
@@ -448,8 +460,8 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
                 if (!capTrans) return cap;
                 return {
                   ...cap,
-                  title: cap.title || capTrans.title,
-                  description: cap.description || capTrans.description,
+                  title: explicitCapTitleLang[idx] ? cap.title : (capTrans.title || cap.title),
+                  description: explicitCapDescLang[idx] ? cap.description : (capTrans.description || cap.description),
                 };
               });
             } else {
@@ -458,8 +470,10 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
           } else if (key === 'categories' && Array.isArray(trans.categories)) {
             s.categories = trans.categories;
           } else {
-            // Priority: CMS value (already localized if object) > professional dictionary > original
-            s[key] = s[key] || trans[key];
+            // Priority: Explicit CMS locale value > professional dictionary > English fallback
+            if (!explicitCmsLangFields.has(key)) {
+              s[key] = trans[key] || s[key];
+            }
           }
         });
       }

@@ -11,6 +11,7 @@ const isProduction = process.env.NODE_ENV === 'production' || process.argv.inclu
 // https://astro.build/config
 export default defineConfig({
     output: 'server',
+    session: false,
     devToolbar: {
         enabled: false
     },

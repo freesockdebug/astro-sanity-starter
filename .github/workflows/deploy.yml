@@ -18,6 +18,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
 
       - name: Install dependencies
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
@@ -28,6 +29,7 @@ jobs:
           SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID || 'xvhhd8u0' }}
           SANITY_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
           SANITY_TOKEN: ${{ secrets.SANITY_TOKEN }}
+          REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
           PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFXbqPn5Jkh6bMhV' }}
           TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
           TURNSTILE_HOSTNAMES: ${{ secrets.TURNSTILE_HOSTNAMES || 'localhost,127.0.0.1,gwenvenni.com' }}
@@ -66,27 +68,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
 
-      - name: Install root dependencies
-        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
-
-      - name: Install Studio dependencies
-        working-directory: studio
+      - name: Install dependencies
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
       - name: Build Sanity Studio
-        working-directory: studio
         env:
           SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID || 'xvhhd8u0' }}
           SANITY_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
           SANITY_STUDIO_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID || 'xvhhd8u0' }}
           SANITY_STUDIO_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
-        run: npm run build
+          SANITY_STUDIO_SITE_URL: ${{ secrets.SANITY_STUDIO_SITE_URL || 'https://gwenvenni.com' }}
+          SANITY_STUDIO_REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET || 'itsasecret' }}
+        run: npm run build:studio
 
       - name: Deploy Studio to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: 'studio'
-          command: deploy --config wrangler.jsonc --keep-vars
+          command: deploy --config studio/wrangler.jsonc --keep-vars

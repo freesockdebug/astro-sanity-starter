@@ -3,7 +3,7 @@ import { type SiteConfig, type CustomImage, type Page } from 'types';
 import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@components';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
-import { getLangFromUrl, getLocalizedValue } from '@i18n';
+import { getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
 import type { TwitterCardType } from 'astro-seo';
 
 import '../styles/globals.css';
@@ -43,6 +43,7 @@ const {
 } = Astro.props;
 
 const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
 const configData: SiteConfig = (await fetchData()) || {};
 SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
 
@@ -113,8 +114,8 @@ const resolvedImage = imageSrc
         {configData?.enableWhatsApp && configData?.whatsAppNumber && (
             <WhatsAppWidget
                 phoneNumber={configData.whatsAppNumber}
-                prefillText={getLocalizedValue(configData.whatsAppPrefillText, currentLang)}
-                tooltip={getLocalizedValue(configData.whatsAppTooltip, currentLang)}
+                prefillText={getLocalizedValue(configData.whatsAppPrefillText, currentLang, t('whatsapp.prefill'))}
+                tooltip={getLocalizedValue(configData.whatsAppTooltip, currentLang, t('whatsapp.tooltip'))}
             />
         )}
 

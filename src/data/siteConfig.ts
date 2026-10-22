@@ -30,33 +30,48 @@ export const CONFIG_QUERY_OBJ = `{
  */
 export class SiteConfigService {
   private static cachedConfig: SiteConfig | null = null;
+  private static hasSeededValue: boolean = false;
   private static cacheTimestamp: number = 0;
+  private static inflightPromise: Promise<SiteConfig | null> | null = null;
   private static readonly CACHE_TTL_MS = 10_000;
 
   public static seed(config?: SiteConfig | null): void {
-    if (config) {
-      this.cachedConfig = config;
-      this.cacheTimestamp = Date.now();
-      SanityImageService.setStudioProxyConfig(config.enableImageProxy);
-    }
+    this.cachedConfig = config || ({} as SiteConfig);
+    this.hasSeededValue = true;
+    this.cacheTimestamp = Date.now();
+    SanityImageService.setStudioProxyConfig(this.cachedConfig?.enableImageProxy);
   }
 
   public static async getConfig(forceRefresh = false): Promise<SiteConfig | null> {
     const now = Date.now();
-    if (!forceRefresh && this.cachedConfig && (now - this.cacheTimestamp < this.CACHE_TTL_MS)) {
+    if (!forceRefresh && this.hasSeededValue && (now - this.cacheTimestamp < this.CACHE_TTL_MS)) {
       return this.cachedConfig;
     }
 
-    try {
-      const data = await client.fetch<SiteConfig>(`*[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ}`);
-      this.cachedConfig = data || null;
-      this.cacheTimestamp = now;
-      SanityImageService.setStudioProxyConfig(this.cachedConfig?.enableImageProxy);
-      return this.cachedConfig;
-    } catch (err: any) {
-      console.error('SiteConfigService.getConfig failed:', err?.message);
-      return this.cachedConfig;
+    if (!forceRefresh && this.inflightPromise) {
+      return this.inflightPromise;
     }
+
+    this.inflightPromise = (async () => {
+      try {
+        const data = await client.fetch<SiteConfig>(`*[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ}`);
+        this.cachedConfig = data || ({} as SiteConfig);
+        this.hasSeededValue = true;
+        this.cacheTimestamp = Date.now();
+        SanityImageService.setStudioProxyConfig(this.cachedConfig?.enableImageProxy);
+        return this.cachedConfig;
+      } catch (err: any) {
+        console.error('SiteConfigService.getConfig failed:', err?.message);
+        this.cachedConfig = this.cachedConfig || ({} as SiteConfig);
+        this.hasSeededValue = true;
+        this.cacheTimestamp = Date.now();
+        return this.cachedConfig;
+      } finally {
+        this.inflightPromise = null;
+      }
+    })();
+
+    return this.inflightPromise;
   }
 }
 

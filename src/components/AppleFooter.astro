@@ -112,40 +112,60 @@ const COLUMN_TRANSLATIONS: Record<string, Record<string, string>> = {
     "Custom Pantone Dyeing": "Tintado Pantone Personalizado",
     "Private Label Packaging": "Empaque de Marca Blanca",
     "Rapid 72h Prototyping": "Prototipado Rápido 72h",
-    "Factory Audit Tour": "Visita de Auditoría a Fábrica"
+    "Factory Audit Tour": "Visita de Auditoría a Fábrica",
+    "Privacy Policy": "Política de Privacidad",
+    "Terms of Wholesale": "Condiciones de Venta Mayorista",
+    "Cookie Settings": "Configuración de Cookies",
+    "Compliance": "Cumplimiento Normativo"
   }
 };
 
+// Add legal link translations for German and French
+Object.assign(COLUMN_TRANSLATIONS.de, {
+  "Privacy Policy": "Datenschutzerklärung",
+  "Terms of Wholesale": "Großhandelsbedingungen",
+  "Cookie Settings": "Cookie-Einstellungen",
+  "Compliance": "Compliance & Zertifikate"
+});
+Object.assign(COLUMN_TRANSLATIONS.fr, {
+  "Privacy Policy": "Politique de Confidentialité",
+  "Terms of Wholesale": "Conditions Générales de Gros",
+  "Cookie Settings": "Paramètres des Cookies",
+  "Compliance": "Conformité"
+});
+
+const COPYRIGHT_BY_LANG: Record<string, string> = {
+  de: `Copyright © 2026 ${brandTitle} Hosiery & Knitwear Manufacturing. ${t('common.rights')}`,
+  fr: `Copyright © 2026 ${brandTitle} Hosiery & Knitwear Manufacturing. ${t('common.rights')}`,
+  es: `Copyright © 2026 ${brandTitle} Hosiery & Knitwear Manufacturing. ${t('common.rights')}`,
+  en: DEFAULT_COPYRIGHT_TEXT
+};
+
 // 1. Footer bio from Studio CMS or language fallback
-const cmsBio = getLocalizedValue(footer?.description, currentLang);
-const footerBio = cmsBio || (currentLang !== 'en' ? (FOOTER_BIO_BY_LANG[currentLang] || DEFAULT_FOOTER_BIO) : DEFAULT_FOOTER_BIO);
+const footerBio = getLocalizedValue(footer?.description, currentLang, FOOTER_BIO_BY_LANG[currentLang] || DEFAULT_FOOTER_BIO);
 
 // 2. Status badge from Studio CMS or language fallback
-const cmsStatusBadge = getLocalizedValue(footer?.statusBadge, currentLang);
-const statusBadge = cmsStatusBadge || (currentLang !== 'en' ? (STATUS_BADGE_BY_LANG[currentLang] || DEFAULT_STATUS_BADGE) : DEFAULT_STATUS_BADGE);
+const statusBadge = getLocalizedValue(footer?.statusBadge, currentLang, STATUS_BADGE_BY_LANG[currentLang] || DEFAULT_STATUS_BADGE);
 
-// 3. Copyright text from Studio CMS
+// 3. Copyright text from Studio CMS or language fallback
 const rawFooterText = footer?.text;
-const cmsFooterText = getLocalizedValue(rawFooterText, currentLang);
-const cleanFooterText = cmsFooterText || cleanEnglishText(typeof rawFooterText === 'string' ? rawFooterText : '') || DEFAULT_COPYRIGHT_TEXT;
+const cleanFooterText = getLocalizedValue(rawFooterText, currentLang, COPYRIGHT_BY_LANG[currentLang] || DEFAULT_COPYRIGHT_TEXT);
 
 // 4. Columns: prioritize Studio CMS multilingual title & link labels
 const colDict = COLUMN_TRANSLATIONS[currentLang] || {};
 const rawColumns = (footer?.columns && footer.columns.length > 0) ? footer.columns : DEFAULT_FOOTER_COLUMNS;
 const columns = rawColumns.map((col: any) => {
-  const localizedTitle = getLocalizedValue(col.title, currentLang);
   const fallbackEnglish = typeof col.title === 'string' ? col.title : (col.title?.en || '');
   const cleanedTitle = cleanEnglishText(fallbackEnglish);
-  const finalTitle = localizedTitle || colDict[cleanedTitle] || fallbackEnglish;
+  const finalTitle = getLocalizedValue(col.title, currentLang, colDict[cleanedTitle] || cleanedTitle);
 
   return {
     ...col,
     title: finalTitle,
     links: col.links?.map((l: any) => {
-      const localizedLabel = getLocalizedValue(l.label, currentLang);
       const fallbackLinkEnglish = typeof l.label === 'string' ? l.label : (l.label?.en || '');
       const cleanedLabel = cleanEnglishText(fallbackLinkEnglish);
-      const finalLabel = localizedLabel || colDict[cleanedLabel] || fallbackLinkEnglish;
+      const finalLabel = getLocalizedValue(l.label, currentLang, colDict[cleanedLabel] || cleanedLabel);
 
       return {
         ...l,
@@ -158,11 +178,11 @@ const columns = rawColumns.map((col: any) => {
 // 5. Legal links: prioritize Studio CMS multilingual labels
 const rawLegalLinks = (footer?.legalLinks && footer.legalLinks.length > 0) ? footer.legalLinks : DEFAULT_LEGAL_LINKS;
 const legalLinks = rawLegalLinks.map((l: any) => {
-  const localizedLabel = getLocalizedValue(l.label, currentLang);
   const fallbackLegalEnglish = typeof l.label === 'string' ? l.label : (l.label?.en || '');
+  const cleanedLegal = cleanEnglishText(fallbackLegalEnglish);
   return {
     ...l,
-    label: localizedLabel || cleanEnglishText(fallbackLegalEnglish)
+    label: getLocalizedValue(l.label, currentLang, colDict[cleanedLegal] || cleanedLegal)
   };
 });
 ---

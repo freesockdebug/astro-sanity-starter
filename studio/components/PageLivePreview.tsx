@@ -306,6 +306,11 @@ export function PageLivePreview(props: PageLivePreviewProps) {
 
   const [origin, setOrigin] = useState('')
   useEffect(() => {
+    const env = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
+    if (env.SANITY_STUDIO_SITE_URL) {
+      setOrigin(env.SANITY_STUDIO_SITE_URL.replace(/\/$/, ''))
+      return
+    }
     if (typeof window !== 'undefined') {
       if (window.location.port === '3333') {
         const hostname = window.location.hostname || 'localhost'

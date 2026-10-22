@@ -37,16 +37,17 @@ export interface ButtonVisibilityOptions {
 export class RfqSettingsService {
   private static cachedSettings: RfqSettings | null = null;
   private static cacheTimestamp: number = 0;
+  private static inflightPromise: Promise<RfqSettings> | null = null;
   private static readonly CACHE_TTL_MS = 10_000; // 10s in-memory cache for SSR request deduplication
 
   /**
    * Fetches merged RFQ settings with in-memory caching to prevent duplicate Sanity calls in one page render
    */
   public static seed(settings?: any): void {
-    if (settings) {
-      this.cachedSettings = { ...DEFAULT_RFQ_SETTINGS, ...settings };
-      this.cacheTimestamp = Date.now();
-    }
+    this.cachedSettings = settings && typeof settings === 'object'
+      ? { ...DEFAULT_RFQ_SETTINGS, ...settings }
+      : { ...DEFAULT_RFQ_SETTINGS };
+    this.cacheTimestamp = Date.now();
   }
 
   public static async getSettings(forceRefresh = false): Promise<RfqSettings> {
@@ -55,20 +56,30 @@ export class RfqSettingsService {
       return this.cachedSettings;
     }
 
-    try {
-      const directDoc = await client.fetch<any>('*[_type == "rfqSettings"][0]');
-      if (directDoc && Object.keys(directDoc).length > 2) {
-        this.cachedSettings = { ...DEFAULT_RFQ_SETTINGS, ...directDoc };
-        this.cacheTimestamp = now;
-        return this.cachedSettings;
-      }
-    } catch (e: any) {
-      console.warn("RfqSettingsService.getSettings fallback to defaults:", e?.message);
+    if (!forceRefresh && this.inflightPromise) {
+      return this.inflightPromise;
     }
 
-    this.cachedSettings = DEFAULT_RFQ_SETTINGS;
-    this.cacheTimestamp = now;
-    return this.cachedSettings;
+    this.inflightPromise = (async () => {
+      try {
+        const directDoc = await client.fetch<any>('*[_type == "rfqSettings"][0]');
+        if (directDoc && Object.keys(directDoc).length > 2) {
+          this.cachedSettings = { ...DEFAULT_RFQ_SETTINGS, ...directDoc };
+          this.cacheTimestamp = Date.now();
+          return this.cachedSettings;
+        }
+      } catch (e: any) {
+        console.warn("RfqSettingsService.getSettings fallback to defaults:", e?.message);
+      } finally {
+        this.inflightPromise = null;
+      }
+
+      this.cachedSettings = { ...DEFAULT_RFQ_SETTINGS };
+      this.cacheTimestamp = Date.now();
+      return this.cachedSettings;
+    })();
+
+    return this.inflightPromise;
   }
 
   /**
