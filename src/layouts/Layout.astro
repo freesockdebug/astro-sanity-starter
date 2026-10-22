@@ -1,46 +1,57 @@
 ---
-import { type SiteConfig, type CustomImage } from 'types';
-import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget } from '@components';
+import { type SiteConfig, type CustomImage, type Page } from 'types';
+import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@components';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
-import { getLangFromUrl, switchLocalePath, LANGUAGES, type SupportedLocale, getLocalizedValue } from '@i18n';
+import { getLangFromUrl, getLocalizedValue } from '@i18n';
+import type { TwitterCardType } from 'astro-seo';
 
 import '../styles/globals.css';
 
 interface Props {
-    title: string;
+    title?: string;
     addTitleSuffix?: boolean;
     description?: string;
     image?: CustomImage | string;
+    canonicalUrl?: string | URL;
+    type?: 'website' | 'article' | 'product';
+    twitterCard?: TwitterCardType;
+    noindex?: boolean;
+    nofollow?: boolean;
+    page?: Partial<Page>;
+    structuredData?: Record<string, any> | Record<string, any>[];
     bodyClass?: string;
     mainClass?: string;
     preloadHeroImage?: boolean | { src: string; srcset?: string; sizes?: string };
 }
 
-const { addTitleSuffix, description, image, bodyClass, mainClass, preloadHeroImage } = Astro.props;
+const {
+    title,
+    addTitleSuffix,
+    description,
+    image,
+    canonicalUrl,
+    type,
+    twitterCard,
+    noindex,
+    nofollow,
+    page,
+    structuredData,
+    bodyClass,
+    mainClass,
+    preloadHeroImage,
+} = Astro.props;
 
 const currentLang = getLangFromUrl(Astro.url);
 const configData: SiteConfig = (await fetchData()) || {};
 SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
-const rawTitleSuffix = configData.titleSuffix && addTitleSuffix !== false ? configData.titleSuffix : undefined;
-const titleSuffix = rawTitleSuffix ? (typeof rawTitleSuffix === 'object' ? getLocalizedValue(rawTitleSuffix, currentLang) : rawTitleSuffix) : undefined;
-const title = [Astro.props.title, titleSuffix].filter(Boolean).join(' | ');
 
-const rawImageSrc = typeof image === 'string' ? image : image?.src;
+const rawImage = image ?? page?.socialImage;
+const rawImageSrc = typeof rawImage === 'string' ? rawImage : rawImage?.src;
 const imageSrc = rawImageSrc ? SanityImageService.hero(rawImageSrc, 1200) : undefined;
 const resolvedImage = imageSrc
     ? { src: imageSrc.startsWith('http') || imageSrc.startsWith('/') ? imageSrc : new URL(imageSrc, Astro.site || Astro.url).toString() }
     : undefined;
-const canonicalURL = Astro.site ? new URL(Astro.request.url, Astro.site) : Astro.url;
-
-/**
- * Enforce some standard canonical URL formatting across the site.
- */
-function formatCanonicalURL(url: string | URL) {
-    const path = url.toString();
-    const hasQueryParams = path.includes('?');
-    return path.replace(/\/?$/, hasQueryParams ? '' : '/');
-}
 ---
 
 <!doctype html>
@@ -49,14 +60,23 @@ function formatCanonicalURL(url: string | URL) {
         <!-- High Priority Global Metadata -->
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>{title}</title>
         <meta name="generator" content={Astro.generator} />
 
-        <!-- Hreflang Tags for Multi-Region International SEO (Google & Bing) -->
-        {(Object.keys(LANGUAGES) as SupportedLocale[]).map((loc) => (
-            <link rel="alternate" hreflang={loc} href={new URL(switchLocalePath(Astro.url.pathname, loc), Astro.site || Astro.url).toString()} />
-        ))}
-        <link rel="alternate" hreflang="x-default" href={new URL(switchLocalePath(Astro.url.pathname, 'en'), Astro.site || Astro.url).toString()} />
+        <!-- Reusable Sanity & Astro SEO Component (Title, Canonical, OpenGraph, Twitter Cards, Hreflang) -->
+        <SEO
+            title={title}
+            addTitleSuffix={addTitleSuffix}
+            description={description}
+            image={image}
+            canonicalUrl={canonicalUrl}
+            type={type}
+            twitterCard={twitterCard}
+            noindex={noindex}
+            nofollow={nofollow}
+            page={page}
+            siteConfig={configData}
+            structuredData={structuredData}
+        />
 
         <!-- High-priority Responsive LCP Image Preload (Avoids downloading mismatched 1200px on mobile) -->
         {preloadHeroImage && (
@@ -76,28 +96,10 @@ function formatCanonicalURL(url: string | URL) {
             )
         )}
 
-
         <!-- Low Priority Global Metadata -->
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="icon" type="image/svg+xml" href={configData?.favicon?.src || "/favicon.svg"} />
         <link rel="alternate icon" href="/favicon.ico" />
         <link rel="sitemap" href="/sitemap-index.xml" />
-
-        <!-- Page Metadata -->
-        <link rel="canonical" href={formatCanonicalURL(canonicalURL)} />
-        {description && <meta name="description" content={description} />}
-
-        <!-- Open Graph / Facebook -->
-        <meta property="og:url" content={formatCanonicalURL(canonicalURL)} />
-        <meta property="og:title" content={title} />
-        {description && <meta property="og:description" content={description} />}
-        {resolvedImage?.src && <meta property="og:image" content={resolvedImage.src} />}
-
-        <!-- X/Twitter -->
-        <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content={formatCanonicalURL(canonicalURL)} />
-        <meta property="twitter:title" content={title} />
-        {description && <meta property="twitter:description" content={description} />}
-        {resolvedImage?.src && <meta property="twitter:image" content={resolvedImage.src} />}
     </head>
     <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
         <AppleNav config={configData} />

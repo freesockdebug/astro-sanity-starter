@@ -7,9 +7,13 @@ export const PAGE_QUERY_OBJ = `{
   slug,
   title,
   metaTitle,
+  addTitleSuffix,
   metaDescription,
   "socialImage": {
-    "src": socialImage.asset->url
+    "_id": socialImage.asset->_id,
+    "src": socialImage.asset->url,
+    "alt": socialImage.alt,
+    "dimensions": socialImage.asset->metadata.dimensions
   },
   sections[] ${SECTIONS}
 }`;

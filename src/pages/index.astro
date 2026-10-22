@@ -19,6 +19,7 @@ try {
     "page": *[_type == "page" && slug.current == "/"][0]{
       title,
       metaTitle,
+      addTitleSuffix,
       metaDescription,
       socialImage ${IMAGE},
       sections[]${SECTIONS}
@@ -90,7 +91,14 @@ const stages = sections
   .filter((st: any) => Boolean(st.id));
 ---
 
-<Layout title={metaTitle} description={metaDescription} image={ogImage} addTitleSuffix={false} preloadHeroImage={heroPreload}>
+<Layout
+  title={metaTitle}
+  description={metaDescription}
+  image={ogImage}
+  addTitleSuffix={homeData?.addTitleSuffix ?? false}
+  page={homeData}
+  preloadHeroImage={heroPreload}
+>
   {sections.map((section: any) => {
     const Component = componentMap[section._type];
     return Component ? <Component {...section} /> : null;

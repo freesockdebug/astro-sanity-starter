@@ -1,0 +1,198 @@
+---
+// src/components/SEO.astro
+import { SEO as AstroSEO, type TwitterCardType } from 'astro-seo';
+import type { CustomImage, Page, SiteConfig } from 'types';
+import { SanityImageService } from '@utils/image';
+import { cleanBrandTitle } from '@utils/text';
+import {
+  DEFAULT_BRAND_TITLE,
+  DEFAULT_FALLBACK_IMAGE,
+  DEFAULT_META_DESCRIPTION,
+  DEFAULT_META_TITLE,
+} from '@data/defaults';
+import {
+  getLangFromUrl,
+  getLocalizedValue,
+  LANGUAGES,
+  switchLocalePath,
+  type SupportedLocale,
+} from '@i18n';
+
+export interface Props {
+  title?: string | Record<string, string>;
+  addTitleSuffix?: boolean;
+  description?: string | Record<string, string>;
+  image?: CustomImage | string | { asset?: { url?: string }; src?: string; alt?: string };
+  canonicalUrl?: string | URL;
+  type?: 'website' | 'article' | 'product';
+  twitterCard?: TwitterCardType;
+  noindex?: boolean;
+  nofollow?: boolean;
+  page?: Partial<Page>;
+  siteConfig?: SiteConfig | null;
+  structuredData?: Record<string, any> | Record<string, any>[];
+}
+
+const {
+  title: propTitle,
+  addTitleSuffix: propAddTitleSuffix,
+  description: propDescription,
+  image: propImage,
+  canonicalUrl: propCanonicalUrl,
+  type = 'website',
+  twitterCard = 'summary_large_image',
+  noindex = false,
+  nofollow = false,
+  page,
+  siteConfig,
+  structuredData,
+} = Astro.props;
+
+const currentLang = getLangFromUrl(Astro.url);
+
+// 1. Resolve localized Title & Site Title Suffix from Sanity Page / SiteConfig
+const rawTitle = propTitle ?? page?.metaTitle ?? page?.title ?? DEFAULT_META_TITLE;
+const baseTitle =
+  (typeof rawTitle === 'object' && rawTitle !== null
+    ? getLocalizedValue(rawTitle, currentLang)
+    : rawTitle) || DEFAULT_META_TITLE;
+
+const shouldAddSuffix = propAddTitleSuffix ?? page?.addTitleSuffix ?? true;
+const rawTitleSuffix =
+  siteConfig?.titleSuffix && shouldAddSuffix !== false ? siteConfig.titleSuffix : undefined;
+const titleSuffix = rawTitleSuffix
+  ? typeof rawTitleSuffix === 'object'
+    ? getLocalizedValue(rawTitleSuffix, currentLang)
+    : rawTitleSuffix
+  : undefined;
+
+const resolvedTitle = [baseTitle, titleSuffix].filter(Boolean).join(' | ');
+
+// 2. Resolve localized Meta Description from Sanity Page / Props
+const rawDescription =
+  propDescription ?? page?.metaDescription ?? DEFAULT_META_DESCRIPTION;
+const resolvedDescription =
+  (typeof rawDescription === 'object' && rawDescription !== null
+    ? getLocalizedValue(rawDescription, currentLang)
+    : rawDescription) || DEFAULT_META_DESCRIPTION;
+
+// 3. Resolve Canonical URL & Base Origin
+function formatCanonicalURL(url: string | URL): string {
+  const path = url.toString();
+  const hasQueryParams = path.includes('?');
+  return path.replace(/\/?$/, hasQueryParams ? '' : '/');
+}
+
+const appUrlEnv =
+  (typeof process !== 'undefined' && process.env?.APP_URL) ||
+  (import.meta.env && import.meta.env.APP_URL);
+const baseOrigin = Astro.site || (appUrlEnv ? new URL(appUrlEnv) : Astro.url);
+
+const rawCanonical =
+  propCanonicalUrl ||
+  (Astro.site ? new URL(Astro.url.pathname, Astro.site) : new URL(Astro.url.pathname, baseOrigin));
+const resolvedCanonical = formatCanonicalURL(rawCanonical);
+
+// 4. Resolve Open Graph & Twitter Image from Sanity socialImage / Props
+const rawImage = propImage ?? page?.socialImage ?? DEFAULT_FALLBACK_IMAGE;
+const rawImageSrc =
+  typeof rawImage === 'string'
+    ? rawImage
+    : rawImage?.src || (rawImage as any)?.asset?.url || DEFAULT_FALLBACK_IMAGE;
+const rawImageAlt =
+  typeof rawImage === 'object' && rawImage !== null && 'alt' in rawImage && rawImage.alt
+    ? String(rawImage.alt)
+    : resolvedTitle;
+const imageDimensions =
+  typeof rawImage === 'object' && rawImage !== null && 'dimensions' in rawImage
+    ? rawImage.dimensions
+    : undefined;
+
+const transformedImageSrc = SanityImageService.hero(rawImageSrc || DEFAULT_FALLBACK_IMAGE, 1200);
+const resolvedImageUrl = transformedImageSrc.startsWith('http')
+  ? transformedImageSrc
+  : new URL(
+      transformedImageSrc.startsWith('/') ? transformedImageSrc : `/${transformedImageSrc}`,
+      baseOrigin
+    ).toString();
+
+// 5. Resolve Brand / Site Name & Locale
+const rawBrandName = siteConfig?.header?.title
+  ? typeof siteConfig.header.title === 'object'
+    ? getLocalizedValue(siteConfig.header.title, currentLang)
+    : siteConfig.header.title
+  : DEFAULT_BRAND_TITLE;
+const siteName = cleanBrandTitle(rawBrandName || DEFAULT_BRAND_TITLE);
+
+const OG_LOCALE_MAP: Record<SupportedLocale, string> = {
+  en: 'en_US',
+  de: 'de_DE',
+  fr: 'fr_FR',
+  es: 'es_ES',
+};
+const ogLocale = OG_LOCALE_MAP[currentLang] || 'en_US';
+const ogAlternateLocales = (Object.keys(LANGUAGES) as SupportedLocale[])
+  .filter((loc) => loc !== currentLang)
+  .map((loc) => OG_LOCALE_MAP[loc]);
+
+// 6. Multi-region Hreflang Language Alternates
+const languageAlternates = [
+  ...(Object.keys(LANGUAGES) as SupportedLocale[]).map((loc) => ({
+    hrefLang: loc,
+    href: formatCanonicalURL(new URL(switchLocalePath(Astro.url.pathname, loc), baseOrigin)),
+  })),
+  {
+    hrefLang: 'x-default',
+    href: formatCanonicalURL(new URL(switchLocalePath(Astro.url.pathname, 'en'), baseOrigin)),
+  },
+];
+---
+
+<AstroSEO
+  title={resolvedTitle}
+  description={resolvedDescription}
+  canonical={resolvedCanonical}
+  noindex={noindex}
+  nofollow={nofollow}
+  languageAlternates={languageAlternates}
+  openGraph={{
+    basic: {
+      title: resolvedTitle,
+      type,
+      image: resolvedImageUrl,
+      url: resolvedCanonical,
+    },
+    optional: {
+      description: resolvedDescription,
+      siteName,
+      locale: ogLocale,
+      localeAlternate: ogAlternateLocales,
+    },
+    image: {
+      url: resolvedImageUrl,
+      secureUrl: resolvedImageUrl.startsWith('https') ? resolvedImageUrl : undefined,
+      alt: rawImageAlt,
+      width: imageDimensions?.width || 1200,
+      height: imageDimensions?.height || 630,
+    },
+  }}
+  twitter={{
+    card: twitterCard,
+    title: resolvedTitle,
+    description: resolvedDescription,
+    image: resolvedImageUrl,
+    imageAlt: rawImageAlt,
+  }}
+  extend={{
+    meta: [
+      { property: 'twitter:url', content: resolvedCanonical },
+    ],
+  }}
+/>
+
+{structuredData && (
+  <script
+    type="application/ld+json"
+    set:html={JSON.stringify(structuredData)}
+  />
+)}

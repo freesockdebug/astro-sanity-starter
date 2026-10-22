@@ -14,6 +14,7 @@ import QuoteDrawer from './QuoteDrawer.astro';
 import AppleStageNavigator from './AppleStageNavigator.astro';
 import WhatsAppWidget from './WhatsAppWidget.astro';
 import LanguagePicker from './LanguagePicker.astro';
+import SEO from './SEO.astro';
 
 export {
   SockHero,
@@ -28,6 +29,7 @@ export {
   AppleStageNavigator,
   WhatsAppWidget,
   LanguagePicker,
+  SEO,
 };
 
 /**

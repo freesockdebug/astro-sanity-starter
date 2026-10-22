@@ -48,7 +48,7 @@ if (!page) {
 }
 
 const currentLang = getLangFromUrl(Astro.url);
-const { title, sections: rawSections, metaTitle, metaDescription, socialImage } = page;
+const { title, sections: rawSections, metaTitle, addTitleSuffix, metaDescription, socialImage } = page;
 const sections = normalizeSections(rawSections, currentLang);
 const heroPreload = extractHeroPreload(sections);
 const localizedTitle = (title && typeof title === 'object' ? getLocalizedValue(title, currentLang) : '') || title;
@@ -58,7 +58,14 @@ const localizedMetaDescription = (metaDescription && typeof metaDescription === 
 
 {
     page && (
-        <Layout title={localizedMetaTitle || localizedTitle} description={localizedMetaDescription} image={socialImage} preloadHeroImage={heroPreload}>
+        <Layout
+            title={localizedMetaTitle || localizedTitle}
+            addTitleSuffix={addTitleSuffix}
+            description={localizedMetaDescription}
+            image={socialImage}
+            page={page}
+            preloadHeroImage={heroPreload}
+        >
             <Fragment>
                 {sections?.length &&
                     sections.map((section: any) => {
