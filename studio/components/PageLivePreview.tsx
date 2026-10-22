@@ -304,11 +304,15 @@ export function PageLivePreview(props: PageLivePreviewProps) {
     path = slug.startsWith('/') ? slug : `/${slug}`
   }
 
-  const [origin, setOrigin] = useState('http://localhost:4321')
+  const [origin, setOrigin] = useState('')
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname || 'localhost'
-      setOrigin(`http://${hostname}:4321`)
+      if (window.location.port === '3333') {
+        const hostname = window.location.hostname || 'localhost'
+        setOrigin(`http://${hostname}:4321`)
+      } else {
+        setOrigin(window.location.origin)
+      }
     }
   }, [])
 

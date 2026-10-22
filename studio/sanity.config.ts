@@ -6,12 +6,15 @@ import { markdownSchema } from 'sanity-plugin-markdown'
 import { deskStructure, defaultDocumentNode } from './deskStructure'
 import { createPurgeCacheAction } from './actions/purgeCacheAction'
 
+const env = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
+const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env ? (import.meta as any).env : {}) as Record<string, string | undefined>
+
 export default defineConfig({
   name: 'default',
   title: "Content Studio",
 
-  projectId: (process.env.SANITY_STUDIO_PROJECT_ID ?? process.env.SANITY_PROJECT_ID ?? 'xvhhd8u0') as string,
-  dataset: (process.env.SANITY_STUDIO_DATASET ?? process.env.SANITY_DATASET ?? 'production') as string,
+  projectId: (env.SANITY_STUDIO_PROJECT_ID ?? env.SANITY_PROJECT_ID ?? metaEnv.PUBLIC_SANITY_PROJECT_ID ?? 'xvhhd8u0') as string,
+  dataset: (env.SANITY_STUDIO_DATASET ?? env.SANITY_DATASET ?? metaEnv.PUBLIC_SANITY_DATASET ?? 'production') as string,
 
   plugins: [
     structureTool({

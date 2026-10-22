@@ -35,8 +35,10 @@ export function createPurgeCacheAction(): DocumentActionComponent {
 
     if (!targetPath) return null
 
-    const siteUrl = (process.env.SANITY_STUDIO_SITE_URL || 'https://gwenvenni.com').replace(/\/$/, '')
-    const secret = process.env.SANITY_STUDIO_REVALIDATE_SECRET || 'itsasecret'
+    const env = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
+    const defaultOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://gwenvenni.com'
+    const siteUrl = (env.SANITY_STUDIO_SITE_URL || defaultOrigin).replace(/\/$/, '')
+    const secret = env.SANITY_STUDIO_REVALIDATE_SECRET || 'itsasecret'
 
     return {
       label: isPurging ? '正在清除缓存...' : '⚡ 清除此页 CDN 缓存',

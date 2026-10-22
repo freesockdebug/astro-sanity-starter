@@ -35,7 +35,7 @@ try {
     { formattedSlug, unslashed }
   );
 } catch (e) {
-  console.error(`Failed to batch-fetch page data for ${slug}:`, e);
+  console.error(`Failed to batch-fetch page data for ${formattedSlug}:`, e);
 }
 
 // Pre-populate service caches so Layout, AppleNav, QuoteDrawer, and sections make 0 additional API requests

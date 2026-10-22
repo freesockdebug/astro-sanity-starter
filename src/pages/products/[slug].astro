@@ -104,12 +104,47 @@ const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string
       sizes: '(max-width: 1024px) 100vw, 800px',
     }
   : undefined;
+const numericPrices = (currentProduct.pricingTiers || [])
+  .map((tier: any) => {
+    const raw = typeof tier?.price === 'string' ? tier.price.replace(/[^0-9.]/g, '') : String(tier?.price ?? '');
+    return parseFloat(raw);
+  })
+  .filter((n: number) => !Number.isNaN(n) && n > 0);
+
+const productStructuredData: Record<string, any> = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: currentProductTitle,
+  description: currentProductTagline,
+  sku: currentProduct.sku || slug,
+  image: (currentProduct.gallery || [])
+    .map((img: any) => img?.src)
+    .filter(Boolean),
+  brand: {
+    '@type': 'Brand',
+    name: brandTitle,
+  },
+  ...(numericPrices.length > 0
+    ? {
+        offers: {
+          '@type': 'AggregateOffer',
+          priceCurrency: currentProduct.currency || 'USD',
+          lowPrice: Math.min(...numericPrices).toFixed(2),
+          highPrice: Math.max(...numericPrices).toFixed(2),
+          offerCount: numericPrices.length,
+          availability: 'https://schema.org/InStock',
+        },
+      }
+    : {}),
+};
 ---
 
 <Layout
   title={currentProductTitle}
   description={currentProductTagline}
   image={currentProduct.mainImage}
+  type="product"
+  structuredData={productStructuredData}
   mainClass="pt-12"
   preloadHeroImage={productHeroPreload}
 >

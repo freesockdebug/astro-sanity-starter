@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import sanity from '@sanity/astro';
+import react from '@astrojs/react';
 import cloudflare from '@astrojs/cloudflare';
 import { sanityConfig } from './src/utils/sanity-client';
 
@@ -26,9 +27,44 @@ export default defineConfig({
     image: {
         domains: ['cdn.sanity.io']
     },
-    integrations: [sanity(sanityConfig)],
+    integrations: [
+        ...(isProduction ? [] : [react()]),
+        sanity({
+            ...sanityConfig,
+            ...(isProduction ? {} : { studioBasePath: '/studio' })
+        })
+    ],
     vite: {
-        plugins: [tailwindcss()],
+        plugins: [
+            tailwindcss(),
+            {
+                name: 'studio-trailing-slash',
+                configureServer(server) {
+                    server.middlewares.use((req, _res, next) => {
+                        if (req.url === '/studio' || req.url?.startsWith('/studio?')) {
+                            req.url = req.url.replace('/studio', '/studio/');
+                        }
+                        next();
+                    });
+                }
+            }
+        ],
+        define: !isProduction
+            ? {
+                  'process.env.SANITY_STUDIO_PROJECT_ID': JSON.stringify(
+                      process.env.SANITY_STUDIO_PROJECT_ID || process.env.SANITY_PROJECT_ID || 'xvhhd8u0'
+                  ),
+                  'process.env.SANITY_STUDIO_DATASET': JSON.stringify(
+                      process.env.SANITY_STUDIO_DATASET || process.env.SANITY_DATASET || 'production'
+                  ),
+                  'process.env.SANITY_PROJECT_ID': JSON.stringify(process.env.SANITY_PROJECT_ID || 'xvhhd8u0'),
+                  'process.env.SANITY_DATASET': JSON.stringify(process.env.SANITY_DATASET || 'production'),
+                  'process.env.SANITY_STUDIO_SITE_URL': JSON.stringify(process.env.SANITY_STUDIO_SITE_URL || ''),
+                  'process.env.SANITY_STUDIO_REVALIDATE_SECRET': JSON.stringify(
+                      process.env.SANITY_STUDIO_REVALIDATE_SECRET || process.env.REVALIDATE_SECRET || 'itsasecret'
+                  )
+              }
+            : undefined,
         server: {
             hmr: { path: '/vite-hmr/' },
             allowedHosts: true
@@ -37,7 +73,9 @@ export default defineConfig({
             drop: isProduction ? ['console', 'debugger'] : []
         },
         optimizeDeps: {
-            exclude: ['marked', '@sanity/client', 'ua-parser-js', '@nanostores/persistent']
+            exclude: isProduction
+                ? ['marked', '@sanity/client', 'ua-parser-js', '@nanostores/persistent']
+                : ['marked', 'ua-parser-js', '@nanostores/persistent']
         }
     },
     server: {

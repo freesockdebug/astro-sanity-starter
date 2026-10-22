@@ -27,7 +27,10 @@ const swatchKitDesc = getLocalizedValue(rfqSettings?.swatchKitDesc, currentLang)
 const swatchKitImageUrl = rfqSettings?.swatchKitImage?.asset?.url || rfqSettings?.swatchKitImageUrl || DEFAULT_RFQ.swatchKitImageUrl;
 const swatchKitMoq = rfqSettings?.swatchKitMoq || DEFAULT_RFQ.swatchKitMoq;
 
-const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAAFXbqPn5Jkh6bMhV";
+const isProdHostname = Astro.url.hostname.endsWith('gwenvenni.com');
+const turnstileSiteKey =
+  import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ||
+  (isProdHostname ? '0x4AAAAAAFXbqPn5Jkh6bMhV' : '1x00000000000000000000AA');
 ---
 
 
@@ -170,6 +173,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
               data-action="quote_cart"
               data-theme="light"
               data-size="flexible"
+              data-error-callback="onTurnstileError"
             ></div>
           )}
 
@@ -197,6 +201,11 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
 <script>
   import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '@stores/quoteCart';
 
+  // Prevent cross-origin Turnstile script from throwing uncaught Script error. on domain/network mismatch
+  (window as any).onTurnstileError = () => {
+    return true;
+  };
+
   // Lazy-load Turnstile on demand to eliminate ~700KB initial page load payload
   function ensureTurnstileLoaded() {
     if (typeof window === 'undefined' || document.getElementById('cf-turnstile-script')) return;
@@ -205,6 +214,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
     script.async = true;
     script.defer = true;
+    script.crossOrigin = 'anonymous';
     document.head.appendChild(script);
   }
 
@@ -255,10 +265,10 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
   (window as any).requestSwatchKit = (customItem?: any) => {
     const root = document.getElementById('quote-drawer-root');
     const defaultSku = root?.dataset.swatchSku || 'SWATCH-KIT';
-    const defaultTitle = root?.dataset.swatchTitle || DEFAULT_RFQ.swatchKitTitle;
-    const defaultDesc = root?.dataset.swatchDesc || DEFAULT_RFQ.swatchKitDesc;
-    const defaultImage = root?.dataset.swatchImage || DEFAULT_RFQ.swatchKitImageUrl;
-    const defaultMoq = root?.dataset.swatchMoq || DEFAULT_RFQ.swatchKitMoq;
+    const defaultTitle = root?.dataset.swatchTitle || 'Physical Yarn & Fabric Swatch Dossier';
+    const defaultDesc = root?.dataset.swatchDesc || 'Complimentary for verified fashion labels & retail buyers';
+    const defaultImage = root?.dataset.swatchImage || '/images/products/gv-ruffle-detail.webp';
+    const defaultMoq = root?.dataset.swatchMoq || '1 Set (Free for Verified Buyers)';
 
     const rawSku = (customItem?.sku || defaultSku).trim();
     const itemSku = rawSku;
@@ -348,6 +358,15 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
   const submitText = document.getElementById('rfq-submit-text');
   const alertBox = document.getElementById('rfq-alert');
 
+  function escapeHtml(val: unknown): string {
+    return String(val ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function renderCart() {
     const items = quoteCart.get() || [];
     const totalCount = items.reduce((sum, i) => sum + i.quantity, 0);
@@ -381,53 +400,63 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     if (submit) submit.disabled = false;
 
     const rootEl = document.getElementById('quote-drawer-root');
-    const removeText = rootEl?.dataset.removeText || 'Remove';
+    const removeText = escapeHtml(rootEl?.dataset.removeText || 'Remove');
 
     container.innerHTML = items
-      .map(
-        (item) => `
+      .map((item) => {
+        const safeId = escapeHtml(item.id);
+        const safeTitle = escapeHtml(item.title);
+        const safeSku = item.sku ? escapeHtml(item.sku) : '';
+        const safeVariant = escapeHtml(item.variant || 'Standard');
+        const rawAttrVariant = escapeHtml(item.variant || '');
+        const safeImgSrc = escapeHtml(
+          (item.imageUrl || '/images/hero-light.webp').replace('https://cdn.sanity.io', '/cdn-image')
+        );
+        const safeQty = Number(item.quantity) || 0;
+
+        return `
       <div class="flex items-center gap-3 p-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 text-xs">
         <img
-          src="${(item.imageUrl || '/images/hero-light.webp').replace('https://cdn.sanity.io', '/cdn-image')}"
-          alt="${item.title}"
+          src="${safeImgSrc}"
+          alt="${safeTitle}"
           class="w-12 h-12 rounded-lg object-cover bg-white border border-black/5 shrink-0"
         />
         <div class="flex-1 min-w-0">
-          <h4 class="font-semibold text-[#1d1d1f] truncate">${item.title}</h4>
+          <h4 class="font-semibold text-[#1d1d1f] truncate">${safeTitle}</h4>
           <p class="text-[11px] text-[#86868b] truncate mt-0.5">
-            ${item.sku ? `<span class="font-mono">${item.sku}</span> · ` : ''}${item.variant || 'Standard'}
+            ${safeSku ? `<span class="font-mono">${safeSku}</span> · ` : ''}${safeVariant}
           </p>
           <div class="flex items-center justify-between mt-1.5">
             <div class="flex items-center border border-black/15 rounded-md bg-white overflow-hidden text-[11px]">
               <button
                 type="button"
                 data-action="dec"
-                data-id="${item.id}"
-                data-variant="${item.variant}"
+                data-id="${safeId}"
+                data-variant="${rawAttrVariant}"
                 class="px-2 py-0.5 hover:bg-black/5 transition-colors text-[#1d1d1f]"
               >−</button>
-              <span class="px-2 font-mono font-medium">${item.quantity}</span>
+              <span class="px-2 font-mono font-medium">${safeQty}</span>
               <button
                 type="button"
                 data-action="inc"
-                data-id="${item.id}"
-                data-variant="${item.variant}"
+                data-id="${safeId}"
+                data-variant="${rawAttrVariant}"
                 class="px-2 py-0.5 hover:bg-black/5 transition-colors text-[#1d1d1f]"
               >+</button>
             </div>
             <button
               type="button"
               data-action="remove"
-              data-id="${item.id}"
-              data-variant="${item.variant}"
+              data-id="${safeId}"
+              data-variant="${rawAttrVariant}"
               class="text-[11px] text-[#86868b] hover:text-rose-600 transition-colors"
             >
               ${removeText}
             </button>
           </div>
         </div>
-      </div>`
-      )
+      </div>`;
+      })
       .join('');
   }
 
@@ -457,10 +486,25 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     }
   });
 
+  let clearConfirmTimer: ReturnType<typeof setTimeout> | null = null;
   btnClear?.addEventListener('click', () => {
-    if (confirm('Clear all items from your quote basket?')) {
+    if (!btnClear) return;
+    if (btnClear.dataset.confirming === 'true') {
+      if (clearConfirmTimer) clearTimeout(clearConfirmTimer);
+      btnClear.dataset.confirming = 'false';
+      btnClear.textContent = btnClear.dataset.originalText || 'Clear all';
       clearQuote();
+      return;
     }
+    btnClear.dataset.originalText = btnClear.textContent || 'Clear all';
+    btnClear.dataset.confirming = 'true';
+    btnClear.textContent = 'Confirm clear?';
+    clearConfirmTimer = setTimeout(() => {
+      if (btnClear) {
+        btnClear.dataset.confirming = 'false';
+        btnClear.textContent = btnClear.dataset.originalText || 'Clear all';
+      }
+    }, 3000);
   });
 
   // Handle Form Submission
@@ -468,7 +512,10 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAA
     e.preventDefault();
     const items = quoteCart.get() || [];
     if (items.length === 0) {
-      alert('Your quote basket is empty.');
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs bg-amber-50 text-amber-800 border border-amber-200 block';
+        alertBox.textContent = 'Your quote basket is empty. Please add at least one style before submitting.';
+      }
       return;
     }
 

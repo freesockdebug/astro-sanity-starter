@@ -1,4 +1,5 @@
 import { client } from '@utils/sanity-client';
+import { SanityImageService } from '@utils/image';
 import { IMAGE } from './blocks';
 import type { SiteConfig } from 'types';
 
@@ -36,6 +37,7 @@ export class SiteConfigService {
     if (config) {
       this.cachedConfig = config;
       this.cacheTimestamp = Date.now();
+      SanityImageService.setStudioProxyConfig(config.enableImageProxy);
     }
   }
 
@@ -49,6 +51,7 @@ export class SiteConfigService {
       const data = await client.fetch<SiteConfig>(`*[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ}`);
       this.cachedConfig = data || null;
       this.cacheTimestamp = now;
+      SanityImageService.setStudioProxyConfig(this.cachedConfig?.enableImageProxy);
       return this.cachedConfig;
     } catch (err: any) {
       console.error('SiteConfigService.getConfig failed:', err?.message);
