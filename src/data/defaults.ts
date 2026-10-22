@@ -208,6 +208,7 @@ export const DEFAULT_RFQ = {
   swatchKitSku: 'SWATCH-KIT',
   swatchKitTitle: 'Curated Swatch Kit & Fabric Color Book',
   swatchKitDesc: 'Physical fabric swatches & yarn color dossier via DHL Express',
+  swatchKitOptions: [] as Array<{ sku: string; title: string; desc?: string; moq?: string }>,
   swatchKitImageUrl: '/images/spec-light.webp',
   swatchKitMoq: '1 Set (Priority Dispatch)',
 

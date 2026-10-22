@@ -28,13 +28,21 @@ pnpm-debug.log*
 *.build.log
 
 # Development & testing scripts, scrapers and seeders
-scripts/
+scripts/*
+!scripts/check-preflight.ts
+!scripts/preflight-rules.json
 amazon_*.json
 studio/.sanity/
 # AI agent documentation & IDE rules
 AGENTS.md
 .agent/
 .agents
+
+# Prevent duplicate lockfiles
+bun.lock
+bun.lockb
+yarn.lock
+pnpm-lock.yaml
 
 # Sanity export archives
 sanity-export/*.tar.gz

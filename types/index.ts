@@ -160,6 +160,12 @@ export interface RfqSettings {
     swatchKitSku?: string;
     swatchKitTitle?: string;
     swatchKitDesc?: string;
+    swatchKitOptions?: Array<{
+        sku: string;
+        title: string;
+        desc?: string;
+        moq?: string;
+    }>;
     swatchKitImageUrl?: string;
     swatchKitMoq?: string;
     swatchKitImage?: {

@@ -19,5 +19,13 @@
     },
     "jsx": "react-jsx",
     "jsxImportSource": "react"
+  },
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "CommonJS",
+      "moduleResolution": "Node",
+      "verbatimModuleSyntax": false
+    }
   }
 }
