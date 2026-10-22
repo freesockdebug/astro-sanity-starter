@@ -36,7 +36,9 @@ const rawFetch = client.fetch.bind(client);
         ? query.replace(/[\r\n\s]+/g, ' ').trim().slice(0, 90)
         : 'dynamic query';
     const endpointType = sanityConfig.useCdn && !sanityConfig.token ? 'API CDN (5,000,000 Free/mo)' : 'LIVE API (Paid Quota)';
-    console.log(`[SANITY API CALL #${apiCallCount}] [${endpointType}] ${querySummary}...`);
+    if (isDev) {
+        console.log(`[SANITY API CALL #${apiCallCount}] [${endpointType}] ${querySummary}...`);
+    }
     return (rawFetch as any)(query, ...rest);
 };
 

@@ -328,8 +328,9 @@ export const POST: APIRoute = async ({ request }) => {
           rawItems: JSON.stringify(items),
         };
         const created = await writeClient.create(doc);
-        sanityRecordId = created._id;
-        console.log('Successfully recorded inquiry in Sanity:', sanityRecordId);
+        if (import.meta.env.DEV) {
+          console.log('Successfully recorded inquiry in Sanity:', sanityRecordId);
+        }
       } catch (e: any) {
         console.error('Could not write inquiry to Sanity:', e);
         sanityWriteError = e?.message || 'Sanity API create failed';

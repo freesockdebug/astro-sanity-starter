@@ -5,6 +5,8 @@ import sanity from '@sanity/astro';
 import cloudflare from '@astrojs/cloudflare';
 import { sanityConfig } from './src/utils/sanity-client';
 
+const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('build');
+
 // https://astro.build/config
 export default defineConfig({
     output: 'server',
@@ -32,7 +34,7 @@ export default defineConfig({
             allowedHosts: true
         },
         esbuild: {
-            drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : []
+            drop: isProduction ? ['console', 'debugger'] : []
         },
         optimizeDeps: {
             exclude: ['marked', '@sanity/client', 'ua-parser-js', '@nanostores/persistent']

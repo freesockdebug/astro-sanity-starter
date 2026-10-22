@@ -25,6 +25,7 @@ jobs:
 
       - name: Build Astro SSR
         env:
+          NODE_ENV: production
           SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID || 'xvhhd8u0' }}
           SANITY_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
           SANITY_TOKEN: ${{ secrets.SANITY_TOKEN }}
