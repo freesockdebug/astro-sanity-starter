@@ -31,6 +31,9 @@ export default defineConfig({
             hmr: { path: '/vite-hmr/' },
             allowedHosts: true
         },
+        esbuild: {
+            drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : []
+        },
         optimizeDeps: {
             exclude: ['marked', '@sanity/client', 'ua-parser-js', '@nanostores/persistent']
         }
