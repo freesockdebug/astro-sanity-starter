@@ -31,6 +31,7 @@ pnpm-debug.log*
 scripts/*
 !scripts/check-preflight.ts
 !scripts/preflight-rules.json
+!scripts/verify-cf-deploy.mjs
 amazon_*.json
 studio/.sanity/
 # AI agent documentation & IDE rules

@@ -67,24 +67,3 @@ const publicFetch = publicClient.fetch.bind(publicClient);
     }
 };
 
-// Dev-only hot reload listener for local Node.js environment (when draft preview mode is active)
-if (isDev && isDraftMode && typeof process !== 'undefined' && typeof process.cwd === 'function') {
-    Promise.all([import('fs'), import('path'), import('url')]).then(([{ default: fs }, { default: path }, { fileURLToPath }]) => {
-        try {
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = path.dirname(__filename);
-            [{ client: client, types: ['page'] }].forEach(({ client, types }: { client: SanityClient; types: Array<String> }) =>
-                client.listen(`*[_type in ${JSON.stringify(types)}]`, {}, { visibility: 'query' }).subscribe({
-                    next: async (event: any) => {
-                        if (event.transition === 'appear' || event.transition === 'disappear') {
-                            const filePath = path.join(__dirname, '../layouts/Layout.astro');
-                            const time = new Date();
-                            await fs.promises.utimes(filePath, time, time).catch(() => {});
-                        }
-                    },
-                    error: () => {}
-                })
-            );
-        } catch {}
-    }).catch(() => {});
-}

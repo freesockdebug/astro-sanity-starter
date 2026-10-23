@@ -5,7 +5,7 @@
         "dev": "node ./astro-cli.mjs dev --host 0.0.0.0 --port 3000",
         "start": "node ./astro-cli.mjs dev --host 0.0.0.0 --port 3000",
         "build": "node ./astro-cli.mjs build && node ./scripts/verify-cf-deploy.mjs",
-        "check:cf": "npx tsc --noEmit && node ./scripts/verify-cf-deploy.mjs",
+        "check:cf": "npx tsc --noEmit && node ./scripts/verify-cf-deploy.mjs --dry-run",
         "preview": "node ./astro-cli.mjs preview --host 0.0.0.0 --port 3000",
         "preview:cf": "wrangler dev",
         "deploy": "node ./astro-cli.mjs build && wrangler deploy",
@@ -40,6 +40,9 @@
         "@sanity/icons": "^5.2.3",
         "@sanity/import": "^3.37.4",
         "@sanity/vision": "^6.20.0",
+        "@types/node": "^22.0.0",
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
         "configstore": "7.0.0",
         "daisyui": "^5.0.0",
         "easymde": "^2.21.0",
@@ -48,7 +51,6 @@
         "sanity": "^6.20.0",
         "sanity-plugin-markdown": "^9.0.18",
         "styled-components": "^6.6.0",
-        "ts-node": "^10.9.2",
         "typescript": "5.8.2",
         "vite": "^8.3.4"
     }

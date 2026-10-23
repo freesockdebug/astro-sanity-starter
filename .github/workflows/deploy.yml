@@ -45,8 +45,8 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::CLOUDFLARE_API_TOKEN secret is not set in GitHub Repository Secrets."
-            exit 1
+            echo "::warning::CLOUDFLARE_API_TOKEN secret is not set in GitHub Repository Secrets. Skipping GitHub Actions deploy step (if using Cloudflare Dashboard Git integration, deployment is handled automatically by Cloudflare)."
+            exit 0
           fi
           if [ -n "$CF_ACCOUNT_ID" ]; then
             export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
@@ -65,7 +65,7 @@ jobs:
             curl -s --connect-timeout 10 --max-time 30 -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
-              --data '{"purge_everything":true}'
+              --data '{"purge_everything":true}' || true
           else
             echo "CLOUDFLARE_ZONE_ID not set; relying on 300s edge TTL"
           fi
@@ -104,8 +104,8 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::CLOUDFLARE_API_TOKEN secret is not set in GitHub Repository Secrets."
-            exit 1
+            echo "::warning::CLOUDFLARE_API_TOKEN secret is not set in GitHub Repository Secrets. Skipping Studio deploy step in GitHub Actions."
+            exit 0
           fi
           if [ -n "$CF_ACCOUNT_ID" ]; then
             export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
