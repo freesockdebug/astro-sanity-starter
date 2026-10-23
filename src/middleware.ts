@@ -38,6 +38,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // 3. Bypass cache for APIs, Sanity Studio admin, dynamic auth, and static asset chunks
   if (
     pathname.startsWith('/api/') ||
+    pathname.startsWith('/admin') ||
     pathname.startsWith('/studio') ||
     pathname.startsWith('/cdn-image/') ||
     pathname === '/favicon.ico' ||

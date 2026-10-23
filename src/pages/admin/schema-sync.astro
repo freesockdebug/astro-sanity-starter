@@ -1,0 +1,35 @@
+---
+// src/pages/admin/schema-sync.astro
+import Layout from '@layouts/Layout.astro';
+import { SchemaSyncStatus } from '@components';
+import { getSchemaSyncSummary } from '@utils/schemaSync';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+const simulate = Astro.url.searchParams.get('drift') === 'true' || Astro.url.searchParams.get('simulate') === 'true';
+const summary = getSchemaSyncSummary(simulate);
+---
+
+<Layout
+  title="Schema & Data Projection Sync Monitor | Admin Console"
+  description="Internal administrative monitor verifying data contract synchronization across Sanity Studio and Astro edge SSR."
+  noindex={true}
+  nofollow={true}
+>
+  <main class="min-h-screen bg-slate-50/60 pt-20 pb-16">
+    <!-- Breadcrumb bar -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-4">
+      <div class="flex items-center gap-2 text-xs text-slate-500">
+        <a href="/" class="hover:text-slate-900 transition-colors">Home</a>
+        <span aria-hidden="true">/</span>
+        <span class="text-slate-700 font-medium">Admin Tools</span>
+        <span aria-hidden="true">/</span>
+        <span class="text-slate-900 font-medium">Schema Sync Monitor</span>
+      </div>
+    </div>
+
+    <!-- Main UI Component -->
+    <SchemaSyncStatus initialSummary={summary} showSimulateToggle={true} />
+  </main>
+</Layout>

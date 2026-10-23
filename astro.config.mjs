@@ -40,13 +40,38 @@ export default defineConfig({
             tailwindcss(),
             {
                 name: 'studio-trailing-slash',
+                enforce: 'post',
                 configureServer(server) {
-                    server.middlewares.use((req, _res, next) => {
+                    server.middlewares.use((req, res, next) => {
                         if (req.url === '/studio' || req.url?.startsWith('/studio?')) {
                             req.url = req.url.replace('/studio', '/studio/');
                         }
+                        if (req.url && req.url.includes('.css')) {
+                            res.setHeader('Vary', 'Accept, Origin');
+                            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+                        }
                         next();
                     });
+                },
+                hotUpdate({ file, modules, server }) {
+                    if (file.endsWith('.css')) {
+                        if (!this.environment || this.environment.name === 'client') {
+                            server.ws.send({ type: 'full-reload', path: '*' });
+                        }
+                        return [];
+                    }
+                    return modules.filter(
+                        (m) => !m.id?.endsWith('.css') && !m.url?.includes('.css')
+                    );
+                },
+                handleHotUpdate({ file, modules, server }) {
+                    if (file.endsWith('.css')) {
+                        server.ws.send({ type: 'full-reload', path: '*' });
+                        return [];
+                    }
+                    return modules.filter(
+                        (m) => !m.id?.endsWith('.css') && !m.url?.includes('.css')
+                    );
                 }
             }
         ],

@@ -1,0 +1,125 @@
+---
+// src/components/AppleProductGridSkeleton.astro
+interface Props {
+  count?: number;
+  variant?: 'catalog' | 'shelf';
+  id?: string;
+  class?: string;
+}
+
+const {
+  count = 12,
+  variant = 'catalog',
+  id,
+  class: className = '',
+} = Astro.props;
+
+const items = Array.from({ length: count }, (_, idx) => idx);
+---
+
+{variant === 'shelf' ? (
+  <div
+    id={id}
+    role="status"
+    aria-label="Loading product collection shelf"
+    aria-busy="true"
+    class:list={[
+      'apple-shelf-skeleton flex-1 min-h-0 flex overflow-x-hidden gap-4 sm:gap-5 pb-2 pt-1 items-stretch lg:items-center select-none pointer-events-none',
+      className,
+    ]}
+  >
+    {items.map((idx) => (
+      <div
+        class="shrink-0 w-[78vw] max-w-[300px] sm:w-[310px] lg:w-[320px] xl:w-[340px] h-auto lg:h-full lg:max-h-[490px] rounded-2xl sm:rounded-3xl bg-[#f5f5f7] border border-black/5 p-4 sm:p-5 flex flex-col justify-between"
+        style={`animation-delay: ${idx * 60}ms`}
+      >
+        <div class="flex-1 min-h-0 flex flex-col">
+          <!-- Shelf Card Header Skeleton -->
+          <div class="shrink-0 h-[44px] flex flex-col justify-center space-y-2">
+            <div class="h-4 w-3/4 rounded-md apple-skeleton-warm"></div>
+            <div class="h-2.5 w-1/2 rounded-md apple-skeleton-warm"></div>
+          </div>
+
+          <!-- Shelf Card 1:1 / Auto-Fit Image Box Skeleton -->
+          <div class="w-full aspect-square lg:aspect-auto lg:flex-1 lg:min-h-[220px] rounded-xl sm:rounded-2xl apple-skeleton my-2.5 border border-black/[0.03]"></div>
+
+          <!-- Color Dots & MOQ Pill Row Skeleton -->
+          <div class="shrink-0 flex items-center justify-between pt-0.5">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 rounded-full apple-skeleton-warm"></span>
+              <span class="w-3.5 h-3.5 rounded-full apple-skeleton-warm"></span>
+              <span class="w-3.5 h-3.5 rounded-full apple-skeleton-warm"></span>
+              <span class="w-3.5 h-3.5 rounded-full apple-skeleton-warm"></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="hidden sm:inline-block h-4 w-12 rounded-md apple-skeleton-warm"></span>
+              <span class="h-3.5 w-16 rounded-md apple-skeleton-warm"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shelf Card Bottom Action Bar Skeleton -->
+        <div class="shrink-0 mt-3 pt-2.5 border-t border-black/5 flex items-center justify-between">
+          <div class="h-3.5 w-20 rounded-md apple-skeleton-warm"></div>
+          <div class="h-7 w-24 rounded-full apple-skeleton-warm"></div>
+        </div>
+      </div>
+    ))}
+  </div>
+) : (
+  <div
+    id={id}
+    role="status"
+    aria-label="Loading product catalog grid"
+    aria-busy="true"
+    class:list={[
+      'apple-grid-skeleton grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5 select-none pointer-events-none',
+      className,
+    ]}
+  >
+    {items.map((idx) => (
+      <div
+        class="rounded-2xl bg-white border border-black/8 p-2 sm:p-2.5 flex flex-col justify-between"
+        style={`animation-delay: ${(idx % 6) * 50}ms`}
+      >
+        <div class="flex-1 min-h-0 flex flex-col">
+          <!-- 1:1 Aspect Square Image Container with Badge Placeholder -->
+          <div class="relative w-full aspect-square rounded-xl overflow-hidden apple-skeleton shrink-0">
+            <div class="absolute top-1.5 left-1.5 w-10 h-3.5 rounded-md bg-white/60"></div>
+          </div>
+
+          <!-- Swatch Dots & Lead Time Row -->
+          <div class="shrink-0 flex items-center justify-between pt-2 pb-1 px-0.5">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full apple-skeleton"></span>
+              <span class="w-2.5 h-2.5 rounded-full apple-skeleton"></span>
+              <span class="w-2.5 h-2.5 rounded-full apple-skeleton"></span>
+              <span class="w-2.5 h-2.5 rounded-full apple-skeleton"></span>
+            </div>
+            <span class="w-9 h-2.5 rounded-sm apple-skeleton"></span>
+          </div>
+
+          <!-- Two-Line Title Placeholder (36px exact height match) -->
+          <div class="shrink-0 h-[36px] mt-0.5 px-0.5 flex flex-col justify-center space-y-1.5">
+            <div class="h-3 w-11/12 rounded-sm apple-skeleton"></div>
+            <div class="h-3 w-2/3 rounded-sm apple-skeleton"></div>
+          </div>
+
+          <!-- Composition Subtitle Placeholder -->
+          <div class="px-0.5 mt-1">
+            <div class="h-2.5 w-3/4 rounded-sm apple-skeleton"></div>
+          </div>
+        </div>
+
+        <!-- Bottom Price, MOQ & Quote Pill Button Placeholder -->
+        <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
+          <div class="space-y-1">
+            <div class="h-3.5 w-14 rounded-sm apple-skeleton"></div>
+            <div class="h-2.5 w-16 rounded-sm apple-skeleton"></div>
+          </div>
+          <div class="h-6 w-16 rounded-full apple-skeleton"></div>
+        </div>
+      </div>
+    ))}
+  </div>
+)}

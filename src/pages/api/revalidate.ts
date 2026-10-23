@@ -175,10 +175,20 @@ export const POST: APIRoute = async (context) => {
       body?.secret;
 
     const expectedSecret = getEnv('REVALIDATE_SECRET') || getEnv('SANITY_REVALIDATE_SECRET');
+    const isDev = Boolean(import.meta.env?.DEV);
+    const isSameOrTrustedOrigin =
+      Boolean(corsHeaders['Access-Control-Allow-Origin']) ||
+      request.headers.get('sec-fetch-site') === 'same-origin';
 
-    // 2. Authenticate webhook request if secret is configured in environment
-    if (expectedSecret && providedSecret !== expectedSecret) {
-      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid revalidation secret' }), {
+    // 2. Authenticate webhook request:
+    // - If secret is configured in environment, strictly require matching secret (fail-closed)
+    // - If no secret is configured in production, reject untrusted cross-origin/external callers
+    const isAuthorized = expectedSecret
+      ? providedSecret === expectedSecret
+      : isDev || isSameOrTrustedOrigin;
+
+    if (!isAuthorized) {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or missing revalidation secret' }), {
         status: 401,
         headers: {
           'Content-Type': 'application/json',

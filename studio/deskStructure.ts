@@ -8,8 +8,10 @@ import { CogIcon } from '@sanity/icons/Cog'
 import { ArchiveIcon } from '@sanity/icons/Archive'
 import { EnvelopeIcon } from '@sanity/icons/Envelope'
 import { BoltIcon } from '@sanity/icons/Bolt'
+import { SyncIcon } from '@sanity/icons/Sync'
 import { PageLivePreview } from './components/PageLivePreview'
 import { CachePurgeDashboard } from './components/CachePurgeDashboard'
+import { SchemaSyncDashboard } from './components/SchemaSyncDashboard'
 
 export const defaultDocumentNode: DefaultDocumentNodeResolver = (S, { schemaType }) => {
   if (schemaType === 'page') {
@@ -119,5 +121,16 @@ export const deskStructure: StructureResolver = (S) =>
           S.component(CachePurgeDashboard)
             .title('Cloudflare 边缘缓存与 CDN 快速刷新')
             .id('cache-purge-view')
+        ),
+
+      // 8. Schema & Frontend Projection Sync Dashboard
+      S.listItem()
+        .id('schemaSync')
+        .title('🔄 Schema 与前端数据同步看板')
+        .icon(SyncIcon)
+        .child(
+          S.component(SchemaSyncDashboard)
+            .title('Schema 与前端 GROQ/TS 契约同步看板')
+            .id('schema-sync-view')
         ),
     ])

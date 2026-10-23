@@ -15,6 +15,9 @@ import AppleStageNavigator from './AppleStageNavigator.astro';
 import WhatsAppWidget from './WhatsAppWidget.astro';
 import LanguagePicker from './LanguagePicker.astro';
 import SEO from './SEO.astro';
+import SchemaSyncStatus from './SchemaSyncStatus.astro';
+import AppleProductGridSkeleton from './AppleProductGridSkeleton.astro';
+import AppleProductDetailSkeleton from './AppleProductDetailSkeleton.astro';
 
 export {
   SockHero,
@@ -30,6 +33,9 @@ export {
   WhatsAppWidget,
   LanguagePicker,
   SEO,
+  SchemaSyncStatus,
+  AppleProductGridSkeleton,
+  AppleProductDetailSkeleton,
 };
 
 /**

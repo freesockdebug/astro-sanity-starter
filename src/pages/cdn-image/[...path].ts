@@ -16,10 +16,23 @@ export const GET: APIRoute = async ({ params, request, url }) => {
     return new Response('Bad Request: Missing image path', { status: 400 });
   }
 
-  // Security: prevent path traversal or SSRF to non-Sanity destinations
-  const cleanPath = path.replace(/^\/+/, '');
-  if (cleanPath.includes('..') || cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
-    return new Response('Forbidden: Invalid image path', { status: 403 });
+  // Security: prevent encoded path traversal, backslashes, or SSRF to non-Sanity destinations
+  let decodedPath = path;
+  try {
+    decodedPath = decodeURIComponent(path);
+  } catch {
+    return new Response('Bad Request: Malformed image path encoding', { status: 400 });
+  }
+
+  const cleanPath = decodedPath.replace(/^\/+/, '');
+  if (
+    cleanPath.includes('..') ||
+    cleanPath.includes('\\') ||
+    cleanPath.startsWith('http://') ||
+    cleanPath.startsWith('https://') ||
+    !/^images\/[a-z0-9_-]+\/[a-z0-9_-]+\//i.test(cleanPath)
+  ) {
+    return new Response('Forbidden: Invalid Sanity image path', { status: 403 });
   }
 
   const targetUrl = `https://cdn.sanity.io/${cleanPath}${url.search}`;
@@ -37,9 +50,15 @@ export const GET: APIRoute = async ({ params, request, url }) => {
       return new Response(`Upstream Sanity Error: ${upstreamRes.statusText}`, { status: upstreamRes.status });
     }
 
+    const contentType = (upstreamRes.headers.get('Content-Type') || 'image/jpeg').toLowerCase();
+    if (!contentType.startsWith('image/')) {
+      return new Response('Forbidden: Upstream asset is not a valid image resource', { status: 403 });
+    }
+
     const headers = new Headers();
-    const contentType = upstreamRes.headers.get('Content-Type') || 'image/jpeg';
     headers.set('Content-Type', contentType);
+    headers.set('X-Content-Type-Options', 'nosniff');
+    headers.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
 
     const contentLength = upstreamRes.headers.get('Content-Length');
     if (contentLength) {

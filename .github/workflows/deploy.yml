@@ -6,10 +6,14 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  CI: true
+
 jobs:
   deploy-web:
     runs-on: ubuntu-latest
     name: Deploy Web
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,7 +51,11 @@ jobs:
           if [ -n "$CF_ACCOUNT_ID" ]; then
             export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
           fi
-          npx wrangler deploy --keep-vars
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID secret is not set! Required to prevent Wrangler from prompting interactively and hanging CI."
+            exit 1
+          fi
+          npx wrangler deploy --keep-vars --non-interactive
 
       - name: Purge Cloudflare Edge Cache
         env:
@@ -56,7 +64,7 @@ jobs:
         run: |
           if [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN" ]; then
             echo "Purging Cloudflare Edge Cache for Zone: $CLOUDFLARE_ZONE_ID"
-            curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
+            curl -s --connect-timeout 10 --max-time 30 -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json" \
               --data '{"purge_everything":true}'
@@ -67,6 +75,7 @@ jobs:
   deploy-studio:
     runs-on: ubuntu-latest
     name: Deploy Studio
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -88,6 +97,7 @@ jobs:
           SANITY_STUDIO_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
           SANITY_STUDIO_SITE_URL: ${{ secrets.SANITY_STUDIO_SITE_URL || 'https://gwenvenni.com' }}
           SANITY_STUDIO_REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET || 'itsasecret' }}
+          SANITY_TELEMETRY: 'false'
         run: npm run build:studio
 
       - name: Deploy Studio to Cloudflare Workers
@@ -102,4 +112,9 @@ jobs:
           if [ -n "$CF_ACCOUNT_ID" ]; then
             export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
           fi
-          npx wrangler deploy --config studio/wrangler.jsonc --keep-vars
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID secret is not set! Required to prevent Wrangler from prompting interactively and hanging CI."
+            exit 1
+          fi
+          npx wrangler deploy --config studio/wrangler.jsonc --keep-vars --non-interactive
+

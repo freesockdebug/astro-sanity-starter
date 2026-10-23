@@ -406,7 +406,7 @@ export const POST: APIRoute = async ({ request }) => {
     const enableWebhook = siteConfig?.enableNotificationWebhook !== false;
 
     const webhookTask = (async () => {
-      if (!enableWebhook || !webhookUrl) return;
+      if (!enableWebhook || !webhookUrl || !SecurityService.isSafeWebhookUrl(webhookUrl)) return;
       try {
         const itemLines = items
           .map((item, idx) => `  ${idx + 1}. [${item.sku}] ${item.title} (${item.variant}) × ${item.quantity}双`)

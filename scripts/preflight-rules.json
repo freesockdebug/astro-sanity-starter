@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "lastUpdated": "2026-10-22",
+  "lastUpdated": "2026-10-23",
   "customRules": [
     {
       "id": "pitfall-23",
@@ -31,7 +31,33 @@
           "message": "scripts/check-preflight.ts 必须包含 1.5 双端数据契约与 Schema 强联动同步校验逻辑！"
         }
       ]
+    },
+    {
+      "id": "pitfall-25",
+      "num": 25,
+      "title": "源码与组件零空文件守卫（防 0 字节截断模块破坏 Vite 模块图）",
+      "detail": "`src/` 与 `studio/` 下所有源码及 `.astro`/`.tsx` 组件严禁存在 0 字节空白文件，杜绝因半截断文件引发 `[vite] Importing a module script failed` 及样式热重载崩溃。",
+      "createdAt": "2026-10-23",
+      "checks": [
+        {
+          "type": "file_must_contain",
+          "path": "src/components/SchemaSyncStatus.astro",
+          "pattern": "schema-sync-dashboard",
+          "message": "src/components/SchemaSyncStatus.astro 严禁为空文件，必须包含完整的组件模板！"
+        },
+        {
+          "type": "file_must_contain",
+          "path": "src/components/AppleProductGridSkeleton.astro",
+          "pattern": "apple-grid-skeleton",
+          "message": "src/components/AppleProductGridSkeleton.astro 严禁为空文件，必须包含完整的骨架屏组件模板！"
+        },
+        {
+          "type": "file_must_contain",
+          "path": "src/components/AppleProductDetailSkeleton.astro",
+          "pattern": "apple-pdp-skeleton",
+          "message": "src/components/AppleProductDetailSkeleton.astro 严禁为空文件，必须包含完整的详情页骨架屏组件模板！"
+        }
+      ]
     }
   ]
 }
-

@@ -1,6 +1,7 @@
 ---
 // src/pages/products/index.astro
 import Layout from '@layouts/Layout.astro';
+import { AppleProductGridSkeleton } from '@components/index';
 import { client } from '@utils/sanity-client';
 import { PRODUCT_CARD_FIELDS, CATEGORY_FIELDS, ProductService, fetchCatalogCategories } from '@data/products';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
@@ -207,24 +208,25 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
         {initialProducts.map((item: any, idx: number) => (
           <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between" data-product-id={item.id}>
             <div class="flex-1 min-h-0 flex flex-col">
-              <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with rounded corners -->
+              <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with Apple Progressive Skeleton Shimmer -->
               <a
                 href={getLocalizedPath(`/products/${item.slug}`, currentLang)}
-                class="block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] my-0 group-hover:opacity-95 transition-all shrink-0"
+                class="apple-img-wrapper block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] apple-skeleton-surface my-0 group-hover:opacity-95 transition-all shrink-0"
               >
                 <img
                   src={item.image}
                   srcset={SanityImageService.srcSet(item.image, [240, 480]) || undefined}
                   sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
                   alt={getLocalizedValue(item.title, currentLang)}
-                  class="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
+                  class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
                   loading={idx < 4 ? "eager" : "lazy"}
                   fetchpriority={idx === 0 ? "high" : "auto"}
                   decoding="async"
                   width="240"
                   height="240"
+                  onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
                 />
-                <div class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
+                <div class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
                   {item.category ? item.category.toUpperCase() : 'OEM'}
                 </div>
               </a>
@@ -283,6 +285,9 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
         ))}
       </div>
 
+      <!-- Apple Design Language Filter / Sort Transition Skeleton Grid -->
+      <AppleProductGridSkeleton id="catalog-filter-skeleton" count={12} class="hidden min-h-[50vh]" />
+
       <!-- Zero Results Empty State -->
       <div id="catalog-empty-state" class="hidden py-20 text-center space-y-3">
         <div class="w-12 h-12 rounded-full bg-[#f5f5f7] text-[#86868b] flex items-center justify-center mx-auto border border-black/5">
@@ -303,15 +308,12 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
         </button>
       </div>
 
-      <!-- 4. Infinite Scroll Sentinel & Compact End of List -->
-      <div id="catalog-load-trigger" class="w-full min-h-[56px] py-4 flex items-center justify-center">
-        <!-- Loading Spinner while fetching next batch -->
-        <div id="catalog-loading-spinner" class="hidden items-center gap-2 text-xs text-[#86868b] font-medium">
-          <svg class="animate-spin h-4 w-4 text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-          </svg>
-          <span>{t('catalog.loadingMore')}</span>
+      <!-- 4. Infinite Scroll Sentinel & Apple Skeleton Next-Batch Loader -->
+      <div id="catalog-load-trigger" class="w-full min-h-[56px] py-4 flex flex-col items-center justify-center">
+        <!-- Apple Skeleton Row while fetching next infinite-scroll batch -->
+        <div id="catalog-loading-spinner" class="hidden w-full flex-col items-center gap-3">
+          <AppleProductGridSkeleton count={6} class="w-full" />
+          <span class="text-[11px] text-[#86868b] font-medium tracking-tight">{t('catalog.loadingMore')}</span>
         </div>
 
         <!-- End-of-List Divider (Compact padding) -->
@@ -340,6 +342,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   let filteredList = [];
 
   const gridContainer = document.getElementById('products-grid');
+  const filterSkeleton = document.getElementById('catalog-filter-skeleton');
   const emptyState = document.getElementById('catalog-empty-state');
   const allLoadedNotice = document.getElementById('catalog-all-loaded-notice');
   const loadingSpinner = document.getElementById('catalog-loading-spinner');
@@ -350,9 +353,20 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   const searchClearBtn = document.getElementById('catalog-search-clear');
   const sortSelect = document.getElementById('catalog-sort-select');
   const loadTriggerSentinel = document.getElementById('catalog-load-trigger');
+  let skeletonTimer = null;
+
+  function hydrateCompletedImages(scope) {
+    const root = scope || document;
+    const imgs = root.querySelectorAll('.catalog-card-img');
+    imgs.forEach((img) => {
+      if (img.complete && img.parentElement) {
+        img.parentElement.classList.add('apple-img-loaded');
+      }
+    });
+  }
 
   // Filter & Sort Logic (Immutable source, defensive parsing, clean priority)
-  function updateFilteredProducts() {
+  function updateFilteredProducts(withSkeletonTransition) {
     let result = allProducts.filter((item) => {
       // 1. Category filter
       const matchesCategory = currentCategory === 'all' || item.category === currentCategory;
@@ -395,10 +409,22 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     // Reset pagination
     displayedCount = 0;
     if (gridContainer) gridContainer.innerHTML = '';
-    renderNextBatch();
+
+    if (withSkeletonTransition && filterSkeleton && gridContainer) {
+      clearTimeout(skeletonTimer);
+      gridContainer.classList.add('hidden');
+      if (emptyState) emptyState.classList.add('hidden');
+      filterSkeleton.classList.remove('hidden');
+      skeletonTimer = setTimeout(() => {
+        filterSkeleton.classList.add('hidden');
+        renderNextBatch();
+      }, 140);
+    } else {
+      if (filterSkeleton) filterSkeleton.classList.add('hidden');
+      renderNextBatch();
+    }
   }
 
-  // Create Product Card HTML compliant with Taobao Dense Grid & Gwenvenni Apple Specs
   // Create Product Card HTML matching Taobao Shelf Layout (Image-Top, 2-line title, Price/MOQ block)
   function createCardElement(item) {
     const card = document.createElement('div');
@@ -418,21 +444,22 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
     card.innerHTML = `
       <div class="flex-1 min-h-0 flex flex-col">
-        <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with rounded corners -->
+        <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with Apple Progressive Skeleton Shimmer -->
         <a
           href="${productUrlPrefix}${item.slug}"
-          class="block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] my-0 group-hover:opacity-95 transition-all shrink-0"
+          class="apple-img-wrapper block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] apple-skeleton-surface my-0 group-hover:opacity-95 transition-all shrink-0"
         >
           <img
             src="${item.image}"
             alt="${item.title}"
-            class="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
+            class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
             loading="lazy"
             decoding="async"
             width="240"
             height="240"
+            onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
           />
-          <div class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
+          <div class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
             ${item.category ? item.category.toUpperCase() : 'OEM'}
           </div>
         </a>
@@ -485,6 +512,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       </div>
     `;
 
+    hydrateCompletedImages(card);
     return card;
   }
 
@@ -627,7 +655,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       }
       window.history.replaceState({}, '', url.toString());
 
-      updateFilteredProducts();
+      updateFilteredProducts(true);
     });
   });
 
@@ -641,7 +669,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     }
     searchDebounceTimer = setTimeout(() => {
       searchQuery = val;
-      updateFilteredProducts();
+      updateFilteredProducts(false);
     }, 250);
   });
 
@@ -651,7 +679,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       (searchInput).value = '';
       searchQuery = '';
       searchClearBtn.classList.add('hidden');
-      updateFilteredProducts();
+      updateFilteredProducts(false);
     }
   });
 
@@ -668,7 +696,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   // Sort dropdown
   sortSelect?.addEventListener('change', (e) => {
     currentSort = (e.target).value;
-    updateFilteredProducts();
+    updateFilteredProducts(true);
   });
 
   // Handle URL deep linking (e.g. /products?category=silk)
@@ -687,7 +715,10 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     displayedCount = Math.min(BATCH_SIZE, filteredList.length);
     if (totalCountLabel) totalCountLabel.textContent = String(filteredList.length);
     if (displayedCountLabel) displayedCountLabel.textContent = String(displayedCount);
-    if (gridContainer) bindQuoteButtons(gridContainer);
+    if (gridContainer) {
+      bindQuoteButtons(gridContainer);
+      hydrateCompletedImages(gridContainer);
+    }
     if (displayedCount >= filteredList.length) {
       if (allLoadedNotice) {
         allLoadedNotice.classList.remove('hidden');

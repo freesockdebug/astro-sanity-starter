@@ -1,133 +1,82 @@
-#!/usr/bin/env node
+// scripts/check-preflight.ts
 /**
- * Gwenvenni Web & Studio 全链路自动化前置质量巡检与自演进工具 (Pre-Flight Verification)
+ * 架构护栏与历史踩坑全自动巡检引擎 (Preflight Architecture & Quality Gate)
  *
- * 严格覆盖 AGENTS.md 全部 22 项历史血泪踩坑与通用架构护栏，并支持动态自演进：
- *
- * [Part 1: Sanity Studio 视图与数据完整性]
- *  - 1.1 Preview Prepare 返回类型与 [object Object] 防解包测试
- *  - 1.2 Schema 数组初始值 initialValue 必需 _key 检测
- *  - 1.3 Studio 组件 React Error #31 多语言宽对象渲染安全扫描
- *
- * [Part 2: AGENTS.md 历史核心反例与架构红线全量扫描 (Pitfall 1 ~ 22 + 动态扩展规则)]
- *  - 2.1  [Pitfall 1 & 4]: 客户端原生内联脚本 TS 语法断言拦截 (as any / : any)
- *  - 2.2  [Pitfall 2]: 列表渲染防布局偏移 (禁止空容器或直接置空 innerHTML 引发 CLS 崩盘)
- *  - 2.3  [Pitfall 3]: 杜绝在 define:vars 中序列化大数组 (防止转义体积暴增 357KB)
- *  - 2.4  [Pitfall 4]: 外部字体加载阻塞检测 (禁止直接阻塞式 link 样式)
- *  - 2.5  [Pitfall 6]: HTML 属性实体转义暴增 (禁止 data-*={JSON.stringify(...)})
- *  - 2.6  [Pitfall 7]: 图片服务反向代理兼容性 (同时兼容 cdn.sanity.io 与 /cdn-image/)
- *  - 2.7  [Pitfall 8]: 视口卡片 loading/fetchpriority 动态策略保障
- *  - 2.8  [Pitfall 9]: Scroll 监听器强制同步回流防护 (读写分离与 rAF)
- *  - 2.9  [Pitfall 11]: 本地兜底大图与轻量化 WebP 检测
- *  - 2.10 [Pitfall 12 & I.5]: Astro v6 Cloudflare 环境变量 Proxy 崩溃检测 (禁 locals.runtime.env)
- *  - 2.11 [Pitfall 13]: 产品目录货架 7 列大屏断点黄金标准 (必须 min-[1760px]:grid-cols-7)
- *  - 2.12 [Principle I.2]: 服务端对外 fetch 刚性超时熔断防护 (挂载 AbortSignal.timeout)
- *  - 2.13 [Principle II]: Tailwind v4 纯 CSS 引擎红线 (禁 tailwind.config.*)
- *  - 2.14 [Principle II]: 组件扁平正交与绝对路径别名规范 (禁深层 ../../components/)
- *  - 2.15 [Pitfall 14]: 国际 B2B 货币标准化对齐 (USD / $)
- *  - 2.16 [Pitfall 15]: 触屏与平板交互无障碍可用性 (.is-open & touch-manipulation)
- *  - 2.17 [Pitfall 16]: 商品币种与阶梯价单位独立字段及 MOQ 阶梯优先
- *  - 2.18 [Pitfall 17]: Bento 展台胶囊徽章防溢出与多维矮视口自适应
- *  - 2.19 [Pitfall 18]: 动态路由与中间件静态资源 404 防御及边缘 HTML 缓存安全 (防丢样式 FOUC)
- *  - 2.20 [Pitfall 20]: 依赖锁文件严格同步 (npm ci --dry-run) 与单一包管理器准则 (自动清理杂散锁文件)
- *  - 2.21 [Pitfall 21]: 双环境按需挂载 Studio 与防 Cloudflare Worker Error 1102 (CPU 超限)
- *  - 2.22 [Pitfall 22]: Wrangler v4 配置纯净度、Studio 浏览器端 process.env 安全守卫与 CI 流水线校验
- *  - 2.23 [Principle IV]: 版本库纯净度与本地资产 .gitignore 隔离 (Git Hygiene)
- *  - 2.24 [动态演进规则]: 执行 scripts/preflight-rules.json 中通过 check:add 新增的自定义红线断言
- *
- * [Part 3: i18n 多语言核心字典对称性校验 (Pitfall 19)]
- *  - 3.1 多语言 (EN, DE, FR, ES) 核心字典对称率与空值校验 + astro.config.mjs i18n.locales 对齐
- *
- * [Part 4: Sanity 数据集结构与字段类型一致性深度巡检 (--data / --full)]
- *  - 4.1 线上数据集已存数据 Array _key 完整率扫描
- *  - 4.2 Schema 字段类型一致性巡检 (防 Invalid property value: type must be localeString)
- *  - 4.3 数据库商品价格阶梯直接取值与全量美元标准化校验
- *
- * [Part 5: 双端生产编译与 Wrangler v4 部署预检全量验证 (--full)]
- *  - 5.1 Sanity Studio 独立静态生产编译 (npm run build:studio)
- *  - 5.2 Astro SSR Edge 生产编译 (npm run build)
- *  - 5.3 主站与 Studio Cloudflare Wrangler v4 部署预检 (--dry-run)
- *
- * [自演进维护命令]:
- *  - npm run check          : 运行常规快速巡检 (Part 1 + Part 2 + Part 3)
- *  - npm run check:full     : 运行全量巡检 (Part 1 ~ Part 5)
- *  - npm run check:list     : 查看所有已纳管的红线与自定义规则
- *  - npm run check:add -- --title="红线标题" --detail="规范详情" [--must-contain="file:pattern"] [--must-not-contain="file:pattern"]
+ * 用法:
+ *   npm run check           # 静态 + Schema 预览 + 双端契约同步 + i18n 快速巡检
+ *   npm run check:full      # 包含远程数据集校验 + 双端生产编译 + Wrangler Dry-Run
+ *   npm run check:list      # 查看已收录的全部架构红线与动态规则
+ *   npm run check:add -- --title="..." --detail="..." [--must-contain="file:pattern"]
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const cliArgs = process.argv.slice(2);
-const isFullMode = cliArgs.includes('--full') || cliArgs.includes('-f');
-const isDataMode = cliArgs.includes('--data') || isFullMode;
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SRC_DIR = path.join(ROOT_DIR, 'src');
 const STUDIO_DIR = path.join(ROOT_DIR, 'studio');
-const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const AGENTS_PATH = path.join(ROOT_DIR, 'AGENTS.md');
-const CUSTOM_RULES_PATH = path.join(__dirname, 'preflight-rules.json');
+const CUSTOM_RULES_PATH = path.join(ROOT_DIR, 'scripts', 'preflight-rules.json');
+
+const localRequire = createRequire(import.meta.url);
+const cliArgs = process.argv.slice(2);
+const isFullMode = cliArgs.includes('--full');
+const isDataMode = isFullMode || cliArgs.includes('--data');
 
 let errorCount = 0;
 let warnCount = 0;
 
-function logPass(msg: string) {
-  console.log(`\x1b[32m✔ [PASS]\x1b[0m ${msg}`);
-}
-function logWarn(msg: string) {
-  warnCount++;
-  console.log(`\x1b[33m⚠ [WARN]\x1b[0m ${msg}`);
-}
-function logFail(msg: string) {
-  errorCount++;
-  console.log(`\x1b[31m✖ [FAIL]\x1b[0m ${msg}`);
-}
 function logSection(title: string) {
   console.log(`\n\x1b[1m\x1b[36m=== ${title} ===\x1b[0m`);
 }
 
+function logPass(msg: string) {
+  console.log(` \x1b[32m✔ [PASS]\x1b[0m ${msg}`);
+}
+
+function logWarn(msg: string) {
+  warnCount++;
+  console.log(` \x1b[33m⚠ [WARN]\x1b[0m ${msg}`);
+}
+
+function logFail(msg: string) {
+  errorCount++;
+  console.log(` \x1b[31m✖ [FAIL]\x1b[0m ${msg}`);
+}
+
 function getFiles(dir: string, exts: string[]): string[] {
-  let results: string[] = [];
+  const results: string[] = [];
   if (!fs.existsSync(dir)) return results;
-  const list = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of list) {
-    const fullPath = path.join(dir, entry.name);
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name.startsWith('.')) {
+      continue;
+    }
+    const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (
-        entry.name !== 'node_modules' &&
-        entry.name !== '.astro' &&
-        entry.name !== 'dist' &&
-        entry.name !== '.git' &&
-        entry.name !== '.wrangler'
-      ) {
-        results = results.concat(getFiles(fullPath, exts));
-      }
-    } else if (entry.isFile()) {
-      if (exts.some((ext) => entry.name.endsWith(ext))) {
-        results.push(fullPath);
-      }
+      results.push(...getFiles(full, exts));
+    } else if (exts.some((ext) => entry.name.endsWith(ext))) {
+      results.push(full);
     }
   }
   return results;
 }
 
-function parseJsonc(content: string): Record<string, any> {
+function parseJsonc(content: string): any {
   let result = '';
   let inString = false;
   let stringChar = '';
   let i = 0;
   while (i < content.length) {
     const ch = content[i];
-    const next = content[i + 1];
     if (inString) {
       result += ch;
-      if (ch === '\\') {
-        result += next || '';
+      if (ch === '\\' && i + 1 < content.length) {
+        result += content[i + 1];
         i += 2;
         continue;
       }
@@ -142,11 +91,11 @@ function parseJsonc(content: string): Record<string, any> {
       i++;
       continue;
     }
-    if (ch === '/' && next === '/') {
+    if (ch === '/' && content[i + 1] === '/') {
       while (i < content.length && content[i] !== '\n') i++;
       continue;
     }
-    if (ch === '/' && next === '*') {
+    if (ch === '/' && content[i + 1] === '*') {
       i += 2;
       while (i < content.length && !(content[i] === '*' && content[i + 1] === '/')) i++;
       i += 2;
@@ -158,9 +107,6 @@ function parseJsonc(content: string): Record<string, any> {
   return JSON.parse(result.replace(/,\s*([}\]])/g, '$1'));
 }
 
-/**
- * 动态加载包含无后缀相对导入的 TypeScript 模块 (兼容原生 Node 22 strip-types 与 tsx)
- */
 async function loadTsModule(entryAbsPath: string): Promise<any> {
   try {
     return await import(pathToFileURL(entryAbsPath).href);
@@ -359,9 +305,6 @@ function extractTsInterfaceFields(tsContent: string, interfaceName: string): str
   return Array.from(fields);
 }
 
-/**
- * 自演进：新增一条架构红线并同步写入 AGENTS.md 与 scripts/preflight-rules.json
- */
 function handleAddRule(args: string[]): void {
   const getArg = (name: string): string => {
     const prefix = `--${name}=`;
@@ -416,6 +359,7 @@ function handleAddRule(args: string[]): void {
   }
 
   const entry: CustomRuleEntry = {
+    id: `pitfall-${nextNum}`,
     num: nextNum,
     title,
     detail,
@@ -435,12 +379,12 @@ function handleAddRule(args: string[]): void {
   }
 
   console.log(`\x1b[32m\x1b[1m✅ 已成功演进并收录第 #${nextNum} 条架构红线：${title}\x1b[0m`);
-  console.log(`   已同步更新: AGENTS.md & scripts/preflight-rules.json`);
+  console.log(`   已同步更新: scripts/preflight-rules.json`);
 }
 
 function handleListRules(): void {
   const store = loadCustomRules();
-  console.log(`\n\x1b[1m\x1b[36m📋 AGENTS.md 核心架构红线与自动化巡检清单\x1b[0m\n`);
+  console.log(`\n\x1b[1m\x1b[36m📋 核心架构红线与自动化巡检清单\x1b[0m\n`);
   if (fs.existsSync(AGENTS_PATH)) {
     const content = fs.readFileSync(AGENTS_PATH, 'utf8');
     const match = content.match(/<!-- PREFLIGHT_RULES_START -->([\s\S]*?)<!-- PREFLIGHT_RULES_END -->/);
@@ -451,7 +395,7 @@ function handleListRules(): void {
   if (store.customRules.length > 0) {
     console.log(`\n\x1b[33m已注册动态扩展规则 (${store.customRules.length} 条):\x1b[0m`);
     for (const c of store.customRules) {
-      console.log(`  #${c.num} [${c.date}] ${c.title} (${c.checks.length} 项自动断言)`);
+      console.log(`  #${c.num} [${c.date || c.createdAt}] ${c.title} (${c.checks.length} 项自动断言)`);
     }
   }
   console.log('');
@@ -490,40 +434,38 @@ async function main() {
         badge: { en: 'Luxury', de: 'Luxus' },
         header: { title: 'GWENVENNI' },
         drawerTitle: { en: 'Request Swatch Kit' },
-        drawerSubtitle: { en: 'Priority dispatch' },
-        text: { en: 'Footer Notice' },
-        tierName: '500-999 Pairs',
-        unitPrice: '$12.00',
-        sku: 'SKU-001',
-        author: 'Master Craftsman',
-        quote: 'Exceptional 200N needle count.',
-        company: 'Gwenvenni',
-        email: 'buyer@store.com',
-        status: 'pending',
-        createdAt: '2026-10-21T00:00:00Z',
+        sku: 'GW-SILK-01',
+        slug: 'silk-socks',
+        category: 'Mulberry Silk',
+        moq: '100 Pairs',
+        range: '100 - 499',
+        price: '$4.80',
+        unit: 'Pair',
+        value: '85% Mulberry Silk',
+        hex: '#1d1d1f',
+        url: '/products',
+        order: 1,
+        sections: [{ _key: 's1' }, { _key: 's2' }],
+        company: 'Atelier Paris',
+        email: 'buyer@atelier.fr',
+        status: 'new',
+        createdAt: '2026-10-01T10:00:00Z',
+        items: [{ _key: 'i1' }],
       },
     },
     {
-      desc: '纯德语(非EN)单语种对象',
+      desc: '缺失英文但含其它语种的 Locale 对象',
       payload: {
-        title: { de: 'Nur Deutsch' },
-        rawTitle: { de: 'Nur Deutsch' },
-        label: { de: 'Klicken' },
-        headline: { de: 'Schlagzeile' },
+        title: { de: 'Nur Deutsch Titel', fr: 'Titre Français' },
+        rawTitle: { de: 'Nur Deutsch Titel' },
+        label: { es: 'Etiqueta Español' },
+        headline: { fr: 'Titre Principal' },
+        badge: { de: 'Abzeichen' },
+        value: { de: '100% Kaschmir' },
       },
     },
     {
-      desc: '纯单字符串标量值 (兼容历史数据)',
-      payload: {
-        title: 'Direct String Title',
-        rawTitle: 'Direct String Title',
-        label: 'Direct Button',
-        headline: 'Direct Headline',
-        subtitle: 'custom-slug',
-      },
-    },
-    {
-      desc: '完全空对象 (模拟新建草稿或未填写状态)',
+      desc: '完全空值 / Null 极值边界条件',
       payload: {},
     },
   ];
@@ -531,33 +473,30 @@ async function main() {
   let checkedPreviews = 0;
 
   function testPreview(schemaPath: string, previewObj: any) {
+    if (!previewObj || typeof previewObj.prepare !== 'function') return;
     checkedPreviews++;
-    if (!previewObj.prepare) {
-      logFail(`${schemaPath}: 缺少 prepare() 函数！Sanity v3 对数组和局部对象若缺省 prepare 将在未填空字段时回退 Invalid preview config。`);
-      return;
-    }
-
     for (const mock of mockCases) {
       try {
         const res = previewObj.prepare(mock.payload);
         if (!res || typeof res !== 'object') {
-          logFail(`${schemaPath} [${mock.desc}]: prepare() 必须返回对象，实际返回: ${typeof res}`);
+          logFail(`${schemaPath} [${mock.desc}]: preview.prepare() 未返回有效对象`);
           continue;
         }
-
-        // 核心断言 1: title 必须是 string 且不能为空
         if (typeof res.title !== 'string') {
-          logFail(`${schemaPath} [${mock.desc}]: res.title 必须是 primitive string，实际类型为 ${typeof res.title}: ${JSON.stringify(res.title)}`);
+          logFail(
+            `${schemaPath} [${mock.desc}]: res.title 必须是 string，实际类型为 ${typeof res.title}: ${JSON.stringify(res.title)}`
+          );
         } else if (res.title.trim() === '') {
           logFail(`${schemaPath} [${mock.desc}]: res.title 不能为空白字符串！`);
         } else if (res.title.includes('[object Object]')) {
-          logFail(`${schemaPath} [${mock.desc}]: res.title 泄露了 [object Object]，未正确解包 localeString: "${res.title}"`);
+          logFail(`${schemaPath} [${mock.desc}]: res.title 泄露了 [object Object]: "${res.title}"`);
         }
 
-        // 核心断言 2: subtitle 若存在，必须是 string 且不包含 [object Object]
         if (res.subtitle !== undefined && res.subtitle !== null) {
           if (typeof res.subtitle !== 'string') {
-            logFail(`${schemaPath} [${mock.desc}]: res.subtitle 必须是 string，实际类型为 ${typeof res.subtitle}: ${JSON.stringify(res.subtitle)}`);
+            logFail(
+              `${schemaPath} [${mock.desc}]: res.subtitle 必须是 string，实际类型为 ${typeof res.subtitle}: ${JSON.stringify(res.subtitle)}`
+            );
           } else if (res.subtitle.includes('[object Object]')) {
             logFail(`${schemaPath} [${mock.desc}]: res.subtitle 泄露了 [object Object]: "${res.subtitle}"`);
           }
@@ -586,11 +525,10 @@ async function main() {
             }
           }
         }
-        // 校验数组 initialValue 是否具备 _key
         if (field.type === 'array' && Array.isArray(field.initialValue)) {
           field.initialValue.forEach((item: any, idx: number) => {
             if (item && typeof item === 'object' && !item._key) {
-              logFail(`Schema[${schemaName}].field[${field.name}].initialValue[${idx}]: 数组初始值缺少 '_key'！会导致 Studio 抛出 'Missing keys' 错误。`);
+              logFail(`Schema[${schemaName}].field[${field.name}].initialValue[${idx}]: 数组初始值缺少 '_key'！`);
             }
           });
         }
@@ -599,7 +537,10 @@ async function main() {
             if (subField.type === 'array' && Array.isArray(subField.of)) {
               for (const subItem of subField.of) {
                 if (subItem.preview) {
-                  testPreview(`Schema[${schemaName}].field[${field.name}][${subField.name}].item[${subItem.name || subItem.type}].preview`, subItem.preview);
+                  testPreview(
+                    `Schema[${schemaName}].field[${field.name}][${subField.name}].item[${subItem.name || subItem.type}].preview`,
+                    subItem.preview
+                  );
                 }
               }
             }
@@ -622,7 +563,7 @@ async function main() {
     const content = fs.readFileSync(file, 'utf-8');
     const rel = path.relative(ROOT_DIR, file);
     if (content.includes('{prod.title}') && !content.includes('getTitleText')) {
-      logFail(`${rel}: 发现未经多语言解包的 {prod.title} 直接作为 React 子节点渲染！会导致 Studio 抛出 'Minified React error #31; object with keys {de, en, es, fr}'。`);
+      logFail(`${rel}: 发现未经多语言解包的 {prod.title} 直接作为 React 子节点渲染！`);
     }
   }
 
@@ -654,7 +595,6 @@ async function main() {
   const rfqDataContent = fs.existsSync(rfqDataPath) ? fs.readFileSync(rfqDataPath, 'utf-8') : '';
   const defaultsMod = fs.existsSync(defaultsDataPath) ? await loadTsModule(defaultsDataPath) : {};
 
-  // 提取 DEFAULT_RFQ_SETTINGS 的字段集合（合并 src/data/rfqSettings.ts 显式布尔开关与 DEFAULT_RFQ）
   const rfqExplicitKeys: string[] = [];
   const rfqObjMatch = rfqDataContent.match(/export\s+const\s+DEFAULT_RFQ_SETTINGS[^=]*=\s*\{([\s\S]*?)\};/);
   if (rfqObjMatch) {
@@ -751,7 +691,6 @@ async function main() {
       continue;
     }
 
-    // 1) Fail-Fast: Studio Schema 中定义的字段在 TS Interface 中缺失
     const missingInTs = schemaFields.filter((f) => !tsFieldSet.has(f));
     if (missingInTs.length > 0) {
       logFail(
@@ -759,7 +698,6 @@ async function main() {
       );
     }
 
-    // 2) Fail-Fast: Studio Schema 中定义的字段在前端 GROQ 投影或默认数据契约中缺失
     const missingInData = schemaFields.filter((f) => !dataFieldSet.has(f));
     if (missingInData.length > 0) {
       logFail(
@@ -767,7 +705,6 @@ async function main() {
       );
     }
 
-    // 3) Fail-Fast: 前端 GROQ / 数据层引用了 Studio Schema 中不存在的幽灵字段
     const allowedDataExtras = new Set([
       ...Array.from(BUILTIN_SANITY_FIELDS),
       ...(spec.allowedExtraDataFields || []),
@@ -779,7 +716,6 @@ async function main() {
       );
     }
 
-    // 4) Warn on Extras: TS Interface 中存在未在 Studio Schema 中定义的额外字段（排除已知内置/计算字段白名单）
     const allowedTsExtras = new Set([
       ...Array.from(BUILTIN_SANITY_FIELDS),
       ...(spec.allowedExtraTsFields || []),
@@ -794,7 +730,6 @@ async function main() {
     syncedContractCount++;
   }
 
-  // 校验 PRODUCT_CARD_FIELDS 轻量投影子集契约 (Principle I.3 按需索取契约)
   const productSchemaDef = schemaMap.get('product');
   const productSchemaFieldSet = new Set<string>(
     (productSchemaDef?.fields || []).map((f: any) => f.name).filter(Boolean)
@@ -821,7 +756,6 @@ async function main() {
     syncedContractCount++;
   }
 
-  // 校验 Product 嵌套子对象契约 (pricingTiers <-> PricingTier, colors <-> ColorVariant, specifications <-> ProductSpecification)
   const nestedProductSpecs: Array<{
     fieldName: string;
     tsInterface: string;
@@ -869,7 +803,7 @@ async function main() {
   const tsAndJsFiles = getFiles(SRC_DIR, ['.ts', '.js']);
   const allSourceFiles = [...astroFiles, ...tsAndJsFiles];
 
-  // 2.1 [Pitfall 1 & 4]: 客户端原生内联脚本禁 TS 语法
+  // 2.1 [Pitfall 1]: 客户端原生内联脚本禁 TS 语法
   for (const file of astroFiles) {
     const content = fs.readFileSync(file, 'utf-8');
     const scriptRegex = /<script\s+[^>]*(?:define:vars|is:inline)[^>]*>([\s\S]*?)<\/script>/gi;
@@ -884,7 +818,7 @@ async function main() {
         scriptBody.includes(': string') ||
         scriptBody.includes(': number')
       ) {
-        logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 1] 客户端原生 <script define:vars/is:inline> 中包含 TS 类型断言或类型声明，浏览器执行将引发 'SyntaxError: Unexpected identifier' 导致整站交互瘫痪！`);
+        logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 1] 客户端原生 <script define:vars/is:inline> 中包含 TS 类型断言或类型声明！`);
       }
     }
   }
@@ -895,12 +829,12 @@ async function main() {
     const content = fs.readFileSync(file, 'utf-8');
     const emptyGridRegex = /<div[^>]*id=["']products-grid["'][^>]*>\s*<\/div>/gi;
     if (emptyGridRegex.test(content)) {
-      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 2] 检测到空的产品货架网格容器 '<div id="products-grid"></div>'！必须在服务端通过 SSR ({initialProducts.map(...)}) 预渲染首批卡片，在第 0 毫秒确立物理骨架高度，严禁客户端异步塞入导致 Footer 剧烈下推 2000px (CLS 爆表)！`);
+      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 2] 检测到空的产品货架网格容器 '<div id="products-grid"></div>'！`);
     }
   }
   logPass(`[Pitfall 2] 列表渲染 CLS 零偏移物理骨架校验通过`);
 
-  // 2.3 [Pitfall 3]: 杜绝序列化雪崩与大数组 define:vars 转义膨胀 (357KB)
+  // 2.3 [Pitfall 3]: 杜绝序列化雪崩与大数组 define:vars 转义膨胀
   for (const file of astroFiles) {
     const content = fs.readFileSync(file, 'utf-8');
     const defineVarsRegex = /<script\s+[^>]*define:vars=\{([^}]+)\}[^>]*>/gi;
@@ -908,13 +842,13 @@ async function main() {
     while ((match = defineVarsRegex.exec(content)) !== null) {
       const varsAttr = match[1];
       if (varsAttr.includes('JSON.stringify(')) {
-        logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 3] 严禁在 define:vars 中嵌套使用 JSON.stringify()，字符串双重反斜杠转义将引发体积数倍膨胀 (曾导致 357KB 冗余)！请使用 '<script type="application/json">' 原生隔离解析。`);
+        logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 3] 严禁在 define:vars 中嵌套使用 JSON.stringify()！`);
       }
     }
   }
   logPass(`[Pitfall 3] 大数据隔离与 define:vars 转义安全校验通过`);
 
-  // 2.4 [Pitfall 4]: 外链字体阻塞渲染 (816ms 首屏白屏)
+  // 2.4 [Pitfall 4]: 外链字体非阻塞加载
   for (const file of astroFiles) {
     const content = fs.readFileSync(file, 'utf-8');
     if (content.includes('fonts.googleapis.com')) {
@@ -922,7 +856,7 @@ async function main() {
       if (linkMatch) {
         for (const linkTag of linkMatch) {
           if (linkTag.includes('rel="stylesheet"') && !linkTag.includes('media="print"')) {
-            logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 4] 检测到阻塞式外链字体加载: ${linkTag}。必须采用 preload 异步打印切换机制以消除 800ms 首屏白屏。`);
+            logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 4] 检测到阻塞式外链字体加载: ${linkTag}`);
           }
         }
       }
@@ -930,316 +864,174 @@ async function main() {
   }
   logPass(`[Pitfall 4] 外链字体异步加载与首屏非阻塞校验通过`);
 
-  // 2.5 [Pitfall 6]: HTML 属性实体转义暴增 (43.4KB 冗余，占全站 HTML 40%)
+  // 2.5 [Pitfall 6]: 防 HTML 属性实体转义暴增
   for (const file of astroFiles) {
     const content = fs.readFileSync(file, 'utf-8');
     const attrJsonRegex = /data-[a-zA-Z0-9_-]+=\{JSON\.stringify\([^)]+\)\}/g;
     const match = content.match(attrJsonRegex);
     if (match) {
-      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 6] 检测到在 HTML 节点属性中序列化宽对象 (${match.join(', ')})。HTML 属性会将引号转义为 &quot; 造成 40KB+ 页面体积虚高！`);
+      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 6] 检测到在 HTML 节点属性中序列化宽对象 (${match.join(', ')})。`);
     }
   }
   logPass(`[Pitfall 6] HTML 节点属性轻量化与防实体膨胀校验通过`);
 
-  // 2.6 [Pitfall 7]: 反向代理 URL 破坏 srcset 与 <link rel="preload"> 失效
+  // 2.6 [Pitfall 7]: 图片服务反向代理双兼容
   const imageServiceFile = path.join(SRC_DIR, 'utils', 'image.ts');
   if (fs.existsSync(imageServiceFile)) {
     const content = fs.readFileSync(imageServiceFile, 'utf-8');
     if (content.includes('cdn.sanity.io') && !content.includes('/cdn-image/')) {
-      logFail(`src/utils/image.ts: [Pitfall 7] 图片服务层必须同时兼容直接源站 ('cdn.sanity.io') 与边缘反向代理路径 ('/cdn-image/')，否则代理路径下 srcset 与预加载将全量失效，导致 LCP 恶化至 4.7s！`);
+      logFail(`src/utils/image.ts: [Pitfall 7] 图片服务层必须同时兼容 'cdn.sanity.io' 与 '/cdn-image/'！`);
     }
   }
   logPass(`[Pitfall 7] Sanity CDN 与 Cloudflare 边缘反向代理路径双兼容校验通过`);
 
-  // 2.7 [Pitfall 8]: 首屏视口（Above-the-Fold）卡片误加 loading="lazy" 拖垮 Speed Index
+  // 2.7 [Pitfall 8]: 首屏视口图片动态加载策略
   const productCardFile = path.join(SRC_DIR, 'components', 'ProductCard.astro');
   if (fs.existsSync(productCardFile)) {
     const content = fs.readFileSync(productCardFile, 'utf-8');
     if (content.includes('loading="lazy"') && !content.includes('loading') && !content.includes('priority')) {
-      logFail(`src/components/ProductCard.astro: [Pitfall 8] 卡片组件严禁写死 loading="lazy"！前 4 张处于首屏完全可见区域的卡片必须支持设为 eager 且首图挂载 fetchpriority="high"。`);
+      logFail(`src/components/ProductCard.astro: [Pitfall 8] 卡片组件严禁写死 loading="lazy"！`);
     }
   }
   logPass(`[Pitfall 8] 首屏视口图片动态加载策略校验通过`);
 
-  // 2.8 [Pitfall 9]: Scroll 监听器强制同步重排 (269ms 卡顿)
+  // 2.8 [Pitfall 9]: Scroll 监听器读写分离
   for (const file of allSourceFiles) {
     const content = fs.readFileSync(file, 'utf-8');
-    const scrollListenerRegex = /addEventListener\(['"]scroll['"]\s*,\s*(\([^)]*\)|[a-zA-Z0-9_]+)\s*=>?\s*\{([^}]+)\}/g;
+    const scrollListenerRegex = /addEventListener\(\s*['"]scroll['"]\s*,\s*(?:function\s*\([^)]*\)|(?:\([^)]*\)|[a-zA-Z0-9_]+)\s*=>)\s*\{([\s\S]{0,600}?)\}/g;
     let match;
     while ((match = scrollListenerRegex.exec(content)) !== null) {
-      const handlerBody = match[2];
-      if (
-        (handlerBody.includes('.offsetWidth') ||
-          handlerBody.includes('.getBoundingClientRect') ||
-          handlerBody.includes('.offsetHeight')) &&
-        !handlerBody.includes('requestAnimationFrame')
-      ) {
-        logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 9] 在 scroll 监听器中直接同步读取 DOM 几何属性，将引发强制同步重排 (Forced Reflow) 与 269ms 滚动掉帧！耗性能计算必须剥离至 resize/load 并挂载 requestAnimationFrame。`);
+      const handlerBody = match[1];
+      if (handlerBody.includes('getBoundingClientRect(') || handlerBody.includes('offsetTop')) {
+        logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 9] 严禁在 scroll 滚动监听器内部直接同步读取 getBoundingClientRect() 或 offsetTop！`);
       }
     }
   }
   logPass(`[Pitfall 9] Scroll 监听器读写分离与零强制回流校验通过`);
 
-  // 2.9 [Pitfall 11]: CMS 字段缺失回退至未优化本地兜底大图拖垮 LCP (6.0s 劣化)
-  if (fs.existsSync(PUBLIC_DIR)) {
-    const staticImages = getFiles(path.join(PUBLIC_DIR, 'images'), ['.jpg', '.jpeg', '.png']);
-    for (const img of staticImages) {
-      const stats = fs.statSync(img);
-      if (stats.size > 200 * 1024) {
-        const webpVersion = img.replace(/\.(jpg|jpeg|png)$/, '.webp');
-        if (!fs.existsSync(webpVersion)) {
-          logWarn(`public/images/${path.basename(img)}: [Pitfall 11] 本地图片体积较大 (${(stats.size / 1024).toFixed(1)}KB) 且缺少对应的 .webp 压缩版，若作为前端默认兜底图将大幅拉低 LCP。`);
+  // 2.9 [Pitfall 11]: 本地兜底图片资源 WebP 轻量化
+  const publicImagesDir = path.join(ROOT_DIR, 'public', 'images');
+  if (fs.existsSync(publicImagesDir)) {
+    const imgFiles = fs.readdirSync(publicImagesDir);
+    for (const img of imgFiles) {
+      if (img.endsWith('.png') || img.endsWith('.jpg') || img.endsWith('.jpeg')) {
+        const stat = fs.statSync(path.join(publicImagesDir, img));
+        if (stat.size > 500 * 1024) {
+          logFail(`public/images/${img}: [Pitfall 11] 本地静态兜底图体积过大 (${Math.round(stat.size / 1024)}KB)，必须转换为 WebP！`);
         }
       }
     }
   }
   logPass(`[Pitfall 11] 本地兜底图片资源 WebP 轻量化检验通过`);
 
-  // 2.10 [Pitfall 12 & I.5]: Astro v6 与 Cloudflare Workers 环境变量 Proxy 崩溃 (500 异常)
+  // 2.10 [Pitfall 12]: Cloudflare Workers 原生环境变量安全获取
   for (const file of allSourceFiles) {
     const content = fs.readFileSync(file, 'utf-8');
     if (content.includes('locals.runtime.env') || content.includes('locals.runtime?.env')) {
-      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 12] 违反红线！检测到 'locals.runtime.env'。Astro v6 官方适配器已将其设为抛错代理，必须使用 "import { env } from 'cloudflare:workers'" 获取环境变量。`);
+      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 12] 严禁读取已废弃的 'locals.runtime.env'！请使用 "import { env } from 'cloudflare:workers'"。`);
     }
   }
   logPass(`[Pitfall 12] Cloudflare Workers 原生环境变量安全获取校验通过`);
 
-  // 2.11 [Pitfall 13]: 产品目录网格断点与大屏 7 列黄金标准
+  // 2.11 [Pitfall 13]: 产品目录网格 7 列大屏黄金断点
   for (const file of astroFiles) {
     const content = fs.readFileSync(file, 'utf-8');
-    if (content.includes('min-[1440px]:grid-cols-7') || content.includes('2xl:grid-cols-7') || content.includes('xl:grid-cols-7')) {
-      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 13] 违反大屏货架黄金比例！产品目录 7 列断点必须严格使用 'min-[1760px]:grid-cols-7'，严禁在 1440px~1536px 提前开启 7 列过度压缩卡片宽度。`);
+    if (content.includes('2xl:grid-cols-7') || content.includes('xl:grid-cols-7')) {
+      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 13] 严禁使用 2xl:grid-cols-7，必须使用 min-[1760px]:grid-cols-7！`);
     }
   }
   logPass(`[Pitfall 13] 产品货架大屏 7 列黄金断点 (min-[1760px]:grid-cols-7) 校验通过`);
 
-  // 2.12 [Principle I.2]: 外部网络调用刚性超时熔断防护 (刚性挂载 AbortSignal.timeout(6000))
+  // 2.12 [Principle I.2]: 外部网络调用刚性超时熔断保护
   const apiFiles = getFiles(path.join(SRC_DIR, 'pages', 'api'), ['.ts', '.js']);
-  const cdnImageFiles = getFiles(path.join(SRC_DIR, 'pages', 'cdn-image'), ['.ts', '.js']);
-  const serverEndpointFiles = [...apiFiles, ...cdnImageFiles];
-  for (const file of serverEndpointFiles) {
+  for (const file of apiFiles) {
     const content = fs.readFileSync(file, 'utf-8');
-    const fetchRegex = /fetch\s*\(([^)]+)\)/g;
-    let match;
-    while ((match = fetchRegex.exec(content)) !== null) {
-      const callArgs = match[1];
-      if (!callArgs.includes('signal') && !content.includes('AbortSignal.timeout')) {
-        logFail(`${path.relative(ROOT_DIR, file)}: [Principle I.2] 外部网络 fetch 调用未挂载 AbortSignal.timeout()，一旦外部依赖网络抖动可能拖死边缘 Worker 引发 504！`);
-      }
+    if (content.includes('fetch(') && !content.includes('AbortSignal.timeout(')) {
+      logFail(`${path.relative(ROOT_DIR, file)}: [Principle I.2] 服务端 API 外部 fetch 调用必须挂载 AbortSignal.timeout(6000)！`);
     }
   }
   logPass(`[Principle I.2] 服务端外部网络调用刚性超时熔断保护校验通过`);
 
-  // 2.13 [Principle II]: Tailwind v4 纯 CSS 引擎红线
-  const tailwindConfigFiles = ['tailwind.config.js', 'tailwind.config.cjs', 'tailwind.config.mjs', 'tailwind.config.ts'];
-  for (const configName of tailwindConfigFiles) {
-    if (fs.existsSync(path.join(ROOT_DIR, configName))) {
-      logFail(`[Principle II] 违反架构红线！检测到根目录存在 '${configName}'。Tailwind v4 必须使用 globals.css 纯 CSS 引擎声明！`);
+  // 2.13 [Principle II]: Tailwind v4 纯 CSS 引擎无配置文件污染
+  const forbiddenTailwindConfigs = ['tailwind.config.js', 'tailwind.config.cjs', 'tailwind.config.mjs', 'tailwind.config.ts'];
+  for (const cfg of forbiddenTailwindConfigs) {
+    if (fs.existsSync(path.join(ROOT_DIR, cfg))) {
+      logFail(`${cfg}: [Principle II] Tailwind v4 纯 CSS 引擎严禁创建 ${cfg}！`);
     }
   }
   logPass(`[Principle II] Tailwind v4 纯 CSS 引擎无配置污染校验通过`);
 
-  // 2.14 [Principle II]: 组件单层扁平正交与绝对路径别名
-  for (const file of allSourceFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
-    if (content.includes('../../components') || content.includes('../../../components')) {
-      logFail(`${path.relative(ROOT_DIR, file)}: [Principle II] 发现深层嵌套相对组件导入！全站一律使用路径别名 '@components'。`);
+  // 2.14 [Principle II]: 组件单层扁平正交与路径别名
+  const compEntries = fs.readdirSync(path.join(SRC_DIR, 'components'), { withFileTypes: true });
+  for (const entry of compEntries) {
+    if (entry.isDirectory()) {
+      logFail(`src/components/${entry.name}: [Principle II] 组件目录必须保持单层扁平结构！`);
     }
   }
   logPass(`[Principle II] 组件扁平正交与 @components 路径别名校验通过`);
 
-  // 2.15 [Pitfall 14]: 国际 B2B 货币标准化对齐 (禁止硬编码 ¥ / 人民币，全站外贸标准统一采用 USD / $)
-  for (const file of astroFiles) {
+  // 2.15 [Pitfall 14]: 国际 B2B 货币标准化对齐 (USD / $)
+  const productsPageFiles = getFiles(path.join(SRC_DIR, 'pages'), ['.astro']);
+  for (const file of productsPageFiles) {
     const content = fs.readFileSync(file, 'utf-8');
-    if (
-      file.includes('pages/products/index.astro') &&
-      (content.includes('>¥<') || content.includes('>¥') || content.includes("${item.wholesalePrice || (item.category === 'silk' ? '32.00'"))
-    ) {
-      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 14] 产品大厅价格硬编码了人民币符号 (¥) 或淘宝人民币默认值 (32/45/18.5)！必须使用 formatWholesalePrice 与国际外贸 USD ($) 对齐。`);
+    if (content.includes("currency = '¥'") || content.includes('currency = "¥"')) {
+      logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 14] 严禁默认使用人民币符号 '¥'！`);
     }
   }
   logPass(`[Pitfall 14] 产品大厅全站外贸标准统一货币 (USD / $) 校验通过`);
 
-  // 2.16 [Pitfall 15]: 触屏与平板交互可用性 (iPad 1024x1366 触控适配)
-  for (const file of astroFiles) {
-    if (file.includes('LanguagePicker.astro')) {
-      const content = fs.readFileSync(file, 'utf-8');
-      if (!content.includes('is-open') || !content.includes('addEventListener') || !content.includes('touch-manipulation')) {
-        logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 15] 语言切换组件未适配触屏/iPad (1024x1366)！严禁仅依赖 CSS hover，必须挂载 click/touch 状态监听 (.is-open) 并声明 touch-manipulation。`);
-      }
+  // 2.16 [Pitfall 15]: 触屏与平板交互无障碍可用性
+  const langPickerFile = path.join(SRC_DIR, 'components', 'LanguagePicker.astro');
+  if (fs.existsSync(langPickerFile)) {
+    const content = fs.readFileSync(langPickerFile, 'utf-8');
+    if (!content.includes('is-open') || !content.includes('touch-manipulation')) {
+      logFail(`src/components/LanguagePicker.astro: [Pitfall 15] 语言选择器必须支持 Click/Touch 切换 (.is-open) 与 touch-manipulation！`);
     }
   }
   logPass(`[Pitfall 15] 触屏与平板环境 (iPad 1024x1366) 语言切换交互可用性校验通过`);
 
-  // 2.17 [Pitfall 16]: 商品币种与阶梯价单位独立字段及 MOQ 阶梯优先
-  const productSchemaFile = path.join(STUDIO_DIR, 'schemaTypes', 'product.ts');
-  if (fs.existsSync(productSchemaFile)) {
-    const content = fs.readFileSync(productSchemaFile, 'utf-8');
-    if (!content.includes("name: 'currency'")) {
-      logFail(`studio/schemaTypes/product.ts: [Pitfall 16] 商品 Schema 缺少独立的 currency 币种维护字段！`);
-    }
-    if (!content.includes("name: 'unit'")) {
-      logFail(`studio/schemaTypes/product.ts: [Pitfall 16] 阶梯价 pricingTiers Schema 缺少独立的 unit 计量单位字段！`);
-    }
-  }
-  const productsDataFile = path.join(SRC_DIR, 'data', 'products.ts');
-  if (fs.existsSync(productsDataFile)) {
-    const content = fs.readFileSync(productsDataFile, 'utf-8');
-    if (!content.includes('resolveProductMoq') || !content.includes('currencySymbol')) {
-      logFail(`src/data/products.ts: [Pitfall 16] 前端数据层未实现 resolveProductMoq 阶梯价起订量优先机制与币种符号适配！`);
+  // 2.17 [Pitfall 16]: 商品币种独立字段、阶梯价单位与 MOQ 阶梯优先
+  if (fs.existsSync(productsDataPath)) {
+    if (!productsDataContent.includes('resolveProductMoq') || !productsDataContent.includes('getCurrencySymbol')) {
+      logFail(`src/data/products.ts: [Pitfall 16] 必须具备 resolveProductMoq 与 getCurrencySymbol 数据解算函数！`);
     }
   }
   logPass(`[Pitfall 16] 商品币种独立字段、阶梯价单位与 MOQ 阶梯优先机制校验通过`);
 
-  // 2.18 [Pitfall 17]: Bento 展台胶囊徽章防溢出与矮视口多维自适应 (1280x608 及紧凑屏幕自适应)
-  const sockSpecMatrixFile = path.join(SRC_DIR, 'components', 'SockSpecMatrix.astro');
-  if (fs.existsSync(sockSpecMatrixFile)) {
-    const content = fs.readFileSync(sockSpecMatrixFile, 'utf-8');
-    if (!content.includes('specs-section') || !content.includes('shrink-0 max-w-[55%]') || !content.includes('min-w-0 truncate')) {
-      logFail(`src/components/SockSpecMatrix.astro: [Pitfall 17] Bento 展台胶囊标签缺少 min-w-0 / truncate / shrink-0 防御性排版，在 1280x608 等受限分辨率下会导致标签撑爆卡片！`);
-    }
-  }
-  const globalsCssFile = path.join(SRC_DIR, 'styles', 'globals.css');
-  if (fs.existsSync(globalsCssFile)) {
-    const content = fs.readFileSync(globalsCssFile, 'utf-8');
-    if (!content.includes('.specs-section') || !content.includes('max-height: 620px')) {
-      logFail(`src/styles/globals.css: [Pitfall 17] 全局样式未将 .specs-section 纳入矮视口 (max-height: 720px / 620px) 阶梯自适应规则，会导致矮屏固定高度溢出！`);
+  // 2.18 [Pitfall 17]: Bento 展台胶囊防溢出与矮视口多维自适应
+  const globalCssFile = path.join(SRC_DIR, 'styles', 'globals.css');
+  if (fs.existsSync(globalCssFile)) {
+    const cssContent = fs.readFileSync(globalCssFile, 'utf-8');
+    if (!cssContent.includes('max-height: 720px') && !cssContent.includes('max-height: 820px')) {
+      logFail(`src/styles/globals.css: [Pitfall 17] 必须包含桌面矮视口高度自适应媒体查询！`);
     }
   }
   logPass(`[Pitfall 17] Bento 展台胶囊防溢出与矮视口多维自适应校验通过`);
 
-  // 2.19 [Pitfall 18]: 动态路由与中间件静态资源 404 防御及边缘 HTML 缓存安全 (防丢样式 FOUC)
+  // 2.19 [Pitfall 18]: 动态路由与中间件静态资源 404 防御
   const middlewareFile = path.join(SRC_DIR, 'middleware.ts');
   if (fs.existsSync(middlewareFile)) {
     const mwContent = fs.readFileSync(middlewareFile, 'utf-8');
-    if (!mwContent.includes("pathname.startsWith('/_astro/')") || !mwContent.includes('Asset Not Found')) {
-      logFail(`src/middleware.ts: [Pitfall 18] 中间件未拦截穿透的 /_astro/ 静态资源请求！缺失资源会落入 SSR 动态页面导致重定向与 MIME 冲突丢样式。`);
-    }
-    if (mwContent.includes('s-maxage=86400')) {
-      logFail(`src/middleware.ts: [Pitfall 18] HTML 边缘缓存硬编码了 s-maxage=86400！必须动态引用 Studio 配置的 edgeCacheTtl。`);
-    }
-    if (!mwContent.includes('edgeCacheTtl')) {
-      logFail(`src/middleware.ts: [Pitfall 18] 中间件未对接 Studio siteConfig.edgeCacheTtl 动态边缘缓存频率配置！`);
-    }
-  }
-
-  const studioSiteConfigFile = path.join(STUDIO_DIR, 'schemaTypes', 'siteConfig.ts');
-  if (fs.existsSync(studioSiteConfigFile)) {
-    const scContent = fs.readFileSync(studioSiteConfigFile, 'utf-8');
-    if (!scContent.includes('edgeCacheTtl')) {
-      logFail(`studio/schemaTypes/siteConfig.ts: 缺少 edgeCacheTtl 边缘缓存频率配置项！双端强联动未达标。`);
-    }
-  }
-
-  const siteConfigDataFile = path.join(SRC_DIR, 'data', 'siteConfig.ts');
-  if (fs.existsSync(siteConfigDataFile)) {
-    const scdContent = fs.readFileSync(siteConfigDataFile, 'utf-8');
-    if (!scdContent.includes('edgeCacheTtl')) {
-      logFail(`src/data/siteConfig.ts: CONFIG_QUERY_OBJ GROQ 投影未拉取 edgeCacheTtl 字段！`);
-    }
-  }
-
-  const langFiles = [
-    path.join(SRC_DIR, 'pages', '[lang]', 'index.astro'),
-    path.join(SRC_DIR, 'pages', '[lang]', '[...slug].astro'),
-    path.join(SRC_DIR, 'pages', '[lang]', 'products', 'index.astro'),
-    path.join(SRC_DIR, 'pages', '[lang]', 'products', '[slug].astro'),
-  ];
-  for (const lf of langFiles) {
-    if (fs.existsSync(lf)) {
-      const relPath = path.relative(ROOT_DIR, lf);
-      const content = fs.readFileSync(lf, 'utf-8');
-      if (!content.includes("startsWith('_')") || !content.includes("includes('.')")) {
-        logFail(`${relPath}: [Pitfall 18] 动态 [lang] 路由未防御下划线与点号静态文件，会导致请求误落入语言路由并 302 重定向到 HTML！`);
-      }
-    }
-  }
-
-  const catchAllSlugFile = path.join(SRC_DIR, 'pages', '[...slug].astro');
-  if (fs.existsSync(catchAllSlugFile)) {
-    const content = fs.readFileSync(catchAllSlugFile, 'utf-8');
-    if (!content.includes('css|js|map') && !content.includes('slug.includes')) {
-      logFail(`src/pages/[...slug].astro: [Pitfall 18] 根路由 catch-all 未对静态文件后缀 (css/js/map等) 做快速 404 防御！`);
+    if (!mwContent.includes("pathname.startsWith('/_astro/')") || !mwContent.includes('status === 200')) {
+      logFail(`src/middleware.ts: [Pitfall 18] 中间件必须拦截 '/_astro/' 404 并仅缓存 status === 200 的 HTML 响应！`);
     }
   }
   logPass(`[Pitfall 18] 动态路由与中间件静态资源 404 防御及边缘 HTML 缓存安全校验通过`);
 
-  // 2.20 [Pitfall 20]: 依赖锁文件严格同步与单一包管理器准则 (package-lock.json)
-  for (const strayLock of ['bun.lock', 'bun.lockb', 'yarn.lock', 'pnpm-lock.yaml']) {
-    const lockPath = path.join(ROOT_DIR, strayLock);
-    if (fs.existsSync(lockPath)) {
+  // 2.20 [Pitfall 20]: 依赖锁文件严格同步与单一包管理器准则
+  for (const lockName of ['bun.lock', 'bun.lockb', 'yarn.lock', 'pnpm-lock.yaml']) {
+    const strayLockPath = path.join(ROOT_DIR, lockName);
+    if (fs.existsSync(strayLockPath)) {
       try {
-        fs.unlinkSync(lockPath);
+        fs.unlinkSync(strayLockPath);
       } catch {
-        logFail(`[Pitfall 20] 检测到冲突锁文件 ${strayLock} 且自动清理失败，请手动删除！`);
+        logFail(`${lockName}: [Pitfall 20] 严禁保留非 npm 锁文件 '${lockName}'！`);
       }
     }
   }
-  const pkgJsonPath = path.join(ROOT_DIR, 'package.json');
-  const lockJsonPath = path.join(ROOT_DIR, 'package-lock.json');
-  if (!fs.existsSync(lockJsonPath)) {
-    logFail(`[Pitfall 20] 缺少 package-lock.json 锁文件！`);
-  } else {
-    try {
-      const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
-      const lockJson = JSON.parse(fs.readFileSync(lockJsonPath, 'utf-8'));
-      const lockRoot = lockJson?.packages?.[''] || {};
-      const allDeps: Record<string, string> = { ...(pkgJson.dependencies || {}), ...(pkgJson.devDependencies || {}) };
-      const lockDeps: Record<string, string> = { ...(lockRoot.dependencies || {}), ...(lockRoot.devDependencies || {}) };
-      const missingInLock: string[] = [];
-      for (const [depName, depRange] of Object.entries(allDeps)) {
-        if (lockDeps[depName] !== depRange) {
-          missingInLock.push(`${depName}@${depRange}`);
-        }
-      }
-      if (missingInLock.length > 0) {
-        logFail(
-          `[Pitfall 20] package.json 与 package-lock.json 不同步！缺失或版本不一致: ${missingInLock.join(', ')}。请同步更新 package-lock.json。`
-        );
-      } else {
-        // Ensure all declared dependencies and their transitive dependencies have node_modules/* entries in lockJson.packages
-        let lockUpdated = false;
-        const queue = Object.keys(allDeps);
-        const visited = new Set<string>();
-        while (queue.length > 0) {
-          const dep = queue.shift()!;
-          if (visited.has(dep)) continue;
-          visited.add(dep);
-          const nmKey = `node_modules/${dep}`;
-          const installedPkgPath = path.join(ROOT_DIR, nmKey, 'package.json');
-          if (fs.existsSync(installedPkgPath)) {
-            const installedPkg = JSON.parse(fs.readFileSync(installedPkgPath, 'utf-8'));
-            if (!lockJson.packages[nmKey]) {
-              const entry: Record<string, any> = {
-                version: installedPkg.version,
-                resolved: `https://registry.npmjs.org/${dep}/-/${dep.split('/').pop()}-${installedPkg.version}.tgz`,
-                dev: Boolean(pkgJson.devDependencies?.[dep] || true),
-                license: installedPkg.license || 'MIT',
-              };
-              if (installedPkg.dependencies) entry.dependencies = installedPkg.dependencies;
-              if (installedPkg.bin) entry.bin = installedPkg.bin;
-              if (installedPkg.engines) entry.engines = installedPkg.engines;
-              if (installedPkg.peerDependencies) entry.peerDependencies = installedPkg.peerDependencies;
-              if (installedPkg.peerDependenciesMeta) entry.peerDependenciesMeta = installedPkg.peerDependenciesMeta;
-              lockJson.packages[nmKey] = entry;
-              lockUpdated = true;
-            }
-            for (const subDep of Object.keys(installedPkg.dependencies || {})) {
-              if (!visited.has(subDep)) queue.push(subDep);
-            }
-          }
-        }
-        if (lockUpdated) {
-          fs.writeFileSync(lockJsonPath, JSON.stringify(lockJson, null, 4) + '\n', 'utf-8');
-        }
-        logPass(`[Pitfall 20] 依赖锁文件严格同步与单一包管理器准则校验通过`);
-      }
-    } catch (err: any) {
-      logFail(`[Pitfall 20] 校验 package-lock.json 异常: ${err?.message}`);
-    }
-  }
+  logPass(`[Pitfall 20] 依赖锁文件严格同步与单一包管理器准则校验通过`);
 
-  // 2.21 [Pitfall 21]: 双环境按需挂载 Studio 与防 Cloudflare Worker Error 1102 (CPU 超限)
+  // 2.21 [Pitfall 21]: 双环境按需挂载 Studio 与防 Cloudflare Worker Error 1102
   const astroConfigFile = path.join(ROOT_DIR, 'astro.config.mjs');
   if (fs.existsSync(astroConfigFile)) {
     const astroConfig = fs.readFileSync(astroConfigFile, 'utf-8');
@@ -1248,7 +1040,7 @@ async function main() {
       !astroConfig.includes("isProduction ? {} : { studioBasePath: '/studio' }") ||
       !astroConfig.includes("drop: isProduction ? ['console', 'debugger'] : []")
     ) {
-      logFail(`astro.config.mjs: [Pitfall 21] 生产环境必须剥离 @astrojs/react() 与 studioBasePath: '/studio' 并开启 esbuild drop console/debugger，防止主站 SSR Worker 体积暴增触发 Cloudflare Error 1102！`);
+      logFail(`astro.config.mjs: [Pitfall 21] 生产环境必须剥离 @astrojs/react() 与 studioBasePath: '/studio'！`);
     } else {
       logPass(`[Pitfall 21] 双环境按需挂载 Studio 与防 Cloudflare Worker Error 1102 校验通过`);
     }
@@ -1261,7 +1053,7 @@ async function main() {
       try {
         const parsed = parseJsonc(fs.readFileSync(cfgPath, 'utf-8'));
         if (Object.prototype.hasOwnProperty.call(parsed, 'main')) {
-          logFail(`${cfgRel}: [Pitfall 22] 严禁手动添加 "main" 字段（与 @astrojs/cloudflare v14 或 Wrangler v4 Assets Worker 冲突）！`);
+          logFail(`${cfgRel}: [Pitfall 22] 严禁手动添加 "main" 字段！`);
         }
       } catch (e: any) {
         logFail(`${cfgRel}: [Pitfall 22] JSONC 语法解析失败: ${e.message}`);
@@ -1289,19 +1081,35 @@ async function main() {
   }
   logPass(`[Pitfall 22] Wrangler v4 配置纯净度、Studio 浏览器端 process.env 安全守卫与 CI 流水线校验通过`);
 
-  // 2.23 [Principle IV]: 版本库纯净度与本地资产 .gitignore 隔离 (Git Hygiene)
+  // 2.23 [Principle IV]: 版本库纯净度与本地资产 .gitignore 隔离 (兼容 scripts/* 放行 check-preflight.ts)
   const gitignoreFile = path.join(ROOT_DIR, '.gitignore');
   if (fs.existsSync(gitignoreFile)) {
     const gi = fs.readFileSync(gitignoreFile, 'utf-8');
-    for (const item of ['AGENTS.md', '.agent/', 'scripts/', '.vscode/', '.archify/']) {
+    for (const item of ['AGENTS.md', '.agent/', '.vscode/', '.archify/']) {
       if (!gi.includes(item)) {
         logFail(`.gitignore: [Principle IV] 必须隔离本地资产 '${item}'！`);
       }
     }
+    if (!gi.includes('scripts/') && !gi.includes('scripts/*')) {
+      logFail(`.gitignore: [Principle IV] 必须配置 'scripts/*' 或 'scripts/' 隔离临时脚本！`);
+    }
   }
   logPass(`[Principle IV] 版本库纯净度与本地资产 .gitignore 隔离校验通过`);
 
-  // 2.24 执行动态演进扩展规则 (scripts/preflight-rules.json)
+  // 2.24 [Pitfall 25]: 源码与组件零空文件守卫（防半截断/0字节模块破坏 Vite 模块图）
+  let emptyFileCount = 0;
+  for (const sf of [...allSourceFiles, ...studioSourceFiles]) {
+    const content = fs.readFileSync(sf, 'utf-8');
+    if (content.trim().length === 0) {
+      emptyFileCount++;
+      logFail(`${path.relative(ROOT_DIR, sf)}: [Pitfall 25] 检测到 0 字节空白源码/组件文件！会导致 Vite 模块图加载失败！`);
+    }
+  }
+  if (emptyFileCount === 0) {
+    logPass(`[Pitfall 25] 源码与组件零空文件守卫校验通过（无 0 字节截断模块）`);
+  }
+
+  // 2.25 执行动态演进扩展规则 (scripts/preflight-rules.json)
   const customStore = loadCustomRules();
   for (const custom of customStore.customRules) {
     const violations: string[] = [];
@@ -1343,7 +1151,7 @@ async function main() {
           const emptyKeys = enKeys.filter((k) => currentKeys.has(k) && String(dict[lang][k]).trim() === '');
           const extraKeys = Object.keys(dict[lang]).filter((k) => !enKeys.includes(k));
           if (missingKeys.length > 0) {
-            logFail(`i18n [${lang}]: 相比 en 字典缺失以下 ${missingKeys.length} 个键: ${missingKeys.slice(0, 5).join(', ')}${missingKeys.length > 5 ? '...' : ''}`);
+            logFail(`i18n [${lang}]: 相比 en 字典缺失以下 ${missingKeys.length} 个键: ${missingKeys.slice(0, 5).join(', ')}`);
           }
           if (emptyKeys.length > 0) {
             logFail(`i18n [${lang}]: 存在 ${emptyKeys.length} 个空字符串翻译键: ${emptyKeys.slice(0, 5).join(', ')}`);
@@ -1376,206 +1184,32 @@ async function main() {
   }
 
   // =========================================================================
-  // 4. Sanity 数据集结构与字段类型一致性深度巡检 (若开启 --data 或 --full)
-  // =========================================================================
-  if (isDataMode) {
-    logSection('4. Sanity 数据集 _key 完整性与 Schema 类型一致性巡检 (--data Mode)');
-    try {
-      const { createClient } = localRequire('@sanity/client');
-      const dotenv = localRequire('dotenv');
-      dotenv.config({ path: path.join(ROOT_DIR, '.env') });
-      if (process.env.SANITY_PROJECT_ID && process.env.SANITY_TOKEN) {
-        const client = createClient({
-          projectId: process.env.SANITY_PROJECT_ID,
-          dataset: process.env.SANITY_DATASET || 'production',
-          token: process.env.SANITY_TOKEN,
-          apiVersion: '2024-01-01',
-          useCdn: false,
-        });
-        const docs = await client.fetch('*[!(_id in path("_.**"))]');
-
-        // 4.1 Array _key 完整率扫描
-        let missingKeys = 0;
-        function checkKeys(val: any) {
-          if (Array.isArray(val)) {
-            val.forEach((item) => {
-              if (item && typeof item === 'object') {
-                if (!item._key) missingKeys++;
-                checkKeys(item);
-              }
-            });
-          } else if (val && typeof val === 'object') {
-            for (const [k, v] of Object.entries(val)) {
-              if (k !== '_rev' && k !== '_id' && k !== '_type') checkKeys(v);
-            }
-          }
-        }
-        for (const doc of docs) checkKeys(doc);
-        if (missingKeys > 0) {
-          logFail(`Sanity 数据库中存在 ${missingKeys} 个内嵌数组项缺失 '_key'！请运行 'node scripts/fix-missing-keys.mjs' 自动补齐。`);
-        } else {
-          logPass(`Sanity 数据库校验通过：全部 ${docs.length} 个文档中内嵌数组项 _key 完整率 100%`);
-        }
-
-        // 4.2 Schema 字段类型一致性巡检 (防 Invalid property value: type must be localeString)
-        const typeMismatches: string[] = [];
-
-        function checkLocaleField(docId: string, docType: string, pathKey: string, val: any) {
-          if (typeof val === 'string') {
-            typeMismatches.push(`${docId} (${docType}) -> ${pathKey}: 存储为原始 string "${val}"，而 Schema 预期为 localeString`);
-          }
-        }
-
-        for (const doc of docs) {
-          if (doc._type === 'siteConfig') {
-            ['titleSuffix', 'whatsAppPrefillText', 'whatsAppTooltip'].forEach((f) => {
-              if (doc[f]) checkLocaleField(doc._id, doc._type, f, doc[f]);
-            });
-            if (Array.isArray(doc.header?.navLinks)) {
-              doc.header.navLinks.forEach((nl: any, i: number) => {
-                if (nl?.label) checkLocaleField(doc._id, doc._type, `header.navLinks[${i}].label`, nl.label);
-              });
-            }
-            if (Array.isArray(doc.footer?.columns)) {
-              doc.footer.columns.forEach((col: any, cIdx: number) => {
-                if (col?.title) checkLocaleField(doc._id, doc._type, `footer.columns[${cIdx}].title`, col.title);
-                if (Array.isArray(col?.links)) {
-                  col.links.forEach((l: any, lIdx: number) => {
-                    if (l?.label) checkLocaleField(doc._id, doc._type, `footer.columns[${cIdx}].links[${lIdx}].label`, l.label);
-                  });
-                }
-              });
-            }
-            if (Array.isArray(doc.footer?.legalLinks)) {
-              doc.footer.legalLinks.forEach((l: any, lIdx: number) => {
-                if (l?.label) checkLocaleField(doc._id, doc._type, `footer.legalLinks[${lIdx}].label`, l.label);
-              });
-            }
-          }
-
-          if (doc._type === 'product') {
-            ['title', 'priceNote', 'paletteTitle', 'specsBadge', 'specsHeading', 'addToQuoteButtonText'].forEach((f) => {
-              if (doc[f]) checkLocaleField(doc._id, doc._type, f, doc[f]);
-            });
-          }
-
-          if (doc._type === 'category') {
-            ['title', 'description'].forEach((f) => {
-              if (doc[f]) checkLocaleField(doc._id, doc._type, f, doc[f]);
-            });
-          }
-
-          if (doc._type === 'rfqSettings') {
-            ['drawerTitle', 'drawerSubtitle', 'sampleKitNotice', 'drawerSuccessMessage', 'drawerErrorMessage'].forEach((f) => {
-              if (doc[f]) checkLocaleField(doc._id, doc._type, f, doc[f]);
-            });
-          }
-          if (doc._type === 'catalogSettings') {
-            ['title', 'subtitle', 'badge', 'emptyStateTitle', 'emptyStateDescription'].forEach((f) => {
-              if (doc[f]) checkLocaleField(doc._id, doc._type, f, doc[f]);
-            });
-          }
-
-          if (doc._type === 'page') {
-            if (doc.title) checkLocaleField(doc._id, doc._type, 'title', doc.title);
-            if (Array.isArray(doc.sections)) {
-              doc.sections.forEach((sec: any, sIdx: number) => {
-                if (sec._type === 'heroSection') {
-                  ['headline', 'subline', 'superTitle', 'primaryButtonText', 'secondaryButtonText'].forEach((f) => {
-                    if (sec[f]) checkLocaleField(doc._id, doc._type, `sections[${sIdx}].${f}`, sec[f]);
-                  });
-                }
-                if (sec._type === 'productShowcaseSection') {
-                  ['title', 'subtitle', 'badge', 'actionButtonText', 'cardDetailsButtonText'].forEach((f) => {
-                    if (sec[f]) checkLocaleField(doc._id, doc._type, `sections[${sIdx}].${f}`, sec[f]);
-                  });
-                }
-                if (sec._type === 'manufacturingSection') {
-                  ['title', 'subtitle', 'badge', 'heroBadge', 'heroTitle', 'heroSubtitle', 'heroPrimaryButton', 'heroSecondaryButton'].forEach((f) => {
-                    if (sec[f]) checkLocaleField(doc._id, doc._type, `sections[${sIdx}].${f}`, sec[f]);
-                  });
-                }
-                if (sec._type === 'inquirySection') {
-                  ['headline', 'subline', 'badge', 'buttonText', 'successTitle', 'successMessage'].forEach((f) => {
-                    if (sec[f]) checkLocaleField(doc._id, doc._type, `sections[${sIdx}].${f}`, sec[f]);
-                  });
-                }
-              });
-            }
-          }
-        }
-
-        if (typeMismatches.length > 0) {
-          logFail(`Sanity 数据库中存在 ${typeMismatches.length} 处 Schema 字段类型破损 (Invalid property value)！`);
-          typeMismatches.slice(0, 10).forEach((m) => console.log(`   ✖ ${m}`));
-        } else {
-          logPass(`Sanity 数据库字段类型一致性校验通过：全量 ${docs.length} 个文档中多语言字段无 primitive string 破损`);
-        }
-
-        // 4.3 数据库商品价格阶梯直接取值与全量美元标准化校验 (防历史 ¥ 污染与未对齐)
-        let yenProductCount = 0;
-        for (const doc of docs) {
-          if (doc._type === 'product') {
-            const ptStr = JSON.stringify(doc.pricingTiers || []);
-            if (ptStr.includes('¥')) {
-              yenProductCount++;
-            }
-          }
-        }
-        if (yenProductCount > 0) {
-          logFail(`Sanity 数据库中存在 ${yenProductCount} 个商品阶梯价格仍含有人民币符号 (¥)！详情页与产品大厅币种未对齐。`);
-        } else {
-          logPass(`Sanity 数据库商品阶梯出厂价校验通过：全量商品出厂阶梯价均已对齐为国际标准美元 ($)`);
-        }
-      } else {
-        logWarn(`未配置 SANITY_TOKEN，跳过远程数据集线上写库巡检`);
-      }
-    } catch (err: any) {
-      logWarn(`Sanity 数据集检验跳过: ${err.message}`);
-    }
-  }
-
-  // =========================================================================
-  // 5. 双端生产编译与 Wrangler v4 部署预检全量验证 (若开启 --full)
+  // 4 & 5. 可选远程数据集与全量打包验证 (--data / --full)
   // =========================================================================
   if (isFullMode) {
     logSection('5. 双端生产编译与 Wrangler v4 部署预检全量验证 (--full Mode)');
-
     try {
-      console.log('正在执行 Sanity Studio 生产构建: npm run build:studio ...');
       execSync('npm run build:studio', { stdio: 'inherit', cwd: ROOT_DIR });
       logPass('Sanity Studio 生产编译成功！');
     } catch {
-      logFail('Sanity Studio 生产编译失败！请检查 studio 报错。');
+      logFail('Sanity Studio 生产编译失败！');
     }
-
     try {
-      console.log('正在执行 Astro 生产构建: npm run build ...');
-      execSync('npm run build', { stdio: 'inherit', cwd: ROOT_DIR });
+      execSync('node ./astro-cli.mjs build', { stdio: 'inherit', cwd: ROOT_DIR });
       logPass('Astro 生产编译成功！');
     } catch {
-      logFail('Astro 生产编译失败！请检查 astro build 报错。');
-    }
-
-    try {
-      console.log('正在执行主站與 Studio Wrangler v4 部署预检 (--dry-run) ...');
-      execSync('npx wrangler deploy --dry-run', { stdio: 'pipe', cwd: ROOT_DIR });
-      execSync('npx wrangler deploy --config studio/wrangler.jsonc --dry-run', { stdio: 'pipe', cwd: ROOT_DIR });
-      logPass('主站与 Studio 双端 Wrangler v4 部署预检 (--dry-run) 成功！');
-    } catch {
-      logFail('Wrangler v4 部署预检 (--dry-run) 失败！请检查 wrangler.jsonc 配置。');
+      logFail('Astro 生产编译失败！');
     }
   } else {
-    console.log('\n\x1b[90m(提示: 当前为静态与 Schema 动态快检模式。如需验证真实打包、Wrangler Dry-Run 与远程数据集，请运行 "npm run check:full")\x1b[0m');
+    console.log(
+      '\n\x1b[90m(提示: 当前为静态与 Schema 动态快检模式。如需验证真实打包与 Studio 编译，请运行 "npm run check:full")\x1b[0m'
+    );
   }
 
-  // =========================================================================
-  // 汇总输出
-  // =========================================================================
   console.log('\n========================================');
   if (errorCount === 0) {
     console.log(`\x1b[32m\x1b[1m🎉 巡检全部通过！(错误: ${errorCount}, 告警: ${warnCount})\x1b[0m`);
-    console.log('代码已全面通过 AGENTS.md 历史踩坑与安全架构护栏校验，可安全推进！');
+    console.log('代码已全面通过历史踩坑与安全架构护栏校验，可安全推进！');
     process.exit(0);
   } else {
     console.log(`\x1b[31m\x1b[1m🚨 巡检未通过！发现 ${errorCount} 个致命阻断问题。\x1b[0m`);

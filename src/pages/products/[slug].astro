@@ -1,6 +1,7 @@
 ---
 // src/pages/products/[slug].astro
 import Layout from '@layouts/Layout.astro';
+import { AppleProductDetailSkeleton } from '@components/index';
 import { client } from '@utils/sanity-client';
 import { PRODUCT_FIELDS, PRODUCT_CARD_FIELDS, ProductService, resolveProductMoq, getCurrencySymbol } from '@data/products';
 import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
@@ -106,7 +107,7 @@ const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
 const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
 const firstGalleryImg = currentProduct.gallery?.[0]?.src || currentProduct.mainImage;
-const productHeroPreload = firstGalleryImg && typeof firstGalleryImg === 'string' && (firstGalleryImg.includes('cdn.sanity.io') || firstGalleryImg.includes('/cdn-image/'))
+const productHeroPreload = firstGalleryImg && typeof firstGalleryImg && (firstGalleryImg.includes('cdn.sanity.io') || firstGalleryImg.includes('/cdn-image/'))
   ? {
       src: SanityImageService.hero(firstGalleryImg, 1200),
       srcset: SanityImageService.srcSet(firstGalleryImg, [480, 800, 1200]),
@@ -157,6 +158,10 @@ const productStructuredData: Record<string, any> = {
   mainClass="pt-12"
   preloadHeroImage={productHeroPreload}
 >
+  <!-- Instant Perceived Performance Skeleton Overlay for Silhouette Navigation -->
+  <AppleProductDetailSkeleton id="pdp-transition-skeleton" class="hidden" />
+
+  <div id="pdp-live-content">
   <section id="product-overview" class="product-hero-overview w-full lg:h-[calc(100svh-48px)] lg:max-h-[920px] lg:min-h-0 lg:flex lg:flex-col lg:justify-between py-1 sm:py-2 lg:py-2 border-b border-black/5 bg-white overflow-visible lg:overflow-hidden">
         <!-- Breadcrumb Navigation & Quick Prev/Next Style Switcher -->
         <div class="apple-rail-bento py-1 flex items-center justify-between gap-4 shrink-0">
@@ -173,6 +178,7 @@ const productStructuredData: Record<string, any> = {
             <div class="flex items-center gap-1.5 shrink-0 text-xs font-medium font-sans">
               <a
                 href={getLocalizedPath(`/products/${prevProduct.slug}`, currentLang)}
+                data-pdp-nav-link
                 class="px-2.5 py-1 rounded-full border border-black/10 hover:border-black/25 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] transition-all flex items-center gap-1 shadow-2xs group"
                 title={`${t('pdp.prev')}: ${prevProductTitle}`}
               >
@@ -188,6 +194,7 @@ const productStructuredData: Record<string, any> = {
 
               <a
                 href={getLocalizedPath(`/products/${nextProduct.slug}`, currentLang)}
+                data-pdp-nav-link
                 class="px-2.5 py-1 rounded-full border border-black/10 hover:border-black/25 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] transition-all flex items-center gap-1 shadow-2xs group"
                 title={`${t('pdp.next')}: ${nextProductTitle}`}
               >
@@ -215,9 +222,16 @@ const productStructuredData: Record<string, any> = {
                       type="button"
                       data-thumb-index={idx}
                       aria-label={`View image ${idx + 1}`}
-                      class={`carousel-thumb shrink-0 w-14 h-14 sm:w-15 sm:h-15 lg:w-[68px] lg:h-[68px] xl:w-[74px] xl:h-[74px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer bg-[#fafafa] flex items-center justify-center ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
+                      class={`carousel-thumb shrink-0 w-14 h-14 sm:w-15 sm:h-15 lg:w-[68px] lg:h-[68px] xl:w-[74px] xl:h-[74px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer bg-[#fafafa] apple-skeleton-surface flex items-center justify-center ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
                     >
-                      <img src={SanityImageService.thumbnail(img.src, 160)} alt={img.alt || currentProductTitle} class="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
+                      <img
+                        src={SanityImageService.thumbnail(img.src, 160)}
+                        alt={img.alt || currentProductTitle}
+                        class="pdp-gallery-img w-full h-full object-contain p-0.5"
+                        loading="lazy"
+                        decoding="async"
+                        onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
+                      />
                     </button>
                   ))}
                 </div>
@@ -232,7 +246,7 @@ const productStructuredData: Record<string, any> = {
                   >
                     {currentProduct.gallery.map((img: any, idx: number) => (
                       <div
-                        class="carousel-slide shrink-0 w-full h-full snap-center relative overflow-hidden flex items-center justify-center min-w-0 min-h-0"
+                        class="carousel-slide shrink-0 w-full h-full snap-center relative overflow-hidden apple-skeleton-surface flex items-center justify-center min-w-0 min-h-0"
                         data-index={idx}
                       >
                         <img
@@ -240,11 +254,12 @@ const productStructuredData: Record<string, any> = {
                           srcset={SanityImageService.srcSet(img.src, [480, 800, 1200]) || undefined}
                           sizes="(max-width: 1024px) 100vw, 800px"
                           alt={img.alt || currentProductTitle}
-                          class="absolute inset-0 m-auto max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)] max-h-[calc(100%-1rem)] sm:max-h-[calc(100%-2rem)] w-auto h-auto object-contain pointer-events-none select-none"
+                          class="pdp-gallery-img absolute inset-0 m-auto max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)] max-h-[calc(100%-1rem)] sm:max-h-[calc(100%-2rem)] w-auto h-auto object-contain pointer-events-none select-none"
                           draggable="false"
                           loading={idx === 0 ? 'eager' : 'lazy'}
                           fetchpriority={idx === 0 ? 'high' : 'auto'}
                           decoding="async"
+                          onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
                         />
                       </div>
                     ))}
@@ -532,6 +547,7 @@ const productStructuredData: Record<string, any> = {
                 <!-- Previous Product Card -->
                 <a
                   href={getLocalizedPath(`/products/${prevProduct.slug}`, currentLang)}
+                  data-pdp-nav-link
                   class="group p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-[#f5f5f7] hover:bg-stone-100 border border-black/5 hover:border-black/15 transition-all flex items-center justify-between gap-2 sm:gap-3 text-left shadow-2xs hover:shadow-xs min-w-0"
                 >
                   <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -555,6 +571,7 @@ const productStructuredData: Record<string, any> = {
                 <!-- Next Product Card -->
                 <a
                   href={getLocalizedPath(`/products/${nextProduct.slug}`, currentLang)}
+                  data-pdp-nav-link
                   class="group p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-[#f5f5f7] hover:bg-stone-100 border border-black/5 hover:border-black/15 transition-all flex items-center justify-between gap-2 sm:gap-3 text-right shadow-2xs hover:shadow-xs min-w-0"
                 >
                   <div class="min-w-0 flex-1">
@@ -577,8 +594,32 @@ const productStructuredData: Record<string, any> = {
           )}
         </div>
       </section>
+  </div>
 
   <script>
+      // Mark already-cached gallery images as loaded to stop progressive Apple shimmer
+      document.querySelectorAll('.pdp-gallery-img').forEach((img) => {
+        const htmlImg = img as HTMLImageElement;
+        if (htmlImg.complete && htmlImg.parentElement) {
+          htmlImg.parentElement.classList.add('apple-img-loaded');
+        }
+      });
+
+      // Instant Apple Product Detail Skeleton reveal when switching between Prev/Next silhouettes
+      const pdpSkeleton = document.getElementById('pdp-transition-skeleton');
+      const pdpLiveContent = document.getElementById('pdp-live-content');
+      document.querySelectorAll('[data-pdp-nav-link]').forEach((link) => {
+        link.addEventListener('click', (e) => {
+          const mouseEvent = e as MouseEvent;
+          if (mouseEvent.metaKey || mouseEvent.ctrlKey || mouseEvent.shiftKey || mouseEvent.altKey) return;
+          if (pdpSkeleton && pdpLiveContent) {
+            pdpLiveContent.classList.add('hidden');
+            pdpSkeleton.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+          }
+        });
+      });
+
       let currentSlide = 0;
       const track = document.getElementById('carousel-track');
       const slides = document.querySelectorAll('.carousel-slide');
