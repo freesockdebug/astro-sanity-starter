@@ -213,7 +213,7 @@ export const POST: APIRoute = async ({ request }) => {
     const { buyerInfo, items, inquiryType, turnstileToken } = validation.data;
 
     // Environment resolution helper
-    const runtimeEnv = cfEnv || null;
+    const runtimeEnv = (cfEnv as Record<string, any> | undefined) || null;
     const getVal = (key: string): string | undefined => {
       return (
         runtimeEnv?.[key] ||

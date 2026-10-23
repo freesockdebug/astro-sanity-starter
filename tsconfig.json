@@ -1,31 +1,24 @@
 {
   "extends": "astro/tsconfigs/base",
-  "include": [".astro/types.d.ts", "src/**/*"],
+  "include": [".astro/types.d.ts", "src/**/*", "types/**/*", "worker-configuration.d.ts"],
   "exclude": ["dist", "studio", "sanity-export"],
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "@pages/*": ["src/pages/*"],
-      "@components/*": ["src/components/*"],
-      "@components": ["src/components/index.ts"],
-      "@layouts/*": ["src/layouts/*"],
-      "@styles/*": ["src/styles/*"],
-      "@utils/*": ["src/utils/*"],
-      "@data/*": ["src/data/*"],
-      "@data": ["src/data/index.ts"],
-      "@stores/*": ["src/stores/*"],
-      "@i18n": ["src/i18n/index.ts"],
-      "@i18n/*": ["src/i18n/*"]
+      "types": ["./types/index.ts"],
+      "types/*": ["./types/*"],
+      "@pages/*": ["./src/pages/*"],
+      "@components/*": ["./src/components/*"],
+      "@components": ["./src/components/index.ts"],
+      "@layouts/*": ["./src/layouts/*"],
+      "@styles/*": ["./src/styles/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@data/*": ["./src/data/*"],
+      "@data": ["./src/data/index.ts"],
+      "@stores/*": ["./src/stores/*"],
+      "@i18n": ["./src/i18n/index.ts"],
+      "@i18n/*": ["./src/i18n/*"]
     },
     "jsx": "react-jsx",
     "jsxImportSource": "react"
-  },
-  "ts-node": {
-    "transpileOnly": true,
-    "compilerOptions": {
-      "module": "CommonJS",
-      "moduleResolution": "Node",
-      "verbatimModuleSyntax": false
-    }
   }
 }

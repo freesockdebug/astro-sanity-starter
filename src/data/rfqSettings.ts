@@ -60,13 +60,14 @@ export class RfqSettingsService {
       return this.inflightPromise;
     }
 
-    this.inflightPromise = (async () => {
+    const fetchPromise: Promise<RfqSettings> = (async () => {
       try {
         const directDoc = await client.fetch<any>('*[_type == "rfqSettings"][0]');
         if (directDoc && Object.keys(directDoc).length > 2) {
-          this.cachedSettings = { ...DEFAULT_RFQ_SETTINGS, ...directDoc };
+          const merged: RfqSettings = { ...DEFAULT_RFQ_SETTINGS, ...directDoc };
+          this.cachedSettings = merged;
           this.cacheTimestamp = Date.now();
-          return this.cachedSettings;
+          return merged;
         }
       } catch (e: any) {
         console.warn("RfqSettingsService.getSettings fallback to defaults:", e?.message);
@@ -74,12 +75,14 @@ export class RfqSettingsService {
         this.inflightPromise = null;
       }
 
-      this.cachedSettings = { ...DEFAULT_RFQ_SETTINGS };
+      const fallback: RfqSettings = { ...DEFAULT_RFQ_SETTINGS };
+      this.cachedSettings = fallback;
       this.cacheTimestamp = Date.now();
-      return this.cachedSettings;
+      return fallback;
     })();
 
-    return this.inflightPromise;
+    this.inflightPromise = fetchPromise;
+    return fetchPromise;
   }
 
   /**

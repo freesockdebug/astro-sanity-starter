@@ -50,12 +50,10 @@ jobs:
           fi
           if [ -n "$CF_ACCOUNT_ID" ]; then
             export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
+          else
+            echo "::notice::CLOUDFLARE_ACCOUNT_ID secret not set; Wrangler will auto-resolve if the API token is scoped to a single account."
           fi
-          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::CLOUDFLARE_ACCOUNT_ID secret is not set! Required to prevent Wrangler from prompting interactively and hanging CI."
-            exit 1
-          fi
-          npx wrangler deploy --keep-vars --non-interactive
+          npx wrangler deploy --keep-vars
 
       - name: Purge Cloudflare Edge Cache
         env:
@@ -111,10 +109,8 @@ jobs:
           fi
           if [ -n "$CF_ACCOUNT_ID" ]; then
             export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
+          else
+            echo "::notice::CLOUDFLARE_ACCOUNT_ID secret not set; Wrangler will auto-resolve if the API token is scoped to a single account."
           fi
-          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::CLOUDFLARE_ACCOUNT_ID secret is not set! Required to prevent Wrangler from prompting interactively and hanging CI."
-            exit 1
-          fi
-          npx wrangler deploy --config studio/wrangler.jsonc --keep-vars --non-interactive
+          npx wrangler deploy --config studio/wrangler.jsonc --keep-vars
 

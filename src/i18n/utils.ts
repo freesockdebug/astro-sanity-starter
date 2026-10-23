@@ -94,7 +94,7 @@ export function getLocalizedPath(path: string = '', lang: SupportedLocale = DEFA
   return `/${lang}${cleanPath ? `/${cleanPath}` : ''}${searchSuffix}${hashSuffix}`;
 }
 
-const COMMON_CMS_TERM_TRANSLATIONS: Record<Exclude<SupportedLocale, 'en'>, Record<string, string>> = {
+const COMMON_CMS_TERM_TRANSLATIONS: Partial<Record<SupportedLocale, Record<string, string>>> = {
   de: {
     'Composition': 'Materialzusammensetzung',
     'Needle Count': 'Nadelanzahl',
