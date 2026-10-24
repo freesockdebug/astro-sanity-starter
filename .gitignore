@@ -32,6 +32,7 @@ scripts/*
 !scripts/check-preflight.ts
 !scripts/preflight-rules.json
 !scripts/verify-cf-deploy.mjs
+!scripts/ensure-asset-aliases.cjs
 amazon_*.json
 studio/.sanity/
 # AI agent documentation & IDE rules
