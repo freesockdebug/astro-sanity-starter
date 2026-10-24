@@ -1,7 +1,6 @@
 ---
 import { type SiteConfig, type CustomImage, type Page } from 'types';
-import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget, SEO, Breadcrumbs } from '@components';
-import type { BreadcrumbItem } from '../components/Breadcrumbs.astro';
+import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@components';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
 import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
@@ -11,9 +10,6 @@ import '../styles/globals.css';
 
 interface Props {
     title?: string;
-    breadcrumbTitle?: string;
-    breadcrumbs?: BreadcrumbItem[];
-    hideBreadcrumbs?: boolean;
     addTitleSuffix?: boolean;
     description?: string;
     image?: CustomImage | string;
@@ -31,9 +27,6 @@ interface Props {
 
 const {
     title,
-    breadcrumbTitle,
-    breadcrumbs,
-    hideBreadcrumbs = false,
     addTitleSuffix,
     description,
     image,
@@ -117,16 +110,6 @@ const resolvedImage = imageSrc
     </head>
     <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
         <AppleNav config={configData} />
-        {!hideBreadcrumbs && (
-            <Breadcrumbs
-                items={breadcrumbs}
-                currentTitle={breadcrumbTitle || title}
-                page={page}
-                siteConfig={configData}
-            >
-                <slot name="breadcrumb-actions" slot="actions" />
-            </Breadcrumbs>
-        )}
         <main class={mainClass}>
             <slot />
         </main>
