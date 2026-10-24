@@ -1,3 +1,4 @@
+import activeAsset from './utils/active-asset.json';
 // src/middleware.ts
 import { defineMiddleware } from 'astro:middleware';
 import { SiteConfigService } from '@data/siteConfig';
@@ -12,19 +13,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const pathname = url.pathname;
 
-  // 1. Only cache GET requests
-  if (request.method !== 'GET') {
-    return next();
-  }
-
-  // 2. Completely bypass caching in local development (Vite dev server / workerd)
-  if (import.meta.env.DEV) {
-    return next();
-  }
-
-  // 2. Intercept missing /_astro/ static assets: if an asset request reaches SSR Worker,
-  // it does not exist in the static bucket. Return explicit 404 to prevent falling through to dynamic HTML routes.
+  // 1. Self-Healing Stale Asset Redirection & Fallback Guard
+  // When a client holds a cached/stale HTML requesting an older hashed CSS/JS bundle
+  // (e.g. /_astro/Layout.old.css), prevent styling catastrophic 404s by redirecting to current active bundle.
   if (pathname.startsWith('/_astro/')) {
+    if (pathname.endsWith('.css') && pathname.includes('Layout.')) {
+      // Evergreen Canonical Fallback: redirect any missed/stale Layout.*.css directly to /_astro/Layout.css
+      if (pathname !== '/_astro/Layout.css') {
+        return new Response(null, {
+          status: 302,
+          statusText: 'Found',
+          headers: {
+            'Location': '/_astro/Layout.css',
+            'Cache-Control': 'public, max-age=60',
+            'X-Asset-Healing': 'STALE_LAYOUT_CSS_REDIRECT',
+          },
+        });
+      }
+    }
+
     return new Response('Asset Not Found', {
       status: 404,
       statusText: 'Not Found',
@@ -33,6 +40,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
         'Cache-Control': 'no-store, no-cache, must-revalidate',
       },
     });
+  }
+
+  // 2. Only cache GET requests
+  if (request.method !== 'GET') {
+    return next();
+  }
+  // 3. Bypass cache in local dev, APIs, Studio, and assets
+  if (import.meta.env.DEV) {
+    return next();
   }
 
   // 3. Bypass cache for APIs, Sanity Studio admin, dynamic auth, and static asset chunks

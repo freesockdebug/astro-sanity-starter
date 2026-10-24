@@ -658,6 +658,64 @@ async function main() {
   }
   logPass(`[Pitfall 18] 边缘缓存时间测度区间公理与防御性路由校验通过`);
 
+  // 2.18 [Pitfall 19]: 静态资产断代容错与构建哈希一致性护栏 (Zero Stale Asset 404 Guarantee)
+  // 必须保证旧客户端/未刷新浏览器发起的历史 hash CSS 请求不会引发 404 样式裸奔，
+  // 且构建系统天然自愈，携带历史别名与中间件智能重定向兜底。
+  // reuse existing middlewareFile
+  if (fs.existsSync(middlewareFile)) {
+    const middlewareSrc = fs.readFileSync(middlewareFile, 'utf-8');
+    if (!middlewareSrc.includes('STALE_LAYOUT_CSS_REDIRECT') || !middlewareSrc.includes('Layout.css')) {
+      logFail(
+        `src/middleware.ts: [Pitfall 19] 中间件未包含对历史 Layout.*.css 的自愈重定向兜底逻辑！` +
+        `未刷新浏览器请求旧哈希 CSS 会遭遇 404 导致页面排版裸奔乱码。`
+      );
+    }
+  }
+
+  const pkgJsonFile = path.join(path.join(SRC_DIR, '..'), 'package.json');
+  if (fs.existsSync(pkgJsonFile)) {
+    const pkgSrc = fs.readFileSync(pkgJsonFile, 'utf-8');
+    if (!pkgSrc.includes('ensure-asset-aliases.cjs')) {
+      logFail(
+        `package.json: [Pitfall 19] build 流程未挂载 ensure-asset-aliases.cjs！构建产物无法自动保留历史版本兼容别名。`
+      );
+    }
+  }
+
+  const activeAssetFile = path.join(SRC_DIR, 'utils', 'active-asset.json');
+  if (!fs.existsSync(activeAssetFile)) {
+    logFail(`src/utils/active-asset.json: [Pitfall 19] 缺少 active-asset.json 清单！Worker 边缘自愈重定向无法获取活跃 CSS。`);
+  } else {
+    try {
+      const activeMeta = JSON.parse(fs.readFileSync(activeAssetFile, 'utf-8'));
+      if (!activeMeta.activeLayoutCss || !activeMeta.activeLayoutCss.endsWith('.css')) {
+        logFail(`src/utils/active-asset.json: [Pitfall 19] activeLayoutCss 路径格式非法: ${activeMeta.activeLayoutCss}`);
+      }
+    } catch {
+      logFail(`src/utils/active-asset.json: [Pitfall 19] JSON 解析失败！`);
+    }
+  }
+
+  const clientAstroDir = path.join(path.join(SRC_DIR, '..'), 'dist/client/_astro');
+  if (fs.existsSync(clientAstroDir)) {
+    const astroFiles = fs.readdirSync(clientAstroDir);
+    const activeLayout = astroFiles.find(f => f.startsWith('Layout.') && f.endsWith('.css') && !f.includes('wz5V2tVq') && !f.includes('2XgfxuuA'));
+    if (!activeLayout) {
+      logFail(`dist/client/_astro: [Pitfall 19] 未在构建产物中检测到有效的主样式包 Layout.*.css！`);
+    }
+
+    // 强校验：必须包含历史回退别名，保证未刷新页面的旧 Tab 100% 200 OK 物理命中
+    const requiredAliases = ['Layout.wz5V2tVq.css', 'Layout.2XgfxuuA.css', 'Layout.css'];
+    for (const reqAlias of requiredAliases) {
+      const aliasPath = path.join(clientAstroDir, reqAlias);
+      if (!fs.existsSync(aliasPath) || fs.statSync(aliasPath).size === 0) {
+        logFail(`dist/client/_astro/${reqAlias}: [Pitfall 19] 缺少关键历史兼容别名！用户旧客户端访问将引发 404 页面乱码。`);
+      }
+    }
+  }
+
+  logPass(`[Pitfall 19] 静态资产断代容错与历史哈希自愈双保险护栏校验通过`);
+
   // =========================================================================
   // 3. i18n 多语言核心字典树同构与对称性深度分析
   // =========================================================================
