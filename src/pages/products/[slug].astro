@@ -529,12 +529,12 @@ const productStructuredData: Record<string, any> = {
 
       <!-- Section 1.5: Editorial Craftsmanship & Product Story (Markdown Narrative) -->
       {storyMarkdown && (
-      <section id="product-story" class="w-full py-10 sm:py-14 lg:py-16 bg-white border-t border-black/5 scroll-mt-24">
+      <section id="product-story" class="w-full py-8 sm:py-10 lg:py-12 bg-white border-t border-black/5 scroll-mt-24">
         <span id="specs" class="sr-only"></span>
         <div class="apple-rail-bento">
           <!-- Editorial Header -->
-          <div class="mb-8 sm:mb-10 pb-5 border-b border-black/5 text-left">
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-zinc-100 text-zinc-800 font-semibold mb-2.5">
+          <div class="mb-5 sm:mb-6 pb-3.5 border-b border-black/5 text-left">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-zinc-100 text-zinc-800 font-semibold mb-2">
               <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
               <span>{currentProductStoryBadge}</span>
             </span>
@@ -544,7 +544,7 @@ const productStructuredData: Record<string, any> = {
           </div>
 
           <!-- Markdown Prose Content via Reusable MarkdownRenderer (Aligned with Bento Rail) -->
-          <div class="max-w-4xl text-left">
+          <div class="max-w-4xl w-full text-left">
             <MarkdownRenderer content={storyMarkdown} />
           </div>
         </div>
