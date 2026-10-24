@@ -6,6 +6,7 @@ import inquiry from './inquiry'
 import siteConfig from './siteConfig'
 import rfqSettings from './rfqSettings'
 import catalogSettings from './catalogSettings'
+import productStorySettings from './productStorySettings'
 
 // 2. Reusable Page Section Blocks (页面可拖拽积木块)
 import heroSection from './heroSection'
@@ -33,6 +34,7 @@ export const documentTypes = [
   siteConfig,
   rfqSettings,
   catalogSettings,
+  productStorySettings,
 ]
 
 export const sectionTypes = [

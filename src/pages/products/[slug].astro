@@ -28,7 +28,8 @@ try {
       "product": *[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS},
       "allProducts": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS},
       "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
-      "rfqSettings": *[_type == "rfqSettings"][0]
+      "rfqSettings": *[_type == "rfqSettings"][0],
+      "productStorySettings": *[_type == "productStorySettings"][0]
     }`,
     { slug }
   );
@@ -109,8 +110,56 @@ const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
 const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
 // Editorial Story Resolution (Multilingual Markdown with luxurious Craftsmanship Fallback)
-const currentProductStoryBadge = t('pdp.storyBadge');
-const currentProductStoryHeading = t('pdp.storyHeading');
+const productStorySettings = batchData?.productStorySettings;
+
+const currentProductStoryBadge = getLocalizedValue(
+  currentProduct.storyBadge,
+  currentLang,
+  getLocalizedValue(productStorySettings?.storyBadgeText, currentLang, t('pdp.storyBadge'))
+);
+
+const currentProductStoryHeading = getLocalizedValue(
+  currentProduct.storyHeading,
+  currentLang,
+  getLocalizedValue(productStorySettings?.storyHeading, currentLang, t('pdp.storyHeading'))
+);
+
+const defaultCredentials = [
+  {
+    iconType: 'lonati',
+    title: 'Italian Lonati Calibration',
+    description: 'High-gauge dual-cylinder needle density with zero-friction dimensional architecture.',
+    tag: '200N',
+    accentColor: 'text-amber-700'
+  },
+  {
+    iconType: 'seamless',
+    title: 'Hand-Linked Seamless Finish',
+    description: 'True 0.0 mm seam plane eliminating ridge chafing and shoe pressure points.',
+    tag: '0.0 mm',
+    accentColor: 'text-zinc-900'
+  },
+  {
+    iconType: 'oekotex',
+    title: 'OEKO-TEX® Standard 100',
+    description: 'Rigorous independent lab screening for harmful aromatic amines and allergens.',
+    tag: 'Class I',
+    accentColor: 'text-emerald-700'
+  }
+];
+
+const rawCards = (productStorySettings?.credentials && productStorySettings.credentials.length > 0)
+  ? productStorySettings.credentials
+  : defaultCredentials;
+
+const resolvedCredentials = rawCards.map((card: any) => ({
+  iconType: card.iconType || 'lonati',
+  title: getLocalizedValue(card.title, currentLang, card.title || 'Artisan Standard'),
+  description: getLocalizedValue(card.description, currentLang, card.description || ''),
+  tag: getLocalizedValue(card.tag, currentLang, card.tag || ''),
+  customSvg: card.customSvg || '',
+  accentColor: card.iconType === 'oekotex' ? 'text-emerald-700' : card.iconType === 'lonati' ? 'text-amber-700' : card.iconType === 'gauge' ? 'text-blue-700' : card.iconType === 'fiber' ? 'text-indigo-700' : 'text-zinc-900'
+}));
 
 const rawProductStory = getLocalizedValue(currentProduct.story, currentLang);
 const generatedStory = getProductStory(
@@ -551,41 +600,46 @@ const productStructuredData: Record<string, any> = {
 
               <!-- Artisan Credential Indicators (Desktop High-Value Anchor) -->
               <div class="hidden lg:flex flex-col gap-2.5 pt-4 border-t border-black/5">
-                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 text-[11px] text-zinc-700 flex items-start gap-2.5">
-                  <div class="w-5 h-5 rounded-md bg-white border border-black/10 flex items-center justify-center shrink-0 text-amber-700 mt-0.5 shadow-2xs">
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
+                {resolvedCredentials.map((card: any) => (
+                  <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 text-[11px] text-zinc-700 flex items-start gap-2.5 hover:border-black/10 transition-colors">
+                    <div class={`w-5 h-5 rounded-md bg-white border border-black/10 flex items-center justify-center shrink-0 ${card.accentColor} mt-0.5 shadow-2xs`}>
+                      {card.customSvg ? (
+                        <Fragment set:html={card.customSvg} />
+                      ) : card.iconType === 'oekotex' ? (
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : card.iconType === 'seamless' ? (
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                        </svg>
+                      ) : card.iconType === 'gauge' ? (
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                      ) : card.iconType === 'fiber' ? (
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      ) : (
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                      )}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-semibold text-zinc-900 block font-mono text-[11px] leading-tight truncate">{card.title}</span>
+                        {card.tag && (
+                          <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-medium bg-zinc-200/70 text-zinc-700 shrink-0">{card.tag}</span>
+                        )}
+                      </div>
+                      {card.description && (
+                        <span class="text-zinc-500 text-[10px] leading-tight block mt-0.5">{card.description}</span>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <span class="font-semibold text-zinc-900 block font-mono text-[11px]">Italian Lonati Calibration</span>
-                    <span class="text-zinc-500 text-[10px] leading-tight block mt-0.5">High-gauge dual-cylinder needle density with zero-friction dimensional architecture.</span>
-                  </div>
-                </div>
-
-                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 text-[11px] text-zinc-700 flex items-start gap-2.5">
-                  <div class="w-5 h-5 rounded-md bg-white border border-black/10 flex items-center justify-center shrink-0 text-zinc-900 mt-0.5 shadow-2xs">
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                    </svg>
-                  </div>
-                  <div>
-                    <span class="font-semibold text-zinc-900 block font-mono text-[11px]">Hand-Linked Seamless Finish</span>
-                    <span class="text-zinc-500 text-[10px] leading-tight block mt-0.5">True 0.0 mm seam plane eliminating ridge chafing and shoe pressure points.</span>
-                  </div>
-                </div>
-
-                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 text-[11px] text-zinc-700 flex items-start gap-2.5">
-                  <div class="w-5 h-5 rounded-md bg-white border border-black/10 flex items-center justify-center shrink-0 text-emerald-700 mt-0.5 shadow-2xs">
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div>
-                    <span class="font-semibold text-zinc-900 block font-mono text-[11px]">OEKO-TEX® Standard 100</span>
-                    <span class="text-zinc-500 text-[10px] leading-tight block mt-0.5">Rigorous independent lab screening for harmful aromatic amines and allergens.</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 

@@ -250,6 +250,22 @@ export default defineType({
       group: 'story',
     }),
     defineField({
+      name: 'storyBadge',
+      title: 'Custom Story Badge (当前单品专属工艺徽章 - 可选覆盖全局)',
+      description: '留空将默认继承 Studio "Product Story Settings" 全局统一配置 (默认 CRAFTSMANSHIP & STORY)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
+      group: 'story',
+    }),
+    defineField({
+      name: 'storyHeading',
+      title: 'Custom Story Heading (当前单品专属大标题 - 可选覆盖全局)',
+      description: '留空将默认继承 Studio "Product Story Settings" 全局统一配置 (默认 The Story Behind the Silhouette)',
+      type: 'localeString',
+      options: { collapsible: true, collapsed: true },
+      group: 'story',
+    }),
+    defineField({
       name: 'addToQuoteButtonText',
       title: 'Add to Quote Button Text (加入询盘车按钮文案 - 多语言)',
       description: '留空将默认使用全站 RFQ 设置 (Add to Quote Basket)',

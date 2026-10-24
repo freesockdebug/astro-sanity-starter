@@ -8,6 +8,7 @@ import { CogIcon } from '@sanity/icons/Cog'
 import { ArchiveIcon } from '@sanity/icons/Archive'
 import { EnvelopeIcon } from '@sanity/icons/Envelope'
 import { BoltIcon } from '@sanity/icons/Bolt'
+import { SparklesIcon } from '@sanity/icons/Sparkles'
 import { PageLivePreview } from './components/PageLivePreview'
 import { CachePurgeDashboard } from './components/CachePurgeDashboard'
 
@@ -68,6 +69,18 @@ export const deskStructure: StructureResolver = (S) =>
             .schemaType('catalogSettings')
             .documentId('catalogSettings')
             .title('产品陈列大厅页面配置')
+        ),
+
+      // 2.3 Product Story & Craftsmanship Sticky Sidebar Settings
+      S.listItem()
+        .id('productStorySettings')
+        .title('💎 Product Story Settings (工艺叙事与吸顶栏统一配置)')
+        .icon(SparklesIcon)
+        .child(
+          S.document()
+            .schemaType('productStorySettings')
+            .documentId('productStorySettings')
+            .title('单品详情与工艺叙事吸顶栏统一配置')
         ),
 
       // 3. All Pages (About, Contact, Private Label)
