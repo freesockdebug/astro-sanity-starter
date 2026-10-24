@@ -9,10 +9,19 @@
   --apple-text-primary: #1d1d1f;   /* Primary titles and key metrics */
   --apple-text-secondary: #86868b; /* Subtitles, body copy and specs */
   --apple-border: rgba(0, 0, 0, 0.08);
+
+  /* Dynamic geometric viewport offsets */
+  --apple-nav-h: 48px;
+  --apple-breadcrumbs-h: 0px;
+  --apple-header-offset: calc(var(--apple-nav-h) + var(--apple-breadcrumbs-h));
+}
+
+html:has(.breadcrumbs-bar) {
+  --apple-breadcrumbs-h: 36px;
 }
 
 html {
-  scroll-padding-top: 84px;
+  scroll-padding-top: var(--apple-header-offset);
 }
 
 body {

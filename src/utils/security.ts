@@ -107,7 +107,8 @@ export class SecurityService {
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean);
 
-    const trustedDomainSet = new Set<string>(['sanity.studio', 'pages.dev', 'workers.dev', 'run.app']);
+    // Only allow specific trusted apex root domains, never wildcard multi-tenant platforms (e.g. *.workers.dev)
+    const trustedDomainSet = new Set<string>(['sanity.studio']);
     if (rootDomain) trustedDomainSet.add(rootDomain);
     if (currentHost) trustedDomainSet.add(currentHost);
     for (const d of envConfiguredDomains) {
@@ -120,9 +121,13 @@ export class SecurityService {
         const originHost = new URL(origin).hostname.toLowerCase();
         if (originHost === 'localhost' || originHost === '127.0.0.1' || originHost.endsWith('.local')) {
           isAllowedOrigin = true;
+        } else if (rootDomain && (originHost === rootDomain || originHost.endsWith(`.${rootDomain}`))) {
+          // Allow apex domain and any of its own subdomains (e.g. admin.gwenvenni.com)
+          isAllowedOrigin = true;
         } else {
+          // Explicit full-host match only for external configurations
           for (const trusted of trustedDomainSet) {
-            if (originHost === trusted || originHost.endsWith(`.${trusted}`)) {
+            if (originHost === trusted) {
               isAllowedOrigin = true;
               break;
             }

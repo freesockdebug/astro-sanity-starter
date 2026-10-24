@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import sanity from '@sanity/astro';
-import react from '@astrojs/react';
 import cloudflare from '@astrojs/cloudflare';
 import { sanityConfig } from './src/utils/sanity-client';
 
@@ -28,107 +27,9 @@ export default defineConfig({
     image: {
         domains: ['cdn.sanity.io']
     },
-    integrations: [
-        ...(isProduction ? [] : [react()]),
-        sanity({
-            ...sanityConfig,
-            ...(isProduction ? {} : { studioBasePath: '/studio' })
-        })
-    ],
+    integrations: [sanity(sanityConfig)],
     vite: {
-        plugins: [
-            tailwindcss(),
-            {
-                name: 'studio-trailing-slash-and-css-hmr-guard',
-                enforce: 'pre',
-                configureServer(server) {
-                    const wrapHotChannel = (channel) => {
-                        if (!channel || typeof channel.send !== 'function' || channel.__cssGuardWrapped) {
-                            return;
-                        }
-                        const originalSend = channel.send.bind(channel);
-                        channel.__cssGuardWrapped = true;
-                        channel.send = (payload, ... rest) => {
-                            if (
-                                payload &&
-                                typeof payload === 'object' &&
-                                payload.type === 'update' &&
-                                Array.isArray(payload.updates)
-                            ) {
-                                const hasCssJsUpdate = payload.updates.some(
-                                    (u) =>
-                                        u.type === 'js-update' &&
-                                        (u.path?.includes('.css') || u.acceptedPath?.includes('.css'))
-                                );
-                                if (hasCssJsUpdate) {
-                                    return originalSend({ type: 'full-reload', path: '*' }, ...rest);
-                                }
-                            }
-                            return originalSend(payload, ...rest);
-                        };
-                    };
-
-                    wrapHotChannel(server.ws);
-                    wrapHotChannel(server.hot);
-                    if (server.environments) {
-                        for (const env of Object.values(server.environments)) {
-                            wrapHotChannel(env?.hot);
-                        }
-                    }
-
-                    server.middlewares.use((req, res, next) => {
-                        if (req.url === '/studio' || req.url?.startsWith('/studio?')) {
-                            req.url = req.url.replace('/studio', '/studio/');
-                        }
-                        if (req.url && req.url.includes('.css')) {
-                            res.setHeader('Vary', 'Accept, Sec-Fetch-Dest, Origin');
-                            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-                            if (req.headers['sec-fetch-dest'] === 'script') {
-                                req.headers.accept = '*/*';
-                                req.url = req.url
-                                    .replace(/([?&])direct(&|$)/, '$1')
-                                    .replace(/[?&]$/, '');
-                            }
-                        }
-                        next();
-                    });
-                },
-                hotUpdate({ file, modules, server }) {
-                    if (file.endsWith('.css')) {
-                        if (!this.environment || this.environment.name === 'client') {
-                            server.ws.send({ type: 'full-reload', path: '*' });
-                        }
-                        return [];
-                    }
-                    const filtered = modules.filter(
-                        (m) => !m.id?.endsWith('.css') && !m.url?.includes('.css')
-                    );
-                    if (filtered.length !== modules.length) {
-                        if (!this.environment || this.environment.name === 'client') {
-                            server.ws.send({ type: 'full-reload', path: '*' });
-                        }
-                        return [];
-                    }
-                    return filtered;
-                }
-            }
-        ],
-        define: !isProduction
-            ? {
-                  'process.env.SANITY_STUDIO_PROJECT_ID': JSON.stringify(
-                      process.env.SANITY_STUDIO_PROJECT_ID || process.env.SANITY_PROJECT_ID || 'xvhhd8u0'
-                  ),
-                  'process.env.SANITY_STUDIO_DATASET': JSON.stringify(
-                      process.env.SANITY_STUDIO_DATASET || process.env.SANITY_DATASET || 'production'
-                  ),
-                  'process.env.SANITY_PROJECT_ID': JSON.stringify(process.env.SANITY_PROJECT_ID || 'xvhhd8u0'),
-                  'process.env.SANITY_DATASET': JSON.stringify(process.env.SANITY_DATASET || 'production'),
-                  'process.env.SANITY_STUDIO_SITE_URL': JSON.stringify(process.env.SANITY_STUDIO_SITE_URL || ''),
-                  'process.env.SANITY_STUDIO_REVALIDATE_SECRET': JSON.stringify(
-                      process.env.SANITY_STUDIO_REVALIDATE_SECRET || process.env.REVALIDATE_SECRET || 'itsasecret'
-                  )
-              }
-            : undefined,
+        plugins: [tailwindcss()],
         server: {
             hmr: { path: '/vite-hmr/' },
             allowedHosts: true
@@ -137,13 +38,11 @@ export default defineConfig({
             drop: isProduction ? ['console', 'debugger'] : []
         },
         optimizeDeps: {
-            exclude: isProduction
-                ? ['marked', '@sanity/client', 'ua-parser-js', '@nanostores/persistent']
-                : ['marked', 'ua-parser-js', '@nanostores/persistent']
+            exclude: ['marked', '@sanity/client', 'ua-parser-js', '@nanostores/persistent']
         }
     },
     server: {
         host: '0.0.0.0',
-        port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000
+        port: process.env.PORT ? parseInt(process.env.PORT, 10) : 4321
     }
 });

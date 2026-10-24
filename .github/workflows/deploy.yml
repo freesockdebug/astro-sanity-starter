@@ -25,7 +25,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+        run: npm ci
 
       - name: Build Astro SSR
         env:
@@ -83,11 +83,14 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
+          cache-dependency-path: 'studio/package-lock.json'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+      - name: Install Studio dependencies
+        working-directory: studio
+        run: npm ci
 
       - name: Build Sanity Studio
+        working-directory: studio
         env:
           SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID || 'xvhhd8u0' }}
           SANITY_DATASET: ${{ secrets.SANITY_DATASET || 'production' }}
@@ -96,9 +99,10 @@ jobs:
           SANITY_STUDIO_SITE_URL: ${{ secrets.SANITY_STUDIO_SITE_URL || 'https://gwenvenni.com' }}
           SANITY_STUDIO_REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET || 'itsasecret' }}
           SANITY_TELEMETRY: 'false'
-        run: npm run build:studio
+        run: npm run build
 
       - name: Deploy Studio to Cloudflare Workers
+        working-directory: studio
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -112,5 +116,4 @@ jobs:
           else
             echo "::notice::CLOUDFLARE_ACCOUNT_ID secret not set; Wrangler will auto-resolve if the API token is scoped to a single account."
           fi
-          npx wrangler deploy --config studio/wrangler.jsonc --keep-vars
-
+          npx wrangler deploy --config wrangler.jsonc --keep-vars

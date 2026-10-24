@@ -12,7 +12,13 @@ const { content = '', className = '' } = Astro.props;
 let htmlContent = '';
 if (content && typeof content === 'string' && content.trim().length > 0) {
   try {
-    htmlContent = marked.parse(content, { gfm: true, breaks: true }) as string;
+    const rawParsed = marked.parse(content, { gfm: true, breaks: true }) as string;
+    // Lightweight defense against malicious script tags, iframes, inline event handlers, and javascript pseudo-protocols
+    htmlContent = rawParsed
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+      .replace(/\s+on\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
+      .replace(/(href|src)\s*=\s*["']?\s*javascript:[^"'>]*/gi, '$1="#"');
   } catch (err) {
     console.error('Error parsing markdown in MarkdownRenderer:', err);
     htmlContent = content;
@@ -36,50 +42,45 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
     letter-spacing: -0.015em;
   }
   :global(.product-story-prose h1) {
-    font-size: 1.75rem;
-    margin-top: 2rem;
+    font-size: clamp(1.5rem, 1.25rem + 1.2vw, 2.125rem);
+    margin-top: clamp(1.5rem, 1.2rem + 1vw, 2.25rem);
     margin-bottom: 0.75rem;
-    line-height: 1.25;
+    line-height: 1.2;
   }
   :global(.product-story-prose h2) {
-    font-size: 1.5rem;
-    margin-top: 1.75rem;
+    font-size: clamp(1.25rem, 1.1rem + 0.8vw, 1.75rem);
+    margin-top: clamp(1.25rem, 1rem + 0.8vw, 1.875rem);
     margin-bottom: 0.75rem;
-    line-height: 1.3;
+    line-height: 1.25;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   }
   :global(.product-story-prose h3) {
-    font-size: 1.25rem;
-    margin-top: 1.5rem;
+    font-size: clamp(1.125rem, 1.025rem + 0.5vw, 1.375rem);
+    margin-top: clamp(1.125rem, 0.95rem + 0.6vw, 1.625rem);
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+  }
+  :global(.product-story-prose h4) {
+    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.15rem);
+    margin-top: clamp(1rem, 0.85rem + 0.5vw, 1.375rem);
     margin-bottom: 0.5rem;
     line-height: 1.35;
   }
-  :global(.product-story-prose h4) {
-    font-size: 1.05rem;
-    margin-top: 1.25rem;
-    margin-bottom: 0.5rem;
-    line-height: 1.4;
-  }
   :global(.product-story-prose p) {
     margin-bottom: 1rem;
-    line-height: 1.75;
-    font-size: 0.9375rem;
-  }
-  @media (min-width: 640px) {
-    :global(.product-story-prose p) {
-      font-size: 1rem;
-    }
+    font-size: clamp(0.9375rem, 0.9rem + 0.25vw, 1.0625rem);
+    line-height: clamp(1.65, 1.6 + 0.3vw, 1.8);
   }
   :global(.product-story-prose blockquote) {
-    margin: 1.5rem 0;
-    padding: 1rem 1.25rem;
+    margin: clamp(1.25rem, 1rem + 0.8vw, 1.75rem) 0;
+    padding: clamp(0.875rem, 0.75rem + 0.5vw, 1.25rem) clamp(1rem, 0.875rem + 0.5vw, 1.5rem);
     background-color: #fbf9f5;
     border-left: 3px solid #1d1d1f;
     border-radius: 0 0.75rem 0.75rem 0;
     font-style: italic;
     color: #1d1d1f;
-    font-size: 0.9375rem;
+    font-size: clamp(0.9rem, 0.875rem + 0.2vw, 1rem);
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
   }
   :global(.product-story-prose ul) {
