@@ -1,6 +1,7 @@
 ---
 // src/components/MarkdownRenderer.astro
 import { marked } from 'marked';
+import { SanityImageService } from '../utils/image';
 
 export interface Props {
   content?: string;
@@ -12,13 +13,32 @@ const { content = '', className = '' } = Astro.props;
 let htmlContent = '';
 if (content && typeof content === 'string' && content.trim().length > 0) {
   try {
-    const rawParsed = marked.parse(content, { gfm: true, breaks: true }) as string;
+    const renderer = new marked.Renderer();
+    renderer.image = ({ href, title, text }) => {
+      let finalHref = href || '';
+      if (finalHref.includes('cdn.sanity.io') || finalHref.includes('/cdn-image/')) {
+        finalHref = SanityImageService.optimize(finalHref, { format: 'auto', quality: 85 });
+      }
+      const titleAttr = title ? ` title="${title}"` : '';
+      const altAttr = text ? ` alt="${text}"` : '';
+      return `<img src="${finalHref}"${altAttr}${titleAttr} loading="lazy" decoding="async" class="product-story-image" />`;
+    };
+
+    const rawParsed = marked.parse(content, { gfm: true, breaks: true, renderer }) as string;
+
     // Lightweight defense against malicious script tags, iframes, inline event handlers, and javascript pseudo-protocols
-    htmlContent = rawParsed
+    let sanitized = rawParsed
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
       .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
       .replace(/\s+on\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
       .replace(/(href|src)\s*=\s*["']?\s*javascript:[^"'>]*/gi, '$1="#"');
+
+    // Ensure any raw HTML <img> or links pointing to cdn.sanity.io also route through /cdn-image
+    if (SanityImageService.isProxyEnabled()) {
+      sanitized = sanitized.replace(/https:\/\/cdn\.sanity\.io\/(images\/[^\s"'>\)]+)/g, '/cdn-image/$1');
+    }
+
+    htmlContent = sanitized;
   } catch (err) {
     console.error('Error parsing markdown in MarkdownRenderer:', err);
     htmlContent = content;

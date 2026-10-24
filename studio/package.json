@@ -15,6 +15,7 @@
     "sanity"
   ],
   "dependencies": {
+    "@mdxeditor/editor": "^4.3.3",
     "@sanity/icons": "^5.2.3",
     "@sanity/validation": "^6.20.0",
     "@sanity/vision": "^6.20.0",

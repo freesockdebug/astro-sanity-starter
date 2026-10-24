@@ -1,5 +1,6 @@
 import {defineType} from 'sanity'
 import {SUPPORTED_LANGUAGES} from './localeString'
+import {MdxEditorInput} from '../components/MdxEditorInput'
 
 export default defineType({
   name: 'localeMarkdown',
@@ -19,7 +20,10 @@ export default defineType({
   fields: SUPPORTED_LANGUAGES.map((lang) => ({
     name: lang.id,
     title: lang.title,
-    type: 'markdown',
+    type: 'text',
+    components: {
+      input: MdxEditorInput,
+    },
     fieldset: lang.isDefault ? undefined : 'translations',
   })),
   preview: {

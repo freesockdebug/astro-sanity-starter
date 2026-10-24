@@ -15,6 +15,7 @@ export interface StoryContext {
   secondaryImage?: string;
   composition?: string;
   gauge?: string;
+  specifications?: Array<{ label: any; value: any }>;
 }
 
 interface LanguageTokens {
@@ -161,8 +162,14 @@ ${t.heroIntro(fiber, gauge)}
 
 | ${t.tableHeader[0]} | ${t.tableHeader[1]} | ${t.tableHeader[2]} |
 | :--- | :--- | :--- |
-| **Material Composition** | ${fiber} | Spectrometric Fiber Analysis |
-| **Gauge / Cylinder** | ${gauge} | Calibrated Sensor Verification |
+${(ctx.specifications && Array.isArray(ctx.specifications) && ctx.specifications.length > 0)
+  ? ctx.specifications.map((s) => {
+      const lbl = typeof s.label === "object" ? s.label[selectedLang] || s.label.en || "" : String(s.label || "");
+      const val = typeof s.value === "object" ? s.value[selectedLang] || s.value.en || "" : String(s.value || "");
+      return (lbl && val) ? `| **${lbl}** | ${val} | Precision Metric Verification |` : null;
+    }).filter(Boolean).join('\n')
+  : `| **Material Composition** | ${fiber} | Spectrometric Fiber Analysis |\n| **Gauge / Cylinder** | ${gauge} | Calibrated Sensor Verification |`
+}
 ${t.tableRows.map((r) => `| **${r[0]}** | ${r[1]} | ${r[2]} |`).join('\n')}
 
 ![${catName} Ergonomic Architecture](${secondaryImg})

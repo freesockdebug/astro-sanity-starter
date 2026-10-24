@@ -8,6 +8,9 @@
 /.sanity
 *.tsbuildinfo
 
+# Cloudflare Wrangler cache
+/.wrangler
+
 # Logs
 /logs
 *.log

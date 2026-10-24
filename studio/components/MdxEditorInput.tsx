@@ -1,0 +1,482 @@
+import React, { useCallback, useId, useEffect, useState, useRef } from 'react'
+import { StringInputProps, set, unset, useClient } from 'sanity'
+import {
+  MDXEditor,
+  MDXEditorMethods,
+  headingsPlugin,
+  listsPlugin,
+  quotePlugin,
+  thematicBreakPlugin,
+  markdownShortcutPlugin,
+  tablePlugin,
+  linkPlugin,
+  linkDialogPlugin,
+  imagePlugin,
+  diffSourcePlugin,
+  toolbarPlugin,
+  UndoRedo,
+  BoldItalicUnderlineToggles,
+  BlockTypeSelect,
+  CreateLink,
+  InsertImage,
+  InsertTable,
+  InsertThematicBreak,
+  DiffSourceToggleWrapper,
+  ListsToggle,
+} from '@mdxeditor/editor'
+import { Dialog, Button, Card, Grid, Box, Flex, Text, Spinner, TextInput, Stack, Badge } from '@sanity/ui'
+
+interface SanityImageAsset {
+  _id: string
+  url: string
+  originalFilename?: string
+  size?: number
+  _createdAt?: string
+  metadata?: {
+    dimensions?: {
+      width: number
+      height: number
+      aspectRatio: number
+    }
+  }
+}
+
+function formatBytes(bytes?: number): string {
+  if (!bytes) return ''
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
+
+export function MdxEditorInput(props: StringInputProps) {
+  const { value, onChange, readOnly } = props
+  const editorKey = useId()
+  const editorRef = useRef<MDXEditorMethods | null>(null)
+  const client = useClient({ apiVersion: '2024-01-01' })
+
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false)
+  const [assets, setAssets] = useState<SanityImageAsset[]>([])
+  const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    // Dynamic import to prevent Node.js / tsx runner CSS syntax error during schema preflights
+    // @ts-ignore
+    import('@mdxeditor/editor/style.css')
+  }, [])
+
+  const fetchAssets = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await client.fetch<SanityImageAsset[]>(
+        `*[_type == "sanity.imageAsset"] | order(_createdAt desc)[0..120]{
+          _id,
+          url,
+          originalFilename,
+          size,
+          _createdAt,
+          metadata { dimensions { width, height, aspectRatio } }
+        }`
+      )
+      setAssets(data || [])
+    } catch (err) {
+      console.error('Failed to load Sanity image assets:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [client])
+
+  const handleOpenLibrary = useCallback(() => {
+    setIsLibraryOpen(true)
+    fetchAssets()
+  }, [fetchAssets])
+
+  const handleCloseLibrary = useCallback(() => {
+    setIsLibraryOpen(false)
+  }, [])
+
+  const handleChange = useCallback(
+    (nextMarkdown: string) => {
+      onChange(nextMarkdown ? set(nextMarkdown) : unset())
+    },
+    [onChange]
+  )
+
+  // Upload handler for MDXEditor native paste/drag-and-drop & native dialog
+  const handleImageUpload = useCallback(
+    async (file: File): Promise<string> => {
+      const asset = await client.assets.upload('image', file, {
+        filename: file.name,
+      })
+      return asset.url
+    },
+    [client]
+  )
+
+  // Direct insert from Asset Library
+  const handleInsertAsset = useCallback(
+    (asset: SanityImageAsset) => {
+      const altText = asset.originalFilename
+        ? asset.originalFilename.replace(/\.[^/.]+$/, '').trim()
+        : 'Image'
+      const markdownToInsert = `![${altText}](${asset.url})\n\n`
+
+      if (editorRef.current) {
+        editorRef.current.insertMarkdown(markdownToInsert)
+        try {
+          editorRef.current.focus()
+        } catch {
+          // ignore focus error
+        }
+      } else {
+        const current = value || ''
+        onChange(set(current ? `${current}\n\n${markdownToInsert}` : markdownToInsert))
+      }
+      setIsLibraryOpen(false)
+    },
+    [value, onChange]
+  )
+
+  // Upload new image from within Asset Library dialog
+  const handleUploadFromDialog = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files
+      if (!files || files.length === 0) return
+      const file = files[0]
+      setUploading(true)
+      try {
+        const newAsset = await client.assets.upload('image', file, {
+          filename: file.name,
+        })
+        handleInsertAsset(newAsset as SanityImageAsset)
+      } catch (err) {
+        console.error('Error uploading asset to Sanity:', err)
+      } finally {
+        setUploading(false)
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+      }
+    },
+    [client, handleInsertAsset]
+  )
+
+  const filteredAssets = assets.filter((asset) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return (asset.originalFilename || '').toLowerCase().includes(q)
+  })
+
+  return (
+    <div
+      style={{
+        border: '1px solid #e2e8f0',
+        borderRadius: '10px',
+        backgroundColor: '#ffffff',
+        overflow: 'hidden',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+      }}
+    >
+      <MDXEditor
+        ref={editorRef}
+        key={editorKey}
+        markdown={value || ''}
+        onChange={handleChange}
+        readOnly={readOnly}
+        contentEditableClassName="mdx-editor-prose"
+        plugins={[
+          headingsPlugin(),
+          listsPlugin(),
+          quotePlugin(),
+          thematicBreakPlugin(),
+          tablePlugin(),
+          linkPlugin(),
+          linkDialogPlugin(),
+          imagePlugin({
+            imageUploadHandler: handleImageUpload,
+          }),
+          diffSourcePlugin({ viewMode: 'rich-text' }),
+          markdownShortcutPlugin(),
+          toolbarPlugin({
+            toolbarContents: () => (
+              <DiffSourceToggleWrapper>
+                <UndoRedo />
+                <BlockTypeSelect />
+                <BoldItalicUnderlineToggles />
+                <ListsToggle />
+                <CreateLink />
+                <InsertImage />
+                <button
+                  type="button"
+                  title="从 Sanity 资源库中选择图片 (Asset Library)"
+                  aria-label="从 Sanity 资源库中选择图片"
+                  onClick={handleOpenLibrary}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #cbd5e1',
+                    background: '#f8fafc',
+                    color: '#334155',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    lineHeight: '1.2',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#e2e8f0'
+                    e.currentTarget.style.color = '#0f172a'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#f8fafc'
+                    e.currentTarget.style.color = '#334155'
+                  }}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                  <span>资源库</span>
+                </button>
+                <InsertTable />
+                <InsertThematicBreak />
+              </DiffSourceToggleWrapper>
+            ),
+          }),
+        ]}
+      />
+
+      {isLibraryOpen && (
+        <Dialog
+          id="sanity-asset-library-dialog"
+          header="Sanity 媒体资源库"
+          onClose={handleCloseLibrary}
+          width={3}
+          zOffset={100000}
+        >
+          <Box padding={4}>
+            <Stack space={4}>
+              {/* Header Action Bar */}
+              <Flex gap={3} align="center" justify="space-between">
+                <Box flex={1}>
+                  <TextInput
+                    placeholder="输入关键词搜索图片文件名..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.currentTarget.value)}
+                    fontSize={1}
+                    padding={2}
+                  />
+                </Box>
+                <Flex gap={2} align="center">
+                  <Button
+                    mode="ghost"
+                    text="刷新"
+                    onClick={fetchAssets}
+                    disabled={loading}
+                    fontSize={1}
+                    padding={2}
+                  />
+                  <Button
+                    tone="primary"
+                    text={uploading ? '正在上传并插入...' : '上传新图片'}
+                    onClick={() => fileInputRef.current?.click()}
+                    loading={uploading}
+                    fontSize={1}
+                    padding={2}
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handleUploadFromDialog}
+                  />
+                </Flex>
+              </Flex>
+
+              {/* Status and Hint */}
+              <Flex justify="space-between" align="center">
+                <Text size={1} muted>
+                  点击下方任意图片即可自动将 Markdown 语法插入到文档当前光标处
+                </Text>
+                <Badge tone="default" fontSize={0}>
+                  已显示 {filteredAssets.length} 项资源
+                </Badge>
+              </Flex>
+
+              {/* Loading State */}
+              {loading && (
+                <Flex justify="center" align="center" padding={6}>
+                  <Spinner size={3} />
+                </Flex>
+              )}
+
+              {/* Empty State */}
+              {!loading && filteredAssets.length === 0 && (
+                <Card padding={5} tone="transparent" radius={2} border style={{ textAlign: 'center' }}>
+                  <Text size={2} muted>
+                    {searchQuery ? '没有找到符合条件的图片' : '暂无已上传的图片资产'}
+                  </Text>
+                </Card>
+              )}
+
+              {/* Asset Grid */}
+              {!loading && filteredAssets.length > 0 && (
+                <Box style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '4px' }}>
+                  <Grid columns={[2, 3, 4]} gap={3}>
+                    {filteredAssets.map((asset) => {
+                      const dim = asset.metadata?.dimensions
+                      const dimText = dim ? `${dim.width} × ${dim.height}` : ''
+                      const sizeText = formatBytes(asset.size)
+
+                      return (
+                        <Card
+                          key={asset._id}
+                          radius={3}
+                          border
+                          style={{
+                            cursor: 'pointer',
+                            overflow: 'hidden',
+                            position: 'relative',
+                            transition: 'all 0.2s ease',
+                          }}
+                          onClick={() => handleInsertAsset(asset)}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#2563eb'
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.15)'
+                            e.currentTarget.style.transform = 'translateY(-2px)'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#e2e8f0'
+                            e.currentTarget.style.boxShadow = 'none'
+                            e.currentTarget.style.transform = 'none'
+                          }}
+                        >
+                          {/* Image Thumbnail */}
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '140px',
+                              backgroundColor: '#f1f5f9',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <img
+                              src={`${asset.url}?w=300&h=200&fit=crop&auto=format`}
+                              alt={asset.originalFilename || 'Asset'}
+                              loading="lazy"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                transition: 'transform 0.3s ease',
+                              }}
+                            />
+                          </div>
+
+                          {/* Info Footer */}
+                          <Box padding={2}>
+                            <Text
+                              size={1}
+                              weight="medium"
+                              style={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                marginBottom: '4px',
+                              }}
+                              title={asset.originalFilename}
+                            >
+                              {asset.originalFilename || '未命名图片'}
+                            </Text>
+                            <Flex justify="space-between" align="center">
+                              <Text size={0} muted>
+                                {dimText}
+                              </Text>
+                              <Text size={0} muted>
+                                {sizeText}
+                              </Text>
+                            </Flex>
+                          </Box>
+                        </Card>
+                      )
+                    })}
+                  </Grid>
+                </Box>
+              )}
+            </Stack>
+          </Box>
+        </Dialog>
+      )}
+
+      <style>{`
+        .mdx-editor-prose {
+          min-height: 280px;
+          padding: 16px 20px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+          font-size: 14px;
+          line-height: 1.65;
+          color: #1e293b;
+        }
+        .mdx-editor-prose h1, .mdx-editor-prose h2, .mdx-editor-prose h3, .mdx-editor-prose h4 {
+          color: #0f172a;
+          font-weight: 700;
+          margin-top: 1.2em;
+          margin-bottom: 0.5em;
+        }
+        .mdx-editor-prose table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 16px 0;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .mdx-editor-prose th, .mdx-editor-prose td {
+          border: 1px solid #cbd5e1;
+          padding: 8px 12px;
+          text-align: left;
+        }
+        .mdx-editor-prose th {
+          background-color: #f8fafc;
+          font-weight: 600;
+          color: #334155;
+        }
+        .mdx-editor-prose blockquote {
+          border-left: 4px solid #f59e0b;
+          padding-left: 14px;
+          margin: 14px 0;
+          color: #64748b;
+          font-style: italic;
+        }
+        .mdx-editor-prose img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+          margin: 12px 0;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+      `}</style>
+    </div>
+  )
+}
+
+export default MdxEditorInput

@@ -243,62 +243,6 @@ export default defineType({
       group: 'wholesale',
     }),
     defineField({
-      name: 'specsBadge',
-      title: 'Specs Section Badge (工艺参数分类上标 - 多语言)',
-      type: 'localeString',
-      options: { collapsible: true, collapsed: true },
-      group: 'specs',
-    }),
-    defineField({
-      name: 'specsHeading',
-      title: 'Specs Section Heading (工艺参数区块大标题 - 多语言)',
-      type: 'localeString',
-      options: { collapsible: true, collapsed: true },
-      group: 'specs',
-    }),
-    defineField({
-      name: 'specifications',
-      title: 'Technical Specs (工业级工艺指标)',
-      type: 'array',
-      of: [
-        {
-          type: 'object',
-          fields: [
-            {name: 'label', title: 'Spec Label (参数项目)', type: 'string'},
-            {name: 'value', title: 'Spec Value (参数指标内容)', type: 'string'},
-          ],
-          preview: {
-            select: {title: 'label', subtitle: 'value'},
-            prepare({title, subtitle}: any) {
-              const rawT = typeof title === 'object' && title ? (title.en || title.zh || Object.values(title)[0]) : title;
-              const rawS = typeof subtitle === 'object' && subtitle ? (subtitle.en || subtitle.zh || Object.values(subtitle)[0]) : subtitle;
-              return {
-                title: rawT ? String(rawT) : '未命名参数',
-                subtitle: rawS ? String(rawS) : undefined,
-              }
-            },
-          },
-        },
-      ],
-      group: 'specs',
-    }),
-    defineField({
-      name: 'storyBadge',
-      title: 'Story Section Badge (图文详情分类上标 - 多语言)',
-      description: '例如: CRAFTSMANSHIP & DESIGN。留空将默认显示对应语言的“工艺叙事”',
-      type: 'localeString',
-      options: { collapsible: true, collapsed: true },
-      group: 'story',
-    }),
-    defineField({
-      name: 'storyHeading',
-      title: 'Story Section Heading (图文详情大标题 - 多语言)',
-      description: '例如: The Story Behind the Silhouette。留空将默认显示对应语言标题',
-      type: 'localeString',
-      options: { collapsible: true, collapsed: true },
-      group: 'story',
-    }),
-    defineField({
       name: 'story',
       title: 'Product Story & Markdown Detail (富文本图文与工艺叙事 - 多语言)',
       description: '使用 Markdown 编辑器编写专属图文故事。支持各级标题、引用块、工艺细节参数列表、高清大图与对比说明。',
