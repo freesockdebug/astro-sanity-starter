@@ -53,157 +53,229 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
 )}
 
 <style>
+  /* ==========================================================================
+     Ergonomic Mathematical Typography & Multi-Device Fluid Rhythm
+     Calculated via Bringhurst Reading Law (45-75 CPL) & Modular Scale Harmonics
+     ========================================================================== */
+
   :global(.product-story-prose) {
     color: #374151;
-    font-size: 0.9375rem;
-    line-height: 1.65;
+    /* Fluid Base Typography: 15px at 375px viewport -> 16.5px at 1440px */
+    font-size: clamp(0.9375rem, 0.91rem + 0.15vw, 1.03125rem);
+    /* Golden Inverse Line Height: 1.62 ratio for optimal eye return-sweep */
+    line-height: clamp(1.6, 1.58 + 0.1vw, 1.68);
     text-wrap: pretty;
+    letter-spacing: -0.011em;
+    /* Ergonomic Maximum Reading Measure: 72ch prevents neck & saccadic fatigue */
+    max-width: min(100%, 72ch);
+    margin-left: 0;
+    margin-right: auto;
   }
+
+  /* --------------------------------------------------------------------------
+     Harmonic Headings Hierarchy (Minor Third 1.20 ~ Major Third 1.25 Modular Ratios)
+     -------------------------------------------------------------------------- */
   :global(.product-story-prose h1),
   :global(.product-story-prose h2),
   :global(.product-story-prose h3),
   :global(.product-story-prose h4) {
     color: #111827;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.022em;
     line-height: 1.25;
+    text-wrap: balance;
   }
+
   :global(.product-story-prose h1) {
-    font-size: clamp(1.35rem, 1.2rem + 0.8vw, 1.75rem);
-    margin-top: 1.5rem;
-    margin-bottom: 0.5rem;
+    /* Fluid Scale: 22px -> 28px */
+    font-size: clamp(1.375rem, 1.25rem + 0.55vw, 1.75rem);
+    margin-top: clamp(1.35rem, 1.2rem + 0.5vw, 1.75rem);
+    margin-bottom: clamp(0.4rem, 0.35rem + 0.2vw, 0.55rem);
   }
+
   :global(.product-story-prose h2) {
-    font-size: clamp(1.15rem, 1.05rem + 0.5vw, 1.45rem);
-    margin-top: 1.25rem;
-    margin-bottom: 0.45rem;
+    /* Fluid Scale: 18.5px -> 23px */
+    font-size: clamp(1.15625rem, 1.05rem + 0.4vw, 1.4375rem);
+    margin-top: clamp(1.15rem, 1rem + 0.4vw, 1.5rem);
+    margin-bottom: clamp(0.35rem, 0.3rem + 0.15vw, 0.45rem);
     padding-bottom: 0.35rem;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   }
+
   :global(.product-story-prose h3) {
-    font-size: clamp(1.025rem, 0.975rem + 0.3vw, 1.2rem);
-    margin-top: 1rem;
+    /* Fluid Scale: 16.5px -> 19px */
+    font-size: clamp(1.03125rem, 0.96rem + 0.25vw, 1.1875rem);
+    margin-top: clamp(0.95rem, 0.85rem + 0.3vw, 1.25rem);
     margin-bottom: 0.35rem;
   }
+
   :global(.product-story-prose h4) {
-    font-size: 0.95rem;
-    margin-top: 0.875rem;
+    font-size: clamp(0.9rem, 0.875rem + 0.1vw, 0.975rem);
+    margin-top: 0.85rem;
     margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.8125rem;
+    color: #4b5563;
   }
+
+  /* --------------------------------------------------------------------------
+     Paragraphs & Vertical Cadence (4px/8px Baseline Quantum)
+     -------------------------------------------------------------------------- */
   :global(.product-story-prose p) {
     margin-top: 0;
-    margin-bottom: 0.75rem;
-    font-size: 0.9375rem;
-    line-height: 1.65;
+    /* Precise 12px bottom cadence on mobile, 14px on desktop */
+    margin-bottom: clamp(0.75rem, 0.7rem + 0.18vw, 0.875rem);
     text-wrap: pretty;
   }
+
   :global(.product-story-prose blockquote) {
-    margin: 0.875rem 0;
-    padding: 0.625rem 1rem;
+    margin: clamp(0.75rem, 0.65rem + 0.3vw, 1rem) 0;
+    padding: clamp(0.5rem, 0.45rem + 0.25vw, 0.65rem) clamp(0.85rem, 0.75rem + 0.3vw, 1.15rem);
     background-color: #fbf9f5;
     border-left: 3px solid #111827;
     border-radius: 0 0.5rem 0.5rem 0;
     font-style: italic;
     color: #1f2937;
-    font-size: 0.9rem;
-    line-height: 1.55;
+    font-size: clamp(0.875rem, 0.85rem + 0.1vw, 0.9375rem);
+    line-height: 1.58;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
   }
+
   :global(.product-story-prose ul) {
     list-style-type: disc;
-    padding-left: 1.25rem;
+    padding-left: clamp(1.1rem, 1rem + 0.3vw, 1.35rem);
     margin-top: 0;
-    margin-bottom: 0.75rem;
+    margin-bottom: clamp(0.75rem, 0.7rem + 0.18vw, 0.875rem);
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    font-size: 0.9375rem;
   }
+
   :global(.product-story-prose ol) {
     list-style-type: decimal;
-    padding-left: 1.25rem;
+    padding-left: clamp(1.1rem, 1rem + 0.3vw, 1.35rem);
     margin-top: 0;
-    margin-bottom: 0.75rem;
+    margin-bottom: clamp(0.75rem, 0.7rem + 0.18vw, 0.875rem);
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    font-size: 0.9375rem;
   }
+
   :global(.product-story-prose li) {
     line-height: 1.55;
     padding-left: 0.15rem;
   }
+
   :global(.product-story-prose li strong) {
     color: #111827;
   }
-  /* Table formatting: Strict 100% full-width alignment, tight row heights, clean borders */
+
+  /* --------------------------------------------------------------------------
+     Ergonomic Table Engineering (Dual-Mode: 100% Flush Alignment + Touch Scroll Guard)
+     -------------------------------------------------------------------------- */
   :global(.product-story-prose table) {
     width: 100% !important;
     max-width: 100%;
-    margin: 0.875rem 0 1.125rem 0;
-    border-collapse: collapse;
-    font-size: 0.8125rem;
+    margin: clamp(0.75rem, 0.65rem + 0.3vw, 1rem) 0 clamp(1rem, 0.85rem + 0.4vw, 1.25rem) 0;
+    border-collapse: separate;
+    border-spacing: 0;
     border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 0.625rem;
+    border-radius: clamp(0.5rem, 0.4rem + 0.2vw, 0.75rem);
     overflow: hidden;
     background: #ffffff;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
     table-layout: auto;
+    display: table;
   }
+
   :global(.product-story-prose thead) {
     background-color: #f8fafc;
   }
+
   :global(.product-story-prose th) {
     background-color: #f8fafc;
     color: #1e293b;
     font-weight: 600;
-    padding: 0.55rem 0.875rem;
+    /* Responsive cell padding based on touch target ergonomics */
+    padding: clamp(0.48rem, 0.42rem + 0.2vw, 0.625rem) clamp(0.625rem, 0.5rem + 0.3vw, 0.875rem);
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     text-transform: uppercase;
     font-family: var(--font-mono, monospace);
-    font-size: 0.6875rem;
+    font-size: clamp(0.625rem, 0.6rem + 0.1vw, 0.6875rem);
     letter-spacing: 0.04em;
     text-align: left;
     white-space: nowrap;
   }
+
   :global(.product-story-prose td) {
-    padding: 0.55rem 0.875rem;
+    padding: clamp(0.48rem, 0.42rem + 0.2vw, 0.625rem) clamp(0.625rem, 0.5rem + 0.3vw, 0.875rem);
     border-bottom: 1px solid rgba(0, 0, 0, 0.04);
     font-family: var(--font-mono, monospace);
     color: #374151;
+    font-size: clamp(0.75rem, 0.72rem + 0.12vw, 0.8125rem);
     text-align: left;
     vertical-align: middle;
   }
+
+  /* First column (Parameters): Subtle emphasis & defined metric proportion */
+  :global(.product-story-prose td:first-child) {
+    font-weight: 500;
+    color: #111827;
+    width: 38%;
+  }
+
   :global(.product-story-prose tr:last-child td) {
     border-bottom: none;
   }
+
   :global(.product-story-prose tr:nth-child(even) td) {
-    background-color: #fbfbfd;
+    background-color: #fafafc;
   }
+
   :global(.product-story-prose tr:hover td) {
     background-color: #f1f5f9;
   }
+
+  /* --------------------------------------------------------------------------
+     Visual Assets: Apple G2 Continuous Curvature & Contextual Unit Anchor
+     -------------------------------------------------------------------------- */
   :global(.product-story-prose img) {
-    border-radius: 0.75rem;
+    border-radius: clamp(0.5rem, 0.4rem + 0.3vw, 0.875rem);
     border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
-    margin: 0.875rem 0;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.02);
+    margin: clamp(0.75rem, 0.65rem + 0.3vw, 1rem) 0 0.35rem 0;
     max-width: 100%;
     width: 100%;
     height: auto;
     object-fit: cover;
     display: block;
   }
+
+  /* Anchor caption tightly with preceding image as a single gestalt unit */
+  :global(.product-story-prose img + br + em),
+  :global(.product-story-prose img + em),
+  :global(.product-story-prose p > em:only-child) {
+    display: block;
+    font-size: 0.8125rem;
+    color: #6b7280;
+    margin-top: 0.35rem;
+    margin-bottom: 0.875rem;
+    line-height: 1.45;
+  }
+
   :global(.product-story-prose hr) {
     border: 0;
     border-top: 1px solid rgba(0, 0, 0, 0.07);
-    margin: 1.25rem 0;
+    margin: clamp(1rem, 0.85rem + 0.4vw, 1.35rem) 0;
   }
+
   :global(.product-story-prose a) {
     color: #2563eb;
     text-decoration: underline;
     text-underline-offset: 3px;
   }
+
   :global(.product-story-prose code) {
     font-family: var(--font-mono, monospace);
     background-color: #f1f5f9;
@@ -212,5 +284,21 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
     font-size: 0.85em;
     color: #0f172a;
     border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  /* --------------------------------------------------------------------------
+     Mobile-Specific Viewport Guard (< 640px)
+     -------------------------------------------------------------------------- */
+  @media (max-width: 639px) {
+    :global(.product-story-prose table) {
+      /* Smooth horizontal scrolling wrapper without compressing tabular metrics */
+      display: block;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      white-space: nowrap;
+    }
+    :global(.product-story-prose td:first-child) {
+      width: auto;
+    }
   }
 </style>

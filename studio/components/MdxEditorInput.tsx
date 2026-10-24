@@ -522,40 +522,47 @@ export function MdxEditorInput(props: StringInputProps) {
       <style>{`
         .mdx-editor-prose {
           min-height: 240px;
-          padding: 14px 18px;
+          padding: 16px 20px;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-          font-size: 14px;
-          line-height: 1.6;
+          font-size: 14.5px;
+          line-height: 1.62;
           color: #1e293b;
           text-wrap: pretty;
+          max-width: 72ch;
+          margin: 0 auto;
         }
         .mdx-editor-prose h1, .mdx-editor-prose h2, .mdx-editor-prose h3, .mdx-editor-prose h4 {
           color: #0f172a;
           font-weight: 700;
-          letter-spacing: -0.015em;
-          margin-top: 1.1em;
+          letter-spacing: -0.02em;
+          margin-top: 1.15em;
           margin-bottom: 0.35em;
           line-height: 1.25;
+          text-wrap: balance;
         }
-        .mdx-editor-prose h1 { font-size: 1.35rem; }
-        .mdx-editor-prose h2 { font-size: 1.18rem; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; }
-        .mdx-editor-prose h3 { font-size: 1.05rem; }
+        .mdx-editor-prose h1 { font-size: 1.45rem; }
+        .mdx-editor-prose h2 { font-size: 1.22rem; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; }
+        .mdx-editor-prose h3 { font-size: 1.08rem; }
+        .mdx-editor-prose h4 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; color: #64748b; }
         .mdx-editor-prose p {
           margin-top: 0;
-          margin-bottom: 0.65em;
-          line-height: 1.6;
+          margin-bottom: 0.7em;
+          line-height: 1.62;
+          text-wrap: pretty;
         }
         .mdx-editor-prose table {
-          border-collapse: collapse;
+          border-collapse: separate;
+          border-spacing: 0;
           width: 100%;
-          margin: 10px 0 14px 0;
-          border-radius: 6px;
+          margin: 12px 0 16px 0;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
           overflow: hidden;
           font-size: 13px;
         }
         .mdx-editor-prose th, .mdx-editor-prose td {
-          border: 1px solid #cbd5e1;
-          padding: 6px 10px;
+          border-bottom: 1px solid #e2e8f0;
+          padding: 7px 12px;
           text-align: left;
           vertical-align: middle;
         }
@@ -563,23 +570,37 @@ export function MdxEditorInput(props: StringInputProps) {
           background-color: #f8fafc;
           font-weight: 600;
           color: #334155;
-          font-size: 12px;
+          font-size: 11px;
           text-transform: uppercase;
-          letter-spacing: 0.03em;
+          letter-spacing: 0.04em;
+          border-bottom: 1px solid #cbd5e1;
+        }
+        .mdx-editor-prose td:first-child {
+          font-weight: 500;
+          color: #0f172a;
+          width: 38%;
+        }
+        .mdx-editor-prose tr:last-child td {
+          border-bottom: none;
+        }
+        .mdx-editor-prose tr:nth-child(even) td {
+          background-color: #fafafc;
         }
         .mdx-editor-prose blockquote {
           border-left: 3px solid #f59e0b;
-          padding-left: 12px;
-          margin: 10px 0;
+          padding: 8px 14px;
+          margin: 12px 0;
           color: #475569;
           font-style: italic;
+          background-color: #fbf9f5;
+          border-radius: 0 6px 6px 0;
         }
         .mdx-editor-prose img {
           max-width: 100%;
           width: 100%;
           height: auto;
-          border-radius: 8px;
-          margin: 10px 0;
+          border-radius: 10px;
+          margin: 12px 0 4px 0;
           box-shadow: 0 1px 3px rgba(0,0,0,0.06);
           display: block;
         }
