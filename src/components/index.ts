@@ -19,7 +19,7 @@ import SchemaSyncStatus from './SchemaSyncStatus.astro';
 import AppleProductGridSkeleton from './AppleProductGridSkeleton.astro';
 import AppleProductDetailSkeleton from './AppleProductDetailSkeleton.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
-import MarkdownRenderer from './MarkdownRenderer';
+import MarkdownRenderer from './MarkdownRenderer.astro';
 
 export {
   SockHero,
