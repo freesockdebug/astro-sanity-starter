@@ -140,11 +140,13 @@ function buildRfqEmailHtml(params: {
   safeEmail: string;
   safeWhatsapp: string;
   safeDestination: string;
+  safeVisitorIp?: string;
+  safeDetectedCountry?: string;
   safeInquiryType: string;
   safeMessage: string;
   items: ValidatedItem[];
 }): string {
-  const { safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeInquiryType, safeMessage, items } = params;
+  const { safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeVisitorIp, safeDetectedCountry, safeInquiryType, safeMessage, items } = params;
 
   const itemsRows = items
     .map(
@@ -166,6 +168,7 @@ function buildRfqEmailHtml(params: {
         <p style="margin: 4px 0;"><strong>Work Email:</strong> <a href="mailto:${safeEmail}">${safeEmail}</a></p>
         <p style="margin: 4px 0;"><strong>WhatsApp / Tel:</strong> ${safeWhatsapp}</p>
         <p style="margin: 4px 0;"><strong>Destination:</strong> ${safeDestination}</p>
+        ${safeVisitorIp ? `<p style="margin: 4px 0;"><strong>Visitor IP:</strong> ${safeVisitorIp} ${safeDetectedCountry ? `(${safeDetectedCountry})` : ''}</p>` : ''}
         <p style="margin: 4px 0;"><strong>Type:</strong> ${safeInquiryType}</p>
       </div>
       ${
@@ -189,7 +192,7 @@ function buildRfqEmailHtml(params: {
     </div>`;
 }
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, clientAddress }) => {
   try {
     let rawBody: any;
     try {
@@ -211,6 +214,26 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const { buyerInfo, items, inquiryType, turnstileToken } = validation.data;
+
+    // Extract real visitor IP & Cloudflare Geo details
+    const visitorIp =
+      request.headers.get('cf-connecting-ip') ||
+      request.headers.get('x-real-ip') ||
+      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      clientAddress ||
+      '';
+
+    const cfCountryCode = (request.headers.get('cf-ipcountry') || (request as any).cf?.country || '').trim().toUpperCase();
+    let detectedCountry = '';
+    if (cfCountryCode && cfCountryCode !== 'XX' && cfCountryCode !== 'T1') {
+      try {
+        detectedCountry = new Intl.DisplayNames(['en'], { type: 'region' }).of(cfCountryCode) || cfCountryCode;
+      } catch {
+        detectedCountry = cfCountryCode;
+      }
+    }
+
+    const resolvedDestination = buyerInfo.destination || detectedCountry || cfCountryCode || 'Unspecified';
 
     // Environment resolution helper
     const runtimeEnv = (cfEnv as Record<string, any> | undefined) || null;
@@ -325,7 +348,9 @@ export const POST: APIRoute = async ({ request }) => {
           buyerName: buyerInfo.name,
           email: buyerInfo.email,
           whatsapp: buyerInfo.whatsapp,
-          destination: buyerInfo.destination,
+          destination: resolvedDestination,
+          visitorIp: visitorIp || undefined,
+          detectedCountry: detectedCountry || cfCountryCode || undefined,
           notes: buyerInfo.message,
           inquiryType: inquiryType,
           status: 'pending',
@@ -355,7 +380,9 @@ export const POST: APIRoute = async ({ request }) => {
         const safeName = SecurityService.escapeHtml(buyerInfo.name || 'N/A');
         const safeEmail = SecurityService.escapeHtml(buyerInfo.email);
         const safeWhatsapp = SecurityService.escapeHtml(buyerInfo.whatsapp || 'N/A');
-        const safeDestination = SecurityService.escapeHtml(buyerInfo.destination || 'N/A');
+        const safeDestination = SecurityService.escapeHtml(resolvedDestination);
+        const safeVisitorIp = visitorIp ? SecurityService.escapeHtml(visitorIp) : '';
+        const safeDetectedCountry = detectedCountry ? SecurityService.escapeHtml(detectedCountry) : '';
         const safeMessage = buyerInfo.message ? SecurityService.escapeHtml(buyerInfo.message) : '';
         const safeInquiryType = SecurityService.escapeHtml(inquiryType);
 
@@ -365,6 +392,8 @@ export const POST: APIRoute = async ({ request }) => {
           safeEmail,
           safeWhatsapp,
           safeDestination,
+          safeVisitorIp,
+          safeDetectedCountry,
           safeInquiryType,
           safeMessage,
           items,
@@ -413,7 +442,8 @@ export const POST: APIRoute = async ({ request }) => {
           .join('\n');
         
         const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-        const plainText = `🔔 【Gwenvenni 官网收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${buyerInfo.destination || '未提供'}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
+        const ipNotice = visitorIp ? `\n🌐 访客 IP：${visitorIp} ${detectedCountry ? `(${detectedCountry})` : ''}` : '';
+        const plainText = `🔔 【Gwenvenni 官网收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${resolvedDestination}${ipNotice}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
 
         let webhookBody: any;
         if (webhookUrl.includes('qyapi.weixin.qq.com')) {
@@ -426,7 +456,7 @@ export const POST: APIRoute = async ({ request }) => {
             msgtype: 'markdown',
             markdown: {
               title: `【新询盘】${buyerInfo.company || buyerInfo.name || '买手咨询'}`,
-              text: `### 🔔 Gwenvenni 官网收到新询价单\n\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${buyerInfo.destination || '未提供'}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`
+              text: `### 🔔 Gwenvenni 官网收到新询价单\n\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`
             }
           };
         } else if (webhookUrl.includes('feishu.cn') || webhookUrl.includes('larksuite.com')) {

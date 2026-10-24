@@ -33,6 +33,18 @@ export default defineType({
       type: 'string',
     }),
     defineField({
+      name: 'visitorIp',
+      title: 'Visitor IP Address (访问者 IP 地址)',
+      type: 'string',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'detectedCountry',
+      title: 'Detected Country / Region (Cloudflare 识别国家/地区)',
+      type: 'string',
+      readOnly: true,
+    }),
+    defineField({
       name: 'inquiryType',
       title: 'Inquiry Source Type (询盘来源类型)',
       type: 'string',
@@ -89,15 +101,19 @@ export default defineType({
     select: {
       company: 'company',
       email: 'email',
+      destination: 'destination',
+      visitorIp: 'visitorIp',
       status: 'status',
       createdAt: 'createdAt',
     },
-    prepare({ company, email, status, createdAt }) {
+    prepare({ company, email, destination, visitorIp, status, createdAt }) {
       const statusIcon = status === 'pending' ? '🟢 [NEW]' : status === 'contacted' ? '🟡' : '🔵';
       const dateStr = createdAt ? new Date(createdAt).toLocaleDateString() : '';
+      const destStr = destination ? ` [${destination}]` : '';
+      const ipStr = visitorIp ? ` · IP: ${visitorIp}` : '';
       return {
-        title: `${statusIcon} ${company || 'Unnamed Company'}`,
-        subtitle: `${email || ''} · ${dateStr}`,
+        title: `${statusIcon} ${company || 'Unnamed Company'}${destStr}`,
+        subtitle: `${email || ''}${ipStr} · ${dateStr}`,
       };
     },
   },
