@@ -102,7 +102,11 @@ jobs:
           SANITY_STUDIO_REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET || 'itsasecret' }}
           SANITY_TELEMETRY: 'false'
         run: |
-          npx sanity build -y
+          npx sanity build -y 2>&1 | tee /tmp/sanity-build.log || {
+            ERR_MSG=$(tail -n 25 /tmp/sanity-build.log | tr '\n' ' ')
+            echo "::error title=Sanity Build Failure::$ERR_MSG"
+            exit 1
+          }
 
       - name: Deploy Studio to Cloudflare Workers
         working-directory: studio
