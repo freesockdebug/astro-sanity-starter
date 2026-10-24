@@ -1,0 +1,104 @@
+---
+// src/components/Breadcrumbs.astro
+import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
+import type { SiteConfig, Page } from 'types';
+
+export interface BreadcrumbItem {
+  label: string;
+  url?: string;
+}
+
+export interface Props {
+  items?: BreadcrumbItem[];
+  currentTitle?: string;
+  page?: Partial<Page>;
+  siteConfig?: SiteConfig;
+}
+
+const {
+  items,
+  currentTitle,
+} = Astro.props;
+
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
+const homeLabel = t('nav.home');
+const productsLabel = t('nav.products');
+
+const pathname = Astro.url.pathname;
+const isHome = pathname === '/' || /^\/(en|de|fr|es)\/?$/.test(pathname);
+---
+
+{!isHome && (
+  <>
+    <!-- 48px Spacer for Fixed AppleNav to guarantee zero top-content obstruction -->
+    <div class="h-12 w-full shrink-0" aria-hidden="true" />
+
+    <!-- Apple-Style Compact Sub-Navigation & Breadcrumbs Bar (36px / h-9) -->
+    <nav
+      aria-label="Breadcrumb"
+      class="breadcrumbs-bar sticky top-12 z-40 h-9 w-full bg-white/95 backdrop-blur-md border-b border-black/5 select-none"
+    >
+      <div class="apple-rail-bento h-full flex items-center justify-between gap-3 text-xs">
+        <!-- Left: Breadcrumb Trail -->
+        <ol class="flex items-center gap-1.5 min-w-0 text-[11px] font-medium text-zinc-500 overflow-hidden">
+          <li class="shrink-0 flex items-center gap-1.5">
+            <a
+              href={getLocalizedPath('/', currentLang)}
+              class="hover:text-zinc-950 transition-colors"
+            >
+              {homeLabel}
+            </a>
+          </li>
+
+          <li class="shrink-0 text-zinc-300 select-none text-[10px]" aria-hidden="true">/</li>
+
+          {items && items.length > 0 ? (
+            items.map((item, idx) => (
+              <li class="shrink-0 flex items-center gap-1.5 min-w-0">
+                {item.url ? (
+                  <a href={item.url} class="hover:text-zinc-950 transition-colors">
+                    {item.label}
+                  </a>
+                ) : (
+                  <span class="text-zinc-950 font-semibold">{item.label}</span>
+                )}
+                {idx < items.length - 1 && (
+                  <span class="shrink-0 text-zinc-300 select-none text-[10px]" aria-hidden="true">/</span>
+                )}
+              </li>
+            ))
+          ) : (
+            <li class="shrink-0 flex items-center gap-1.5">
+              <a
+                href={getLocalizedPath('/products', currentLang)}
+                class="hover:text-zinc-950 transition-colors"
+              >
+                {productsLabel}
+              </a>
+            </li>
+          )}
+
+          {currentTitle && (
+            <>
+              <li class="shrink-0 text-zinc-300 select-none text-[10px]" aria-hidden="true">/</li>
+              <li
+                class="truncate text-zinc-950 font-semibold max-w-[130px] sm:max-w-xs md:max-w-md lg:max-w-lg"
+                aria-current="page"
+              >
+                {currentTitle}
+              </li>
+            </>
+          )}
+        </ol>
+
+        <!-- Right: Slotted Controls (e.g., Prev / Next Silhouette Navigation) -->
+        <div class="flex items-center shrink-0">
+          <slot name="actions" />
+          <slot />
+        </div>
+      </div>
+    </nav>
+  </>
+)}
