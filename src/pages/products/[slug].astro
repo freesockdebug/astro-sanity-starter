@@ -527,25 +527,73 @@ const productStructuredData: Record<string, any> = {
         </div>
       </section>
 
-      <!-- Section 1.5: Editorial Craftsmanship & Product Story (Markdown Narrative) -->
+      <!-- Section 1.5: Editorial Craftsmanship & Product Story (Responsive Editorial Dual-Column Architecture) -->
       {storyMarkdown && (
-      <section id="product-story" class="w-full py-8 sm:py-10 lg:py-12 bg-white border-t border-black/5 scroll-mt-24">
+      <section id="product-story" class="w-full py-10 sm:py-12 lg:py-16 bg-white border-t border-black/5 scroll-mt-24">
         <span id="specs" class="sr-only"></span>
         <div class="apple-rail-bento">
-          <!-- Editorial Header -->
-          <div class="mb-5 sm:mb-6 pb-3.5 border-b border-black/5 text-left">
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-zinc-100 text-zinc-800 font-semibold mb-2">
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-              <span>{currentProductStoryBadge}</span>
-            </span>
-            <h2 class="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-[#1d1d1f]">
-              {currentProductStoryHeading}
-            </h2>
-          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-16 items-start">
+            
+            <!-- LEFT COLUMN: Sticky Brand Editorial Anchor & Artisan Verification Cards (4 cols on wide screens) -->
+            <div class="lg:col-span-4 lg:sticky lg:top-28 text-left space-y-5 lg:pr-2">
+              <div class="space-y-2.5">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-zinc-100 text-zinc-800 font-semibold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                  <span>{currentProductStoryBadge}</span>
+                </span>
+                <h2 class="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-[#1d1d1f] leading-snug">
+                  {currentProductStoryHeading}
+                </h2>
+                <p class="text-xs text-zinc-500 font-mono tracking-wide leading-relaxed">
+                  {getLocalizedValue(currentProduct.title, currentLang, 'GwenVenni Bespoke Line')}
+                </p>
+              </div>
 
-          <!-- Markdown Prose Content via Reusable MarkdownRenderer (Aligned with Bento Rail) -->
-          <div class="max-w-4xl w-full text-left">
-            <MarkdownRenderer content={storyMarkdown} />
+              <!-- Artisan Credential Indicators (Desktop High-Value Anchor) -->
+              <div class="hidden lg:flex flex-col gap-2.5 pt-4 border-t border-black/5">
+                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 text-[11px] text-zinc-700 flex items-start gap-2.5">
+                  <div class="w-5 h-5 rounded-md bg-white border border-black/10 flex items-center justify-center shrink-0 text-amber-700 mt-0.5 shadow-2xs">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span class="font-semibold text-zinc-900 block font-mono text-[11px]">Italian Lonati Calibration</span>
+                    <span class="text-zinc-500 text-[10px] leading-tight block mt-0.5">High-gauge dual-cylinder needle density with zero-friction dimensional architecture.</span>
+                  </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 text-[11px] text-zinc-700 flex items-start gap-2.5">
+                  <div class="w-5 h-5 rounded-md bg-white border border-black/10 flex items-center justify-center shrink-0 text-zinc-900 mt-0.5 shadow-2xs">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span class="font-semibold text-zinc-900 block font-mono text-[11px]">Hand-Linked Seamless Finish</span>
+                    <span class="text-zinc-500 text-[10px] leading-tight block mt-0.5">True 0.0 mm seam plane eliminating ridge chafing and shoe pressure points.</span>
+                  </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 text-[11px] text-zinc-700 flex items-start gap-2.5">
+                  <div class="w-5 h-5 rounded-md bg-white border border-black/10 flex items-center justify-center shrink-0 text-emerald-700 mt-0.5 shadow-2xs">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span class="font-semibold text-zinc-900 block font-mono text-[11px]">OEKO-TEX® Standard 100</span>
+                    <span class="text-zinc-500 text-[10px] leading-tight block mt-0.5">Rigorous independent lab screening for harmful aromatic amines and allergens.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Full Markdown Prose Narrative & Spec Tables (8 cols, filled and balanced) -->
+            <div class="lg:col-span-8 w-full min-w-0 text-left">
+              <MarkdownRenderer content={storyMarkdown} />
+            </div>
+
           </div>
         </div>
       </section>
