@@ -13,8 +13,8 @@ export default defineConfig({
   name: 'default',
   title: "Content Studio",
 
-  projectId: (env.SANITY_STUDIO_PROJECT_ID ?? env.SANITY_PROJECT_ID ?? metaEnv.PUBLIC_SANITY_PROJECT_ID ?? 'xvhhd8u0') as string,
-  dataset: (env.SANITY_STUDIO_DATASET ?? env.SANITY_DATASET ?? metaEnv.PUBLIC_SANITY_DATASET ?? 'production') as string,
+  projectId: (env.SANITY_STUDIO_PROJECT_ID || env.SANITY_PROJECT_ID || metaEnv.PUBLIC_SANITY_PROJECT_ID || 'xvhhd8u0') as string,
+  dataset: (env.SANITY_STUDIO_DATASET || env.SANITY_DATASET || metaEnv.PUBLIC_SANITY_DATASET || 'production') as string,
 
   plugins: [
     structureTool({

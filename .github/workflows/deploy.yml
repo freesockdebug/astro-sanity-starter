@@ -87,7 +87,9 @@ jobs:
 
       - name: Install Studio dependencies
         working-directory: studio
-        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+        run: |
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          npm rebuild esbuild || true
 
       - name: Build Sanity Studio
         working-directory: studio
@@ -99,7 +101,8 @@ jobs:
           SANITY_STUDIO_SITE_URL: ${{ secrets.SANITY_STUDIO_SITE_URL || 'https://gwenvenni.com' }}
           SANITY_STUDIO_REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET || 'itsasecret' }}
           SANITY_TELEMETRY: 'false'
-        run: npm run build
+        run: |
+          npx sanity build -y
 
       - name: Deploy Studio to Cloudflare Workers
         working-directory: studio
