@@ -1,15 +1,19 @@
 ---
 import { type SiteConfig, type CustomImage, type Page } from 'types';
-import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@components';
+import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget, SEO, Breadcrumbs } from '@components';
+import type { BreadcrumbItem } from '../components/Breadcrumbs.astro';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
-import { getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
+import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
 import type { TwitterCardType } from 'astro-seo';
 
 import '../styles/globals.css';
 
 interface Props {
     title?: string;
+    breadcrumbTitle?: string;
+    breadcrumbs?: BreadcrumbItem[];
+    hideBreadcrumbs?: boolean;
     addTitleSuffix?: boolean;
     description?: string;
     image?: CustomImage | string;
@@ -27,6 +31,9 @@ interface Props {
 
 const {
     title,
+    breadcrumbTitle,
+    breadcrumbs,
+    hideBreadcrumbs = false,
     addTitleSuffix,
     description,
     image,
@@ -44,6 +51,7 @@ const {
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
+const hreflangAlternates = getHreflangAlternates(Astro.url, Astro.site);
 const configData: SiteConfig = (await fetchData()) || {};
 SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
 
@@ -63,7 +71,7 @@ const resolvedImage = imageSrc
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta name="generator" content={Astro.generator} />
 
-        <!-- Reusable Sanity & Astro SEO Component (Title, Canonical, OpenGraph, Twitter Cards, Hreflang) -->
+        <!-- Reusable Sanity & Astro SEO Component (Title, Canonical, OpenGraph, Twitter Cards) -->
         <SEO
             title={title}
             addTitleSuffix={addTitleSuffix}
@@ -78,6 +86,11 @@ const resolvedImage = imageSrc
             siteConfig={configData}
             structuredData={structuredData}
         />
+
+        <!-- Automatic Google SEO Multilingual Hreflang Interlinking Tags (en, de, fr, es + x-default) -->
+        {hreflangAlternates.map((alt) => (
+            <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
+        ))}
 
         <!-- High-priority Responsive LCP Image Preload (Avoids downloading mismatched 1200px on mobile) -->
         {preloadHeroImage && (
@@ -104,6 +117,16 @@ const resolvedImage = imageSrc
     </head>
     <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
         <AppleNav config={configData} />
+        {!hideBreadcrumbs && (
+            <Breadcrumbs
+                items={breadcrumbs}
+                currentTitle={breadcrumbTitle || title}
+                page={page}
+                siteConfig={configData}
+            >
+                <slot name="breadcrumb-actions" slot="actions" />
+            </Breadcrumbs>
+        )}
         <main class={mainClass}>
             <slot />
         </main>

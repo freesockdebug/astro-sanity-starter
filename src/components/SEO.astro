@@ -14,7 +14,8 @@ import {
   getLangFromUrl,
   getLocalizedValue,
   LANGUAGES,
-  switchLocalePath,
+  normalizeCanonicalUrl,
+  resolveSiteOrigin,
   type SupportedLocale,
 } from '@i18n';
 
@@ -76,22 +77,12 @@ const resolvedDescription =
     ? getLocalizedValue(rawDescription, currentLang)
     : rawDescription) || DEFAULT_META_DESCRIPTION;
 
-// 3. Resolve Canonical URL & Base Origin
-function formatCanonicalURL(url: string | URL): string {
-  const path = url.toString();
-  const hasQueryParams = path.includes('?');
-  return path.replace(/\/?$/, hasQueryParams ? '' : '/');
-}
-
-const appUrlEnv =
-  (typeof process !== 'undefined' && process.env?.APP_URL) ||
-  (import.meta.env && import.meta.env.APP_URL);
-const baseOrigin = Astro.site || (appUrlEnv ? new URL(appUrlEnv) : Astro.url);
-
-const rawCanonical =
-  propCanonicalUrl ||
-  (Astro.site ? new URL(Astro.url.pathname, Astro.site) : new URL(Astro.url.pathname, baseOrigin));
-const resolvedCanonical = formatCanonicalURL(rawCanonical);
+// 3. Resolve Canonical URL & Base Origin (strips query params & non-root trailing slashes)
+const baseOrigin = resolveSiteOrigin(Astro.url, Astro.site);
+const resolvedCanonical = normalizeCanonicalUrl(
+  propCanonicalUrl || Astro.url.pathname,
+  baseOrigin
+);
 
 // 4. Resolve Open Graph & Twitter Image from Sanity socialImage / Props
 const rawImage = propImage ?? page?.socialImage ?? DEFAULT_FALLBACK_IMAGE;
@@ -134,18 +125,6 @@ const ogLocale = OG_LOCALE_MAP[currentLang] || 'en_US';
 const ogAlternateLocales = (Object.keys(LANGUAGES) as SupportedLocale[])
   .filter((loc) => loc !== currentLang)
   .map((loc) => OG_LOCALE_MAP[loc]);
-
-// 6. Multi-region Hreflang Language Alternates
-const languageAlternates = [
-  ...(Object.keys(LANGUAGES) as SupportedLocale[]).map((loc) => ({
-    hrefLang: loc,
-    href: formatCanonicalURL(new URL(switchLocalePath(Astro.url.pathname, loc), baseOrigin)),
-  })),
-  {
-    hrefLang: 'x-default',
-    href: formatCanonicalURL(new URL(switchLocalePath(Astro.url.pathname, 'en'), baseOrigin)),
-  },
-];
 ---
 
 <AstroSEO
@@ -154,7 +133,6 @@ const languageAlternates = [
   canonical={resolvedCanonical}
   noindex={noindex}
   nofollow={nofollow}
-  languageAlternates={languageAlternates}
   openGraph={{
     basic: {
       title: resolvedTitle,

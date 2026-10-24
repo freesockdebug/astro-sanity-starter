@@ -83,6 +83,8 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'pdp.quickSeamValue': 'Hand-Linked',
     'pdp.quickSamplingLabel': 'Sampling',
     'pdp.quickSamplingValue': '48h Dispatch',
+    'pdp.storyBadge': 'CRAFTSMANSHIP & STORY',
+    'pdp.storyHeading': 'The Story Behind the Silhouette',
     'pdp.lonatiVerified': '✓ 100% Lonati Verified',
 
     // RFQ Drawer
@@ -224,6 +226,8 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'pdp.quickSeamValue': 'Handgekettelt',
     'pdp.quickSamplingLabel': 'Musterung',
     'pdp.quickSamplingValue': '48h Versand',
+    'pdp.storyBadge': 'HANDWERKSKUNST & GESCHICHTE',
+    'pdp.storyHeading': 'Die Geschichte hinter der Silhouette',
     'pdp.lonatiVerified': '✓ 100% Lonati-geprüft',
 
     // RFQ Drawer
@@ -365,6 +369,8 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'pdp.quickSeamValue': 'Remaillée Main',
     'pdp.quickSamplingLabel': 'Échantillon',
     'pdp.quickSamplingValue': 'Expédition 48h',
+    'pdp.storyBadge': 'SAVOIR-FAIRE & HISTOIRE',
+    'pdp.storyHeading': 'L’Histoire derrière la Silhouette',
     'pdp.lonatiVerified': '✓ 100% Certifié Lonati',
 
     // RFQ Drawer
@@ -506,6 +512,8 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'pdp.quickSeamValue': 'Remallada a Mano',
     'pdp.quickSamplingLabel': 'Muestreo',
     'pdp.quickSamplingValue': 'Envío 48h',
+    'pdp.storyBadge': 'ARTESANÍA E HISTORIA',
+    'pdp.storyHeading': 'La Historia detrás de la Silueta',
     'pdp.lonatiVerified': '✓ 100% Verificado Lonati',
 
     // RFQ Drawer

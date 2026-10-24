@@ -96,6 +96,9 @@ export interface Product {
     supportBadge?: string | Record<string, string>;
     specsHeading?: string | Record<string, string>;
     specsBadge?: string | Record<string, string>;
+    storyBadge?: string | Record<string, string>;
+    storyHeading?: string | Record<string, string>;
+    story?: string | Record<string, string>;
     galleryHint?: string | Record<string, string>;
     priceNote?: string | Record<string, string>;
     paletteTitle?: string | Record<string, string>;

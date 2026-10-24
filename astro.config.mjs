@@ -39,16 +39,56 @@ export default defineConfig({
         plugins: [
             tailwindcss(),
             {
-                name: 'studio-trailing-slash',
-                enforce: 'post',
+                name: 'studio-trailing-slash-and-css-hmr-guard',
+                enforce: 'pre',
                 configureServer(server) {
+                    const wrapHotChannel = (channel) => {
+                        if (!channel || typeof channel.send !== 'function' || channel.__cssGuardWrapped) {
+                            return;
+                        }
+                        const originalSend = channel.send.bind(channel);
+                        channel.__cssGuardWrapped = true;
+                        channel.send = (payload, ... rest) => {
+                            if (
+                                payload &&
+                                typeof payload === 'object' &&
+                                payload.type === 'update' &&
+                                Array.isArray(payload.updates)
+                            ) {
+                                const hasCssJsUpdate = payload.updates.some(
+                                    (u) =>
+                                        u.type === 'js-update' &&
+                                        (u.path?.includes('.css') || u.acceptedPath?.includes('.css'))
+                                );
+                                if (hasCssJsUpdate) {
+                                    return originalSend({ type: 'full-reload', path: '*' }, ...rest);
+                                }
+                            }
+                            return originalSend(payload, ...rest);
+                        };
+                    };
+
+                    wrapHotChannel(server.ws);
+                    wrapHotChannel(server.hot);
+                    if (server.environments) {
+                        for (const env of Object.values(server.environments)) {
+                            wrapHotChannel(env?.hot);
+                        }
+                    }
+
                     server.middlewares.use((req, res, next) => {
                         if (req.url === '/studio' || req.url?.startsWith('/studio?')) {
                             req.url = req.url.replace('/studio', '/studio/');
                         }
                         if (req.url && req.url.includes('.css')) {
-                            res.setHeader('Vary', 'Accept, Origin');
+                            res.setHeader('Vary', 'Accept, Sec-Fetch-Dest, Origin');
                             res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+                            if (req.headers['sec-fetch-dest'] === 'script') {
+                                req.headers.accept = '*/*';
+                                req.url = req.url
+                                    .replace(/([?&])direct(&|$)/, '$1')
+                                    .replace(/[?&]$/, '');
+                            }
                         }
                         next();
                     });
@@ -60,18 +100,16 @@ export default defineConfig({
                         }
                         return [];
                     }
-                    return modules.filter(
+                    const filtered = modules.filter(
                         (m) => !m.id?.endsWith('.css') && !m.url?.includes('.css')
                     );
-                },
-                handleHotUpdate({ file, modules, server }) {
-                    if (file.endsWith('.css')) {
-                        server.ws.send({ type: 'full-reload', path: '*' });
+                    if (filtered.length !== modules.length) {
+                        if (!this.environment || this.environment.name === 'client') {
+                            server.ws.send({ type: 'full-reload', path: '*' });
+                        }
                         return [];
                     }
-                    return modules.filter(
-                        (m) => !m.id?.endsWith('.css') && !m.url?.includes('.css')
-                    );
+                    return filtered;
                 }
             }
         ],

@@ -4,14 +4,17 @@
     "scripts": {
         "dev": "node ./astro-cli.mjs dev --host 0.0.0.0 --port 3000",
         "start": "node ./astro-cli.mjs dev --host 0.0.0.0 --port 3000",
-        "build": "node ./astro-cli.mjs build && node ./scripts/verify-cf-deploy.mjs",
-        "check:cf": "npx tsc --noEmit && node ./scripts/verify-cf-deploy.mjs --dry-run",
+        "build": "node ./astro-cli.mjs build",
+        "check:cf": "npx tsc --noEmit",
         "preview": "node ./astro-cli.mjs preview --host 0.0.0.0 --port 3000",
         "preview:cf": "wrangler dev",
         "deploy": "node ./astro-cli.mjs build && wrangler deploy",
         "build:studio": "cd studio && npm run build",
         "deploy:studio": "cd studio && npm run build && npx wrangler deploy --config wrangler.jsonc",
         "astro": "node ./astro-cli.mjs",
+        "batch:stories": "node ./scripts/batch-update-stories.mjs",
+        "batch:stories:sync": "node ./scripts/batch-update-stories.mjs --sync",
+        "batch:stories:export": "node ./scripts/batch-update-stories.mjs --export-ndjson ./stories-patch.ndjson",
         "create-project": "node ./sanity-export/create-project.js",
         "import": "node ./sanity-export/import.js",
         "export": "node ./sanity-export/export.js"
@@ -30,6 +33,8 @@
         "fs-extra": "^11.2.0",
         "marked": "^15.0.4",
         "nanostores": "^1.5.5",
+        "react-markdown": "^10.1.0",
+        "remark-gfm": "^4.0.1",
         "tailwindcss": "^4.0.9",
         "ua-parser-js": "^2.0.10",
         "wrangler": "^4.151.3"

@@ -94,6 +94,82 @@ export function getLocalizedPath(path: string = '', lang: SupportedLocale = DEFA
   return `/${lang}${cleanPath ? `/${cleanPath}` : ''}${searchSuffix}${hashSuffix}`;
 }
 
+/**
+ * Resolve dynamic origin from Astro.url with fallback to Astro.site or APP_URL
+ */
+export function resolveSiteOrigin(astroUrl?: URL | string, astroSite?: URL | string): string {
+  if (astroUrl) {
+    try {
+      const parsed = typeof astroUrl === 'string' ? new URL(astroUrl) : astroUrl;
+      if (parsed.origin && parsed.origin !== 'null') {
+        return parsed.origin;
+      }
+    } catch {}
+  }
+
+  if (astroSite) {
+    try {
+      const parsedSite = typeof astroSite === 'string' ? new URL(astroSite) : astroSite;
+      if (parsedSite.origin && parsedSite.origin !== 'null') {
+        return parsedSite.origin;
+      }
+    } catch {}
+  }
+
+  const appUrlEnv =
+    (typeof process !== 'undefined' && process.env?.APP_URL) ||
+    (import.meta.env && import.meta.env.APP_URL);
+  if (appUrlEnv) {
+    try {
+      return new URL(appUrlEnv).origin;
+    } catch {}
+  }
+
+  return 'https://gwenvenni.com';
+}
+
+/**
+ * Normalize canonical & hreflang URLs for Google SEO:
+ * - Strips query parameters (?...) and hash fragments (#...)
+ * - Strips trailing slashes except for the root path "/"
+ */
+export function normalizeCanonicalUrl(rawUrl: string | URL, baseOrigin?: string | URL): string {
+  const origin = baseOrigin ? String(baseOrigin) : 'https://gwenvenni.com';
+  const parsed = new URL(rawUrl.toString(), origin);
+  parsed.search = '';
+  parsed.hash = '';
+
+  const collapsedPath = parsed.pathname.replace(/\/+/g, '/');
+  parsed.pathname =
+    collapsedPath.length > 1 ? collapsedPath.replace(/\/+$/, '') : '/';
+
+  return parsed.toString();
+}
+
+/**
+ * Generate bidirectional Google SEO hreflang links (en, de, fr, es + x-default)
+ * automatically from the current Astro.url
+ */
+export function getHreflangAlternates(
+  astroUrl: URL,
+  astroSite?: URL
+): Array<{ hreflang: string; href: string }> {
+  const origin = resolveSiteOrigin(astroUrl, astroSite);
+  const locales = Object.keys(LANGUAGES) as SupportedLocale[];
+
+  const alternates: Array<{ hreflang: string; href: string }> = locales.map((loc) => ({
+    hreflang: loc,
+    href: normalizeCanonicalUrl(switchLocalePath(astroUrl.pathname, loc), origin),
+  }));
+
+  alternates.push({
+    hreflang: 'x-default',
+    href: normalizeCanonicalUrl(switchLocalePath(astroUrl.pathname, DEFAULT_LOCALE), origin),
+  });
+
+  return alternates;
+}
+
 const COMMON_CMS_TERM_TRANSLATIONS: Partial<Record<SupportedLocale, Record<string, string>>> = {
   de: {
     'Composition': 'Materialzusammensetzung',

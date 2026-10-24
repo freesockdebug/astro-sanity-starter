@@ -23,6 +23,7 @@ import header from './header'
 import footer from './footer'
 import localeString from './localeString'
 import localeText from './localeText'
+import localeMarkdown from './localeMarkdown'
 
 export const documentTypes = [
   page,
@@ -51,6 +52,7 @@ export const objectTypes = [
   footer,
   localeString,
   localeText,
+  localeMarkdown,
 ]
 
 export const schemaTypes = [
