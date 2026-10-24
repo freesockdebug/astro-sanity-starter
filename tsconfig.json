@@ -1,8 +1,21 @@
 {
-  "extends": "astro/tsconfigs/base",
   "include": [".astro/types.d.ts", "src/**/*", "types/**/*", "worker-configuration.d.ts"],
   "exclude": ["dist", "studio", "sanity-export"],
   "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "paths": {
       "types": ["./types/index.ts"],
       "types/*": ["./types/*"],
@@ -17,8 +30,6 @@
       "@stores/*": ["./src/stores/*"],
       "@i18n": ["./src/i18n/index.ts"],
       "@i18n/*": ["./src/i18n/*"]
-    },
-    "jsx": "react-jsx",
-    "jsxImportSource": "react"
+    }
   }
 }
