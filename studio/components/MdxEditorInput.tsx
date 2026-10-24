@@ -24,7 +24,7 @@ import {
   DiffSourceToggleWrapper,
   ListsToggle,
 } from '@mdxeditor/editor'
-import { Dialog, Button, Card, Grid, Box, Flex, Text, Spinner, TextInput, Stack, Badge } from '@sanity/ui'
+import { Dialog, Button, Card, Box, Flex, Text, Spinner, TextInput, Badge } from '@sanity/ui'
 
 interface SanityImageAsset {
   _id: string
@@ -60,6 +60,7 @@ export function MdxEditorInput(props: StringInputProps) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedAsset, setSelectedAsset] = useState<SanityImageAsset | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export function MdxEditorInput(props: StringInputProps) {
     setLoading(true)
     try {
       const data = await client.fetch<SanityImageAsset[]>(
-        `*[_type == "sanity.imageAsset"] | order(_createdAt desc)[0..120]{
+        `*[_type == "sanity.imageAsset"] | order(_createdAt desc)[0..160]{
           _id,
           url,
           originalFilename,
@@ -82,6 +83,9 @@ export function MdxEditorInput(props: StringInputProps) {
         }`
       )
       setAssets(data || [])
+      if (data && data.length > 0) {
+        setSelectedAsset(data[0])
+      }
     } catch (err) {
       console.error('Failed to load Sanity image assets:', err)
     } finally {
@@ -116,7 +120,7 @@ export function MdxEditorInput(props: StringInputProps) {
     [client]
   )
 
-  // Direct insert from Asset Library
+  // Direct insert an asset
   const handleInsertAsset = useCallback(
     (asset: SanityImageAsset) => {
       const altText = asset.originalFilename
@@ -148,10 +152,12 @@ export function MdxEditorInput(props: StringInputProps) {
       const file = files[0]
       setUploading(true)
       try {
-        const newAsset = await client.assets.upload('image', file, {
+        const newAsset = (await client.assets.upload('image', file, {
           filename: file.name,
-        })
-        handleInsertAsset(newAsset as SanityImageAsset)
+        })) as SanityImageAsset
+        // Prepend to asset list and insert
+        setAssets((prev) => [newAsset, ...prev])
+        handleInsertAsset(newAsset)
       } catch (err) {
         console.error('Error uploading asset to Sanity:', err)
       } finally {
@@ -217,25 +223,25 @@ export function MdxEditorInput(props: StringInputProps) {
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    padding: '4px 8px',
+                    gap: '5px',
+                    padding: '4px 10px',
                     borderRadius: '4px',
                     border: '1px solid #cbd5e1',
                     background: '#f8fafc',
-                    color: '#334155',
+                    color: '#1e293b',
                     fontSize: '12px',
-                    fontWeight: 500,
+                    fontWeight: 600,
                     cursor: 'pointer',
                     lineHeight: '1.2',
                     transition: 'all 0.15s ease',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = '#e2e8f0'
-                    e.currentTarget.style.color = '#0f172a'
+                    e.currentTarget.style.borderColor = '#94a3b8'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = '#f8fafc'
-                    e.currentTarget.style.color = '#334155'
+                    e.currentTarget.style.borderColor = '#cbd5e1'
                   }}
                 >
                   <svg
@@ -267,163 +273,248 @@ export function MdxEditorInput(props: StringInputProps) {
           id="sanity-asset-library-dialog"
           header="Sanity 媒体资源库"
           onClose={handleCloseLibrary}
-          width={3}
+          width={4}
           zOffset={100000}
         >
-          <Box padding={4}>
-            <Stack space={4}>
-              {/* Header Action Bar */}
-              <Flex gap={3} align="center" justify="space-between">
-                <Box flex={1}>
-                  <TextInput
-                    placeholder="输入关键词搜索图片文件名..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.currentTarget.value)}
-                    fontSize={1}
-                    padding={2}
-                  />
-                </Box>
-                <Flex gap={2} align="center">
-                  <Button
-                    mode="ghost"
-                    text="刷新"
-                    onClick={fetchAssets}
-                    disabled={loading}
-                    fontSize={1}
-                    padding={2}
-                  />
-                  <Button
-                    tone="primary"
-                    text={uploading ? '正在上传并插入...' : '上传新图片'}
-                    onClick={() => fileInputRef.current?.click()}
-                    loading={uploading}
-                    fontSize={1}
-                    padding={2}
-                  />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={handleUploadFromDialog}
-                  />
-                </Flex>
+          <Box padding={4} style={{ minWidth: '600px', maxWidth: '960px', width: '100%', boxSizing: 'border-box' }}>
+            {/* Header Action Bar */}
+            <Flex gap={3} align="center" justify="space-between" style={{ marginBottom: '14px' }}>
+              <Box flex={1}>
+                <TextInput
+                  placeholder="搜索图片文件名..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.currentTarget.value)}
+                  fontSize={1}
+                  padding={2}
+                />
+              </Box>
+              <Flex gap={2} align="center">
+                <Button
+                  mode="ghost"
+                  text="刷新"
+                  onClick={fetchAssets}
+                  disabled={loading}
+                  fontSize={1}
+                  padding={2}
+                />
+                <Button
+                  tone="primary"
+                  text={uploading ? '上传中...' : '上传新图片'}
+                  onClick={() => fileInputRef.current?.click()}
+                  loading={uploading}
+                  fontSize={1}
+                  padding={2}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleUploadFromDialog}
+                />
               </Flex>
+            </Flex>
 
-              {/* Status and Hint */}
-              <Flex justify="space-between" align="center">
-                <Text size={1} muted>
-                  点击下方任意图片即可自动将 Markdown 语法插入到文档当前光标处
+            {/* Instruction Tip */}
+            <Flex justify="space-between" align="center" style={{ marginBottom: '12px' }}>
+              <Text size={1} muted>
+                单击选择图片，双击或点击下方按钮直接插入到 Markdown 文档中
+              </Text>
+              <Badge tone="default" fontSize={0}>
+                共 {filteredAssets.length} 张图片
+              </Badge>
+            </Flex>
+
+            {/* Loading */}
+            {loading && (
+              <Flex justify="center" align="center" padding={6} style={{ minHeight: '260px' }}>
+                <Spinner size={3} />
+              </Flex>
+            )}
+
+            {/* Empty */}
+            {!loading && filteredAssets.length === 0 && (
+              <Card padding={5} tone="transparent" radius={2} border style={{ textAlign: 'center', minHeight: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Text size={2} muted>
+                  {searchQuery ? '没有找到匹配的图片' : '暂无已上传的图片资产'}
                 </Text>
-                <Badge tone="default" fontSize={0}>
-                  已显示 {filteredAssets.length} 项资源
-                </Badge>
-              </Flex>
+              </Card>
+            )}
 
-              {/* Loading State */}
-              {loading && (
-                <Flex justify="center" align="center" padding={6}>
-                  <Spinner size={3} />
-                </Flex>
-              )}
+            {/* Standard Media Library Grid */}
+            {!loading && filteredAssets.length > 0 && (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(136px, 1fr))',
+                  gap: '12px',
+                  maxHeight: '52vh',
+                  overflowY: 'auto',
+                  padding: '4px',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {filteredAssets.map((asset) => {
+                  const isSelected = selectedAsset?._id === asset._id
+                  const dim = asset.metadata?.dimensions
+                  const dimText = dim ? `${dim.width}×${dim.height}` : ''
 
-              {/* Empty State */}
-              {!loading && filteredAssets.length === 0 && (
-                <Card padding={5} tone="transparent" radius={2} border style={{ textAlign: 'center' }}>
-                  <Text size={2} muted>
-                    {searchQuery ? '没有找到符合条件的图片' : '暂无已上传的图片资产'}
-                  </Text>
-                </Card>
-              )}
-
-              {/* Asset Grid */}
-              {!loading && filteredAssets.length > 0 && (
-                <Box style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '4px' }}>
-                  <Grid columns={[2, 3, 4]} gap={3}>
-                    {filteredAssets.map((asset) => {
-                      const dim = asset.metadata?.dimensions
-                      const dimText = dim ? `${dim.width} × ${dim.height}` : ''
-                      const sizeText = formatBytes(asset.size)
-
-                      return (
-                        <Card
-                          key={asset._id}
-                          radius={3}
-                          border
+                  return (
+                    <div
+                      key={asset._id}
+                      onClick={() => setSelectedAsset(asset)}
+                      onDoubleClick={() => handleInsertAsset(asset)}
+                      title={`${asset.originalFilename || '图片'}${dimText ? ` (${dimText})` : ''}`}
+                      style={{
+                        position: 'relative',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderRadius: '8px',
+                        border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                        backgroundColor: '#ffffff',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        boxShadow: isSelected ? '0 0 0 2px rgba(37,99,235,0.2)' : 'none',
+                        userSelect: 'none',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.borderColor = '#94a3b8'
+                          e.currentTarget.style.transform = 'translateY(-1px)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.borderColor = '#e2e8f0'
+                          e.currentTarget.style.transform = 'none'
+                        }
+                      }}
+                    >
+                      {/* Thumbnail Container (1:1 Aspect Ratio) */}
+                      <div
+                        style={{
+                          width: '100%',
+                          paddingTop: '100%',
+                          position: 'relative',
+                          backgroundColor: '#f8fafc',
+                        }}
+                      >
+                        <img
+                          src={`${asset.url}?w=260&h=260&fit=crop&auto=format`}
+                          alt={asset.originalFilename || 'Asset'}
+                          loading="lazy"
                           style={{
-                            cursor: 'pointer',
-                            overflow: 'hidden',
-                            position: 'relative',
-                            transition: 'all 0.2s ease',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
                           }}
-                          onClick={() => handleInsertAsset(asset)}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = '#2563eb'
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.15)'
-                            e.currentTarget.style.transform = 'translateY(-2px)'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#e2e8f0'
-                            e.currentTarget.style.boxShadow = 'none'
-                            e.currentTarget.style.transform = 'none'
-                          }}
-                        >
-                          {/* Image Thumbnail */}
+                        />
+                        {/* Selected Checkmark Badge */}
+                        {isSelected && (
                           <div
                             style={{
-                              width: '100%',
-                              height: '140px',
-                              backgroundColor: '#f1f5f9',
+                              position: 'absolute',
+                              top: '6px',
+                              right: '6px',
+                              backgroundColor: '#2563eb',
+                              color: '#ffffff',
+                              borderRadius: '50%',
+                              width: '20px',
+                              height: '20px',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              overflow: 'hidden',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                             }}
                           >
-                            <img
-                              src={`${asset.url}?w=300&h=200&fit=crop&auto=format`}
-                              alt={asset.originalFilename || 'Asset'}
-                              loading="lazy"
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                                transition: 'transform 0.3s ease',
-                              }}
-                            />
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
                           </div>
+                        )}
+                      </div>
 
-                          {/* Info Footer */}
-                          <Box padding={2}>
-                            <Text
-                              size={1}
-                              weight="medium"
-                              style={{
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                marginBottom: '4px',
-                              }}
-                              title={asset.originalFilename}
-                            >
-                              {asset.originalFilename || '未命名图片'}
-                            </Text>
-                            <Flex justify="space-between" align="center">
-                              <Text size={0} muted>
-                                {dimText}
-                              </Text>
-                              <Text size={0} muted>
-                                {sizeText}
-                              </Text>
-                            </Flex>
-                          </Box>
-                        </Card>
-                      )
-                    })}
-                  </Grid>
-                </Box>
-              )}
-            </Stack>
+                      {/* Info Bar */}
+                      <div
+                        style={{
+                          padding: '6px 8px',
+                          backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
+                          borderTop: '1px solid #f1f5f9',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            color: isSelected ? '#1e40af' : '#334155',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {asset.originalFilename || '未命名'}
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            fontSize: '10px',
+                            color: '#94a3b8',
+                            marginTop: '2px',
+                          }}
+                        >
+                          <span>{dimText}</span>
+                          <span>{formatBytes(asset.size)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Bottom Confirm Toolbar */}
+            <Flex
+              justify="space-between"
+              align="center"
+              style={{
+                marginTop: '16px',
+                paddingTop: '12px',
+                borderTop: '1px solid #e2e8f0',
+              }}
+            >
+              <Box flex={1} style={{ overflow: 'hidden', marginRight: '16px' }}>
+                {selectedAsset ? (
+                  <Text size={1}>
+                    已选: <strong>{selectedAsset.originalFilename || '未命名图片'}</strong>
+                    {selectedAsset.metadata?.dimensions && (
+                      <span style={{ color: '#64748b', marginLeft: '6px' }}>
+                        ({selectedAsset.metadata.dimensions.width} × {selectedAsset.metadata.dimensions.height})
+                      </span>
+                    )}
+                  </Text>
+                ) : (
+                  <Text size={1} muted>
+                    请点击选择一张图片
+                  </Text>
+                )}
+              </Box>
+              <Flex gap={2}>
+                <Button mode="ghost" text="取消" onClick={handleCloseLibrary} fontSize={1} padding={2} />
+                <Button
+                  tone="primary"
+                  text="插入选中图片"
+                  disabled={!selectedAsset}
+                  onClick={() => selectedAsset && handleInsertAsset(selectedAsset)}
+                  fontSize={1}
+                  padding={2}
+                />
+              </Flex>
+            </Flex>
           </Box>
         </Dialog>
       )}
