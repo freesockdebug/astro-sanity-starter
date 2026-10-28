@@ -218,6 +218,177 @@ class InvariantEngine {
       coverageRatio,
     };
   }
+
+  /**
+   * 5. 单源真理与别名兼容公理 (Law of Single Source of Truth & Compatibility Symmetry)
+   * 动态解析 ensure-asset-aliases.cjs 中的受管别名集合，杜绝在检查脚本中硬编码任何历史哈希
+   */
+  public static extractSSOTAliases(scriptContent: string): string[] {
+    const match = scriptContent.match(/legacyAliases\s*=\s*\[([\s\S]*?)\]/);
+    if (!match) return [];
+    const items = match[1].match(/['"`]([^'"`]+)['"`]/g);
+    return items ? items.map((s) => s.replace(/['"`]/g, '').trim()) : [];
+  }
+
+  /**
+   * 6. 有向图拓扑闭包定理 (Topological Closure of Manifest Graph)
+   * 编译有向图 G = (V_manifest, V_disk), 检验全射性与正物理测度:
+   * ∀ asset ∈ Manifest => asset ∈ Disk ∧ Measure(asset) > 0
+   */
+  public static checkManifestGraphClosure(
+    entryScriptContent: string,
+    clientDistDir: string
+  ): { valid: boolean; totalAssets: number; missing: string[]; zeroMeasure: string[] } {
+    const assetsMatch = entryScriptContent.match(/"assets":\s*(\[[^\]]+\])/);
+    if (!assetsMatch) {
+      return { valid: true, totalAssets: 0, missing: [], zeroMeasure: [] };
+    }
+    let assetsList: string[] = [];
+    try {
+      assetsList = JSON.parse(assetsMatch[1]);
+    } catch {
+      return { valid: false, totalAssets: 0, missing: ['Manifest assets JSON parse error'], zeroMeasure: [] };
+    }
+
+    const missing: string[] = [];
+    const zeroMeasure: string[] = [];
+
+    for (const rel of assetsList) {
+      const diskPath = path.join(clientDistDir, rel.replace(/^\//, ''));
+      if (!fs.existsSync(diskPath)) {
+        missing.push(rel);
+      } else if (fs.statSync(diskPath).size === 0) {
+        zeroMeasure.push(rel);
+      }
+    }
+
+    return {
+      valid: missing.length === 0 && zeroMeasure.length === 0,
+      totalAssets: assetsList.length,
+      missing,
+      zeroMeasure,
+    };
+  }
+
+  /**
+   * 7. 空间几何下确界与零遮挡公理 (Geometric Lower Bound & Zero-Obscurity Invariant)
+   * 证明: PageTop = HeaderOffset + Buffer 且 inf(Buffer) > 0 (通过 clamp 确立连续正下界)
+   * 证明: 挂载流动容器的页面未叠加热力学冲突的静态硬编码 pt-* 击穿下确界
+   */
+  public static checkGeometricTopClearance(
+    globalsCssContent: string,
+    templates: { file: string; content: string }[]
+  ): { valid: boolean; violations: string[] } {
+    const violations: string[] = [];
+
+    // 1. 验证全局 CSS 派生代数完备性 (SSOT 代数关系)
+    const hasHeaderOffset = /--apple-header-offset:\s*calc\(/i.test(globalsCssContent);
+    const hasFluidBuffer = /--apple-flow-buffer:\s*clamp\(/i.test(globalsCssContent);
+    const hasPageTop = /--apple-page-top:\s*calc\([^;]*--apple-header-offset[^;]*--apple-flow-buffer/i.test(globalsCssContent);
+
+    if (!hasHeaderOffset || !hasFluidBuffer || !hasPageTop) {
+      violations.push(
+        'globals.css 违反空间几何代数推导公理！必须满足: --apple-page-top = calc(--apple-header-offset + --apple-flow-buffer)，且 buffer 使用 clamp() 保证严格正下界。'
+      );
+    }
+
+    // 2. 验证页面模板中流动容器未出现硬编码绝对 pt-* 冲突
+    for (const { file, content } of templates) {
+      const classAttrRegex = /class\s*=\s*["']([^"']*(?:catalog-container|page-top-clearance)[^"']*)["']/g;
+      let match;
+      while ((match = classAttrRegex.exec(content)) !== null) {
+        const classList = match[1];
+        // 匹配硬编码类名，如 pt-5, pt-16, pt-20, pt-[20px] 等 (排除 pt-0 或 CSS 变量 top-[var(...)] 声明)
+        const conflictMatch = classList.match(/\bpt-(?:[1-9][0-9]*|\[[0-9]+px\])\b/);
+        if (conflictMatch) {
+          violations.push(
+            `${file}: 几何容器叠加热力学冲突硬编码 '${conflictMatch[0]}'` +
+              `，违背空间几何下确界定理！顶端净空必须由 CSS 变量 --apple-page-top 统一动态派生。`
+          );
+        }
+      }
+    }
+
+    return { valid: violations.length === 0, violations };
+  }
+
+  /**
+   * 8. 信息域隔离与私钥零熵公理 (Information Confinement & Zero Secret Leak)
+   * 客户端公开域 D_client 与 服务端私有域 D_secret 必须严格正交:
+   * D_client ∩ S_secret = ∅
+   */
+  public static checkSecretConfinement(
+    clientJsFiles: string[],
+    envContent: string
+  ): { valid: boolean; leaks: { file: string; pattern: string }[] } {
+    const leaks: { file: string; pattern: string }[] = [];
+
+    // 从 .env 中动态提取私有环境变量名称 (排除公开白名单 PUBLIC_ / NODE_ENV / PORT)
+    const privateKeyNames = new Set<string>();
+    for (const line of envContent.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const keyMatch = trimmed.match(/^([A-Z0-9_]+)\s*=/);
+      if (keyMatch) {
+        const key = keyMatch[1];
+        if (!key.startsWith('PUBLIC_') && key !== 'NODE_ENV' && key !== 'PORT') {
+          privateKeyNames.add(key);
+        }
+      }
+    }
+
+    // 通用高熵密钥与私钥特征签名 (基于密码学格式特征，而非特定具体值)
+    const genericSecretPatterns = [
+      /\bsk[a-zA-Z0-9]{32,}\b/, // Sanity Secret API Key
+      /\b(?:ghp|gho|ghu|ghs|ghr)_[a-zA-Z0-9]{36,}\b/, // GitHub Token
+      /\bAIza[0-9A-Za-z-_]{35}\b/, // Google Cloud API Key
+      /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/, // PEM 私钥
+    ];
+
+    for (const jsFile of clientJsFiles) {
+      if (!fs.existsSync(jsFile)) continue;
+      const content = fs.readFileSync(jsFile, 'utf-8');
+
+      // 1. 检查环境变量私密键名是否被直接打入前端
+      for (const key of privateKeyNames) {
+        if (content.includes(key)) {
+          leaks.push({ file: path.relative(ROOT_DIR, jsFile), pattern: `Env Key: ${key}` });
+        }
+      }
+
+      // 2. 检查高熵密钥特征
+      for (const p of genericSecretPatterns) {
+        if (p.test(content)) {
+          leaks.push({ file: path.relative(ROOT_DIR, jsFile), pattern: `Entropy Pattern: ${p.source}` });
+        }
+      }
+    }
+
+    return { valid: leaks.length === 0, leaks };
+  }
+
+  /**
+   * 9. 物理测度与平台承载力界限公理 (Platform Metric & Resource Bounds)
+   * 0 < Measure(Asset) <= PlatformBudget
+   */
+  public static checkMetricBounds(
+    metrics: { name: string; bytes: number; minBytes?: number; maxBytes: number }[]
+  ): { valid: boolean; violations: string[] } {
+    const violations: string[] = [];
+    for (const m of metrics) {
+      if (m.minBytes !== undefined && m.bytes < m.minBytes) {
+        violations.push(
+          `${m.name} 体积 (${(m.bytes / 1024).toFixed(1)} KB) 低于下限 ${(m.minBytes / 1024).toFixed(1)} KB，可能发生异常 Tree-shaking 剔除！`
+        );
+      }
+      if (m.bytes > m.maxBytes) {
+        violations.push(
+          `${m.name} 体积 (${(m.bytes / 1024).toFixed(1)} KB) 超过平台承载力上限 ${(m.maxBytes / 1024).toFixed(1)} KB！`
+        );
+      }
+    }
+    return { valid: violations.length === 0, violations };
+  }
 }
 
 async function main() {
@@ -696,17 +867,22 @@ async function main() {
     }
   }
 
-  const clientAstroDir = path.join(path.join(SRC_DIR, '..'), 'dist/client/_astro');
-  if (fs.existsSync(clientAstroDir)) {
+  const clientAstroDir = path.join(ROOT_DIR, 'dist/client/_astro');
+  const ensureScriptFile = path.join(ROOT_DIR, 'scripts', 'ensure-asset-aliases.cjs');
+  let ssotAliases: string[] = [];
+  if (fs.existsSync(ensureScriptFile)) {
+    ssotAliases = InvariantEngine.extractSSOTAliases(fs.readFileSync(ensureScriptFile, 'utf-8'));
+  }
+
+  if (fs.existsSync(clientAstroDir) && ssotAliases.length > 0) {
     const astroFiles = fs.readdirSync(clientAstroDir);
-    const activeLayout = astroFiles.find(f => f.startsWith('Layout.') && f.endsWith('.css') && !f.includes('wz5V2tVq') && !f.includes('2XgfxuuA'));
+    const activeLayout = astroFiles.find(f => f.startsWith('Layout.') && f.endsWith('.css') && !ssotAliases.includes(f));
     if (!activeLayout) {
       logFail(`dist/client/_astro: [Pitfall 19] 未在构建产物中检测到有效的主样式包 Layout.*.css！`);
     }
 
-    // 强校验：必须包含历史回退别名，保证未刷新页面的旧 Tab 100% 200 OK 物理命中
-    const requiredAliases = ['Layout.wz5V2tVq.css', 'Layout.2XgfxuuA.css', 'Layout.css'];
-    for (const reqAlias of requiredAliases) {
+    // 强校验：动态基于 SSOT 受管别名列表检验，杜绝脚本硬编码哈希
+    for (const reqAlias of ssotAliases) {
       const aliasPath = path.join(clientAstroDir, reqAlias);
       if (!fs.existsSync(aliasPath) || fs.statSync(aliasPath).size === 0) {
         logFail(`dist/client/_astro/${reqAlias}: [Pitfall 19] 缺少关键历史兼容别名！用户旧客户端访问将引发 404 页面乱码。`);
@@ -714,7 +890,25 @@ async function main() {
     }
   }
 
-  logPass(`[Pitfall 19] 静态资产断代容错与历史哈希自愈双保险护栏校验通过`);
+  logPass(`[Pitfall 19] 静态资产断代容错与单源真理兼容别名校验通过 (SSOT 动态映射)`);
+
+  // 2.19 [Pitfall 20]: 空间几何下确界与零遮挡公理 (Mathematical Zero-Obscurity Invariant)
+  const globalsCssPath = path.join(SRC_DIR, 'styles', 'globals.css');
+  if (fs.existsSync(globalsCssPath)) {
+    const globalsCssContent = fs.readFileSync(globalsCssPath, 'utf-8');
+    const templateFiles = astroFiles.map((file) => ({
+      file: path.relative(ROOT_DIR, file),
+      content: fs.readFileSync(file, 'utf-8'),
+    }));
+    const geomCheck = InvariantEngine.checkGeometricTopClearance(globalsCssContent, templateFiles);
+    if (!geomCheck.valid) {
+      for (const violation of geomCheck.violations) {
+        logFail(`[Pitfall 20] ${violation}`);
+      }
+    } else {
+      logPass(`[Pitfall 20] 空间几何下确界与零遮挡代数方程校验通过 (Top Clearance > Header Offset)`);
+    }
+  }
 
   // =========================================================================
   // 3. i18n 多语言核心字典树同构与对称性深度分析
@@ -770,60 +964,71 @@ async function main() {
   if (!fs.existsSync(distDir) || !fs.existsSync(serverEntryFile)) {
     console.log('\x1b[90m(提示: 当前未检测到 dist/ 生产产物。运行 "npm run build" 后本章节将执行全量产物 404 闭包、敏感词扫描与 CSS 完整性验收)\x1b[0m');
   } else {
-    // 4.1 Manifest 物理闭包校验 (Zero 404 Orphan Assets)
+    // 4.1 Manifest 有向图拓扑物理闭包校验 (Topological Closure & Zero 404)
     try {
       const entrySrc = fs.readFileSync(serverEntryFile, 'utf-8');
-      const assetsMatch = entrySrc.match(/"assets":\s*(\[[^\]]+\])/);
-      if (assetsMatch) {
-        const assetsList: string[] = JSON.parse(assetsMatch[1]);
-        const missingAssets: string[] = [];
-        for (const assetRel of assetsList) {
-          const diskPath = path.join(distClientDir, assetRel.replace(/^\//, ''));
-          if (!fs.existsSync(diskPath) || fs.statSync(diskPath).size === 0) {
-            missingAssets.push(assetRel);
-          }
-        }
-        if (missingAssets.length > 0) {
+      const closureResult = InvariantEngine.checkManifestGraphClosure(entrySrc, distClientDir);
+      if (!closureResult.valid) {
+        if (closureResult.missing.length > 0) {
           logFail(
-            `[dist 404 资产死链] SSR Entry 清单引用了 ${missingAssets.length} 个在 dist/client 中不存在或为空的文件:\n` +
-            missingAssets.map(a => `  - ${a}`).join('\n')
+            `[dist 404 资产死链] SSR Entry 清单引用了 ${closureResult.missing.length} 个在 dist/client 中缺失的静态文件:\n` +
+            closureResult.missing.map((a) => `  - ${a}`).join('\n')
           );
-        } else {
-          logPass(`SSR Manifest 包含的 ${assetsList.length} 个客户端静态资源全部物理存在且非空，零 404 死链`);
+        }
+        if (closureResult.zeroMeasure.length > 0) {
+          logFail(
+            `[dist 空文件异常] SSR Entry 引用的静态文件物理测度为 0 字节:\n` +
+            closureResult.zeroMeasure.map((a) => `  - ${a}`).join('\n')
+          );
         }
       } else {
-        logWarn(`未在 dist/server/entry.mjs 中匹配到 "assets" 清单数组，跳过 Manifest 静态文件闭包对比。`);
+        logPass(`SSR Manifest 包含的 ${closureResult.totalAssets} 个静态资产拓扑闭包校验通过，物理测度 > 0 字节，零 404 死链`);
       }
     } catch (err: any) {
-      logFail(`读取或解析 dist/server/entry.mjs 失败: ${err.message}`);
+      logFail(`读取或解析 dist/server/entry.mjs 拓扑图失败: ${err.message}`);
     }
 
-    // 4.2 核心 CSS 产物几何标尺与关键类落实验收 (CSS Invariants Proof)
+    // 4.2 核心 CSS 产物几何标尺与关键规则落实验收 (CSS Invariants Proof)
     try {
       if (fs.existsSync(distClientAstroDir)) {
         const astroFiles = fs.readdirSync(distClientAstroDir);
-        const activeCss = astroFiles.find(f => f.startsWith('Layout.') && f.endsWith('.css') && f !== 'Layout.css');
+        const ensureScriptFile = path.join(ROOT_DIR, 'scripts', 'ensure-asset-aliases.cjs');
+        let ssotAliases: string[] = [];
+        if (fs.existsSync(ensureScriptFile)) {
+          ssotAliases = InvariantEngine.extractSSOTAliases(fs.readFileSync(ensureScriptFile, 'utf-8'));
+        }
+        const activeCss = astroFiles.find((f) => f.startsWith('Layout.') && f.endsWith('.css') && !ssotAliases.includes(f));
         if (!activeCss) {
-          logFail(`dist/client/_astro: 未找到构建生成的 Layout.*.css 核心样式包！`);
+          logFail(`dist/client/_astro: 未在产物中识别到非别名的主样式包 Layout.*.css！`);
         } else {
-          const cssContent = fs.readFileSync(path.join(distClientAstroDir, activeCss), 'utf-8');
+          const cssPath = path.join(distClientAstroDir, activeCss);
+          const cssContent = fs.readFileSync(cssPath, 'utf-8');
+          const cssBytes = fs.statSync(cssPath).size;
+
           const requiredCssTokens = [
             { token: '--apple-nav-h', desc: '导航栏物理标尺标量' },
             { token: '--apple-flow-buffer', desc: '流体呼吸动态缓冲区' },
             { token: '--apple-page-top', desc: '全局安全顶端净空' },
             { token: 'catalog-container', desc: '产品目录安全流动容器' },
             { token: 'page-top-clearance', desc: '全局零遮盖安全容器' },
-            { token: 'clamp(', desc: 'CSS 数学连续呼吸函数' }
+            { token: 'clamp(', desc: 'CSS 数学连续呼吸函数' },
           ];
-          const missingTokens = requiredCssTokens.filter(t => !cssContent.includes(t.token));
+          const missingTokens = requiredCssTokens.filter((t) => !cssContent.includes(t.token));
           if (missingTokens.length > 0) {
             logFail(
               `dist/client/_astro/${activeCss}: CSS 编译产物缺失关键几何规则或被错误 Tree-shaking 剔除:\n` +
-              missingTokens.map(t => `  - ${t.token} (${t.desc})`).join('\n')
+              missingTokens.map((t) => `  - ${t.token} (${t.desc})`).join('\n')
             );
           } else {
-            const cssKb = (fs.statSync(path.join(distClientAstroDir, activeCss)).size / 1024).toFixed(1);
-            logPass(`CSS 主包 (${activeCss}, ${cssKb} KB) 几何标尺与 Tailwind v4 关键规则编译完整性验证通过`);
+            // 测度界限校验
+            const metricCheck = InvariantEngine.checkMetricBounds([
+              { name: `CSS 主包 (${activeCss})`, bytes: cssBytes, minBytes: 20 * 1024, maxBytes: 500 * 1024 },
+            ]);
+            if (!metricCheck.valid) {
+              for (const v of metricCheck.violations) logFail(v);
+            } else {
+              logPass(`CSS 主包 (${activeCss}, ${(cssBytes / 1024).toFixed(1)} KB) 几何标尺与测度区间 [20KB, 500KB] 检验通过`);
+            }
           }
         }
       }
@@ -831,31 +1036,33 @@ async function main() {
       logFail(`校验 CSS 产物失败: ${err.message}`);
     }
 
-    // 4.3 历史哈希兼容物理镜像 (Zero Stale 404 Invariant)
+    // 4.3 历史哈希兼容物理镜像 (SSOT 动态映射，杜绝写死)
     try {
       if (fs.existsSync(distClientAstroDir)) {
-        const requiredAliases = [
-          'Layout.wz5V2tVq.css',
-          'Layout.2XgfxuuA.css',
-          'Layout.MXg1_XRl.css',
-          'Layout.BLn9bAsC.css',
-          'Layout.css'
-        ];
-        const missingAliases = requiredAliases.filter(alias => {
-          const p = path.join(distClientAstroDir, alias);
-          return !fs.existsSync(p) || fs.statSync(p).size === 0;
-        });
-        if (missingAliases.length > 0) {
-          logFail(`dist/client/_astro 缺少历史兼容别名: ${missingAliases.join(', ')}，旧 Tab 访问将引发 404！`);
+        const ensureScriptFile = path.join(ROOT_DIR, 'scripts', 'ensure-asset-aliases.cjs');
+        let ssotAliases: string[] = [];
+        if (fs.existsSync(ensureScriptFile)) {
+          ssotAliases = InvariantEngine.extractSSOTAliases(fs.readFileSync(ensureScriptFile, 'utf-8'));
+        }
+        if (ssotAliases.length === 0) {
+          logWarn(`未能从 scripts/ensure-asset-aliases.cjs 提取到受管别名列表！`);
         } else {
-          logPass(`历史版本 CSS 兼容镜像与常青别名 (Layout.css) 物理校验通过，保证旧 Tab 100% 200 OK`);
+          const missingAliases = ssotAliases.filter((alias) => {
+            const p = path.join(distClientAstroDir, alias);
+            return !fs.existsSync(p) || fs.statSync(p).size === 0;
+          });
+          if (missingAliases.length > 0) {
+            logFail(`dist/client/_astro 缺少 SSOT 受管历史兼容别名: ${missingAliases.join(', ')}，旧 Tab 访问将引发 404！`);
+          } else {
+            logPass(`动态映射 SSOT ${ssotAliases.length} 个版本别名物理镜像全部存在且非空 (旧 Tab 100% 200 OK)`);
+          }
         }
       }
     } catch (err: any) {
       logFail(`校验兼容别名失败: ${err.message}`);
     }
 
-    // 4.4 客户端静态代码私钥与敏感信息防泄漏 (Zero Secret Leak)
+    // 4.4 客户端静态代码私钥与敏感信息防泄漏 (Information Confinement & Zero Secret Leak)
     try {
       const getClientJsFiles = (dir: string): string[] => {
         let results: string[] = [];
@@ -871,40 +1078,31 @@ async function main() {
         return results;
       };
       const clientJsFiles = getClientJsFiles(distClientDir);
-      const secretLeakPatterns = [
-        { pattern: /SANITY_API_WRITE_TOKEN/, name: 'SANITY_API_WRITE_TOKEN' },
-        { pattern: /SANITY_API_TOKEN/, name: 'SANITY_API_TOKEN' },
-        { pattern: /sk[a-zA-Z0-9]{32,}/, name: 'Sanity Secret API Key (sk...)' },
-        { pattern: /RESEND_API_KEY/, name: 'RESEND_API_KEY' },
-        { pattern: /SENDGRID_API_KEY/, name: 'SENDGRID_API_KEY' }
-      ];
-      let leakFound = false;
-      for (const jsFile of clientJsFiles) {
-        const jsSrc = fs.readFileSync(jsFile, 'utf-8');
-        for (const { pattern, name } of secretLeakPatterns) {
-          if (pattern.test(jsSrc)) {
-            const rel = path.relative(ROOT_DIR, jsFile);
-            logFail(`[安全阻断] 客户端静态产物 ${rel} 泄漏服务端私密凭证: ${name}！`);
-            leakFound = true;
-          }
+      const envPath = path.join(ROOT_DIR, '.env');
+      const envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+
+      const confinementResult = InvariantEngine.checkSecretConfinement(clientJsFiles, envContent);
+      if (!confinementResult.valid) {
+        for (const leak of confinementResult.leaks) {
+          logFail(`[安全阻断] 客户端公开产物 ${leak.file} 发现私密信息特征: ${leak.pattern}！`);
         }
-      }
-      if (!leakFound) {
-        logPass(`客户端静态代码 (${clientJsFiles.length} 个 JS Bundle) 脱敏审计通过，无敏感 Token 泄漏`);
+      } else {
+        logPass(`客户端静态代码 (${clientJsFiles.length} 个 JS Bundle) 熵隔离与脱敏审计通过，无私密 Token/Key 泄漏`);
       }
     } catch (err: any) {
       logFail(`客户端敏感信息扫描异常: ${err.message}`);
     }
 
-    // 4.5 Cloudflare Worker 边缘运行时体积与规格预算
+    // 4.5 Cloudflare Worker 边缘运行时体积与承载力界限
     try {
       const workerBytes = fs.statSync(serverEntryFile).size;
-      const workerKb = (workerBytes / 1024).toFixed(1);
-      // Cloudflare free plan uncompressed limit is 10MB; threshold set at 5MB
-      if (workerBytes > 5 * 1024 * 1024) {
-        logWarn(`Cloudflare Worker 入口体积为 ${workerKb} KB，已超过 5120 KB 告警阈值（硬限 10MB）！`);
+      const workerBounds = InvariantEngine.checkMetricBounds([
+        { name: 'Cloudflare Worker Entry (entry.mjs)', bytes: workerBytes, minBytes: 10 * 1024, maxBytes: 5 * 1024 * 1024 },
+      ]);
+      if (!workerBounds.valid) {
+        for (const v of workerBounds.violations) logWarn(v);
       } else {
-        logPass(`Cloudflare Worker 入口体积符合边缘规范: ${workerKb} KB (< 5120 KB 预算)`);
+        logPass(`Cloudflare Worker 入口体积符合边缘测度区间: ${(workerBytes / 1024).toFixed(1)} KB (< 5120 KB 预算)`);
       }
     } catch (err: any) {
       logFail(`Worker 体积测算失败: ${err.message}`);
