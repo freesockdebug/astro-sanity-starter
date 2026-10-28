@@ -51,7 +51,8 @@ const unitPairLabel = t('catalog.unitPair');
 // 2. Resolve aggregated categories & counts via data service layer (instantly from memory)
 const CATEGORIES = await fetchCatalogCategories(mergedProducts, allLabel);
 
-const BATCH_SIZE = 20;
+// Number-theoretic optimal batch: LCM(2, 3, 4, 6) = 24 ensures zero ragged rows on 2, 3, 4, 6 columns
+const BATCH_SIZE = 24;
 const minimalProducts = mergedProducts.map((p: any) => {
   const locTitle = getLocalizedValue(p.title, currentLang);
   const locShortTitle = getLocalizedValue(p.shortTitle, currentLang) || locTitle;
@@ -220,7 +221,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                   sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
                   alt={getLocalizedValue(item.title, currentLang)}
                   class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
-                  loading={idx < 4 ? "eager" : "lazy"}
+                  loading={idx < 8 ? "eager" : "lazy"}
                   fetchpriority={idx === 0 ? "high" : "auto"}
                   decoding="async"
                   width="240"
@@ -335,7 +336,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   // Catalog State Management
   const catalogDataEl = document.getElementById('catalog-products-data');
   const allProducts = catalogDataEl ? JSON.parse(catalogDataEl.textContent || '[]') : [];
-  const BATCH_SIZE = 20; // 4 full rows on 5-col desktop grid, 5 full rows on 4-col tablet grid
+  const BATCH_SIZE = 24; // LCM(2, 3, 4, 6) = 24 ensures zero ragged rows on 2, 3, 4, 6 column layouts
   let currentCategory = 'all';
   let searchQuery = '';
   let currentSort = 'featured';

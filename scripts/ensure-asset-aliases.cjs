@@ -29,13 +29,9 @@ if (!activeLayoutCss) {
 if (activeLayoutCss && fs.existsSync(path.join(clientAstroDir, activeLayoutCss))) {
   const activePath = path.join(clientAstroDir, activeLayoutCss);
   
-  // Historical hashes to keep physically alive for stale browser tabs
+  // Canonical evergreen fixed point: all arbitrary historical hashes converge to Layout.css via edge middleware in O(1)
   const legacyAliases = [
-    'Layout.wz5V2tVq.css',
-    'Layout.2XgfxuuA.css',
-    'Layout.MXg1_XRl.css',
-    'Layout.BLn9bAsC.css',
-    'Layout.css' // Canonical evergreen alias
+    'Layout.css' // Canonical evergreen fixed point
   ];
 
   for (const alias of legacyAliases) {

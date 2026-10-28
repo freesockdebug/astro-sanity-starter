@@ -10,6 +10,10 @@ export const LANGUAGES = {
 export type SupportedLocale = keyof typeof LANGUAGES;
 export const DEFAULT_LOCALE: SupportedLocale = 'en';
 
+/** Set-algebraic derivation of all supported locales and non-default locale subsets */
+export const ALL_LOCALE_CODES = Object.keys(LANGUAGES) as SupportedLocale[];
+export const NON_DEFAULT_LOCALES = ALL_LOCALE_CODES.filter((loc) => loc !== DEFAULT_LOCALE);
+
 export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
   en: {
     // Navigation

@@ -301,12 +301,21 @@ const showCardQuoteButton = propShowCardQuote !== undefined
 
   shelf?.addEventListener('scroll', updateArrowStates, { passive: true });
 
+  // Dynamic lattice constant step calculation (eliminating phase drift)
+  function getLatticeStep(): number {
+    if (!shelf) return 340;
+    const firstCard = (shelf.querySelector('.group') || shelf.firstElementChild) as HTMLElement | null;
+    const cardWidth = firstCard?.offsetWidth || 320;
+    const gap = parseFloat(window.getComputedStyle(shelf).gap || '24') || 24;
+    return cardWidth + gap;
+  }
+
   prevBtn?.addEventListener('click', () => {
-    shelf?.scrollBy({ left: -400, behavior: 'smooth' });
+    shelf?.scrollBy({ left: -getLatticeStep(), behavior: 'smooth' });
   });
 
   nextBtn?.addEventListener('click', () => {
-    shelf?.scrollBy({ left: 400, behavior: 'smooth' });
+    shelf?.scrollBy({ left: getLatticeStep(), behavior: 'smooth' });
   });
 
   document.querySelectorAll('.btn-card-add-quote').forEach((btn) => {

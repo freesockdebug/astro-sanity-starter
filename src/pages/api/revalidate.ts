@@ -3,6 +3,7 @@ import type { APIRoute } from 'astro';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 import { SecurityService } from '@utils/security';
+import { NON_DEFAULT_LOCALES } from '@i18n';
 
 export const prerender = false;
 
@@ -207,8 +208,8 @@ export const POST: APIRoute = async (context) => {
     }
 
     // Expand all collected target paths to include both with & without trailing slash,
-    // and automatically expand across all non-default supported locales (['de', 'fr', 'es'])
-    const supportedLocales = ['de', 'fr', 'es'];
+    // and automatically expand across all non-default supported locales derived from SSOT
+    const supportedLocales = NON_DEFAULT_LOCALES;
     const allPathsWithLocales = new Set<string>();
 
     for (const p of targetPaths) {

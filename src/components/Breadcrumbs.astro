@@ -1,6 +1,6 @@
 ---
 // src/components/Breadcrumbs.astro
-import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
+import { getLangFromUrl, getLocalizedPath, useTranslations, ALL_LOCALE_CODES } from '@i18n';
 import type { SiteConfig, Page } from 'types';
 
 export interface BreadcrumbItem {
@@ -27,7 +27,7 @@ const homeLabel = t('nav.home');
 const productsLabel = t('nav.products');
 
 const pathname = Astro.url.pathname;
-const isHome = pathname === '/' || /^\/(en|de|fr|es)\/?$/.test(pathname);
+const isHome = pathname === '/' || new RegExp(`^\\/(${ALL_LOCALE_CODES.join('|')})\\/?$`).test(pathname);
 ---
 
 {!isHome && (
