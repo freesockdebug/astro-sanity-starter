@@ -101,7 +101,6 @@ const stages = sections
   addTitleSuffix={homeData?.addTitleSuffix ?? false}
   page={homeData}
   preloadHeroImage={heroPreload}
-  hideBreadcrumbs={true}
 >
   {sections.map((section: any) => {
     const Component = componentMap[section._type];

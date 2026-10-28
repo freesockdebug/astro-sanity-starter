@@ -6,6 +6,8 @@ import { DEFAULT_HERO, DEFAULT_FALLBACK_IMAGE } from '@data/defaults';
 import { getLangFromUrl, getLocalizedPath, useTranslations, getLocalizedValue } from '@i18n';
 
 interface Props {
+  elementId?: string;
+  sectionAnchor?: string;
   superTitle?: string;
   headline?: string;
   subline?: string;
@@ -20,6 +22,8 @@ interface Props {
 }
 
 const {
+  elementId,
+  sectionAnchor,
   superTitle: propSuperTitle,
   headline = DEFAULT_HERO.headline,
   subline = DEFAULT_HERO.subline,
@@ -76,14 +80,16 @@ const showPrimaryButton = RfqSettingsService.isButtonVisible({
   buttonText: primaryButtonText,
 });
 
-const showSecondaryButton = propShowSecondary !== undefined
-  ? Boolean(propShowSecondary && secondaryButtonText?.trim())
-  : (rfqSettings?.showHeroSecondaryButton !== undefined
-      ? Boolean(rfqSettings.showHeroSecondaryButton && secondaryButtonText?.trim())
-      : Boolean(secondaryButtonText?.trim()));
+const showSecondaryButton = RfqSettingsService.isButtonVisible({
+  propOverride: propShowSecondary,
+  settingOverride: rfqSettings?.showHeroSecondaryButton,
+  buttonText: resolvedSecondaryText,
+});
+
+const sectionId = elementId || sectionAnchor || 'hero';
 ---
 
-<section id="hero" class="hero-section pt-16 sm:pt-18 lg:pt-18 pb-4 sm:pb-6 lg:pb-6 bg-white text-center overflow-hidden lg:h-[100svh] lg:max-h-[960px] lg:min-h-0 lg:flex lg:flex-col lg:justify-between">
+<section id={sectionId} class="hero-section pt-16 sm:pt-18 lg:pt-18 pb-4 sm:pb-6 lg:pb-6 bg-white text-center overflow-hidden lg:h-[100svh] lg:max-h-[960px] lg:min-h-0 lg:flex lg:flex-col lg:justify-between">
   <!-- Narrow Rail (980px): Text Content Focus -->
   <div class="apple-rail-narrow shrink-0">
     <!-- Category Super-title (Displayed comfortably below 48px fixed navbar) -->

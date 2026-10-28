@@ -5,6 +5,8 @@ import { DEFAULT_MANUFACTURING, DEFAULT_RFQ } from '@data/defaults';
 import { getLangFromUrl, useTranslations, getLocalizedPath, getLocalizedValue } from '@i18n';
 
 interface Props {
+  elementId?: string;
+  sectionAnchor?: string;
   badge?: string;
   headline?: string;
   subline?: string;
@@ -12,9 +14,12 @@ interface Props {
   actionButtonText?: string;
   actionButtonUrl?: string;
   showActionButton?: boolean;
+  swatchSku?: string;
 }
 
 const {
+  elementId,
+  sectionAnchor,
   badge = DEFAULT_MANUFACTURING.badge,
   headline = DEFAULT_MANUFACTURING.headline,
   subline = DEFAULT_MANUFACTURING.subline,
@@ -78,9 +83,10 @@ const FOOTERS_BY_LANG: Record<string, string[]> = {
   ]
 };
 const footers = FOOTERS_BY_LANG[currentLang] || FOOTERS_BY_LANG.en;
+const sectionId = elementId || sectionAnchor || 'manufacturing';
 ---
 
-<section id="manufacturing" class="bg-white text-[#1d1d1f] border-t border-black/5 py-8 sm:py-10 lg:py-12">
+<section id={sectionId} class="bg-white text-[#1d1d1f] border-t border-black/5 py-8 sm:py-10 lg:py-12">
   <div class="apple-rail-bento w-full">
     <div class="apple-rail-narrow text-center mb-4 sm:mb-5 lg:mb-6 space-y-1 sm:space-y-1.5">
       <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">{badge}</span>

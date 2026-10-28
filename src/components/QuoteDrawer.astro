@@ -37,7 +37,7 @@ const reqCountryCode = SecurityService.resolveCountry(Astro.request);
 let visitorCountry = '';
 if (reqCountryCode) {
   try {
-    visitorCountry = new Intl.DisplayNames(['en'], { type: 'region' }).of(reqCountryCode) || reqCountryCode;
+    visitorCountry = new Intl.DisplayNames([currentLang, 'en'], { type: 'region' }).of(reqCountryCode) || reqCountryCode;
   } catch {
     visitorCountry = reqCountryCode;
   }
@@ -524,12 +524,17 @@ if (reqCountryCode) {
     const items = quoteCart.get() || [];
     const item = items.find((i) => i.id === id && i.variant === variant);
 
+    if (!item) return;
+
+    const isSingleSample = item.quantity < 50 || id === swatchKitSku || id.startsWith('spec-');
+    const step = isSingleSample ? 1 : 50;
+
     if (action === 'remove') {
       removeFromQuote(id, variant);
-    } else if (action === 'inc' && item) {
-      updateQuoteQuantity(id, variant, item.quantity + 50); // B2B step increments
-    } else if (action === 'dec' && item) {
-      updateQuoteQuantity(id, variant, item.quantity - 50);
+    } else if (action === 'inc') {
+      updateQuoteQuantity(id, variant, item.quantity + step);
+    } else if (action === 'dec') {
+      updateQuoteQuantity(id, variant, item.quantity - step);
     }
   });
 

@@ -13,7 +13,13 @@ import { getLangFromUrl, getLocalizedValue } from '@i18n';
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
-const rawSlug = Astro.params.slug || Astro.params.lang || Astro.url.pathname.replace(/^\//, '');
+const currentLang = getLangFromUrl(Astro.url);
+let rawSlug = Astro.params.slug || Astro.params.lang || Astro.url.pathname.replace(/^\//, '');
+
+// Strip language prefix if present (e.g. "de/about" -> "about", "de" -> "") so Sanity query matches standard page slug
+if (currentLang && currentLang !== 'en') {
+  rawSlug = rawSlug.replace(new RegExp(`^${currentLang}(/|$)`), '');
+}
 
 // Fast 404 for static asset extensions to prevent unnecessary CMS roundtrips or MIME confusion
 if (rawSlug && /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml|json)$/i.test(rawSlug)) {
@@ -47,7 +53,6 @@ if (!page) {
     return new Response("404 Not Found", { status: 404, statusText: "Not Found" });
 }
 
-const currentLang = getLangFromUrl(Astro.url);
 const { title, sections: rawSections, metaTitle, addTitleSuffix, metaDescription, socialImage } = page;
 const sections = normalizeSections(rawSections, currentLang);
 const heroPreload = extractHeroPreload(sections);

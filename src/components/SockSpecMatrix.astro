@@ -1,11 +1,13 @@
 ---
 // src/components/SockSpecMatrix.astro
-import { fetchRfqSettings } from '@data/rfqSettings';
+import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_SPEC_MATRIX, DEFAULT_RFQ } from '@data/defaults';
 import { getLangFromUrl, useTranslations, getLocalizedPath, getLocalizedValue } from '@i18n';
 
 interface Props {
+  elementId?: string;
+  sectionAnchor?: string;
   badge?: string;
   title?: string;
   description?: string;
@@ -96,7 +98,9 @@ const {
   bento5Unit = DEFAULT_SPEC_MATRIX.bento5Unit,
   bento5Title = DEFAULT_SPEC_MATRIX.bento5Title,
   bento5Description = DEFAULT_SPEC_MATRIX.bento5Description,
-  bento5FooterNote = DEFAULT_SPEC_MATRIX.bento5FooterNote
+  bento5FooterNote = DEFAULT_SPEC_MATRIX.bento5FooterNote,
+  elementId,
+  sectionAnchor,
 } = Astro.props;
 
 const currentLang = getLangFromUrl(Astro.url);
@@ -110,25 +114,28 @@ const primaryButtonText = propPrimaryText?.trim() || getLocalizedValue(rfqSettin
 const resolvedSecondaryText = (secondaryButtonText && secondaryButtonText !== DEFAULT_SPEC_MATRIX.secondaryButtonText) ? secondaryButtonText : (currentLang !== 'en' ? t('hero.exploreLineSheets') : secondaryButtonText);
 
 const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";
-const showPrimaryButton = propShowPrimary !== undefined
-  ? Boolean(propShowPrimary && primaryButtonText?.trim())
-  : (rfqSettings?.showSpecsPrimaryButton !== undefined
-      ? Boolean(rfqSettings.showSpecsPrimaryButton && primaryButtonText?.trim())
-      : (isSwatchButton ? (Boolean(rfqSettings?.showSwatchKitButton) && Boolean(primaryButtonText?.trim())) : Boolean(primaryButtonText?.trim())));
+const showPrimaryButton = RfqSettingsService.isButtonVisible({
+  propOverride: propShowPrimary,
+  settingOverride: rfqSettings?.showSpecsPrimaryButton,
+  isSwatchAction: isSwatchButton,
+  globalSwatchSetting: rfqSettings?.showSwatchKitButton,
+  buttonText: primaryButtonText,
+});
 
-const showSecondaryButton = propShowSecondary !== undefined
-  ? Boolean(propShowSecondary && secondaryButtonText?.trim())
-  : (rfqSettings?.showSpecsSecondaryButton !== undefined
-      ? Boolean(rfqSettings.showSpecsSecondaryButton && secondaryButtonText?.trim())
-      : Boolean(secondaryButtonText?.trim()));
+const showSecondaryButton = RfqSettingsService.isButtonVisible({
+  propOverride: propShowSecondary,
+  settingOverride: rfqSettings?.showSpecsSecondaryButton,
+  buttonText: resolvedSecondaryText,
+});
 
 // Clean accidental index numbers from CMS text (e.g. "Construction1", "Matrix2", "3We treat")
 const cleanBadge = (badge || "").replace(/\d+$/, "").trim();
 const cleanTitle = (title || "").replace(/\d+$/, "").trim();
 const cleanDescription = (description || "").replace(/^\d+/, "").trim();
+const sectionId = elementId || sectionAnchor || 'specs';
 ---
 
-<section id="specs" class="specs-section bg-[#f5f5f7] border-t border-black/5 py-8 lg:py-0 lg:h-[calc(100svh-48px)] lg:max-h-[850px] lg:min-h-0 lg:flex lg:flex-col lg:justify-between lg:pt-6 lg:pb-4">
+<section id={sectionId} class="specs-section bg-[#f5f5f7] border-t border-black/5 py-8 lg:py-0 lg:h-[calc(100svh-48px)] lg:max-h-[850px] lg:min-h-0 lg:flex lg:flex-col lg:justify-between lg:pt-6 lg:pb-4">
   <div class="apple-rail-bento flex flex-col flex-1 min-h-0 justify-between gap-3 lg:gap-3">
     <!-- Header: Apple Grand Typography on Narrow Rail (980px) - Centered -->
     <div class="apple-rail-narrow text-center flex-shrink-0 pt-1 lg:pt-2 space-y-1 sm:space-y-1.5">
