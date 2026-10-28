@@ -25,6 +25,12 @@
   /* 3. Authoritative Top Clearance (Header Offset + Fluid Buffer) */
   /* Mathematical Invariant: --apple-page-top > --apple-header-offset strictly holds */
   --apple-page-top: calc(var(--apple-header-offset) + var(--apple-flow-buffer));
+
+  /* 4. Continuous Affine Container Rails (smooth C¹ continuity replacing discrete @media staircases) */
+  --rail-gutter: clamp(1rem, 0.25rem + 2.25vw, 3.5rem);
+  --rail-max-header: 1024px;
+  --rail-max-narrow: 980px;
+  --rail-max-bento: clamp(80rem, 82vw, 96.25rem); /* 1280px -> 1540px continuous affine mapping */
 }
 
 html:has(.breadcrumbs-bar) {
@@ -96,69 +102,31 @@ body {
 }
 
 /* ==========================================================================
-   Apple 容器轨制（小屏统一 16px/24px 边距等宽对齐，大屏分级宽窄轨）
+   Apple 容器轨制（连续仿射变换 + 双界钳制，全域 C¹ 连续平滑映射）
    ========================================================================== */
-
-/* 1. 小屏幕统一基线（手机端 <640px）：所有区块严格采用 16px 边距 (min(100% - 2rem))，左右完美对齐 */
 .apple-rail-header,
-.apple-rail-footer,
-.apple-rail-narrow,
+.apple-rail-footer {
+  width: min(calc(100% - 2 * var(--rail-gutter)), var(--rail-max-header));
+  margin-inline: auto;
+}
+
+.apple-rail-narrow {
+  width: min(calc(100% - 2 * var(--rail-gutter)), var(--rail-max-narrow));
+  margin-inline: auto;
+}
+
 .apple-rail-bento,
 .apple-rail-showcase,
 .apple-rail-wide {
-  width: min(100% - 2rem, 100%);
+  width: min(calc(100% - 2 * var(--rail-gutter)), var(--rail-max-bento));
   margin-inline: auto;
 }
 
-/* 当 .apple-rail-narrow 嵌套在 .apple-rail-bento 内部时，小屏宽度自动填满父级 (100%)，避免产生二次嵌套边距偏差 */
+/* 嵌套层级无损映射：内部导语自然贴合父级 narrow 宽限 */
 .apple-rail-bento .apple-rail-narrow {
   width: 100%;
-  max-width: 980px;
+  max-width: var(--rail-max-narrow);
   margin-inline: auto;
-}
-
-/* 2. 平板端 (640px ~ 1023px)：统一采用 24px 边距 (min(100% - 3rem))，保持整齐 */
-@media (min-width: 640px) {
-  .apple-rail-header,
-  .apple-rail-footer,
-  .apple-rail-narrow,
-  .apple-rail-bento,
-  .apple-rail-showcase,
-  .apple-rail-wide {
-    width: min(100% - 3rem, 100%);
-  }
-}
-
-/* 3. 桌面端 (1024px+)：严格遵循苹果官网设计（Header/Footer 1024px，导语文本 980px，主体内容展开至 1360px） */
-@media (min-width: 1024px) {
-  .apple-rail-header,
-  .apple-rail-footer {
-    width: min(100% - 3rem, 1024px);
-  }
-  .apple-rail-narrow {
-    width: min(100% - 3rem, 980px);
-  }
-  .apple-rail-bento,
-  .apple-rail-showcase,
-  .apple-rail-wide {
-    width: min(100% - 5.5rem, 1360px);
-  }
-}
-
-/* 4. 超大屏 (1600px+) 与 4K 宽屏 (1920px+) 视觉沉浸：外侧留出 80px~190px 黄金留白，彻底告别重叠与遮盖 */
-@media (min-width: 1600px) {
-  .apple-rail-bento,
-  .apple-rail-showcase,
-  .apple-rail-wide {
-    width: min(100% - 6rem, 1440px);
-  }
-}
-@media (min-width: 1920px) {
-  .apple-rail-bento,
-  .apple-rail-showcase,
-  .apple-rail-wide {
-    width: min(100% - 7rem, 1540px);
-  }
 }
 
 /* 超大外接显示器产品货架 7 列标准 (>= 1760px，彻底免疫任意工具类层叠覆盖) */
@@ -257,8 +225,8 @@ body {
   .product-hero-overview {
     padding-top: 0.35rem !important;
     padding-bottom: 0.35rem !important;
-    height: calc(100svh - 48px) !important;
-    max-height: calc(100svh - 48px) !important;
+    height: calc(100svh - var(--apple-header-offset)) !important;
+    max-height: calc(100svh - var(--apple-header-offset)) !important;
   }
   .product-gallery-col .carousel-thumb {
     width: 48px !important;
@@ -317,7 +285,7 @@ body {
     padding-top: 1rem !important;
     padding-bottom: 0.75rem !important;
     height: auto !important;
-    min-height: calc(100svh - 48px) !important;
+    min-height: calc(100svh - var(--apple-header-offset)) !important;
     max-height: none !important;
   }
   .specs-section .apple-rail-bento {
@@ -335,7 +303,7 @@ body {
     padding-top: 1rem !important;
     padding-bottom: 0.75rem !important;
     height: auto !important;
-    min-height: calc(100svh - 44px) !important;
+    min-height: calc(100svh - var(--apple-header-offset)) !important;
     max-height: none !important;
   }
   #collections .apple-rail-narrow {

@@ -245,10 +245,10 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                 <span class="text-[10px] text-[#52525b] font-mono">{item.leadTime || '15-20d'}</span>
               </div>
 
-              <!-- 3. Taobao Title: Strict 2-line clamp with fixed 36px height (18px line-height) -->
-              <div class="shrink-0 h-[36px] mt-0.5 px-0.5">
+              <!-- 3. Title: Relative em-metric 2-line clamp ensuring resilience to user font-scaling -->
+              <div class="shrink-0 min-h-[2.8em] mt-0.5 px-0.5">
                 <a href={getLocalizedPath(`/products/${item.slug}`, currentLang)} class="block">
-                  <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-[18px]" title={getLocalizedValue(item.title, currentLang)}>
+                  <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug" title={getLocalizedValue(item.title, currentLang)}>
                     {getLocalizedValue(item.shortTitle || item.title, currentLang)}
                   </h3>
                 </a>
