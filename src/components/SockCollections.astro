@@ -214,6 +214,7 @@ const sectionId = elementId || sectionAnchor || 'collections';
                   type="button"
                   class="btn-card-add-quote px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] font-medium bg-white hover:bg-[#1d1d1f] hover:text-white text-[#1d1d1f] border border-black/10 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
                   data-id={item.id}
+                  data-sku={item.sku || item.id}
                   data-title={item.title}
                   data-image={item.image}
                   data-moq={item.moq}
@@ -328,6 +329,7 @@ const sectionId = elementId || sectionAnchor || 'collections';
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const id = btn.getAttribute('data-id') || '';
+      const sku = btn.getAttribute('data-sku') || id.toUpperCase();
       const title = btn.getAttribute('data-title') || '';
       const imageUrl = btn.getAttribute('data-image') || '';
       const rawMoq = btn.getAttribute('data-moq') || '200';
@@ -336,7 +338,7 @@ const sectionId = elementId || sectionAnchor || 'collections';
       addToQuote({
         id,
         title,
-        sku: 'CAPSULE',
+        sku,
         imageUrl,
         variant: 'Curated Sample',
         quantity: moqNum,

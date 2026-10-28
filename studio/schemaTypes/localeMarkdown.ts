@@ -1,6 +1,14 @@
 import {defineType} from 'sanity'
 import {SUPPORTED_LANGUAGES} from './localeString'
-import {MdxEditorInput} from '../components/MdxEditorInput'
+
+// Safe fallback for CLI/preflight check environments outside Sanity Studio bundle
+let MdxEditorInput: any = undefined;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  MdxEditorInput = require('../components/MdxEditorInput').MdxEditorInput;
+} catch {
+  MdxEditorInput = undefined;
+}
 
 export default defineType({
   name: 'localeMarkdown',

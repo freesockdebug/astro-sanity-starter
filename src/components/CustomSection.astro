@@ -60,6 +60,8 @@ interface BlockItem {
 }
 
 interface Props {
+  elementId?: string;
+  sectionAnchor?: string;
   adminLabel?: string;
   preset?: 'dual-compare' | 'cinematic-hero' | 'split-showcase' | 'bento-grid' | 'custom-free';
   theme?: 'light' | 'subtle' | 'dark' | 'gradient-dark';
@@ -73,6 +75,8 @@ interface Props {
 }
 
 const {
+  elementId,
+  sectionAnchor,
   preset,
   theme = 'light',
   containerWidth = 'wide',
@@ -222,9 +226,11 @@ function getSanityDim(img: any): { w: number; h: number; ratio: number } | null 
   const h = parseInt(m[2], 10);
   return { w, h, ratio: w / h };
 }
+
+const sectionId = elementId || sectionAnchor || 'custom';
 ---
 
-<section id={Astro.props.elementId || Astro.props.sectionAnchor || 'custom'} class={`relative w-full transition-colors duration-300 custom-section-root ${themeContainerClass} ${heightContainerClass}`}>
+<section id={sectionId} class={`relative w-full transition-colors duration-300 custom-section-root ${themeContainerClass} ${heightContainerClass}`}>
   <div class={`${railClass} ${isScreenFit ? 'h-full flex flex-col justify-between my-auto' : 'w-full flex flex-col gap-6 sm:gap-8 lg:gap-12'}`}>
     {/* ---------------- 模式 1: 垂直自然积木流 (Vertical Flow) ---------------- */}
     {layoutMode === 'flow' && (

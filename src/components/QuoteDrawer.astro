@@ -526,7 +526,7 @@ if (reqCountryCode) {
 
     if (!item) return;
 
-    const isSingleSample = item.quantity < 50 || id === swatchKitSku || id.startsWith('spec-');
+    const isSingleSample = item.quantity < 50 || id.startsWith('swatch-') || id === 'swatch-kit-sample' || id.startsWith('spec-');
     const step = isSingleSample ? 1 : 50;
 
     if (action === 'remove') {

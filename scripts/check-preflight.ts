@@ -31,6 +31,23 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import Module from 'module';
+
+// 轻量虚拟 Mock：解耦 Studio 专属富文本组件依赖，防止在无 studio/node_modules 环境下巡检中断
+const originalResolveFilename = (Module as any)._resolveFilename;
+(Module as any)._resolveFilename = function (request: string, parent: any, isMain: boolean, options: any) {
+  if (request === '@mdxeditor/editor' || request.startsWith('@mdxeditor/editor/')) {
+    return '__mock_mdxeditor__';
+  }
+  return originalResolveFilename.call(this, request, parent, isMain, options);
+};
+require.cache['__mock_mdxeditor__'] = {
+  id: '__mock_mdxeditor__',
+  filename: '__mock_mdxeditor__',
+  loaded: true,
+  exports: new Proxy({}, { get: () => () => null }),
+} as any;
+
 import { schemaTypes } from '../studio/schemaTypes/index';
 
 const isFullMode = process.argv.includes('--full');

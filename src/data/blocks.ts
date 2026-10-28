@@ -73,7 +73,7 @@ export function deepLocalize<T>(val: T, lang: string): T {
       keys.every((k) => /^[a-z]{2}(-[A-Z]{2})?$/.test(k)) &&
       ('en' in val || lang in val);
     if (isLocalizedLeaf) {
-      return getLocalizedValue(val, lang) as unknown as T;
+      return getLocalizedValue(val, lang as any) as unknown as T;
     }
     const result: Record<string, any> = {};
     for (const [k, v] of Object.entries(val)) {
