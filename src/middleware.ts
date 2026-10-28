@@ -1,4 +1,3 @@
-import activeAsset from './utils/active-asset.json';
 // src/middleware.ts
 import { defineMiddleware } from 'astro:middleware';
 import { SiteConfigService } from '@data/siteConfig';
@@ -81,8 +80,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
     method: 'GET',
   });
 
-  const isPurge = url.searchParams.has('purge') || url.searchParams.has('revalidate');
-  if (isPurge && cache) {
+  // 4. Secure Purge Guard: Prevent unauthorized external attackers from spamming ?purge=1 to hammer SSR & CMS quotas.
+  // Edge purge via query param is strictly constrained to:
+  // (a) Loopback dev origin (localhost / 127.0.0.1)
+  // (b) Valid secret authentication (?key=... matching REVALIDATE_SECRET or header)
+  const isPurgeParam = url.searchParams.has('purge') || url.searchParams.has('revalidate');
+  let isAuthorizedPurge = false;
+  if (isPurgeParam) {
+    const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    const purgeSecret =
+      (typeof process !== 'undefined' && process.env?.REVALIDATE_SECRET) ||
+      (import.meta.env && (import.meta.env as any).REVALIDATE_SECRET);
+    const providedKey = url.searchParams.get('key') || request.headers.get('x-revalidate-secret');
+    if (isLocalhost || (purgeSecret && providedKey === purgeSecret)) {
+      isAuthorizedPurge = true;
+    }
+  }
+
+  if (isAuthorizedPurge && cache) {
     try {
       await cache.delete(cacheKey);
     } catch (e) {
@@ -90,7 +105,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  if (cache && !isPurge) {
+  if (cache && !isAuthorizedPurge) {
     try {
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {

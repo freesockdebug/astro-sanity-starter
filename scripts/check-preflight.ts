@@ -298,7 +298,7 @@ class InvariantEngine {
       let match;
       while ((match = classAttrRegex.exec(content)) !== null) {
         const classList = match[1];
-        // 匹配硬编码类名，如 pt-5, pt-16, pt-20, pt-[20px] 等 (排除 pt-0 或 CSS 变量 top-[var(...)] 声明)
+        // 匹配硬编码类名，如 pt-5, pt-16, pt-20, pt-[20px] 等 (排除 pt-0 或 CSS 变量 top 声明)
         const conflictMatch = classList.match(/\bpt-(?:[1-9][0-9]*|\[[0-9]+px\])\b/);
         if (conflictMatch) {
           violations.push(
@@ -850,20 +850,6 @@ async function main() {
       logFail(
         `package.json: [Pitfall 19] build 流程未挂载 ensure-asset-aliases.cjs！构建产物无法自动保留历史版本兼容别名。`
       );
-    }
-  }
-
-  const activeAssetFile = path.join(SRC_DIR, 'utils', 'active-asset.json');
-  if (!fs.existsSync(activeAssetFile)) {
-    logFail(`src/utils/active-asset.json: [Pitfall 19] 缺少 active-asset.json 清单！Worker 边缘自愈重定向无法获取活跃 CSS。`);
-  } else {
-    try {
-      const activeMeta = JSON.parse(fs.readFileSync(activeAssetFile, 'utf-8'));
-      if (!activeMeta.activeLayoutCss || !activeMeta.activeLayoutCss.endsWith('.css')) {
-        logFail(`src/utils/active-asset.json: [Pitfall 19] activeLayoutCss 路径格式非法: ${activeMeta.activeLayoutCss}`);
-      }
-    } catch {
-      logFail(`src/utils/active-asset.json: [Pitfall 19] JSON 解析失败！`);
     }
   }
 

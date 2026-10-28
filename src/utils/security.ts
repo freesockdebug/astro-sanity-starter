@@ -71,11 +71,48 @@ export class SecurityService {
   }
 
   /**
+   * Sanitizes raw SVG strings for safe rendering via set:html
+   * Strips <script>, <iframe>, <object>, <embed>, on* inline handlers, and javascript: pseudo-protocols
+   */
+  public static sanitizeSvg(input: unknown): string {
+    if (!input || typeof input !== 'string') return '';
+    const trimmed = input.trim();
+    if (!trimmed.toLowerCase().startsWith('<svg') || !trimmed.toLowerCase().endsWith('</svg>')) {
+      return '';
+    }
+    return trimmed
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+      .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+      .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+      .replace(/\s+on\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
+      .replace(/(href|src|xlink:href)\s*=\s*["']?\s*javascript:[^"'>]*/gi, '$1="#"');
+  }
+
+  /**
    * Extract apex/root domain from hostname (e.g. 'admin.example.com' -> 'example.com')
+   * Accounts for multi-tenant serverless platforms and common two-part TLDs (e.g. .co.uk, .pages.dev)
    */
   private static extractRootDomain(hostname: string): string {
     const parts = hostname.toLowerCase().split('.');
     if (parts.length <= 2) return hostname.toLowerCase();
+
+    // Prevent multi-tenant platforms & 2-level TLDs from being treated as shared apex root
+    const multiTenantOrTwoLevel = [
+      'co.uk',
+      'com.cn',
+      'net.cn',
+      'org.cn',
+      'pages.dev',
+      'workers.dev',
+      'run.app',
+      'vercel.app',
+      'netlify.app',
+    ];
+    const lastTwo = parts.slice(-2).join('.');
+    if (multiTenantOrTwoLevel.includes(lastTwo) && parts.length >= 3) {
+      return parts.slice(-3).join('.');
+    }
     return parts.slice(-2).join('.');
   }
 

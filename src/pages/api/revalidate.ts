@@ -2,6 +2,7 @@
 import type { APIRoute } from 'astro';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
+import { SecurityService } from '@utils/security';
 
 export const prerender = false;
 
@@ -55,78 +56,15 @@ const expandCanonicalUrls = (origin: string, pathOrUrl: string): string[] => {
 };
 
 /**
- * Extract apex/root domain from hostname (e.g. 'admin.gwenvenni.com' -> 'gwenvenni.com')
+ * Reuse strict, trusted-origin CORS generator from SecurityService
  */
-const extractRootDomain = (hostname: string): string => {
-  const parts = hostname.toLowerCase().split('.');
-  if (parts.length <= 2) return hostname.toLowerCase();
-  return parts.slice(-2).join('.');
-};
-
-/**
- * Dynamic CORS header generator:
- * Resolves trusted domains dynamically from runtime request URL and environment variables,
- * strictly eliminating hardcoded domain names while securing all authorized subdomains.
- */
-const getCorsHeaders = (request?: Request, currentUrl?: URL): Record<string, string> => {
-  const origin = request?.headers.get('origin');
-
-  // 1. 从当前运行时 URL 提取站点主机名与根域名（自动适应任何绑定域名）
-  const currentHost = currentUrl?.hostname?.toLowerCase() || '';
-  const rootDomain = currentHost ? extractRootDomain(currentHost) : '';
-
-  // 2. 从环境变量读取可能配置的允许域名（如 ALLOWED_ORIGIN_DOMAINS, SITE_DOMAIN, TURNSTILE_HOSTNAMES）
-  const envConfiguredDomains = [
-    getEnv('ALLOWED_ORIGIN_DOMAINS'),
-    getEnv('SITE_DOMAIN'),
-    getEnv('TURNSTILE_HOSTNAMES'),
-  ]
-    .filter(Boolean)
-    .join(',')
-    .split(',')
-    .map(d => d.trim().toLowerCase())
-    .filter(Boolean);
-
-  const trustedDomainSet = new Set<string>();
-  if (rootDomain) trustedDomainSet.add(rootDomain);
-  if (currentHost) trustedDomainSet.add(currentHost);
-  for (const d of envConfiguredDomains) {
-    trustedDomainSet.add(d);
-  }
-
-  // 3. 校验请求的 Origin 是否属于本地开发环境，或在受信任根域及其子域名白名单内
-  let isAllowedOrigin = false;
-  if (origin) {
-    try {
-      const originHost = new URL(origin).hostname.toLowerCase();
-      if (originHost === 'localhost' || originHost === '127.0.0.1' || originHost.endsWith('.local')) {
-        isAllowedOrigin = true;
-      } else {
-        for (const trusted of trustedDomainSet) {
-          if (originHost === trusted || originHost.endsWith(`.${trusted}`)) {
-            isAllowedOrigin = true;
-            break;
-          }
-        }
-      }
-    } catch {
-      isAllowedOrigin = false;
-    }
-  }
-
-  const headers: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Webhook-Secret, X-Revalidate-Secret',
-    'Access-Control-Max-Age': '86400',
-    'Vary': 'Origin',
-  };
-
-  if (isAllowedOrigin && origin) {
-    headers['Access-Control-Allow-Origin'] = origin;
-  }
-
-  return headers;
-};
+const getCorsHeaders = (request?: Request, currentUrl?: URL): Record<string, string> =>
+  SecurityService.getCorsHeaders(
+    request,
+    currentUrl,
+    'GET, POST, OPTIONS',
+    'Content-Type, Authorization, X-Webhook-Secret, X-Revalidate-Secret, x-sanity-webhook-secret'
+  );
 
 /**
  * Handle CORS preflight requests
@@ -176,16 +114,14 @@ export const POST: APIRoute = async (context) => {
 
     const expectedSecret = getEnv('REVALIDATE_SECRET') || getEnv('SANITY_REVALIDATE_SECRET');
     const isDev = Boolean(import.meta.env?.DEV);
-    const isSameOrTrustedOrigin =
-      Boolean(corsHeaders['Access-Control-Allow-Origin']) ||
-      request.headers.get('sec-fetch-site') === 'same-origin';
+    const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
 
     // 2. Authenticate webhook request:
     // - If secret is configured in environment, strictly require matching secret (fail-closed)
-    // - If no secret is configured in production, reject untrusted cross-origin/external callers
+    // - If no secret is configured, strictly restrict to local dev / loopback origin
     const isAuthorized = expectedSecret
       ? providedSecret === expectedSecret
-      : isDev || isSameOrTrustedOrigin;
+      : isDev || isLocalhost;
 
     if (!isAuthorized) {
       return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or missing revalidation secret' }), {
@@ -270,11 +206,29 @@ export const POST: APIRoute = async (context) => {
       targetPaths.add('/products');
     }
 
-    // Expand all collected target paths to include both with & without trailing slash
+    // Expand all collected target paths to include both with & without trailing slash,
+    // and automatically expand across all non-default supported locales (['de', 'fr', 'es'])
+    const supportedLocales = ['de', 'fr', 'es'];
+    const allPathsWithLocales = new Set<string>();
+
+    for (const p of targetPaths) {
+      const cleanPath = p.startsWith('/') ? p : `/${p}`;
+      allPathsWithLocales.add(cleanPath);
+
+      // Expand to locale prefixes unless already localized
+      const startsWithLocale = supportedLocales.some((l) => cleanPath.startsWith(`/${l}/`) || cleanPath === `/${l}`);
+      if (!startsWithLocale) {
+        for (const loc of supportedLocales) {
+          const localized = cleanPath === '/' ? `/${loc}` : `/${loc}${cleanPath}`;
+          allPathsWithLocales.add(localized);
+        }
+      }
+    }
+
     const urlsToPurge: string[] = [];
     const urlSet = new Set<string>();
 
-    for (const p of targetPaths) {
+    for (const p of allPathsWithLocales) {
       const expanded = expandCanonicalUrls(origin, p);
       for (const u of expanded) {
         if (!urlSet.has(u)) {

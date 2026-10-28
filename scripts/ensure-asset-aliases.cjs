@@ -49,19 +49,6 @@ if (activeLayoutCss && fs.existsSync(path.join(clientAstroDir, activeLayoutCss))
       }
     }
   }
-
-  // Update manifest for reference
-  const activeAssetJsonPath = path.join(process.cwd(), 'src/utils/active-asset.json');
-  try {
-    fs.writeFileSync(activeAssetJsonPath, JSON.stringify({
-      activeLayoutCss: `/_astro/${activeLayoutCss}`,
-      canonicalLayoutCss: '/_astro/Layout.css',
-      generatedAt: new Date().toISOString()
-    }, null, 2));
-    console.log(`[ensure-asset-aliases] Updated src/utils/active-asset.json -> /_astro/${activeLayoutCss}`);
-  } catch (err) {
-    console.warn(`[ensure-asset-aliases] Failed to write active-asset.json:`, err.message);
-  }
 } else {
   console.warn('[ensure-asset-aliases] No active Layout.*.css found in dist/client/_astro');
 }

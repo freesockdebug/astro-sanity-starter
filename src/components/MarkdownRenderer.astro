@@ -2,6 +2,7 @@
 // src/components/MarkdownRenderer.astro
 import { marked } from 'marked';
 import { SanityImageService } from '../utils/image';
+import { SecurityService } from '../utils/security';
 
 export interface Props {
   content?: string;
@@ -19,19 +20,22 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
       if (finalHref.includes('cdn.sanity.io') || finalHref.includes('/cdn-image/')) {
         finalHref = SanityImageService.optimize(finalHref, { format: 'auto', quality: 85 });
       }
-      const titleAttr = title ? ` title="${title}"` : '';
-      const altAttr = text ? ` alt="${text}"` : '';
-      return `<img src="${finalHref}"${altAttr}${titleAttr} loading="lazy" decoding="async" class="product-story-image" />`;
+      const titleAttr = title ? ` title="${SecurityService.escapeHtml(title)}"` : '';
+      const altAttr = text ? ` alt="${SecurityService.escapeHtml(text)}"` : '';
+      const safeHref = SecurityService.escapeHtml(finalHref);
+      return `<img src="${safeHref}"${altAttr}${titleAttr} loading="lazy" decoding="async" class="product-story-image" />`;
     };
 
     const rawParsed = marked.parse(content, { gfm: true, breaks: true, renderer }) as string;
 
-    // Lightweight defense against malicious script tags, iframes, inline event handlers, and javascript pseudo-protocols
+    // Defense against malicious script/object/embed/iframe tags, inline event handlers, and javascript pseudo-protocols
     let sanitized = rawParsed
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
       .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+      .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+      .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
       .replace(/\s+on\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
-      .replace(/(href|src)\s*=\s*["']?\s*javascript:[^"'>]*/gi, '$1="#"');
+      .replace(/(href|src|xlink:href)\s*=\s*["']?\s*javascript:[^"'>]*/gi, '$1="#"');
 
     // Ensure all direct cdn.sanity.io URLs route through Cloudflare Edge Proxy (/cdn-image)
     if (SanityImageService.isProxyEnabled()) {
@@ -41,7 +45,7 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
     htmlContent = sanitized;
   } catch (err) {
     console.error('Error parsing markdown in MarkdownRenderer:', err);
-    htmlContent = content;
+    htmlContent = SecurityService.escapeHtml(content);
   }
 }
 ---
