@@ -32,13 +32,13 @@ const isHome = pathname === '/' || /^\/(en|de|fr|es)\/?$/.test(pathname);
 
 {!isHome && (
   <>
-    <!-- 48px Spacer for Fixed AppleNav to guarantee zero top-content obstruction -->
-    <div class="h-12 w-full shrink-0" aria-hidden="true" />
+    <!-- Dynamic Spacer for Fixed AppleNav to guarantee zero top-content obstruction -->
+    <div class="h-[var(--apple-nav-h)] w-full shrink-0" aria-hidden="true" />
 
     <!-- Apple-Style Compact Sub-Navigation & Breadcrumbs Bar (36px / h-9) -->
     <nav
       aria-label="Breadcrumb"
-      class="breadcrumbs-bar sticky top-12 z-40 h-9 w-full bg-white/95 backdrop-blur-md border-b border-black/5 select-none"
+      class="breadcrumbs-bar sticky top-[var(--apple-nav-h)] z-40 h-9 w-full bg-white/95 backdrop-blur-md border-b border-black/5 select-none"
     >
       <div class="apple-rail-bento h-full flex items-center justify-between gap-3 text-xs">
         <!-- Left: Breadcrumb Trail -->

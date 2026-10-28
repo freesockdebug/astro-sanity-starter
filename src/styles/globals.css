@@ -10,14 +10,43 @@
   --apple-text-secondary: #86868b; /* Subtitles, body copy and specs */
   --apple-border: rgba(0, 0, 0, 0.08);
 
-  /* Dynamic geometric viewport offsets */
+  /* ==========================================================================
+     Single Source of Truth: Mathematical Viewport & Header Offsets Geometry
+     ========================================================================== */
+  /* 1. Header physical stack constants */
   --apple-nav-h: 48px;
   --apple-breadcrumbs-h: 0px;
   --apple-header-offset: calc(var(--apple-nav-h) + var(--apple-breadcrumbs-h));
+
+  /* 2. Fluid mathematical breathing buffer (scales smoothly with viewport width) */
+  /* 390px mobile: 1rem (16px) -> 1440px desktop: 2rem (32px) */
+  --apple-flow-buffer: clamp(1rem, 0.65rem + 1vw, 2rem);
+
+  /* 3. Authoritative Top Clearance (Header Offset + Fluid Buffer) */
+  /* Mathematical Invariant: --apple-page-top > --apple-header-offset strictly holds */
+  --apple-page-top: calc(var(--apple-header-offset) + var(--apple-flow-buffer));
 }
 
 html:has(.breadcrumbs-bar) {
   --apple-breadcrumbs-h: 36px;
+}
+
+/* Fluid responsive buffer adaptation across short displays */
+@media (max-height: 760px) {
+  :root {
+    --apple-flow-buffer: clamp(0.75rem, 0.4rem + 0.8vw, 1.25rem);
+  }
+}
+@media (max-height: 620px) {
+  :root {
+    --apple-flow-buffer: 0.625rem;
+  }
+}
+
+/* Global Zero-Obscurity Flow Container */
+.page-top-clearance,
+.catalog-container {
+  padding-top: var(--apple-page-top);
 }
 
 html {
@@ -250,9 +279,8 @@ body {
     margin-top: 0.125rem !important;
   }
 
-  /* 产品目录列表页 (Catalog Index) - 留足 48px Header + 20px 安全净距 */
+  /* 产品目录列表页 (Catalog Index) */
   .catalog-container {
-    padding-top: 4.25rem !important;
     padding-bottom: 1.5rem !important;
   }
   .catalog-hero-header {

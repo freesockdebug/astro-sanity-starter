@@ -95,8 +95,8 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   image={mergedProducts[0]?.image}
   preloadHeroImage={catalogHeroPreload}
 >
-  <!-- Main Catalog Container with Wide Responsive Boundaries (Clear 48px fixed AppleNav) -->
-  <div class="catalog-container min-h-screen bg-white text-[#1d1d1f] pt-16 sm:pt-20 pb-6 sm:pb-8">
+  <!-- Main Catalog Container with Dynamic Mathematical Top Clearance -->
+  <div class="catalog-container min-h-screen bg-white text-[#1d1d1f] pb-6 sm:pb-8">
     
     <!-- 1. Catalog Hero Header (Apple Rail Narrow) -->
     <section class="catalog-hero-header apple-rail-narrow text-center mb-6 sm:mb-9 space-y-1.5 sm:space-y-2.5">
@@ -111,8 +111,8 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       </p>
     </section>
 
-    <!-- 2. Sticky Control Toolbar: Search & Category Filter Rail -->
-    <div class="catalog-sticky-toolbar sticky top-12 z-40 bg-white/95 backdrop-blur-md border-y border-black/5 py-2.5 mb-6 transition-shadow shadow-xs">
+    <!-- 2. Sticky Control Toolbar: Search & Category Filter Rail (Dynamic offset to match fixed header stack) -->
+    <div class="catalog-sticky-toolbar sticky top-[var(--apple-header-offset)] z-40 bg-white/95 backdrop-blur-md border-y border-black/5 py-2.5 mb-6 transition-shadow shadow-xs">
       <div class="apple-rail-wide flex flex-col md:flex-row md:items-center justify-between gap-3">
         
         <!-- Category Filter Tabs (Horizontal Swipe on Mobile) -->
