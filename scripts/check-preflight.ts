@@ -757,10 +757,176 @@ async function main() {
   }
 
   // =========================================================================
-  // 4. Sanity 数据集结构与字段类型一致性深度巡检 (若开启 --data 或 --full)
+  // 4. dist/ 生产构建交付件物理完整性与安全验收 (Post-build Artifact Verification)
+  // =========================================================================
+  logSection('4. dist/ 生产构建产物交付件物理闭包与安全验收');
+
+  const distDir = path.join(ROOT_DIR, 'dist');
+  const distClientDir = path.join(distDir, 'client');
+  const distServerDir = path.join(distDir, 'server');
+  const serverEntryFile = path.join(distServerDir, 'entry.mjs');
+  const distClientAstroDir = path.join(distClientDir, '_astro');
+
+  if (!fs.existsSync(distDir) || !fs.existsSync(serverEntryFile)) {
+    console.log('\x1b[90m(提示: 当前未检测到 dist/ 生产产物。运行 "npm run build" 后本章节将执行全量产物 404 闭包、敏感词扫描与 CSS 完整性验收)\x1b[0m');
+  } else {
+    // 4.1 Manifest 物理闭包校验 (Zero 404 Orphan Assets)
+    try {
+      const entrySrc = fs.readFileSync(serverEntryFile, 'utf-8');
+      const assetsMatch = entrySrc.match(/"assets":\s*(\[[^\]]+\])/);
+      if (assetsMatch) {
+        const assetsList: string[] = JSON.parse(assetsMatch[1]);
+        const missingAssets: string[] = [];
+        for (const assetRel of assetsList) {
+          const diskPath = path.join(distClientDir, assetRel.replace(/^\//, ''));
+          if (!fs.existsSync(diskPath) || fs.statSync(diskPath).size === 0) {
+            missingAssets.push(assetRel);
+          }
+        }
+        if (missingAssets.length > 0) {
+          logFail(
+            `[dist 404 资产死链] SSR Entry 清单引用了 ${missingAssets.length} 个在 dist/client 中不存在或为空的文件:\n` +
+            missingAssets.map(a => `  - ${a}`).join('\n')
+          );
+        } else {
+          logPass(`SSR Manifest 包含的 ${assetsList.length} 个客户端静态资源全部物理存在且非空，零 404 死链`);
+        }
+      } else {
+        logWarn(`未在 dist/server/entry.mjs 中匹配到 "assets" 清单数组，跳过 Manifest 静态文件闭包对比。`);
+      }
+    } catch (err: any) {
+      logFail(`读取或解析 dist/server/entry.mjs 失败: ${err.message}`);
+    }
+
+    // 4.2 核心 CSS 产物几何标尺与关键类落实验收 (CSS Invariants Proof)
+    try {
+      if (fs.existsSync(distClientAstroDir)) {
+        const astroFiles = fs.readdirSync(distClientAstroDir);
+        const activeCss = astroFiles.find(f => f.startsWith('Layout.') && f.endsWith('.css') && f !== 'Layout.css');
+        if (!activeCss) {
+          logFail(`dist/client/_astro: 未找到构建生成的 Layout.*.css 核心样式包！`);
+        } else {
+          const cssContent = fs.readFileSync(path.join(distClientAstroDir, activeCss), 'utf-8');
+          const requiredCssTokens = [
+            { token: '--apple-nav-h', desc: '导航栏物理标尺标量' },
+            { token: '--apple-flow-buffer', desc: '流体呼吸动态缓冲区' },
+            { token: '--apple-page-top', desc: '全局安全顶端净空' },
+            { token: 'catalog-container', desc: '产品目录安全流动容器' },
+            { token: 'page-top-clearance', desc: '全局零遮盖安全容器' },
+            { token: 'clamp(', desc: 'CSS 数学连续呼吸函数' }
+          ];
+          const missingTokens = requiredCssTokens.filter(t => !cssContent.includes(t.token));
+          if (missingTokens.length > 0) {
+            logFail(
+              `dist/client/_astro/${activeCss}: CSS 编译产物缺失关键几何规则或被错误 Tree-shaking 剔除:\n` +
+              missingTokens.map(t => `  - ${t.token} (${t.desc})`).join('\n')
+            );
+          } else {
+            const cssKb = (fs.statSync(path.join(distClientAstroDir, activeCss)).size / 1024).toFixed(1);
+            logPass(`CSS 主包 (${activeCss}, ${cssKb} KB) 几何标尺与 Tailwind v4 关键规则编译完整性验证通过`);
+          }
+        }
+      }
+    } catch (err: any) {
+      logFail(`校验 CSS 产物失败: ${err.message}`);
+    }
+
+    // 4.3 历史哈希兼容物理镜像 (Zero Stale 404 Invariant)
+    try {
+      if (fs.existsSync(distClientAstroDir)) {
+        const requiredAliases = [
+          'Layout.wz5V2tVq.css',
+          'Layout.2XgfxuuA.css',
+          'Layout.MXg1_XRl.css',
+          'Layout.BLn9bAsC.css',
+          'Layout.css'
+        ];
+        const missingAliases = requiredAliases.filter(alias => {
+          const p = path.join(distClientAstroDir, alias);
+          return !fs.existsSync(p) || fs.statSync(p).size === 0;
+        });
+        if (missingAliases.length > 0) {
+          logFail(`dist/client/_astro 缺少历史兼容别名: ${missingAliases.join(', ')}，旧 Tab 访问将引发 404！`);
+        } else {
+          logPass(`历史版本 CSS 兼容镜像与常青别名 (Layout.css) 物理校验通过，保证旧 Tab 100% 200 OK`);
+        }
+      }
+    } catch (err: any) {
+      logFail(`校验兼容别名失败: ${err.message}`);
+    }
+
+    // 4.4 客户端静态代码私钥与敏感信息防泄漏 (Zero Secret Leak)
+    try {
+      const getClientJsFiles = (dir: string): string[] => {
+        let results: string[] = [];
+        if (!fs.existsSync(dir)) return results;
+        for (const item of fs.readdirSync(dir)) {
+          const full = path.join(dir, item);
+          if (fs.statSync(full).isDirectory()) {
+            results = results.concat(getClientJsFiles(full));
+          } else if (item.endsWith('.js') || item.endsWith('.mjs')) {
+            results.push(full);
+          }
+        }
+        return results;
+      };
+      const clientJsFiles = getClientJsFiles(distClientDir);
+      const secretLeakPatterns = [
+        { pattern: /SANITY_API_WRITE_TOKEN/, name: 'SANITY_API_WRITE_TOKEN' },
+        { pattern: /SANITY_API_TOKEN/, name: 'SANITY_API_TOKEN' },
+        { pattern: /sk[a-zA-Z0-9]{32,}/, name: 'Sanity Secret API Key (sk...)' },
+        { pattern: /RESEND_API_KEY/, name: 'RESEND_API_KEY' },
+        { pattern: /SENDGRID_API_KEY/, name: 'SENDGRID_API_KEY' }
+      ];
+      let leakFound = false;
+      for (const jsFile of clientJsFiles) {
+        const jsSrc = fs.readFileSync(jsFile, 'utf-8');
+        for (const { pattern, name } of secretLeakPatterns) {
+          if (pattern.test(jsSrc)) {
+            const rel = path.relative(ROOT_DIR, jsFile);
+            logFail(`[安全阻断] 客户端静态产物 ${rel} 泄漏服务端私密凭证: ${name}！`);
+            leakFound = true;
+          }
+        }
+      }
+      if (!leakFound) {
+        logPass(`客户端静态代码 (${clientJsFiles.length} 个 JS Bundle) 脱敏审计通过，无敏感 Token 泄漏`);
+      }
+    } catch (err: any) {
+      logFail(`客户端敏感信息扫描异常: ${err.message}`);
+    }
+
+    // 4.5 Cloudflare Worker 边缘运行时体积与规格预算
+    try {
+      const workerBytes = fs.statSync(serverEntryFile).size;
+      const workerKb = (workerBytes / 1024).toFixed(1);
+      // Cloudflare free plan uncompressed limit is 10MB; threshold set at 5MB
+      if (workerBytes > 5 * 1024 * 1024) {
+        logWarn(`Cloudflare Worker 入口体积为 ${workerKb} KB，已超过 5120 KB 告警阈值（硬限 10MB）！`);
+      } else {
+        logPass(`Cloudflare Worker 入口体积符合边缘规范: ${workerKb} KB (< 5120 KB 预算)`);
+      }
+    } catch (err: any) {
+      logFail(`Worker 体积测算失败: ${err.message}`);
+    }
+
+    // 4.6 静态资源 CDN 缓存头配置校验
+    const headersFile = path.join(distClientDir, '_headers');
+    if (fs.existsSync(headersFile)) {
+      const headersContent = fs.readFileSync(headersFile, 'utf-8');
+      if (headersContent.includes('Cache-Control') && headersContent.includes('_astro')) {
+        logPass(`Cloudflare CDN _headers 不可变静态缓存策略配置校验通过`);
+      } else {
+        logWarn(`dist/client/_headers 存在但未检测到对 _astro 静态目录的 Cache-Control 策略。`);
+      }
+    }
+  }
+
+  // =========================================================================
+  // 5. Sanity 数据集结构与字段类型一致性深度巡检 (若开启 --data 或 --full)
   // =========================================================================
   if (isDataMode) {
-    logSection('4. Sanity 数据集 _key 完整性与 Schema 类型一致性巡检 (--data Mode)');
+    logSection('5. Sanity 数据集 _key 完整性与 Schema 类型一致性巡检 (--data Mode)');
     try {
       const { createClient } = await import('@sanity/client');
       const dotenv = await import('dotenv');
@@ -803,10 +969,10 @@ async function main() {
   }
 
   // =========================================================================
-  // 5. 双端生产编译全量验证 (若开启 --full)
+  // 6. 双端生产编译全量验证 (若开启 --full)
   // =========================================================================
   if (isFullMode) {
-    logSection('5. 双端生产编译全量验证 (--full Mode)');
+    logSection('6. 双端生产编译全量验证 (--full Mode)');
     try {
       console.log('正在执行 Sanity Studio 生产构建: npm run build --prefix studio ...');
       execSync('npm run build --prefix studio', { stdio: 'inherit', cwd: ROOT_DIR });
