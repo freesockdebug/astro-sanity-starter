@@ -51,5 +51,5 @@ sanity-export/*.tar.gz
 
 # Local IDE configuration
 .vscode/
-
+.aistudio
 .archify/
