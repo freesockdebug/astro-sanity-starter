@@ -287,6 +287,64 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
         ))}
       </div>
 
+      <!-- Client-side Clone Template (Single Source of Truth for product cards) -->
+      <template id="catalog-card-tpl">
+        <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between">
+          <div class="flex-1 min-h-0 flex flex-col">
+            <a
+              href=""
+              class="card-link-main apple-img-wrapper block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] apple-skeleton-surface my-0 group-hover:opacity-95 transition-all shrink-0"
+            >
+              <img
+                src=""
+                alt=""
+                class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
+                loading="lazy"
+                decoding="async"
+                width="240"
+                height="240"
+                onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
+              />
+              <div class="card-category absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
+                OEM
+              </div>
+            </a>
+
+            <div class="shrink-0 flex items-center justify-between pt-2 pb-1 px-0.5">
+              <div class="card-colors flex items-center gap-1"></div>
+              <span class="card-lead text-[10px] text-[#52525b] font-mono">15-20d</span>
+            </div>
+
+            <div class="shrink-0 min-h-[2.8em] mt-0.5 px-0.5">
+              <a href="" class="card-link-title block">
+                <h3 class="card-title text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug"></h3>
+              </a>
+            </div>
+
+            <p class="card-comp text-[10px] text-[#52525b] px-0.5 mt-1 line-clamp-1 truncate"></p>
+          </div>
+
+          <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
+            <div class="flex flex-col">
+              <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
+                <span class="card-curr text-[10px] font-mono">$</span>
+                <span class="card-price text-sm font-mono tracking-tight font-bold"></span>
+                <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/{unitPairLabel}</span>
+              </div>
+              <span class="card-moq text-[9px] text-[#52525b] font-mono mt-0.5"></span>
+            </div>
+
+            <button
+              type="button"
+              class="btn-catalog-quote px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1d1d1f] hover:bg-[#ff5000] text-white transition-all cursor-pointer flex items-center gap-1 shadow-2xs shrink-0"
+            >
+              <span>+</span>
+              <span>{cardQuoteText}</span>
+            </button>
+          </div>
+        </div>
+      </template>
+
       <!-- Apple Design Language Filter / Sort Transition Skeleton Grid -->
       <AppleProductGridSkeleton id="catalog-filter-skeleton" count={12} class="hidden min-h-[50vh]" />
 
@@ -427,92 +485,56 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     }
   }
 
-  // Create Product Card HTML matching Taobao Shelf Layout (Image-Top, 2-line title, Price/MOQ block)
+  // Create Product Card via template cloning (SSOT with SSR markup)
   function createCardElement(item) {
-    const card = document.createElement('div');
-    card.className = "group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between";
+    const tpl = document.getElementById('catalog-card-tpl');
+    const card = tpl.content.firstElementChild.cloneNode(true);
+    const productUrl = `${productUrlPrefix}${item.slug}`;
 
-    const productUrlPrefix = currentLang && currentLang !== 'en' ? `/${currentLang}/products/` : '/products/';
+    card.dataset.productId = item.id;
 
-    const colorDots = (item.colors || [])
-      .slice(0, 4)
-      .map(
-        (hex) => `
-        <span class="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:scale-125 transition-transform" title="Color: ${hex}">
-          <span class="w-2.5 h-2.5 rounded-full border border-black/15 shadow-2xs block" style="background-color: ${hex}"></span>
-        </span>`
-      )
-      .join('');
+    const linkMain = card.querySelector('.card-link-main');
+    const img = card.querySelector('.catalog-card-img');
+    const cat = card.querySelector('.card-category');
+    const colors = card.querySelector('.card-colors');
+    const lead = card.querySelector('.card-lead');
+    const linkTitle = card.querySelector('.card-link-title');
+    const title = card.querySelector('.card-title');
+    const comp = card.querySelector('.card-comp');
+    const curr = card.querySelector('.card-curr');
+    const price = card.querySelector('.card-price');
+    const moq = card.querySelector('.card-moq');
+    const quoteBtn = card.querySelector('.btn-catalog-quote');
 
-    card.innerHTML = `
-      <div class="flex-1 min-h-0 flex flex-col">
-        <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with Apple Progressive Skeleton Shimmer -->
-        <a
-          href="${productUrlPrefix}${item.slug}"
-          class="apple-img-wrapper block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] apple-skeleton-surface my-0 group-hover:opacity-95 transition-all shrink-0"
-        >
-          <img
-            src="${item.image}"
-            alt="${item.title}"
-            class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
-            loading="lazy"
-            decoding="async"
-            width="240"
-            height="240"
-            onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
-          />
-          <div class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
-            ${item.category ? item.category.toUpperCase() : 'OEM'}
-          </div>
-        </a>
-
-        <!-- 2. Taobao Colorway / Mini Swatch Row -->
-        <div class="shrink-0 flex items-center justify-between pt-2 pb-1 px-0.5">
-          <div class="flex items-center gap-1">
-            ${colorDots}
-          </div>
-          <span class="text-[10px] text-[#52525b] font-mono">${item.leadTime || '15-20d'}</span>
-        </div>
-
-        <!-- 3. Title: Relative em-metric 2-line clamp ensuring resilience to user font-scaling -->
-        <div class="shrink-0 min-h-[2.8em] mt-0.5 px-0.5">
-          <a href="${productUrlPrefix}${item.slug}" class="block">
-            <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug" title="${item.title}">
-              ${item.shortTitle || item.title}
-            </h3>
-          </a>
-        </div>
-
-        <!-- 4. Composition subtitle -->
-        <p class="text-[10px] text-[#52525b] px-0.5 mt-1 line-clamp-1 truncate">${item.composition || 'Premium Knit'}</p>
-      </div>
-
-      <!-- 5. Wholesale Price & Action Bottom Row -->
-      <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
-        <div class="flex flex-col">
-          <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
-            <span class="text-[10px] font-mono">${item.currencySymbol || item.currency || '$'}</span>
-            <span class="text-sm font-mono tracking-tight font-bold">${item.price}</span>
-            <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/${unitPairLabel}</span>
-          </div>
-          <span class="text-[9px] text-[#52525b] font-mono mt-0.5">${moqPrefix} ${item.moq}</span>
-        </div>
-
-        <button
-          type="button"
-          class="btn-catalog-quote px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1d1d1f] hover:bg-[#ff5000] text-white transition-all cursor-pointer flex items-center gap-1 shadow-2xs shrink-0"
-          data-id="${item.id}"
-          data-title="${item.shortTitle || item.title}"
-          data-sku="${item.sku || item.id}"
-          data-image="${item.image}"
-          data-moq="${item.moq || '200 Pairs'}"
-          data-variant="${item.composition || 'Standard Spec'}"
-        >
-          <span>+</span>
-          <span>${cardQuoteText}</span>
-        </button>
-      </div>
-    `;
+    if (linkMain) linkMain.href = productUrl;
+    if (img) {
+      img.src = item.image;
+      img.alt = item.title;
+    }
+    if (cat) cat.textContent = item.category ? item.category.toUpperCase() : 'OEM';
+    if (colors && Array.isArray(item.colors)) {
+      colors.innerHTML = item.colors.slice(0, 4).map(
+        (hex) => `<span class="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:scale-125 transition-transform" title="Color: ${hex}"><span class="w-2.5 h-2.5 rounded-full border border-black/15 shadow-2xs block" style="background-color: ${hex}"></span></span>`
+      ).join('');
+    }
+    if (lead) lead.textContent = item.leadTime || '15-20d';
+    if (linkTitle) linkTitle.href = productUrl;
+    if (title) {
+      title.textContent = item.shortTitle || item.title;
+      title.title = item.title;
+    }
+    if (comp) comp.textContent = item.composition || 'Premium Knit';
+    if (curr) curr.textContent = item.currencySymbol || item.currency || '$';
+    if (price) price.textContent = item.price;
+    if (moq) moq.textContent = `${moqPrefix} ${item.moq}`;
+    if (quoteBtn) {
+      quoteBtn.dataset.id = item.id;
+      quoteBtn.dataset.title = item.shortTitle || item.title;
+      quoteBtn.dataset.sku = item.sku || item.id;
+      quoteBtn.dataset.image = item.image;
+      quoteBtn.dataset.moq = item.moq || '200 Pairs';
+      quoteBtn.dataset.variant = item.composition || 'Standard Spec';
+    }
 
     hydrateCompletedImages(card);
     return card;

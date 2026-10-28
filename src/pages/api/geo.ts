@@ -14,10 +14,10 @@ export const OPTIONS: APIRoute = async ({ request, url }) => {
 
 export const GET: APIRoute = async ({ request, url }) => {
   const corsHeaders = SecurityService.getCorsHeaders(request, url, 'GET, OPTIONS');
-  const countryCode = (request.headers.get('cf-ipcountry') || (request as any).cf?.country || '').trim().toUpperCase();
+  const countryCode = SecurityService.resolveCountry(request);
   let countryName = '';
 
-  if (countryCode && countryCode !== 'XX' && countryCode !== 'T1') {
+  if (countryCode) {
     try {
       countryName = new Intl.DisplayNames(['en'], { type: 'region' }).of(countryCode) || countryCode;
     } catch {

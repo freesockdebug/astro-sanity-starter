@@ -33,6 +33,15 @@ export class SecurityService {
   }
 
   /**
+   * Resolves and validates visitor 2-letter ISO country code from Cloudflare request headers.
+   * Filters out reserved pseudocodes (e.g. 'XX', 'T1') and non-alphabetic inputs.
+   */
+  public static resolveCountry(request: Request): string {
+    const raw = (request.headers.get('cf-ipcountry') || (request as any).cf?.country || '').trim().toUpperCase();
+    return /^[A-Z]{2}$/.test(raw) && raw !== 'XX' && raw !== 'T1' ? raw : '';
+  }
+
+  /**
    * Validates outbound webhook URLs against SSRF (Server-Side Request Forgery).
    * Enforces HTTPS protocol and blocks loopback, link-local, and private network ranges.
    */
@@ -190,5 +199,7 @@ export class SecurityService {
     return headers;
   }
 }
+
+export const resolveCountryFromRequest = (request: Request) => SecurityService.resolveCountry(request);
 
 

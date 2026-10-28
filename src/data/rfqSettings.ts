@@ -1,4 +1,5 @@
 import { client } from '@utils/sanity-client';
+import { createSwrCache } from '@utils/cache';
 import { DEFAULT_RFQ } from './defaults';
 import type { RfqSettings } from 'types';
 
@@ -31,58 +32,34 @@ export interface ButtonVisibilityOptions {
   buttonText?: string;
 }
 
+const rfqCache = createSwrCache<RfqSettings>(
+  async () => {
+    const directDoc = await client.fetch<any>('*[_type == "rfqSettings"][0]');
+    if (directDoc && Object.keys(directDoc).length > 2) {
+      return { ...DEFAULT_RFQ_SETTINGS, ...directDoc };
+    }
+    return { ...DEFAULT_RFQ_SETTINGS };
+  },
+  { ...DEFAULT_RFQ_SETTINGS },
+  10_000
+);
+
 /**
  * Service class managing B2B RFQ settings, caching, and button visibility policies
  */
 export class RfqSettingsService {
-  private static cachedSettings: RfqSettings | null = null;
-  private static cacheTimestamp: number = 0;
-  private static inflightPromise: Promise<RfqSettings> | null = null;
-  private static readonly CACHE_TTL_MS = 10_000; // 10s in-memory cache for SSR request deduplication
-
   /**
    * Fetches merged RFQ settings with in-memory caching to prevent duplicate Sanity calls in one page render
    */
   public static seed(settings?: any): void {
-    this.cachedSettings = settings && typeof settings === 'object'
+    const merged: RfqSettings = settings && typeof settings === 'object'
       ? { ...DEFAULT_RFQ_SETTINGS, ...settings }
       : { ...DEFAULT_RFQ_SETTINGS };
-    this.cacheTimestamp = Date.now();
+    rfqCache.seed(merged);
   }
 
   public static async getSettings(forceRefresh = false): Promise<RfqSettings> {
-    const now = Date.now();
-    if (!forceRefresh && this.cachedSettings && (now - this.cacheTimestamp < this.CACHE_TTL_MS)) {
-      return this.cachedSettings;
-    }
-
-    if (!forceRefresh && this.inflightPromise) {
-      return this.inflightPromise;
-    }
-
-    const fetchPromise: Promise<RfqSettings> = (async () => {
-      try {
-        const directDoc = await client.fetch<any>('*[_type == "rfqSettings"][0]');
-        if (directDoc && Object.keys(directDoc).length > 2) {
-          const merged: RfqSettings = { ...DEFAULT_RFQ_SETTINGS, ...directDoc };
-          this.cachedSettings = merged;
-          this.cacheTimestamp = Date.now();
-          return merged;
-        }
-      } catch (e: any) {
-        console.warn("RfqSettingsService.getSettings fallback to defaults:", e?.message);
-      } finally {
-        this.inflightPromise = null;
-      }
-
-      const fallback: RfqSettings = { ...DEFAULT_RFQ_SETTINGS };
-      this.cachedSettings = fallback;
-      this.cacheTimestamp = Date.now();
-      return fallback;
-    })();
-
-    this.inflightPromise = fetchPromise;
-    return fetchPromise;
+    return rfqCache.get(forceRefresh);
   }
 
   /**
@@ -122,8 +99,7 @@ export class RfqSettingsService {
    * Clears cache
    */
   public static invalidateCache(): void {
-    this.cachedSettings = null;
-    this.cacheTimestamp = 0;
+    rfqCache.invalidate();
   }
 }
 

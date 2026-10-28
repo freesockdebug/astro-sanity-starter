@@ -54,38 +54,29 @@ function validateQuotePayload(body: any): ValidationResult {
     return { valid: false, error: 'Buyer information is required.' };
   }
 
-  const company = typeof buyerInfo.company === 'string' ? buyerInfo.company.trim() : '';
-  const email = typeof buyerInfo.email === 'string' ? buyerInfo.email.trim() : '';
-  const name = typeof buyerInfo.name === 'string' ? buyerInfo.name.trim() : '';
-  const whatsapp = typeof buyerInfo.whatsapp === 'string' ? buyerInfo.whatsapp.trim() : '';
-  const destination = typeof buyerInfo.destination === 'string' ? buyerInfo.destination.trim() : '';
-  const message = typeof buyerInfo.message === 'string' ? buyerInfo.message.trim() : '';
+  const clean = (val: unknown) => (typeof val === 'string' ? val.trim() : '');
+  const buyer = {
+    company: clean(buyerInfo.company),
+    email: clean(buyerInfo.email),
+    name: clean(buyerInfo.name),
+    whatsapp: clean(buyerInfo.whatsapp),
+    destination: clean(buyerInfo.destination),
+    message: clean(buyerInfo.message),
+  };
 
-  if (!company) {
-    return { valid: false, error: 'Company name is required.' };
-  }
-  if (company.length > 120) {
-    return { valid: false, error: 'Company name cannot exceed 120 characters.' };
-  }
+  const FIELD_RULES: Array<[boolean, string]> = [
+    [!buyer.company, 'Company name is required.'],
+    [buyer.company.length > 120, 'Company name cannot exceed 120 characters.'],
+    [!buyer.email, 'Work email is required.'],
+    [buyer.email.length > 100 || !EMAIL_REGEX.test(buyer.email), 'Please provide a valid work email address.'],
+    [buyer.name.length > 80, 'Contact name cannot exceed 80 characters.'],
+    [buyer.whatsapp.length > 50, 'WhatsApp / Tel cannot exceed 50 characters.'],
+    [buyer.destination.length > 100, 'Destination cannot exceed 100 characters.'],
+    [buyer.message.length > 2000, 'Message / Notes cannot exceed 2000 characters.'],
+  ];
 
-  if (!email) {
-    return { valid: false, error: 'Work email is required.' };
-  }
-  if (email.length > 100 || !EMAIL_REGEX.test(email)) {
-    return { valid: false, error: 'Please provide a valid work email address.' };
-  }
-
-  if (name.length > 80) {
-    return { valid: false, error: 'Contact name cannot exceed 80 characters.' };
-  }
-  if (whatsapp.length > 50) {
-    return { valid: false, error: 'WhatsApp / Tel cannot exceed 50 characters.' };
-  }
-  if (destination.length > 100) {
-    return { valid: false, error: 'Destination cannot exceed 100 characters.' };
-  }
-  if (message.length > 2000) {
-    return { valid: false, error: 'Message / Notes cannot exceed 2000 characters.' };
+  for (const [failed, error] of FIELD_RULES) {
+    if (failed) return { valid: false, error };
   }
 
   // Items validation
@@ -123,7 +114,7 @@ function validateQuotePayload(body: any): ValidationResult {
   return {
     valid: true,
     data: {
-      buyerInfo: { company, email, name, whatsapp, destination, message },
+      buyerInfo: buyer,
       items: validatedItems,
       inquiryType: sanitizedInquiryType,
       turnstileToken: cleanTurnstileToken,
@@ -223,9 +214,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       clientAddress ||
       '';
 
-    const cfCountryCode = (request.headers.get('cf-ipcountry') || (request as any).cf?.country || '').trim().toUpperCase();
+    const cfCountryCode = SecurityService.resolveCountry(request);
     let detectedCountry = '';
-    if (cfCountryCode && cfCountryCode !== 'XX' && cfCountryCode !== 'T1') {
+    if (cfCountryCode) {
       try {
         detectedCountry = new Intl.DisplayNames(['en'], { type: 'region' }).of(cfCountryCode) || cfCountryCode;
       } catch {

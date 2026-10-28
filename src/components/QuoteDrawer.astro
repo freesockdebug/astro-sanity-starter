@@ -3,6 +3,7 @@
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { DEFAULT_RFQ } from '@data/defaults';
 import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
+import { SecurityService } from '@utils/security';
 
 interface Props {
   settings?: any;
@@ -32,9 +33,9 @@ const turnstileSiteKey =
   import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ||
   (isProdHostname ? '0x4AAAAAAFXbqPn5Jkh6bMhV' : '1x00000000000000000000AA');
 
-const reqCountryCode = (Astro.request.headers.get('cf-ipcountry') || (Astro.request as any).cf?.country || '').trim().toUpperCase();
+const reqCountryCode = SecurityService.resolveCountry(Astro.request);
 let visitorCountry = '';
-if (reqCountryCode && reqCountryCode !== 'XX' && reqCountryCode !== 'T1') {
+if (reqCountryCode) {
   try {
     visitorCountry = new Intl.DisplayNames(['en'], { type: 'region' }).of(reqCountryCode) || reqCountryCode;
   } catch {

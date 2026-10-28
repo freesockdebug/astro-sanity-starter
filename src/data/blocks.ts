@@ -59,6 +59,32 @@ export const SECTIONS = `{
 }`;
 
 /**
+ * Recursively resolves Sanity multilingual objects ({ en: '...', de: '...' }) in nested data structures.
+ */
+export function deepLocalize<T>(val: T, lang: string): T {
+  if (val === null || val === undefined) return val;
+  if (Array.isArray(val)) {
+    return val.map((item) => deepLocalize(item, lang)) as unknown as T;
+  }
+  if (typeof val === 'object') {
+    const keys = Object.keys(val);
+    const isLocalizedLeaf =
+      keys.length > 0 &&
+      keys.every((k) => /^[a-z]{2}(-[A-Z]{2})?$/.test(k)) &&
+      ('en' in val || lang in val);
+    if (isLocalizedLeaf) {
+      return getLocalizedValue(val, lang) as unknown as T;
+    }
+    const result: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val)) {
+      result[k] = deepLocalize(v, lang);
+    }
+    return result as T;
+  }
+  return val;
+}
+
+/**
  * High-precision multilingual textile & B2B manufacturing dictionaries
  * Translates CMS homepage sections seamlessly when browsing non-English locales
  */
@@ -338,60 +364,21 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
       });
     }
 
-    // 4. Custom Bento / Modular Sections
+    // 4. Custom Bento / Modular Sections (Automated deep localization & image asset optimizations)
     if (s._type === 'customSection' && Array.isArray(s.blocks)) {
       s.blocks = s.blocks.map((b: any) => {
         if (!b) return b;
-        const block = { ...b };
+        const block = deepLocalize({ ...b }, lang);
         if (block._type === 'mediaBlock') {
           if (block.image) block.image = SanityImageService.hero(block.image, 1600);
           if (block.secondaryImage) block.secondaryImage = SanityImageService.hero(block.secondaryImage, 1200);
-          if (block.caption && typeof block.caption === 'object') block.caption = getLocalizedValue(block.caption, lang);
-        } else if (block._type === 'headingBlock') {
-          if (block.badge && typeof block.badge === 'object') block.badge = getLocalizedValue(block.badge, lang);
-          if (block.headline && typeof block.headline === 'object') block.headline = getLocalizedValue(block.headline, lang);
-          if (block.subtitle && typeof block.subtitle === 'object') block.subtitle = getLocalizedValue(block.subtitle, lang);
-        } else if (block._type === 'buttonGroupBlock' && Array.isArray(block.buttons)) {
-          block.buttons = block.buttons.map((btn: any) => ({
-            ...btn,
-            label: btn?.label && typeof btn.label === 'object' ? getLocalizedValue(btn.label, lang) : btn?.label,
-          }));
-        } else if (block._type === 'metricGridBlock' && Array.isArray(block.metrics)) {
-          block.metrics = block.metrics.map((m: any) => ({
-            ...m,
-            label: m?.label && typeof m.label === 'object' ? getLocalizedValue(m.label, lang) : m?.label,
-            suffix: m?.suffix && typeof m.suffix === 'object' ? getLocalizedValue(m.suffix, lang) : m?.suffix,
-          }));
         } else if (block._type === 'bentoCardBlock' && Array.isArray(block.cards)) {
           block.cards = block.cards.map((c: any) => ({
             ...c,
-            badge: c?.badge && typeof c.badge === 'object' ? getLocalizedValue(c.badge, lang) : c?.badge,
-            title: c?.title && typeof c.title === 'object' ? getLocalizedValue(c.title, lang) : c?.title,
-            description: c?.description && typeof c.description === 'object' ? getLocalizedValue(c.description, lang) : c?.description,
             image: c?.image ? SanityImageService.thumbnail(c.image, 800) : c?.image,
           }));
         } else if (block._type === 'quoteBlock') {
           if (block.avatar) block.avatar = SanityImageService.avatar(block.avatar, 120);
-          if (block.quote && typeof block.quote === 'object') block.quote = getLocalizedValue(block.quote, lang);
-          if (block.author && typeof block.author === 'object') block.author = getLocalizedValue(block.author, lang);
-          if (block.role && typeof block.role === 'object') block.role = getLocalizedValue(block.role, lang);
-          if (block.company && typeof block.company === 'object') block.company = getLocalizedValue(block.company, lang);
-        } else if (block._type === 'splitStageBlock') {
-          if (block.badge && typeof block.badge === 'object') block.badge = getLocalizedValue(block.badge, lang);
-          if (block.title && typeof block.title === 'object') block.title = getLocalizedValue(block.title, lang);
-          if (block.description && typeof block.description === 'object') block.description = getLocalizedValue(block.description, lang);
-          if (block.primaryButton?.label && typeof block.primaryButton.label === 'object') {
-            block.primaryButton.label = getLocalizedValue(block.primaryButton.label, lang);
-          }
-          if (block.secondaryButton?.label && typeof block.secondaryButton.label === 'object') {
-            block.secondaryButton.label = getLocalizedValue(block.secondaryButton.label, lang);
-          }
-          if (Array.isArray(block.bullets)) {
-            block.bullets = block.bullets.map((bullet: any) => ({
-              ...bullet,
-              text: bullet?.text && typeof bullet.text === 'object' ? getLocalizedValue(bullet.text, lang) : bullet?.text,
-            }));
-          }
         }
         return block;
       });

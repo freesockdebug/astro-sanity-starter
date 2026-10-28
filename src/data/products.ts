@@ -1,5 +1,6 @@
 import { client } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
+import { createSwrCache } from '@utils/cache';
 import { DEFAULT_CATALOG } from './defaults';
 import type { Product } from 'types';
 
@@ -235,32 +236,32 @@ export interface CatalogCategoryItem {
   count: number;
 }
 
+const productsCache = createSwrCache<Product[]>(
+  () => client.fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`),
+  [],
+  10_000
+);
+
+const categoriesCache = createSwrCache<any[]>(
+  () => client.fetch<any[]>(`*[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS}`),
+  [],
+  10_000
+);
+
+const catalogSettingsCache = createSwrCache<any | null>(
+  () => client.fetch<any>(`*[_type == "catalogSettings"][0]`),
+  null,
+  10_000
+);
+
 /**
  * Service class handling Product querying, caching, and fallback resolution
  */
 export class ProductService {
-  private static cachedProducts: Product[] | null = null;
-  private static cacheTimestamp: number = 0;
-  private static inflightProductsPromise: Promise<Product[]> | null = null;
-  private static cachedCategories: any[] | null = null;
-  private static categoryCacheTimestamp: number = 0;
-  private static inflightCategoriesPromise: Promise<any[]> | null = null;
-  private static readonly CACHE_TTL_MS = 10_000;
-
   public static seed(data: { products?: Product[]; categories?: any[]; catalogSettings?: any }): void {
-    const now = Date.now();
-    if (data.products !== undefined) {
-      this.cachedProducts = data.products || [];
-      this.cacheTimestamp = now;
-    }
-    if (data.categories !== undefined) {
-      this.cachedCategories = data.categories || [];
-      this.categoryCacheTimestamp = now;
-    }
-    if (data.catalogSettings !== undefined) {
-      this.cachedCatalogSettings = data.catalogSettings || null;
-      this.catalogSettingsTimestamp = now;
-    }
+    if (data.products !== undefined) productsCache.seed(data.products);
+    if (data.categories !== undefined) categoriesCache.seed(data.categories);
+    if (data.catalogSettings !== undefined) catalogSettingsCache.seed(data.catalogSettings);
   }
 
   /**
@@ -350,64 +351,14 @@ export class ProductService {
    * Fetch all products from Sanity with short-lived in-memory caching for SSR deduplication
    */
   public static async getAll(forceRefresh = false): Promise<Product[]> {
-    const now = Date.now();
-    if (!forceRefresh && this.cachedProducts && (now - this.cacheTimestamp < this.CACHE_TTL_MS)) {
-      return this.cachedProducts;
-    }
-
-    if (!forceRefresh && this.inflightProductsPromise) {
-      return this.inflightProductsPromise;
-    }
-
-    this.inflightProductsPromise = (async () => {
-      try {
-        const data = await client.fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`);
-        this.cachedProducts = data || [];
-        this.cacheTimestamp = Date.now();
-        return this.cachedProducts;
-      } catch (err: any) {
-        console.error('ProductService.getAll failed to fetch products from Sanity:', err?.message);
-        this.cachedProducts = this.cachedProducts || [];
-        this.cacheTimestamp = Date.now();
-        return this.cachedProducts;
-      } finally {
-        this.inflightProductsPromise = null;
-      }
-    })();
-
-    return this.inflightProductsPromise;
+    return productsCache.get(forceRefresh);
   }
 
   /**
    * Fetch all product categories from Sanity
    */
   public static async getCategories(forceRefresh = false): Promise<any[]> {
-    const now = Date.now();
-    if (!forceRefresh && this.cachedCategories && (now - this.categoryCacheTimestamp < this.CACHE_TTL_MS)) {
-      return this.cachedCategories;
-    }
-
-    if (!forceRefresh && this.inflightCategoriesPromise) {
-      return this.inflightCategoriesPromise;
-    }
-
-    this.inflightCategoriesPromise = (async () => {
-      try {
-        const data = await client.fetch<any[]>(`*[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS}`);
-        this.cachedCategories = data || [];
-        this.categoryCacheTimestamp = Date.now();
-        return this.cachedCategories;
-      } catch (err: any) {
-        console.error('ProductService.getCategories failed to fetch categories from Sanity:', err?.message);
-        this.cachedCategories = this.cachedCategories || [];
-        this.categoryCacheTimestamp = Date.now();
-        return this.cachedCategories;
-      } finally {
-        this.inflightCategoriesPromise = null;
-      }
-    })();
-
-    return this.inflightCategoriesPromise;
+    return categoriesCache.get(forceRefresh);
   }
 
   /**
@@ -427,28 +378,11 @@ export class ProductService {
     }
   }
 
-  private static cachedCatalogSettings: any | null = null;
-  private static catalogSettingsTimestamp: number = 0;
-
   /**
    * Fetch catalog hall settings from Sanity
    */
   public static async getCatalogSettings(forceRefresh = false): Promise<any> {
-    const now = Date.now();
-    if (!forceRefresh && this.cachedCatalogSettings && (now - this.catalogSettingsTimestamp < this.CACHE_TTL_MS)) {
-      return this.cachedCatalogSettings;
-    }
-
-    try {
-      const data = await client.fetch<any>(`*[_type == "catalogSettings"][0]`);
-      this.cachedCatalogSettings = data || null;
-      this.catalogSettingsTimestamp = Date.now();
-      return this.cachedCatalogSettings;
-    } catch (err: any) {
-      console.error('ProductService.getCatalogSettings failed:', err?.message);
-      this.catalogSettingsTimestamp = Date.now();
-      return this.cachedCatalogSettings || null;
-    }
+    return catalogSettingsCache.get(forceRefresh);
   }
 
   /**
@@ -493,12 +427,9 @@ export class ProductService {
    * Clears in-memory cache if needed
    */
   public static invalidateCache(): void {
-    this.cachedProducts = null;
-    this.cacheTimestamp = 0;
-    this.cachedCategories = null;
-    this.categoryCacheTimestamp = 0;
-    this.cachedCatalogSettings = null;
-    this.catalogSettingsTimestamp = 0;
+    productsCache.invalidate();
+    categoriesCache.invalidate();
+    catalogSettingsCache.invalidate();
   }
 }
 
