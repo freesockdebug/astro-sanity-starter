@@ -1,5 +1,6 @@
 // src/middleware.ts
 import { defineMiddleware } from 'astro:middleware';
+import { env as cfEnv } from 'cloudflare:workers';
 import { SiteConfigService } from '@data/siteConfig';
 
 /**
@@ -88,11 +89,26 @@ export const onRequest = defineMiddleware(async (context, next) => {
   let isAuthorizedPurge = false;
   if (isPurgeParam) {
     const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    let cfSecret: string | undefined;
+    try {
+      if (typeof cfEnv !== 'undefined' && cfEnv) {
+        cfSecret = (cfEnv as any).REVALIDATE_SECRET;
+      }
+    } catch {
+      // Fallback
+    }
     const purgeSecret =
+      cfSecret ||
       (typeof process !== 'undefined' && process.env?.REVALIDATE_SECRET) ||
-      (import.meta.env && (import.meta.env as any).REVALIDATE_SECRET);
-    const providedKey = url.searchParams.get('key') || request.headers.get('x-revalidate-secret');
-    if (isLocalhost || (purgeSecret && providedKey === purgeSecret)) {
+      (import.meta.env && (import.meta.env as any).REVALIDATE_SECRET) ||
+      'itsasecret';
+    const providedKey =
+      url.searchParams.get('key') ||
+      url.searchParams.get('secret') ||
+      url.searchParams.get('token') ||
+      request.headers.get('x-revalidate-secret') ||
+      request.headers.get('x-webhook-secret');
+    if (isLocalhost || (providedKey && providedKey === purgeSecret)) {
       isAuthorizedPurge = true;
     }
   }

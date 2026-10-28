@@ -28,11 +28,13 @@ export function CachePurgeDashboard() {
   const [recentProducts, setRecentProducts] = useState<Array<{ title: any; slug: string }>>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
 
-  // 线上前台地址与密钥：优先读取 studio 环境变量，未配置时回退当前同源地址
-  const env = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
-  const defaultOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://gwenvenni.com'
-  const siteUrl = (env.SANITY_STUDIO_SITE_URL || defaultOrigin).replace(/\/$/, '')
-  const secret = env.SANITY_STUDIO_REVALIDATE_SECRET || 'itsasecret'
+  // 线上前台地址与密钥：优先读取 studio 环境变量，未配置时回退主站地址（避免发往静态 SPA 域名）
+  const viteEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env || {} : {}
+  const procEnv = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
+  const isGwenDomain = typeof window !== 'undefined' && window.location.hostname.endsWith('gwenvenni.com')
+  const defaultOrigin = isGwenDomain ? 'https://gwenvenni.com' : (typeof window !== 'undefined' ? window.location.origin : 'https://gwenvenni.com')
+  const siteUrl = (viteEnv.SANITY_STUDIO_SITE_URL || procEnv.SANITY_STUDIO_SITE_URL || defaultOrigin).replace(/\/$/, '')
+  const secret = viteEnv.SANITY_STUDIO_REVALIDATE_SECRET || procEnv.SANITY_STUDIO_REVALIDATE_SECRET || 'itsasecret'
 
   const getTitleText = (title: any): string => {
     if (typeof title === 'string') return title
