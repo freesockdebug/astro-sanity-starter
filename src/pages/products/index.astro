@@ -390,7 +390,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   <script type="application/json" id="catalog-products-data" set:html={catalogJson}></script>
 </Layout>
 
-<script define:vars={{ cardQuoteText, currentLang, moqPrefix: t('catalog.moqPrefix'), unitPairLabel }}>
+<script define:vars={{ cardQuoteText, currentLang, moqPrefix: t('catalog.moqPrefix'), productUrlPrefix: `${getLocalizedPath('/products', currentLang)}/`, unitPairLabel }}>
   // Catalog State Management
   const catalogDataEl = document.getElementById('catalog-products-data');
   const allProducts = catalogDataEl ? JSON.parse(catalogDataEl.textContent || '[]') : [];
@@ -489,7 +489,8 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   function createCardElement(item) {
     const tpl = document.getElementById('catalog-card-tpl');
     const card = tpl.content.firstElementChild.cloneNode(true);
-    const productUrl = `${productUrlPrefix}${item.slug}`;
+    const prefix = typeof productUrlPrefix !== 'undefined' ? productUrlPrefix : (typeof currentLang !== 'undefined' && currentLang !== 'en' ? `/${currentLang}/products/` : '/products/');
+    const productUrl = `${prefix}${item.slug}`;
 
     card.dataset.productId = item.id;
 
