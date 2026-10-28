@@ -250,9 +250,9 @@ body {
     margin-top: 0.125rem !important;
   }
 
-  /* 产品目录列表页 (Catalog Index) */
+  /* 产品目录列表页 (Catalog Index) - 留足 48px Header + 20px 安全净距 */
   .catalog-container {
-    padding-top: 3.25rem !important;
+    padding-top: 4.25rem !important;
     padding-bottom: 1.5rem !important;
   }
   .catalog-hero-header {
