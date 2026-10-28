@@ -32,6 +32,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import Module from 'module';
+import ts from 'typescript';
 
 // 轻量虚拟 Mock：解耦 Studio 专属富文本组件依赖，防止在无 studio/node_modules 环境下巡检中断
 const originalResolveFilename = (Module as any)._resolveFilename;
@@ -138,6 +139,103 @@ class InvariantEngine {
     }
 
     return { pure: violations.length === 0, violations };
+  }
+
+  /**
+   * 1.1 客户端原生内联脚本作用域封闭性公理 (Closed-Scope Invariant)
+   * 扫描 <script define:vars> 与 <script is:inline>，利用 AST 验证所有引用的游离标识符
+   * 是否已在本地声明、通过 define:vars 注入、或为标准浏览器全局对象，杜绝运行时 ReferenceError 崩溃。
+   */
+  public static checkScriptScopeClosed(
+    scriptBody: string,
+    definedVars: string[]
+  ): { valid: boolean; violations: string[] } {
+    const BROWSER_GLOBALS = new Set([
+      'window', 'document', 'console', 'location', 'history', 'navigator', 'screen',
+      'localStorage', 'sessionStorage', 'setTimeout', 'clearTimeout', 'setInterval',
+      'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
+      'IntersectionObserver', 'MutationObserver', 'ResizeObserver', 'PerformanceObserver',
+      'URL', 'URLSearchParams', 'AbortController', 'AbortSignal', 'Headers', 'Request',
+      'Response', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'TouchEvent',
+      'HTMLElement', 'Element', 'Node', 'HTMLTemplateElement', 'HTMLInputElement', 'HTMLButtonElement',
+      'Math', 'JSON', 'Date', 'Array', 'Object', 'String', 'Number', 'Boolean',
+      'Set', 'Map', 'WeakSet', 'WeakMap', 'RegExp', 'Error', 'TypeError', 'RangeError',
+      'Promise', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent',
+      'decodeURIComponent', 'encodeURI', 'decodeURI', 'crypto', 'atob', 'btoa',
+      'fetch', 'alert', 'confirm', 'prompt', 'structuredClone', 'queueMicrotask',
+      'globalThis', 'self', 'undefined', 'NaN', 'Infinity', 'Intl', 'Symbol', 'Proxy', 'Reflect'
+    ]);
+
+    const sourceFile = ts.createSourceFile('inline.js', scriptBody, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const declared = new Set<string>([...definedVars, ...BROWSER_GLOBALS]);
+    const undeclaredUsed = new Set<string>();
+
+    // 1. 递归扫描所有本地声明
+    function collectDeclarations(node: ts.Node) {
+      if (ts.isVariableDeclaration(node)) {
+        if (ts.isIdentifier(node.name)) {
+          declared.add(node.name.text);
+        } else if (ts.isObjectBindingPattern(node.name) || ts.isArrayBindingPattern(node.name)) {
+          node.name.elements.forEach((el) => {
+            if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) {
+              declared.add(el.name.text);
+            }
+          });
+        }
+      } else if (ts.isFunctionDeclaration(node) && node.name) {
+        declared.add(node.name.text);
+      } else if (ts.isClassDeclaration(node) && node.name) {
+        declared.add(node.name.text);
+      } else if (ts.isParameter(node)) {
+        if (ts.isIdentifier(node.name)) {
+          declared.add(node.name.text);
+        } else if (ts.isObjectBindingPattern(node.name) || ts.isArrayBindingPattern(node.name)) {
+          node.name.elements.forEach((el) => {
+            if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) {
+              declared.add(el.name.text);
+            }
+          });
+        }
+      } else if (ts.isCatchClause(node) && node.variableDeclaration && ts.isIdentifier(node.variableDeclaration.name)) {
+        declared.add(node.variableDeclaration.name.text);
+      }
+      ts.forEachChild(node, collectDeclarations);
+    }
+    collectDeclarations(sourceFile);
+
+    // 2. 递归扫描未声明游离标识符
+    function checkIdentifier(node: ts.Node) {
+      if (node.parent && ts.isTypeOfExpression(node.parent)) {
+        return; // 防御性判断 typeof x !== 'undefined'
+      }
+
+      if (ts.isIdentifier(node)) {
+        const name = node.text;
+        const parent = node.parent;
+
+        if (parent) {
+          if (ts.isPropertyAccessExpression(parent) && parent.name === node) return;
+          if (ts.isPropertyAssignment(parent) && parent.name === node) return;
+          if (ts.isMethodDeclaration(parent) && parent.name === node) return;
+          if (ts.isVariableDeclaration(parent) && parent.name === node) return;
+          if (ts.isFunctionDeclaration(parent) && parent.name === node) return;
+          if (ts.isParameter(parent) && parent.name === node) return;
+          if (ts.isClassDeclaration(parent) && parent.name === node) return;
+          if (ts.isBindingElement(parent) && parent.name === node) return;
+          if (ts.isCatchClause(parent)) return;
+        }
+
+        if (!declared.has(name)) {
+          undeclaredUsed.add(name);
+        }
+      }
+
+      ts.forEachChild(node, checkIdentifier);
+    }
+    checkIdentifier(sourceFile);
+
+    const violations = Array.from(undeclaredUsed);
+    return { valid: violations.length === 0, violations };
   }
 
   /**
@@ -912,6 +1010,38 @@ async function main() {
       logPass(`[Pitfall 20] 空间几何下确界与零遮挡代数方程校验通过 (Top Clearance > Header Offset)`);
     }
   }
+
+  // 2.20 [Pitfall 21]: 客户端原生内联脚本作用域封闭性公理 (Closed-Scope Invariant)
+  // 严禁在 <script define:vars> 或 <script is:inline> 中直接引用未声明、未通过 define:vars 注入且非全局白名单的游离变量，
+  // 避免浏览器端执行到特定交互分支时引发 Uncaught ReferenceError 导致整站交互瘫痪。
+  for (const file of astroFiles) {
+    const content = fs.readFileSync(file, 'utf-8');
+    const scriptRegex = /<script\s+[^>]*(?:define:vars|is:inline)[^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    while ((match = scriptRegex.exec(content)) !== null) {
+      const fullTag = match[0];
+      const scriptBody = match[1];
+      const defineVarsMatch = fullTag.match(/define:vars=\{([^}]+)\}/);
+      const definedVars: string[] = [];
+      if (defineVarsMatch) {
+        const inner = defineVarsMatch[1];
+        inner.split(',').forEach((p) => {
+          const parts = p.trim().split(':');
+          if (parts[0]) definedVars.push(parts[0].trim());
+        });
+      }
+
+      const scopeCheck = InvariantEngine.checkScriptScopeClosed(scriptBody, definedVars);
+      if (!scopeCheck.valid) {
+        logFail(
+          `${path.relative(ROOT_DIR, file)}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
+          `检测到未声明游离标识符: ${scopeCheck.violations.map(v => `'${v}'`).join(', ')}。` +
+          `若需从 SSR 传入请在 define:vars 中显式声明，或在脚本内提供局部声明 / typeof 保护，否则客户端将触发 Uncaught ReferenceError！`
+        );
+      }
+    }
+  }
+  logPass(`[Pitfall 21] 客户端原生内联脚本作用域封闭性公理校验通过 (零游离 ReferenceError 隐患)`);
 
   // =========================================================================
   // 3. i18n 多语言核心字典树同构与对称性深度分析
