@@ -106,12 +106,24 @@ const {
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
+// Safe text extractor: resolves Sanity multilingual object ({ en: '...' }) or string safely without throwing .trim errors
+const toText = (val: any, fallback = ''): string => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') return val.trim();
+  if (typeof val === 'object') {
+    const loc = getLocalizedValue(val, currentLang);
+    return typeof loc === 'string' ? loc.trim() : (loc ? String(loc).trim() : fallback);
+  }
+  return String(val).trim();
+};
+
 const rfqSettings = await fetchRfqSettings();
-const rawMacroImage = propMacroImage?.trim() || DEFAULT_SPEC_MATRIX.macroImage;
+const rawMacroImage = (typeof propMacroImage === 'string' ? propMacroImage.trim() : (propMacroImage?.asset?.url || DEFAULT_SPEC_MATRIX.macroImage));
 const macroImage = SanityImageService.macro(rawMacroImage, 1200);
 const macroSrcSet = SanityImageService.srcSet(rawMacroImage, [360, 600, 1000]);
-const primaryButtonText = propPrimaryText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
-const resolvedSecondaryText = (secondaryButtonText && secondaryButtonText !== DEFAULT_SPEC_MATRIX.secondaryButtonText) ? secondaryButtonText : (currentLang !== 'en' ? t('hero.exploreLineSheets') : secondaryButtonText);
+const primaryButtonText = toText(propPrimaryText) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
+const safeSecondaryText = toText(secondaryButtonText, DEFAULT_SPEC_MATRIX.secondaryButtonText);
+const resolvedSecondaryText = (safeSecondaryText && safeSecondaryText !== DEFAULT_SPEC_MATRIX.secondaryButtonText) ? safeSecondaryText : (currentLang !== 'en' ? t('hero.exploreLineSheets') : safeSecondaryText);
 
 const isSwatchButton = (primaryButtonText || "").toLowerCase().includes("swatch") || primaryButtonUrl === "#inquiry";
 const showPrimaryButton = RfqSettingsService.isButtonVisible({
@@ -129,9 +141,9 @@ const showSecondaryButton = RfqSettingsService.isButtonVisible({
 });
 
 // Clean accidental index numbers from CMS text (e.g. "Construction1", "Matrix2", "3We treat")
-const cleanBadge = (badge || "").replace(/\d+$/, "").trim();
-const cleanTitle = (title || "").replace(/\d+$/, "").trim();
-const cleanDescription = (description || "").replace(/^\d+/, "").trim();
+const cleanBadge = toText(badge).replace(/\d+$/, "").trim();
+const cleanTitle = toText(title).replace(/\d+$/, "").trim();
+const cleanDescription = toText(description).replace(/^\d+/, "").trim();
 const sectionId = elementId || sectionAnchor || 'specs';
 ---
 

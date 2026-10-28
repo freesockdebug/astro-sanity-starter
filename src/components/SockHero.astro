@@ -40,22 +40,34 @@ const {
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
+// Safe text extractor: resolves Sanity multilingual object ({ en: '...' }) or string safely without throwing .trim errors
+const toText = (val: any, fallback = ''): string => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') return val.trim();
+  if (typeof val === 'object') {
+    const loc = getLocalizedValue(val, currentLang);
+    return typeof loc === 'string' ? loc.trim() : (loc ? String(loc).trim() : fallback);
+  }
+  return String(val).trim();
+};
+
 const rfqSettings = await fetchRfqSettings();
-const rawHeroImage = propHeroImage?.trim() || DEFAULT_FALLBACK_IMAGE;
+const rawHeroImage = (typeof propHeroImage === 'string' ? propHeroImage.trim() : (propHeroImage?.asset?.url || DEFAULT_FALLBACK_IMAGE));
 const heroImage = SanityImageService.hero(rawHeroImage, 1600);
 const heroSrcSet = SanityImageService.srcSet(rawHeroImage, [480, 800, 1200, 1600], { quality: 80 });
-const primaryButtonText = propPrimaryText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
-const resolvedSecondaryText = (secondaryButtonText && secondaryButtonText !== DEFAULT_HERO.secondaryButtonText) ? secondaryButtonText : t('hero.exploreLineSheets');
+const primaryButtonText = toText(propPrimaryText) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
+const safeSecondaryText = toText(secondaryButtonText, DEFAULT_HERO.secondaryButtonText);
+const resolvedSecondaryText = (safeSecondaryText && safeSecondaryText !== DEFAULT_HERO.secondaryButtonText) ? safeSecondaryText : t('hero.exploreLineSheets');
 
 // Super Title handling: support custom text or clean default
 const cleanSuperTitle = propSuperTitle !== undefined
-  ? (propSuperTitle || "").trim()
+  ? toText(propSuperTitle)
   : DEFAULT_HERO.superTitle;
 
 // Headline parsing: support single-line or two-part contrast subtitle
 // If headline contains a period + space or newline, split into primary and secondary.
 // If it's a single sentence/line, render as ONE single line without forced <br> or unwanted fallback text.
-const rawHeadline = (headline || DEFAULT_HERO.headline).trim();
+const rawHeadline = toText(headline, DEFAULT_HERO.headline);
 let headlinePrimary = rawHeadline;
 let headlineSecondary = "";
 

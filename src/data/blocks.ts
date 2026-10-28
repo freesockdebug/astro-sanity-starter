@@ -388,7 +388,7 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
     const ALL_SECTION_TEXT_FIELDS = [
       'title', 'headline', 'subline', 'subtitle', 'badge', 'superTitle', 'description',
       'primaryButtonText', 'secondaryButtonText', 'actionButtonText', 'buttonText',
-      'cardDetailsButtonText', 'successTitle', 'successMessage',
+      'cardDetailsButtonText', 'cardQuoteButtonText', 'successTitle', 'successMessage',
       'bento1Tag', 'bento1Title', 'bento1Description',
       'bento2Tag', 'bento2Title', 'bento2Description', 'bento2BadgeText', 'bento2BadgeStatus',
       'bento3Tag', 'bento3Title', 'bento3Description', 'bento3FooterNote',
@@ -404,7 +404,7 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
           explicitCmsLangFields.add(f);
         }
         const val = getLocalizedValue(s[f], lang);
-        if (val) s[f] = val;
+        s[f] = typeof val === 'string' ? val : (val ? String(val) : '');
       }
     });
 

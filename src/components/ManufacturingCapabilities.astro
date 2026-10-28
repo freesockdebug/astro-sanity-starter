@@ -33,8 +33,23 @@ const {
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
+// Safe text extractor: resolves Sanity multilingual object ({ en: '...' }) or string safely without throwing .trim errors
+const toText = (val: any, fallback = ''): string => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') return val.trim();
+  if (typeof val === 'object') {
+    const loc = getLocalizedValue(val, currentLang);
+    return typeof loc === 'string' ? loc.trim() : (loc ? String(loc).trim() : fallback);
+  }
+  return String(val).trim();
+};
+
+const safeBadge = toText(badge, DEFAULT_MANUFACTURING.badge);
+const safeHeadline = toText(headline, DEFAULT_MANUFACTURING.headline);
+const safeSubline = toText(subline, DEFAULT_MANUFACTURING.subline);
+
 const rfqSettings = await fetchRfqSettings();
-const actionButtonText = propActionText?.trim() || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
+const actionButtonText = toText(propActionText) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
 
 const isSwatchAction = (actionButtonText || "").toLowerCase().includes("swatch") || actionButtonUrl === "#inquiry";
 const showActionButton = RfqSettingsService.isButtonVisible({
@@ -89,12 +104,12 @@ const sectionId = elementId || sectionAnchor || 'manufacturing';
 <section id={sectionId} class="bg-white text-[#1d1d1f] border-t border-black/5 py-8 sm:py-10 lg:py-12">
   <div class="apple-rail-bento w-full">
     <div class="apple-rail-narrow text-center mb-4 sm:mb-5 lg:mb-6 space-y-1 sm:space-y-1.5">
-      <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">{badge}</span>
+      <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">{safeBadge}</span>
       <h2 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
-        {headline}
+        {safeHeadline}
       </h2>
       <p class="text-[#86868b] text-xs sm:text-sm lg:text-base font-normal leading-relaxed max-w-2xl mx-auto mt-1">
-        {subline}
+        {safeSubline}
       </p>
     </div>
 
