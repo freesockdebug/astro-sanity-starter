@@ -189,29 +189,106 @@ class InvariantEngine {
   }
 
   /**
-   * 1.1 提取 define:vars={{ ... }} 注入的对象属性名 (基于 AST 解析，杜绝双大括号截断与逗号拆分 Bug)
+   * 1.0 稳健提取 <script> 块 (基于括号与引号平衡扫描，杜绝属性内部 > 或 {} 截断)
+   */
+  public static extractScriptBlocks(content: string): { openTag: string; body: string; startOffset: number }[] {
+    const scripts: { openTag: string; body: string; startOffset: number }[] = [];
+    let i = 0;
+    while (i < content.length) {
+      const startIdx = content.indexOf('<script', i);
+      if (startIdx === -1) break;
+      const after = content[startIdx + 7];
+      if (after && !/[\s>]/.test(after)) {
+        i = startIdx + 7;
+        continue;
+      }
+      let p = startIdx + 7;
+      let inQuote: string | null = null;
+      let braceDepth = 0;
+      while (p < content.length) {
+        const ch = content[p];
+        if (inQuote) {
+          if (ch === '\\' && p + 1 < content.length) { p += 2; continue; }
+          if (ch === inQuote) inQuote = null;
+        } else {
+          if (ch === '"' || ch === '\'' || ch === '`') {
+            inQuote = ch;
+          } else if (ch === '{') {
+            braceDepth++;
+          } else if (ch === '}') {
+            if (braceDepth > 0) braceDepth--;
+          } else if (ch === '>' && braceDepth === 0) {
+            break;
+          }
+        }
+        p++;
+      }
+      if (p >= content.length) break;
+      const openTag = content.slice(startIdx, p + 1);
+      const endTagIdx = content.indexOf('</script>', p + 1);
+      if (endTagIdx === -1) break;
+      const body = content.slice(p + 1, endTagIdx);
+      scripts.push({ openTag, body, startOffset: startIdx });
+      i = endTagIdx + 9;
+    }
+    return scripts;
+  }
+
+  /**
+   * 1.1 提取 define:vars={{ ... }} 注入的对象属性名 (基于括号平衡与 AST 解析，杜绝双大括号截断与逗号拆分 Bug)
    */
   public static extractDefineVars(fullTag: string): string[] {
-    const match = fullTag.match(/define:vars=\{([\s\S]*?)\}(?=\s|>)/);
-    if (!match) return [];
-    const rawExpr = match[1].trim();
-    const dummyCode = `const __vars = ${rawExpr};`;
+    const matchIdx = fullTag.indexOf('define:vars');
+    if (matchIdx === -1) return [];
+    const eqIdx = fullTag.indexOf('=', matchIdx);
+    if (eqIdx === -1) return [];
+    let p = eqIdx + 1;
+    while (p < fullTag.length && /\s/.test(fullTag[p])) p++;
+    if (fullTag[p] !== '{') return [];
+    let depth = 0;
+    let start = p;
+    let inQuote: string | null = null;
+    while (p < fullTag.length) {
+      const ch = fullTag[p];
+      if (inQuote) {
+        if (ch === '\\' && p + 1 < fullTag.length) { p += 2; continue; }
+        if (ch === inQuote) inQuote = null;
+      } else {
+        if (ch === '"' || ch === '\'' || ch === '`') {
+          inQuote = ch;
+        } else if (ch === '{') {
+          depth++;
+        } else if (ch === '}') {
+          depth--;
+          if (depth === 0) { p++; break; }
+        }
+      }
+      p++;
+    }
+    const rawMatched = fullTag.slice(start, p);
+    let inner = rawMatched.trim();
+    if (inner.startsWith('{') && inner.endsWith('}')) {
+      inner = inner.slice(1, -1).trim();
+    }
+    const dummyCode = `const __vars = ${inner};`;
     try {
       const sf = ts.createSourceFile('vars.ts', dummyCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
       const declaredNames: string[] = [];
-      function visit(node: ts.Node) {
-        if (ts.isObjectLiteralExpression(node)) {
-          for (const prop of node.properties) {
-            if (ts.isPropertyAssignment(prop) && (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name))) {
-              declaredNames.push(prop.name.text);
-            } else if (ts.isShorthandPropertyAssignment(prop)) {
-              declaredNames.push(prop.name.text);
+      for (const stmt of sf.statements) {
+        if (ts.isVariableStatement(stmt)) {
+          for (const decl of stmt.declarationList.declarations) {
+            if (decl.initializer && ts.isObjectLiteralExpression(decl.initializer)) {
+              for (const prop of decl.initializer.properties) {
+                if (ts.isPropertyAssignment(prop) && (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name))) {
+                  declaredNames.push(prop.name.text);
+                } else if (ts.isShorthandPropertyAssignment(prop)) {
+                  declaredNames.push(prop.name.text);
+                }
+              }
             }
           }
         }
-        ts.forEachChild(node, visit);
       }
-      visit(sf);
       return declaredNames;
     } catch {
       return [];
@@ -231,6 +308,7 @@ class InvariantEngine {
     const sourceFile = ts.createSourceFile('inline.ts', scriptBody, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const rootScope = new Set<string>([...definedVars, ...BROWSER_GLOBALS]);
     const scopeStack: Set<string>[] = [rootScope];
+    const fnScopes: Set<string>[] = [rootScope];
     const undeclaredUsed = new Map<string, boolean>();
 
     function isDeclared(name: string): boolean {
@@ -283,6 +361,7 @@ class InvariantEngine {
 
     function walk(node: ts.Node) {
       let pushedScope = false;
+      let pushedFn = false;
       const isFunctionScope =
         ts.isFunctionDeclaration(node) ||
         ts.isFunctionExpression(node) ||
@@ -314,6 +393,8 @@ class InvariantEngine {
               }
             }
           }
+          fnScopes.push(newScope);
+          pushedFn = true;
         } else if (ts.isBlock(node)) {
           for (const stmt of node.statements) {
             if (ts.isFunctionDeclaration(stmt) && stmt.name) {
@@ -335,8 +416,16 @@ class InvariantEngine {
       }
 
       if (ts.isVariableDeclaration(node)) {
-        const currentScope = scopeStack[scopeStack.length - 1];
-        addBinding(node.name, currentScope);
+        // 先遍历初始化表达式，拦截 TDZ 与声明前自引用 (const x = x + 1)
+        if (node.initializer) {
+          walk(node.initializer);
+        }
+        const isBlockScoped = (ts.getCombinedNodeFlags(node) & ts.NodeFlags.BlockScoped) !== 0;
+        const targetScope = isBlockScoped ? scopeStack[scopeStack.length - 1] : fnScopes[fnScopes.length - 1];
+        addBinding(node.name, targetScope);
+        if (pushedScope) scopeStack.pop();
+        if (pushedFn) fnScopes.pop();
+        return;
       }
 
       if (ts.isIdentifier(node)) {
@@ -347,6 +436,9 @@ class InvariantEngine {
 
       if (pushedScope) {
         scopeStack.pop();
+      }
+      if (pushedFn) {
+        fnScopes.pop();
       }
     }
 
@@ -365,7 +457,8 @@ class InvariantEngine {
         if (ts.isFunctionExpression(parent) && parent.name === node) return;
         if (ts.isParameter(parent) && parent.name === node) return;
         if (ts.isClassDeclaration(parent) && parent.name === node) return;
-        if (ts.isBindingElement(parent) && parent.name === node) return;
+        // 解构重命名：const { sourceKey: localVar } = obj，sourceKey 不是待解析的自由变量
+        if (ts.isBindingElement(parent) && (parent.name === node || parent.propertyName === node)) return;
         if (ts.isImportSpecifier(parent) && parent.name === node) return;
         if (ts.isCatchClause(parent)) return;
         if (ts.isBreakOrContinueStatement(parent)) return;
@@ -477,11 +570,12 @@ class InvariantEngine {
 
   /**
    * 1.4 组件原始 Props 字符串原型方法安全守卫检测
-   * (全面支持解构变量、Astro.props.xxx 链式访问、一阶别名 || / ?? 以及括号逻辑复合表达式)
+   * (全面支持解构变量、Astro.props.xxx 链式访问、一阶别名 || / ?? 以及三元/括号逻辑复合表达式，支持精准行号模板表达式检测)
    */
   public static checkPropsStringPrototypeGuards(
     input: string | ts.SourceFile,
-    startLine: number = 2
+    startLine: number = 2,
+    templateExpressions?: { expr: string; line: number }[]
   ): { valid: boolean; violations: string[] } {
     const violations: string[] = [];
     const sf = typeof input === 'string'
@@ -518,9 +612,11 @@ class InvariantEngine {
               (decl.initializer.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
                decl.initializer.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
             ) {
-              const left = unwrapReceiver(decl.initializer.left);
-              if (ts.isIdentifier(left) && rawProps.has(left.text)) {
-                rawAliases.add(decl.name.text);
+              const receivers = unwrapReceivers(decl.initializer.left);
+              for (const r of receivers) {
+                if (ts.isIdentifier(r) && rawProps.has(r.text)) {
+                  rawAliases.add(decl.name.text);
+                }
               }
             } else if (ts.isIdentifier(decl.initializer) && rawProps.has(decl.initializer.text)) {
               rawAliases.add(decl.name.text);
@@ -530,19 +626,22 @@ class InvariantEngine {
       }
     }
 
-    function unwrapReceiver(node: ts.Node): ts.Node {
+    function unwrapReceivers(node: ts.Node): ts.Node[] {
       let curr = node;
       while (ts.isParenthesizedExpression(curr)) {
         curr = curr.expression;
+      }
+      if (ts.isConditionalExpression(curr)) {
+        return [...unwrapReceivers(curr.whenTrue), ...unwrapReceivers(curr.whenFalse)];
       }
       if (
         ts.isBinaryExpression(curr) &&
         (curr.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
          curr.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
       ) {
-        return unwrapReceiver(curr.left);
+        return [...unwrapReceivers(curr.left), ...unwrapReceivers(curr.right)];
       }
-      return curr;
+      return [curr];
     }
 
     const PROPS_STRING_METHODS = new Set([
@@ -554,19 +653,19 @@ class InvariantEngine {
       'padStart', 'padEnd', 'match', 'matchAll',
     ]);
 
-    function visit(node: ts.Node) {
-      if (ts.isCallExpression(node)) {
-        const expr = node.expression;
-        if (ts.isPropertyAccessExpression(expr)) {
-          const method = expr.name.text;
-          if (PROPS_STRING_METHODS.has(method)) {
-            const receiver = unwrapReceiver(expr.expression);
+    function checkCall(node: ts.CallExpression, currentSf: ts.SourceFile, reportLine: number) {
+      const expr = node.expression;
+      if (ts.isPropertyAccessExpression(expr)) {
+        const method = expr.name.text;
+        if (PROPS_STRING_METHODS.has(method)) {
+          const receivers = unwrapReceivers(expr.expression);
+          for (const receiver of receivers) {
             let rawPropName: string | null = null;
             if (ts.isIdentifier(receiver) && (rawProps.has(receiver.text) || rawAliases.has(receiver.text))) {
               rawPropName = receiver.text;
             } else if (ts.isPropertyAccessExpression(receiver)) {
-              const fullExprText = receiver.getText(sf);
-              if (fullExprText.startsWith('Astro.props.') || rawPropHolders.has(receiver.expression.getText(sf))) {
+              const fullExprText = receiver.getText(currentSf);
+              if (fullExprText.startsWith('Astro.props.') || rawPropHolders.has(receiver.expression.getText(currentSf))) {
                 rawPropName = receiver.name.text;
               }
             }
@@ -575,9 +674,9 @@ class InvariantEngine {
               let isGuarded = false;
               let p: ts.Node | undefined = node.parent;
               // 严格向上回溯父级条件作用域，必须在有效正分支内调用
-              while (p && p !== sf) {
+              while (p && p !== currentSf) {
                 if (ts.isIfStatement(p)) {
-                  const condText = p.expression.getText(sf);
+                  const condText = p.expression.getText(currentSf);
                   const isPositive =
                     condText.includes(`typeof ${rawPropName} === 'string'`) ||
                     condText.includes(`typeof ${rawPropName} === "string"`) ||
@@ -588,16 +687,16 @@ class InvariantEngine {
                     condText.includes(`typeof ${rawPropName} !== 'string'`) ||
                     condText.includes(`typeof ${rawPropName} !== "string"`);
 
-                  if (isPositive && node.getStart() >= p.thenStatement.getStart() && node.getEnd() <= p.thenStatement.getEnd()) {
+                  if (isPositive && node.getStart(currentSf) >= p.thenStatement.getStart(currentSf) && node.getEnd() <= p.thenStatement.getEnd()) {
                     isGuarded = true;
                     break;
                   }
-                  if (isNegative && p.elseStatement && node.getStart() >= p.elseStatement.getStart() && node.getEnd() <= p.elseStatement.getEnd()) {
+                  if (isNegative && p.elseStatement && node.getStart(currentSf) >= p.elseStatement.getStart(currentSf) && node.getEnd() <= p.elseStatement.getEnd()) {
                     isGuarded = true;
                     break;
                   }
                 } else if (ts.isConditionalExpression(p)) {
-                  const condText = p.condition.getText(sf);
+                  const condText = p.condition.getText(currentSf);
                   const isPositive =
                     condText.includes(`typeof ${rawPropName} === 'string'`) ||
                     condText.includes(`typeof ${rawPropName} === "string"`) ||
@@ -608,21 +707,21 @@ class InvariantEngine {
                     condText.includes(`typeof ${rawPropName} !== 'string'`) ||
                     condText.includes(`typeof ${rawPropName} !== "string"`);
 
-                  if (isPositive && node.getStart() >= p.whenTrue.getStart() && node.getEnd() <= p.whenTrue.getEnd()) {
+                  if (isPositive && node.getStart(currentSf) >= p.whenTrue.getStart(currentSf) && node.getEnd() <= p.whenTrue.getEnd()) {
                     isGuarded = true;
                     break;
                   }
-                  if (isNegative && node.getStart() >= p.whenFalse.getStart() && node.getEnd() <= p.whenFalse.getEnd()) {
+                  if (isNegative && node.getStart(currentSf) >= p.whenFalse.getStart(currentSf) && node.getEnd() <= p.whenFalse.getEnd()) {
                     isGuarded = true;
                     break;
                   }
                 } else if (ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-                  const leftText = p.left.getText(sf);
+                  const leftText = p.left.getText(currentSf);
                   if (
                     leftText.includes(`typeof ${rawPropName} === 'string'`) ||
                     leftText.includes(`typeof ${rawPropName} === "string"`)
                   ) {
-                    if (node.getStart() >= p.right.getStart() && node.getEnd() <= p.right.getEnd()) {
+                    if (node.getStart(currentSf) >= p.right.getStart(currentSf) && node.getEnd() <= p.right.getEnd()) {
                       isGuarded = true;
                       break;
                     }
@@ -634,20 +733,20 @@ class InvariantEngine {
               // 检查当前代码块内先前的早退守卫 (如 if (typeof x !== 'string') return;)
               if (!isGuarded) {
                 let currBlock: ts.Node | undefined = node;
-                while (currBlock && !ts.isBlock(currBlock) && currBlock !== sf) {
+                while (currBlock && !ts.isBlock(currBlock) && currBlock !== currentSf) {
                   currBlock = currBlock.parent;
                 }
                 if (currBlock && (ts.isBlock(currBlock) || ts.isSourceFile(currBlock))) {
                   const stmts = ts.isBlock(currBlock) ? currBlock.statements : (currBlock as ts.SourceFile).statements;
                   for (const s of stmts) {
-                    if (s.getEnd() > node.getStart()) break;
+                    if (s.getEnd() > node.getStart(currentSf)) break;
                     if (ts.isIfStatement(s)) {
-                      const cText = s.expression.getText(sf);
+                      const cText = s.expression.getText(currentSf);
                       if (
                         (cText.includes(`typeof ${rawPropName} !== 'string'`) ||
                          cText.includes(`typeof ${rawPropName} !== "string"`) ||
                          cText.includes(`!${rawPropName}`)) &&
-                        (s.thenStatement.getText(sf).includes('return') || s.thenStatement.getText(sf).includes('throw'))
+                        (s.thenStatement.getText(currentSf).includes('return') || s.thenStatement.getText(currentSf).includes('throw'))
                       ) {
                         isGuarded = true;
                         break;
@@ -658,18 +757,40 @@ class InvariantEngine {
               }
 
               if (!isGuarded) {
-                const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + startLine;
                 violations.push(
-                  `原始 Prop 变量 '${rawPropName}' 在第 ${line} 行未经过 typeof === 'string' 或 toText() / String() 类型守卫即调用 .${method}()！若上游 CMS 传入多语言对象或 null 将导致 SSR 崩溃！`
+                  `原始 Prop 变量 '${rawPropName}' 在第 ${reportLine} 行未经过 typeof === 'string' 或 toText() / String() 类型守卫即调用 .${method}()！若上游 CMS 传入多语言对象或 null 将导致 SSR 崩溃！`
                 );
               }
             }
           }
         }
       }
+    }
+
+    function visit(node: ts.Node) {
+      if (ts.isCallExpression(node)) {
+        const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + startLine;
+        checkCall(node, sf, line);
+      }
       ts.forEachChild(node, visit);
     }
     visit(sf);
+
+    // 独立检测模板插值表达式 (保持精确的源文件模板行号)
+    if (templateExpressions && templateExpressions.length > 0) {
+      for (const tmpl of templateExpressions) {
+        try {
+          const exprSf = ts.createSourceFile('expr.ts', `(() => (${tmpl.expr}))`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+          function visitExpr(n: ts.Node) {
+            if (ts.isCallExpression(n)) {
+              checkCall(n, exprSf, tmpl.line);
+            }
+            ts.forEachChild(n, visitExpr);
+          }
+          visitExpr(exprSf);
+        } catch {}
+      }
+    }
 
     return { valid: violations.length === 0, violations };
   }
@@ -734,7 +855,11 @@ class InvariantEngine {
               missingTopLevel.push(`${schema.name}.${lf.name}`);
             }
           } else {
-            if (!registeredFields.has(lf.name) && !blocksContent.includes(lf.name)) {
+            // 嵌套字段绝不能用 registeredFields.has(lf.name) 豁免同名遮蔽
+            const container = lf.fullPath.split(/[\.\[]/)[0];
+            const hasContainerHandling = blocksContent.includes(container);
+            const hasFieldHandling = blocksContent.includes(lf.name);
+            if (!hasContainerHandling || !hasFieldHandling) {
               missingNested.push(`${schema.name}.${lf.fullPath}`);
             }
           }
@@ -793,6 +918,27 @@ class InvariantEngine {
       violations.push("探针 1D (客户端内联 TS 纯净度 AST 拦截) 自检失败：未能捕获原生内联脚本中的非空断言 (!) 语法！");
     }
 
+    // 故障注入 1E: 客户端解构重命名 (const { sourceProp: localVal } = myObj) 防误报
+    const mockDestructureScript = "const { sourceProp: localVal } = myObj; console.log(localVal);";
+    const res1E = InvariantEngine.checkScriptScopeClosed(mockDestructureScript, ['myObj']);
+    if (!res1E.valid || res1E.violations.some((v) => v.identifier === 'sourceProp')) {
+      violations.push("探针 1E (客户端解构重命名防误报) 自检失败：误将 sourceProp 当作游离未声明变量！");
+    }
+
+    // 故障注入 1F: 客户端变量 TDZ 引用自身泄漏拦截
+    const mockTdzScript = "const tdzTrap = tdzTrap + 1;";
+    const res1F = InvariantEngine.checkScriptScopeClosed(mockTdzScript, []);
+    if (res1F.valid || !res1F.violations.some((v) => v.identifier === 'tdzTrap')) {
+      violations.push("探针 1F (客户端变量 TDZ 自引用拦截) 自检失败：未能拦截声明前在初始化器中引用自身！");
+    }
+
+    // 故障注入 1G: 客户端 var 块级提升至函数/全局作用域
+    const mockVarScript = "if (true) { var hoistedInBlock = 42; } console.log(hoistedInBlock);";
+    const res1G = InvariantEngine.checkScriptScopeClosed(mockVarScript, []);
+    if (!res1G.valid || res1G.violations.some((v) => v.identifier === 'hoistedInBlock')) {
+      violations.push("探针 1G (客户端 var 块级作用域提升) 自检失败：误将提升的 var 变量判定为未声明！");
+    }
+
     // 故障注入 2: Frontmatter 重复声明 (含普通变量与解构模式同名冲突)
     const mockFmDuplicate = "const duplicateTrapVar = 1;\nconst duplicateTrapVar = 2;";
     const res2A = InvariantEngine.checkFrontmatterDuplicateDeclarations(mockFmDuplicate, 1);
@@ -826,6 +972,13 @@ class InvariantEngine {
       violations.push("探针 3C (Props 原型方法 else 分支逃逸守卫) 自检失败：未能拦截正向 typeof 检查的 else 逆分支裸调用！");
     }
 
+    // 故障注入 3D: 三元表达式 (cond ? prop : fallback).trim() 穿透拦截
+    const mockFmTernaryUnguarded = "const { rawPropTrap } = Astro.props;\nconst res = (cond ? rawPropTrap : '').trim();";
+    const res3D = InvariantEngine.checkPropsStringPrototypeGuards(mockFmTernaryUnguarded, 1);
+    if (res3D.valid || !res3D.violations.some((v) => v.includes("rawPropTrap") && v.includes(".trim()"))) {
+      violations.push("探针 3D (三元表达式 Props 原型方法穿透拦截) 自检失败：未能穿透三元分支拦截裸调用的原始 Prop！");
+    }
+
     // 故障注入 4: Schema 多语言字段差集真实函数调用
     const mockTrapSchema = [
       {
@@ -842,6 +995,32 @@ class InvariantEngine {
     );
     if (res4.valid || !res4.violations.some((v) => v.includes('unregisteredLocaleFieldTrap'))) {
       violations.push("探针 4 (Schema 多语言字段差集真实调用) 自检失败：未能通过 checkSchemaTextAlignment 拦截未登记的多语言字段！");
+    }
+
+    // 故障注入 4B: 嵌套多语言字段同名遮蔽拦截 (即使字段名为 title，若容器未在 blocks.ts 解包也必须报错)
+    const mockNestedShadowTrap = [
+      {
+        name: 'testNestedSection',
+        fields: [
+          {
+            name: 'unhandledContainer',
+            type: 'array',
+            of: [
+              {
+                type: 'object',
+                fields: [{ name: 'title', type: 'localeString' }],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const res4B = InvariantEngine.checkSchemaTextAlignment(
+      mockNestedShadowTrap,
+      path.join(SRC_DIR, 'data/blocks.ts')
+    );
+    if (res4B.valid || !res4B.violations.some((v) => v.includes('testNestedSection.unhandledContainer[].title'))) {
+      violations.push("探针 4B (嵌套字段同名遮蔽防漏) 自检失败：未能拦截容器未解包的嵌套 title 字段！");
     }
 
     return { valid: violations.length === 0, violations };
@@ -965,13 +1144,16 @@ class InvariantEngine {
   ): { valid: boolean; totalAssets: number; missing: string[]; zeroMeasure: string[] } {
     const assetsMatch = entryScriptContent.match(/"assets":\s*(\[[^\]]+\])/);
     if (!assetsMatch) {
-      return { valid: true, totalAssets: 0, missing: [], zeroMeasure: [] };
+      return { valid: false, totalAssets: 0, missing: ['未能在 SSR entry 中找到 "assets": [...] 清单字段'], zeroMeasure: [] };
     }
     let assetsList: string[] = [];
     try {
       assetsList = JSON.parse(assetsMatch[1]);
     } catch {
       return { valid: false, totalAssets: 0, missing: ['Manifest assets JSON parse error'], zeroMeasure: [] };
+    }
+    if (assetsList.length === 0) {
+      return { valid: false, totalAssets: 0, missing: ['Manifest assets 列表为空，未声明任何有效资产'], zeroMeasure: [] };
     }
 
     const missing: string[] = [];
@@ -1289,17 +1471,17 @@ async function main() {
 
   // 2.1 [Pitfall 1]: 客户端原生内联脚本词法纯净度状态机扫描 (消除任何 TS 语法泄漏)
   for (const { file, rel, content } of astroEntries) {
-    const scriptRegex = /<script\s+[^>]*(?:define:vars|is:inline)[^>]*>([\s\S]*?)<\/script>/gi;
-    let match;
-    while ((match = scriptRegex.exec(content)) !== null) {
-      const scriptBody = match[1];
-      const checkResult = InvariantEngine.checkScriptPurity(scriptBody);
-      if (!checkResult.pure) {
-        logFail(
-          `${rel}: [Pitfall 1] 客户端原生 <script> 违反词法纯净度公理！检测到 TS 语法污染: ${checkResult.violations.join(
-            ', '
-          )}。浏览器执行将直接引发 SyntaxError 导致整站交互瘫痪！`
-        );
+    const scripts = InvariantEngine.extractScriptBlocks(content);
+    for (const { openTag, body } of scripts) {
+      if (openTag.includes('define:vars') || openTag.includes('is:inline')) {
+        const checkResult = InvariantEngine.checkScriptPurity(body);
+        if (!checkResult.pure) {
+          logFail(
+            `${rel}: [Pitfall 1] 客户端原生 <script> 违反词法纯净度公理！检测到 TS 语法污染: ${checkResult.violations.join(
+              ', '
+            )}。浏览器执行将直接引发 SyntaxError 导致整站交互瘫痪！`
+          );
+        }
       }
     }
   }
@@ -1318,31 +1500,14 @@ async function main() {
 
   // 2.3 [Pitfall 3 & 6]: 序列化信息熵与 HTML 属性轻量化公理
   for (const { file, rel, content } of astroEntries) {
-    // 拦截 define:vars 内部字符串二次转义 (基于 AST 解析，避免首个 } 提前截断)
-    const scriptTagRegex = /<script\b([^>]*)>/gi;
-    let tagMatch;
-    while ((tagMatch = scriptTagRegex.exec(content)) !== null) {
-      const fullTag = tagMatch[0];
-      if (fullTag.includes('define:vars=')) {
-        const dvMatch = fullTag.match(/define:vars=\{([\s\S]*?)\}(?=\s|>)/);
-        if (dvMatch) {
-          const rawExpr = dvMatch[1].trim();
-          try {
-            const sf = ts.createSourceFile('dv.ts', `const __dv = ${rawExpr};`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-            let hasJsonStringify = false;
-            function checkDv(node: ts.Node) {
-              if (ts.isCallExpression(node) && node.expression.getText(sf).includes('JSON.stringify')) {
-                hasJsonStringify = true;
-              }
-              ts.forEachChild(node, checkDv);
-            }
-            checkDv(sf);
-            if (hasJsonStringify) {
-              logFail(
-                `${rel}: [Pitfall 3] 严禁在 define:vars 中嵌套使用 JSON.stringify()！双重反斜杠转义将引发体积数倍膨胀。`
-              );
-            }
-          } catch {}
+    // 拦截 define:vars 内部字符串二次转义 (基于稳健标签提取与 AST 解析)
+    const scripts = InvariantEngine.extractScriptBlocks(content);
+    for (const { openTag } of scripts) {
+      if (openTag.includes('define:vars')) {
+        if (openTag.includes('JSON.stringify')) {
+          logFail(
+            `${rel}: [Pitfall 3] 严禁在 define:vars 中嵌套使用 JSON.stringify()！双重反斜杠转义将引发体积数倍膨胀。`
+          );
         }
       }
     }
@@ -1393,9 +1558,9 @@ async function main() {
   const productCardFile = path.join(SRC_DIR, 'components', 'ProductCard.astro');
   if (fs.existsSync(productCardFile)) {
     const content = fs.readFileSync(productCardFile, 'utf-8');
-    if (content.includes('loading="lazy"') && !content.includes('loading') && !content.includes('priority')) {
+    if (content.includes('loading="lazy"') && !content.includes('loading={')) {
       logFail(
-        `src/components/ProductCard.astro: [Pitfall 8] 卡片组件严禁写死 loading="lazy"！前 4 张卡片必须支持设为 eager 且首图挂载 fetchpriority="high"。`
+        `src/components/ProductCard.astro: [Pitfall 8] 卡片组件严禁写死 loading="lazy"！前 4 张卡片必须支持动态 loading (如 loading={idx < 4 ? 'eager' : 'lazy'}) 且首图挂载 fetchpriority。`
       );
     }
   }
@@ -1405,10 +1570,9 @@ async function main() {
   for (const { file, rel, content } of allSourceEntries) {
     const scriptBlocks: string[] = [];
     if (file.endsWith('.astro')) {
-      const sRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
-      let m;
-      while ((m = sRegex.exec(content)) !== null) {
-        scriptBlocks.push(m[1]);
+      const scripts = InvariantEngine.extractScriptBlocks(content);
+      for (const s of scripts) {
+        scriptBlocks.push(s.body);
       }
     } else {
       scriptBlocks.push(content);
@@ -1494,43 +1658,56 @@ async function main() {
   }
   logPass(`[Pitfall 13] 产品货架大屏空间几何极限方程与断点公理校验通过`);
 
-  // 2.10 [Principle I.2]: 弹性熔断上限公理 (基于 AST 遍历每一处外部 fetch 调用，刚性超时保护 T <= 6000ms)
-  const apiFiles = getFiles(path.join(SRC_DIR, 'pages', 'api'), ['.ts', '.js']);
-  const cdnImageFiles = getFiles(path.join(SRC_DIR, 'pages', 'cdn-image'), ['.ts', '.js']);
-  const serverEndpointFiles = [...apiFiles, ...cdnImageFiles];
+  // 2.10 [Principle I.2]: 弹性熔断上限公理 (基于 AST 遍历服务端 fetch 与 globalThis.fetch 调用，刚性超时保护 T <= 6000ms)
+  const serverEndpointFiles = [
+    ...getFiles(path.join(SRC_DIR, 'pages', 'api'), ['.ts', '.js']),
+    ...getFiles(path.join(SRC_DIR, 'pages', 'cdn-image'), ['.ts', '.js']),
+    ...getFiles(path.join(SRC_DIR, 'data'), ['.ts', '.js']),
+    ...getFiles(path.join(SRC_DIR, 'utils'), ['.ts', '.js']),
+  ];
+  const middlewareCandidate = path.join(SRC_DIR, 'middleware.ts');
+  if (fs.existsSync(middlewareCandidate)) serverEndpointFiles.push(middlewareCandidate);
+
   for (const file of serverEndpointFiles) {
     const content = fs.readFileSync(file, 'utf-8');
     const relFile = path.relative(ROOT_DIR, file);
     try {
       const sf = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
       function checkFetch(node: ts.Node) {
-        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'fetch') {
-          const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-          const optionsArg = node.arguments[1];
-          let hasSignal = false;
-          if (optionsArg) {
-            if (ts.isObjectLiteralExpression(optionsArg)) {
-              for (const prop of optionsArg.properties) {
-                if (
-                  (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop)) &&
-                  prop.name &&
-                  prop.name.getText(sf) === 'signal'
-                ) {
+        if (ts.isCallExpression(node)) {
+          const isDirectFetch = ts.isIdentifier(node.expression) && node.expression.text === 'fetch';
+          const isGlobalFetch =
+            ts.isPropertyAccessExpression(node.expression) &&
+            node.expression.expression.getText(sf) === 'globalThis' &&
+            node.expression.name.text === 'fetch';
+          if (isDirectFetch || isGlobalFetch) {
+            const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+            const optionsArg = node.arguments[1];
+            let hasSignal = false;
+            if (optionsArg) {
+              if (ts.isObjectLiteralExpression(optionsArg)) {
+                for (const prop of optionsArg.properties) {
+                  if (
+                    (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop)) &&
+                    prop.name &&
+                    prop.name.getText(sf) === 'signal'
+                  ) {
+                    hasSignal = true;
+                    break;
+                  }
+                }
+              } else {
+                const text = optionsArg.getText(sf);
+                if (text.includes('signal') || text.includes('timeout') || text.includes('AbortSignal')) {
                   hasSignal = true;
-                  break;
                 }
               }
-            } else {
-              const text = optionsArg.getText(sf);
-              if (text.includes('signal') || text.includes('timeout') || text.includes('AbortSignal')) {
-                hasSignal = true;
-              }
             }
-          }
-          if (!hasSignal) {
-            logFail(
-              `${relFile}:${line} [Principle I.2] 外部网络 fetch 调用未挂载超时控制信号 (signal: AbortSignal.timeout(6000))，网络抖动可能拖死边缘 Worker 引发 504！`
-            );
+            if (!hasSignal) {
+              logFail(
+                `${relFile}:${line} [Principle I.2] 外部网络 fetch 调用未挂载超时控制信号 (signal: AbortSignal.timeout(6000))，网络抖动可能拖死边缘 Worker 引发 504！`
+              );
+            }
           }
         }
         ts.forEachChild(node, checkFetch);
@@ -1658,21 +1835,15 @@ async function main() {
     }
   }
 
-  const langFiles = [
-    path.join(SRC_DIR, 'pages', '[lang]', 'index.astro'),
-    path.join(SRC_DIR, 'pages', '[lang]', '[...slug].astro'),
-    path.join(SRC_DIR, 'pages', '[lang]', 'products', 'index.astro'),
-    path.join(SRC_DIR, 'pages', '[lang]', 'products', '[slug].astro'),
-  ];
+  const langDir = path.join(SRC_DIR, 'pages', '[lang]');
+  const langFiles = fs.existsSync(langDir) ? getFiles(langDir, ['.astro']) : [];
   for (const lf of langFiles) {
-    if (fs.existsSync(lf)) {
-      const relPath = path.relative(ROOT_DIR, lf);
-      const content = fs.readFileSync(lf, 'utf-8');
-      if (!content.includes("startsWith('_')") || !content.includes("includes('.')")) {
-        logFail(
-          `${relPath}: [Pitfall 18] 动态 [lang] 路由未防御下划线与点号静态文件，会导致请求误落入语言路由并 302 重定向到 HTML！`
-        );
-      }
+    const relPath = path.relative(ROOT_DIR, lf);
+    const content = fs.readFileSync(lf, 'utf-8');
+    if (!content.includes("startsWith('_')") || !content.includes("includes('.')")) {
+      logFail(
+        `${relPath}: [Pitfall 18] 动态 [lang] 路由未防御下划线与点号静态文件，会导致请求误落入语言路由并 302 重定向到 HTML！`
+      );
     }
   }
   logPass(`[Pitfall 18] 边缘缓存时间测度区间公理与防御性路由校验通过`);
@@ -1765,30 +1936,64 @@ async function main() {
         }
       }
 
-      // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测 (合并 HTML 模板区嵌入表达式 {...})
-      const templateExpressions: string[] = [];
+      // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测 (精确行号模板表达式提取)
+      const templateExpressions: { expr: string; line: number }[] = [];
       const secondFence = content.indexOf('---', 3);
       if (secondFence !== -1) {
         const templatePart = content.slice(secondFence + 3);
-        const cleanedTemplate = templatePart
-          .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-        const exprRegex = /\{([^}{]+)\}/g;
-        let em;
-        while ((em = exprRegex.exec(cleanedTemplate)) !== null) {
-          const expr = em[1].trim();
-          if (expr && !expr.startsWith('/*') && !expr.startsWith('//')) {
-            templateExpressions.push(`(() => { return (${expr}); });`);
+        const templateBaseOffset = secondFence + 3;
+        let p = 0;
+        while (p < templatePart.length) {
+          if (templatePart.startsWith('<!--', p)) {
+            const end = templatePart.indexOf('-->', p + 4);
+            p = end === -1 ? templatePart.length : end + 3;
+            continue;
           }
+          if (templatePart.startsWith('<script', p) && /[\s>]/.test(templatePart[p + 7] || '')) {
+            const end = templatePart.indexOf('</script>', p + 7);
+            p = end === -1 ? templatePart.length : end + 9;
+            continue;
+          }
+          if (templatePart.startsWith('<style', p) && /[\s>]/.test(templatePart[p + 6] || '')) {
+            const end = templatePart.indexOf('</style>', p + 6);
+            p = end === -1 ? templatePart.length : end + 8;
+            continue;
+          }
+          if (templatePart[p] === '{') {
+            const startOffset = templateBaseOffset + p;
+            const line = content.slice(0, startOffset).split('\n').length;
+            let depth = 0;
+            let inQuote: string | null = null;
+            let exprStart = p + 1;
+            p++;
+            depth++;
+            while (p < templatePart.length && depth > 0) {
+              const ch = templatePart[p];
+              if (inQuote) {
+                if (ch === '\\' && p + 1 < templatePart.length) { p += 2; continue; }
+                if (ch === inQuote) inQuote = null;
+              } else {
+                if (ch === '"' || ch === '\'' || ch === '`') {
+                  inQuote = ch;
+                } else if (ch === '{') {
+                  depth++;
+                } else if (ch === '}') {
+                  depth--;
+                  if (depth === 0) break;
+                }
+              }
+              p++;
+            }
+            const expr = templatePart.slice(exprStart, p).trim();
+            if (expr && !expr.startsWith('/*') && !expr.startsWith('//')) {
+              templateExpressions.push({ expr, line });
+            }
+          }
+          p++;
         }
       }
 
-      const combinedCode = templateExpressions.length > 0
-        ? `${fm.code}\n${templateExpressions.join('\n')}`
-        : fm.code;
-      const combinedSf = ts.createSourceFile('fm_combined.ts', combinedCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-
-      const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(combinedSf, fm.startLine);
+      const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(sf, fm.startLine, templateExpressions);
       if (!propCheck.valid) {
         for (const v of propCheck.violations) {
           logFail(`${rel}: [Pitfall 23] ${v}`);
@@ -1797,18 +2002,14 @@ async function main() {
     }
 
     // 2.20 [Pitfall 21]: 客户端原生内联脚本自由变量闭合与 define:vars 漏传 AST 分析
-    const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
-    let match;
-    while ((match = scriptRegex.exec(content)) !== null) {
-      const attrs = match[1] || '';
-      const scriptBody = match[2];
-      if (attrs.includes('src=') || attrs.includes('type="application/json"') || attrs.includes('type="application/ld+json"')) {
+    const scripts = InvariantEngine.extractScriptBlocks(content);
+    for (const { openTag, body } of scripts) {
+      if (openTag.includes('src=') || openTag.includes('type="application/json"') || openTag.includes('type="application/ld+json"')) {
         continue;
       }
-      const fullTag = match[0];
-      const definedVars = InvariantEngine.extractDefineVars(fullTag);
+      const definedVars = InvariantEngine.extractDefineVars(openTag);
 
-      const scopeCheck = InvariantEngine.checkScriptScopeClosed(scriptBody, definedVars, topLevelVars);
+      const scopeCheck = InvariantEngine.checkScriptScopeClosed(body, definedVars, topLevelVars);
       if (!scopeCheck.valid) {
         for (const v of scopeCheck.violations) {
           if (v.isServerVar) {
@@ -1852,32 +2053,76 @@ async function main() {
   try {
     const i18nFile = path.join(SRC_DIR, 'i18n', 'ui.ts');
     if (fs.existsSync(i18nFile)) {
-      const { ui, languages } = await import('../src/i18n/ui');
-      if (ui && languages) {
-        const supportedLangs = Object.keys(languages);
+      const i18nMod = await import('../src/i18n/ui');
+      const uiDict = i18nMod.UI_STRINGS || (i18nMod as any).ui;
+      const langDict = i18nMod.LANGUAGES || (i18nMod as any).languages;
+      if (!uiDict || !langDict) {
+        logFail(`src/i18n/ui.ts: 未能导出 UI_STRINGS 或 LANGUAGES 字典对象！`);
+      } else {
+        const supportedLangs = Object.keys(langDict);
         const baseLang = 'en';
-        const baseTree = ui[baseLang] || {};
+        const baseTree = uiDict[baseLang] || {};
 
         for (const lang of supportedLangs) {
           if (lang === baseLang) continue;
-          if (!ui[lang]) {
+          if (!uiDict[lang]) {
             logFail(`i18n: 缺少 '${lang}' 语言字典！`);
             continue;
           }
-          const isoCheck = InvariantEngine.checkTreeIsomorphism(baseTree, ui[lang]);
+          const isoCheck = InvariantEngine.checkTreeIsomorphism(baseTree, uiDict[lang]);
           if (!isoCheck.isomorphic) {
             if (isoCheck.missingKeys.length > 0) {
-              logWarn(
+              logFail(
                 `i18n [${lang}]: 相比 ${baseLang} 树缺失 ${isoCheck.missingKeys.length} 个键 (对称覆盖率: ${isoCheck.coverageRatio.toFixed(
                   1
                 )}%): ${isoCheck.missingKeys.slice(0, 5).join(', ')}${isoCheck.missingKeys.length > 5 ? '...' : ''}`
               );
             }
+            if (isoCheck.extraKeys.length > 0) {
+              logWarn(
+                `i18n [${lang}]: 包含 ${isoCheck.extraKeys.length} 个未在 ${baseLang} 登记的孤儿键: ${isoCheck.extraKeys.slice(0, 5).join(', ')}${isoCheck.extraKeys.length > 5 ? '...' : ''}`
+              );
+            }
           }
         }
         logPass(
-          `i18n 多语言字典拓扑结构校验完成，基准语言 [${baseLang}] 包含 ${Object.keys(baseTree).length} 个核心词元`
+          `i18n UI_STRINGS 多语言字典拓扑同构校验完成，基准语言 [${baseLang}] 包含 ${Object.keys(baseTree).length} 个核心词元`
         );
+      }
+    } else {
+      logFail(`src/i18n/ui.ts 不存在！`);
+    }
+
+    // SECTION_TRANSLATIONS 检查 (src/data/blocks.ts)
+    const blocksFile = path.join(SRC_DIR, 'data', 'blocks.ts');
+    if (fs.existsSync(blocksFile)) {
+      const blocksMod = await import('../src/data/blocks');
+      const secTrans = blocksMod.SECTION_TRANSLATIONS;
+      if (secTrans) {
+        const transLangs = Object.keys(secTrans);
+        if (transLangs.length > 0) {
+          const baseTransLang = transLangs[0];
+          const baseTransTree = secTrans[baseTransLang] || {};
+          for (let i = 1; i < transLangs.length; i++) {
+            const lang = transLangs[i];
+            const iso = InvariantEngine.checkTreeIsomorphism(baseTransTree, secTrans[lang] || {});
+            if (!iso.isomorphic) {
+              if (iso.missingKeys.length > 0) {
+                logFail(
+                  `SECTION_TRANSLATIONS [${lang}]: 相比 ${baseTransLang} 缺失 ${iso.missingKeys.length} 个字段: ${iso.missingKeys.slice(0, 5).join(', ')}`
+                );
+              }
+              if (iso.extraKeys.length > 0) {
+                logWarn(
+                  `SECTION_TRANSLATIONS [${lang}]: 相比 ${baseTransLang} 多出 ${iso.extraKeys.length} 个字段: ${iso.extraKeys.slice(0, 5).join(', ')}`
+                );
+              }
+            }
+          }
+          logPass(
+            `SECTION_TRANSLATIONS 区块多语言字典拓扑校验完成 (共 ${transLangs.length} 种语言: ${transLangs.join(', ')})`
+          );
+        }
       }
     }
   } catch (err: any) {
