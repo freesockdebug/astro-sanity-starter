@@ -34,22 +34,30 @@ import { execSync } from 'child_process';
 import Module from 'module';
 import ts from 'typescript';
 
-// 轻量虚拟 Mock：解耦 Studio 专属富文本组件依赖，防止在无 studio/node_modules 环境下巡检中断
-const originalResolveFilename = (Module as any)._resolveFilename;
-(Module as any)._resolveFilename = function (request: string, parent: any, isMain: boolean, options: any) {
-  if (request === '@mdxeditor/editor' || request.startsWith('@mdxeditor/editor/')) {
-    return '__mock_mdxeditor__';
+// 轻量虚拟 Mock：解耦 Studio 专属依赖 (sanity, @mdxeditor/editor, @sanity/icons, .css)，彻底杜绝无 studio/node_modules 或瘦身删除后巡检中断
+const originalLoad = (Module as any)._load;
+(Module as any)._load = function (request: string, parent: any, isMain: boolean) {
+  if (request === 'sanity' || request.startsWith('sanity/')) {
+    return {
+      defineField: (field: any) => field,
+      defineType: (type: any) => type,
+      defineArrayMember: (member: any) => member,
+    };
   }
-  return originalResolveFilename.call(this, request, parent, isMain, options);
+  if (
+    request === '@mdxeditor/editor' ||
+    request.startsWith('@mdxeditor/editor/') ||
+    request === '@sanity/icons' ||
+    request.startsWith('@sanity/icons/') ||
+    request.endsWith('.css')
+  ) {
+    return new Proxy({}, { get: () => () => null });
+  }
+  return originalLoad.call(this, request, parent, isMain);
 };
-require.cache['__mock_mdxeditor__'] = {
-  id: '__mock_mdxeditor__',
-  filename: '__mock_mdxeditor__',
-  loaded: true,
-  exports: new Proxy({}, { get: () => () => null }),
-} as any;
 
-import { schemaTypes } from '../studio/schemaTypes/index';
+// 必须在 _load 钩子注册之后动态 require，避免 ESM 静态 import 提升导致的拦截穿透
+const { schemaTypes } = require('../studio/schemaTypes/index');
 
 const isFullMode = process.argv.includes('--full');
 const isDataMode = process.argv.includes('--data') || isFullMode;
@@ -306,6 +314,19 @@ class InvariantEngine {
               }
             }
           }
+        } else if (ts.isBlock(node)) {
+          for (const stmt of node.statements) {
+            if (ts.isFunctionDeclaration(stmt) && stmt.name) {
+              newScope.add(stmt.name.text);
+            }
+          }
+        } else if (ts.isForStatement(node) || ts.isForOfStatement(node) || ts.isForInStatement(node)) {
+          const init = (node as any).initializer;
+          if (init && ts.isVariableDeclarationList(init)) {
+            for (const decl of init.declarations) {
+              addBinding(decl.name, newScope);
+            }
+          }
         } else if (ts.isCatchClause(node) && node.variableDeclaration) {
           addBinding(node.variableDeclaration.name, newScope);
         }
@@ -557,31 +578,43 @@ class InvariantEngine {
               while (p && p !== sf) {
                 if (ts.isIfStatement(p)) {
                   const condText = p.expression.getText(sf);
-                  if (
+                  const isPositive =
                     condText.includes(`typeof ${rawPropName} === 'string'`) ||
                     condText.includes(`typeof ${rawPropName} === "string"`) ||
                     condText.includes(`toText(${rawPropName})`) ||
                     condText.includes(`getLocalizedValue(${rawPropName}`) ||
-                    condText.includes(`String(${rawPropName})`)
-                  ) {
-                    if (node.getStart() >= p.thenStatement.getStart() && node.getEnd() <= p.thenStatement.getEnd()) {
-                      isGuarded = true;
-                      break;
-                    }
+                    condText.includes(`String(${rawPropName})`);
+                  const isNegative =
+                    condText.includes(`typeof ${rawPropName} !== 'string'`) ||
+                    condText.includes(`typeof ${rawPropName} !== "string"`);
+
+                  if (isPositive && node.getStart() >= p.thenStatement.getStart() && node.getEnd() <= p.thenStatement.getEnd()) {
+                    isGuarded = true;
+                    break;
+                  }
+                  if (isNegative && p.elseStatement && node.getStart() >= p.elseStatement.getStart() && node.getEnd() <= p.elseStatement.getEnd()) {
+                    isGuarded = true;
+                    break;
                   }
                 } else if (ts.isConditionalExpression(p)) {
                   const condText = p.condition.getText(sf);
-                  if (
+                  const isPositive =
                     condText.includes(`typeof ${rawPropName} === 'string'`) ||
                     condText.includes(`typeof ${rawPropName} === "string"`) ||
                     condText.includes(`toText(${rawPropName})`) ||
                     condText.includes(`getLocalizedValue(${rawPropName}`) ||
-                    condText.includes(`String(${rawPropName})`)
-                  ) {
-                    if (node.getStart() >= p.whenTrue.getStart() && node.getEnd() <= p.whenTrue.getEnd()) {
-                      isGuarded = true;
-                      break;
-                    }
+                    condText.includes(`String(${rawPropName})`);
+                  const isNegative =
+                    condText.includes(`typeof ${rawPropName} !== 'string'`) ||
+                    condText.includes(`typeof ${rawPropName} !== "string"`);
+
+                  if (isPositive && node.getStart() >= p.whenTrue.getStart() && node.getEnd() <= p.whenTrue.getEnd()) {
+                    isGuarded = true;
+                    break;
+                  }
+                  if (isNegative && node.getStart() >= p.whenFalse.getStart() && node.getEnd() <= p.whenFalse.getEnd()) {
+                    isGuarded = true;
+                    break;
                   }
                 } else if (ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
                   const leftText = p.left.getText(sf);
@@ -784,6 +817,13 @@ class InvariantEngine {
     const res3B = InvariantEngine.checkPropsStringPrototypeGuards(mockFmCompoundUnguarded, 1);
     if (res3B.valid || !res3B.violations.some((v) => v.includes("rawPropTrap") && v.includes(".trim()"))) {
       violations.push("探针 3B (Props 原型方法复合表达式守卫) 自检失败：未能拦截 (prop || fallback).trim() 复合表达式！");
+    }
+
+    // 故障注入 3C: Props 原型方法在 else 假分支逃逸拦截
+    const mockFmElseBranchTrap = "const { rawPropTrap } = Astro.props;\nif (typeof rawPropTrap === 'string') {} else { rawPropTrap.trim(); }";
+    const res3C = InvariantEngine.checkPropsStringPrototypeGuards(mockFmElseBranchTrap, 1);
+    if (res3C.valid || !res3C.violations.some((v) => v.includes("rawPropTrap") && v.includes(".trim()"))) {
+      violations.push("探针 3C (Props 原型方法 else 分支逃逸守卫) 自检失败：未能拦截正向 typeof 检查的 else 逆分支裸调用！");
     }
 
     // 故障注入 4: Schema 多语言字段差集真实函数调用
