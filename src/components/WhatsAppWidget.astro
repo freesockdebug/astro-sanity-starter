@@ -13,7 +13,8 @@ const {
 } = Astro.props;
 
 // Strip all non-numeric characters for WhatsApp international URL standard (e.g. "+86 138-0000" -> "861380000")
-const cleanPhone = phoneNumber.replace(/\D/g, "");
+const safePhone = typeof phoneNumber === 'string' ? phoneNumber : (phoneNumber ? String(phoneNumber) : "");
+const cleanPhone = safePhone.replace(/\D/g, "");
 const chatUrl = cleanPhone 
   ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(prefillText)}`
   : "#";
