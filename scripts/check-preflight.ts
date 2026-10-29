@@ -59,6 +59,25 @@ const SRC_DIR = path.join(ROOT_DIR, 'src');
 const STUDIO_DIR = path.join(ROOT_DIR, 'studio');
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 
+// 统一标准浏览器与 JS 运行期内置全局对象白名单 (单源真理，避免每次调用重复构造 Set)
+const BROWSER_GLOBALS = new Set([
+  'window', 'document', 'console', 'location', 'history', 'navigator', 'screen',
+  'localStorage', 'sessionStorage', 'setTimeout', 'clearTimeout', 'setInterval',
+  'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
+  'IntersectionObserver', 'MutationObserver', 'ResizeObserver', 'PerformanceObserver',
+  'URL', 'URLSearchParams', 'AbortController', 'AbortSignal', 'Headers', 'Request',
+  'Response', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'TouchEvent',
+  'HTMLElement', 'Element', 'Node', 'HTMLTemplateElement', 'HTMLInputElement', 'HTMLButtonElement',
+  'FormData', 'Blob', 'File', 'FileReader', 'Image', 'Audio', 'DocumentFragment', 'Text', 'Comment',
+  'EventTarget', 'ScrollBehavior',
+  'Math', 'JSON', 'Date', 'Array', 'Object', 'String', 'Number', 'Boolean',
+  'Set', 'Map', 'WeakSet', 'WeakMap', 'RegExp', 'Error', 'TypeError', 'RangeError',
+  'Promise', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent',
+  'decodeURIComponent', 'encodeURI', 'decodeURI', 'crypto', 'atob', 'btoa',
+  'fetch', 'alert', 'confirm', 'prompt', 'structuredClone', 'queueMicrotask',
+  'globalThis', 'self', 'undefined', 'NaN', 'Infinity', 'Intl', 'Symbol', 'Proxy', 'Reflect'
+]);
+
 let errorCount = 0;
 let warnCount = 0;
 
@@ -182,29 +201,23 @@ class InvariantEngine {
     definedVars: string[],
     serverVars: Set<string> = new Set()
   ): { valid: boolean; violations: { identifier: string; isServerVar: boolean }[] } {
-    const BROWSER_GLOBALS = new Set([
-      'window', 'document', 'console', 'location', 'history', 'navigator', 'screen',
-      'localStorage', 'sessionStorage', 'setTimeout', 'clearTimeout', 'setInterval',
-      'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
-      'IntersectionObserver', 'MutationObserver', 'ResizeObserver', 'PerformanceObserver',
-      'URL', 'URLSearchParams', 'AbortController', 'AbortSignal', 'Headers', 'Request',
-      'Response', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'TouchEvent',
-      'HTMLElement', 'Element', 'Node', 'HTMLTemplateElement', 'HTMLInputElement', 'HTMLButtonElement',
-      'FormData', 'Blob', 'File', 'FileReader', 'Image', 'Audio', 'DocumentFragment', 'Text', 'Comment',
-      'EventTarget', 'ScrollBehavior',
-      'Math', 'JSON', 'Date', 'Array', 'Object', 'String', 'Number', 'Boolean',
-      'Set', 'Map', 'WeakSet', 'WeakMap', 'RegExp', 'Error', 'TypeError', 'RangeError',
-      'Promise', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent',
-      'decodeURIComponent', 'encodeURI', 'decodeURI', 'crypto', 'atob', 'btoa',
-      'fetch', 'alert', 'confirm', 'prompt', 'structuredClone', 'queueMicrotask',
-      'globalThis', 'self', 'undefined', 'NaN', 'Infinity', 'Intl', 'Symbol', 'Proxy', 'Reflect'
-    ]);
-
     const sourceFile = ts.createSourceFile('inline.ts', scriptBody, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const declared = new Set<string>([...definedVars, ...BROWSER_GLOBALS]);
     const undeclaredUsed = new Map<string, boolean>();
 
-    // 1. 递归扫描所有本地声明 (含 import 导入、类型声明、变量与函数)
+    function collectBindingNames(binding: ts.Node) {
+      if (ts.isIdentifier(binding)) {
+        declared.add(binding.text);
+      } else if (ts.isObjectBindingPattern(binding) || ts.isArrayBindingPattern(binding)) {
+        for (const el of binding.elements) {
+          if (ts.isBindingElement(el)) {
+            collectBindingNames(el.name);
+          }
+        }
+      }
+    }
+
+    // 1. 递归扫描所有本地声明 (含 import 导入、类型声明、变量与嵌套解构函数参数)
     function collectDeclarations(node: ts.Node) {
       if (ts.isImportDeclaration(node) && node.importClause) {
         if (node.importClause.name) declared.add(node.importClause.name.text);
@@ -218,15 +231,7 @@ class InvariantEngine {
           }
         }
       } else if (ts.isVariableDeclaration(node)) {
-        if (ts.isIdentifier(node.name)) {
-          declared.add(node.name.text);
-        } else if (ts.isObjectBindingPattern(node.name) || ts.isArrayBindingPattern(node.name)) {
-          node.name.elements.forEach((el) => {
-            if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) {
-              declared.add(el.name.text);
-            }
-          });
-        }
+        collectBindingNames(node.name);
       } else if (ts.isFunctionDeclaration(node) && node.name) {
         declared.add(node.name.text);
       } else if (ts.isClassDeclaration(node) && node.name) {
@@ -236,15 +241,7 @@ class InvariantEngine {
       } else if (ts.isInterfaceDeclaration(node) && node.name) {
         declared.add(node.name.text);
       } else if (ts.isParameter(node)) {
-        if (ts.isIdentifier(node.name)) {
-          declared.add(node.name.text);
-        } else if (ts.isObjectBindingPattern(node.name) || ts.isArrayBindingPattern(node.name)) {
-          node.name.elements.forEach((el) => {
-            if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) {
-              declared.add(el.name.text);
-            }
-          });
-        }
+        collectBindingNames(node.name);
       } else if (ts.isCatchClause(node) && node.variableDeclaration && ts.isIdentifier(node.variableDeclaration.name)) {
         declared.add(node.variableDeclaration.name.text);
       }
@@ -320,55 +317,16 @@ class InvariantEngine {
   }
 
   /**
-   * 1.3 提取 Frontmatter 顶层作用域声明的变量表
-   */
-  public static extractFrontmatterTopLevelVars(frontmatterCode: string): Set<string> {
-    const vars = new Set<string>();
-    const sf = ts.createSourceFile('fm.ts', frontmatterCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-    function addIdentifier(node: ts.Node) {
-      if (ts.isIdentifier(node)) {
-        vars.add(node.text);
-      } else if (ts.isObjectBindingPattern(node) || ts.isArrayBindingPattern(node)) {
-        node.elements.forEach((el) => {
-          if (ts.isBindingElement(el)) {
-            addIdentifier(el.name);
-          }
-        });
-      }
-    }
-    for (const stmt of sf.statements) {
-      if (ts.isVariableStatement(stmt)) {
-        for (const decl of stmt.declarationList.declarations) {
-          addIdentifier(decl.name);
-        }
-      } else if (ts.isFunctionDeclaration(stmt) && stmt.name) {
-        vars.add(stmt.name.text);
-      } else if (ts.isClassDeclaration(stmt) && stmt.name) {
-        vars.add(stmt.name.text);
-      } else if (ts.isImportDeclaration(stmt) && stmt.importClause) {
-        if (stmt.importClause.name) vars.add(stmt.importClause.name.text);
-        if (stmt.importClause.namedBindings) {
-          if (ts.isNamedImports(stmt.importClause.namedBindings)) {
-            stmt.importClause.namedBindings.elements.forEach((el) => vars.add(el.name.text));
-          } else if (ts.isNamespaceImport(stmt.importClause.namedBindings)) {
-            vars.add(stmt.importClause.namedBindings.name.text);
-          }
-        }
-      }
-    }
-    return vars;
-  }
-
-  /**
-   * 1.4 Astro Frontmatter 语法树解析与词法作用域重复声明检测
-   * (全面支持普通变量、解构赋值与 import 符号的重复冲突拦截)
+   * 1.3 Astro Frontmatter 语法树解析与词法作用域重复声明检测 (兼顶层变量收集，0 冗余 AST 解析)
    */
   public static checkFrontmatterDuplicateDeclarations(
-    frontmatterCode: string,
+    input: string | ts.SourceFile,
     startLine: number = 2
-  ): { valid: boolean; violations: string[] } {
+  ): { valid: boolean; violations: string[]; topLevelVars: Set<string> } {
     const violations: string[] = [];
-    const sf = ts.createSourceFile('fm.ts', frontmatterCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const sf = typeof input === 'string'
+      ? ts.createSourceFile('fm.ts', input, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+      : input;
     const declared = new Map<string, number>();
 
     function checkAndAdd(name: string, line: number) {
@@ -423,19 +381,21 @@ class InvariantEngine {
         }
       }
     }
-    return { valid: violations.length === 0, violations };
+    return { valid: violations.length === 0, violations, topLevelVars: new Set(declared.keys()) };
   }
 
   /**
-   * 1.5 组件原始 Props 字符串原型方法安全守卫检测
-   * (全面支持裸调用、一阶别名以及括号逻辑或复合表达式 (prop || 'default').trim())
+   * 1.4 组件原始 Props 字符串原型方法安全守卫检测
+   * (全面支持裸调用、一阶别名 || / ?? 以及括号逻辑或复合表达式 (prop || 'default').trim())
    */
   public static checkPropsStringPrototypeGuards(
-    frontmatterCode: string,
+    input: string | ts.SourceFile,
     startLine: number = 2
   ): { valid: boolean; violations: string[] } {
     const violations: string[] = [];
-    const sf = ts.createSourceFile('fm.ts', frontmatterCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const sf = typeof input === 'string'
+      ? ts.createSourceFile('fm.ts', input, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+      : input;
     const rawProps = new Set<string>();
     const rawAliases = new Set<string>();
 
@@ -455,13 +415,18 @@ class InvariantEngine {
       }
     }
 
-    // 追踪一阶未解包赋值与 || 表达式
+    // 追踪一阶未解包赋值与 || / ?? 表达式 (防漏追踪 safe = prop ?? '')
     for (const stmt of sf.statements) {
       if (ts.isVariableStatement(stmt)) {
         for (const decl of stmt.declarationList.declarations) {
           if (decl.initializer && ts.isIdentifier(decl.name)) {
-            if (ts.isBinaryExpression(decl.initializer) && decl.initializer.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
-              if (ts.isIdentifier(decl.initializer.left) && rawProps.has(decl.initializer.left.text)) {
+            if (
+              ts.isBinaryExpression(decl.initializer) &&
+              (decl.initializer.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+               decl.initializer.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+            ) {
+              const left = unwrapReceiver(decl.initializer.left);
+              if (ts.isIdentifier(left) && rawProps.has(left.text)) {
                 rawAliases.add(decl.name.text);
               }
             } else if (ts.isIdentifier(decl.initializer) && rawProps.has(decl.initializer.text)) {
@@ -497,17 +462,25 @@ class InvariantEngine {
             if (ts.isIdentifier(receiver) && (rawProps.has(receiver.text) || rawAliases.has(receiver.text))) {
               let isGuarded = false;
               let p: ts.Node | undefined = node.parent;
-              while (p) {
-                const pText = p.getText(sf);
+              // 严格向上回溯父级条件作用域，杜绝爬升至 SourceFile 根部发生全局误报/漏报
+              while (p && p !== sf) {
                 if (
-                  pText.includes(`typeof ${receiver.text} === 'string'`) ||
-                  pText.includes(`typeof ${receiver.text} === "string"`) ||
-                  pText.includes(`toText(${receiver.text})`) ||
-                  pText.includes(`getLocalizedValue(${receiver.text}`) ||
-                  pText.includes(`String(${receiver.text})`)
+                  ts.isIfStatement(p) ||
+                  ts.isConditionalExpression(p) ||
+                  ts.isBinaryExpression(p)
                 ) {
-                  isGuarded = true;
-                  break;
+                  const cond = ts.isIfStatement(p) ? p.expression : ts.isConditionalExpression(p) ? p.condition : p;
+                  const condText = cond.getText(sf);
+                  if (
+                    condText.includes(`typeof ${receiver.text} === 'string'`) ||
+                    condText.includes(`typeof ${receiver.text} === "string"`) ||
+                    condText.includes(`toText(${receiver.text})`) ||
+                    condText.includes(`getLocalizedValue(${receiver.text}`) ||
+                    condText.includes(`String(${receiver.text})`)
+                  ) {
+                    isGuarded = true;
+                    break;
+                  }
                 }
                 p = p.parent;
               }
@@ -529,14 +502,15 @@ class InvariantEngine {
   }
 
   /**
-   * 1.6 Sanity Schema 多语言字段与前端提取白名单自动同构对齐
+   * 1.5 Sanity Schema 多语言字段与前端提取白名单自动同构对齐
+   * (直接基于内存 schemaTypes 运行时反射，天然支持未来新增或拆分文件，零额外磁盘 I/O 与 AST 开销)
    */
   public static checkSchemaTextAlignment(
-    schemaDir: string,
+    schemaTypesList: any[],
     blocksFile: string
   ): { valid: boolean; violations: string[] } {
     const violations: string[] = [];
-    if (!fs.existsSync(schemaDir) || !fs.existsSync(blocksFile)) return { valid: true, violations: [] };
+    if (!fs.existsSync(blocksFile)) return { valid: true, violations: [] };
 
     // 1. 从 blocks.ts 提取 ALL_SECTION_TEXT_FIELDS
     const blocksContent = fs.readFileSync(blocksFile, 'utf-8');
@@ -549,49 +523,16 @@ class InvariantEngine {
       (fieldsMatch[1].match(/'([^']+)'|"([^"]+)"/g) || []).map((s) => s.replace(/['"]/g, ''))
     );
 
-    // 2. 从 Section Schema AST 提取所有顶层 localeString / localeText / localeMarkdown 字段
-    const sectionFiles = [
-      'heroSection.ts',
-      'featureMatrixSection.ts',
-      'productShowcaseSection.ts',
-      'manufacturingSection.ts',
-      'inquirySection.ts',
-    ];
+    // 2. 从内存已载入的 schemaTypes 反射提取所有 Section Schema 顶层 localeString / localeText / localeMarkdown 字段
     const schemaLocaleFields = new Set<string>();
-
-    for (const sfName of sectionFiles) {
-      const sfPath = path.join(schemaDir, sfName);
-      if (!fs.existsSync(sfPath)) continue;
-      const code = fs.readFileSync(sfPath, 'utf-8');
-      const sf = ts.createSourceFile(sfName, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-
-      function visit(node: ts.Node) {
-        if (ts.isCallExpression(node)) {
-          const fnName = node.expression.getText(sf);
-          if (fnName === 'defineField') {
-            const arg = node.arguments[0];
-            if (arg && ts.isObjectLiteralExpression(arg)) {
-              let fName = '';
-              let fType = '';
-              for (const prop of arg.properties) {
-                if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
-                  if (prop.name.text === 'name' && ts.isStringLiteral(prop.initializer)) {
-                    fName = prop.initializer.text;
-                  }
-                  if (prop.name.text === 'type' && ts.isStringLiteral(prop.initializer)) {
-                    fType = prop.initializer.text;
-                  }
-                }
-              }
-              if (['localeString', 'localeText', 'localeMarkdown'].includes(fType) && fName) {
-                schemaLocaleFields.add(fName);
-              }
-            }
+    for (const schema of schemaTypesList) {
+      if (schema && Array.isArray(schema.fields) && schema.name && schema.name.endsWith('Section')) {
+        for (const field of schema.fields) {
+          if (field && ['localeString', 'localeText', 'localeMarkdown'].includes(field.type)) {
+            schemaLocaleFields.add(field.name);
           }
         }
-        ts.forEachChild(node, visit);
       }
-      visit(sf);
     }
 
     // 3. 求差集：Schema 中存在但前端未登记
@@ -1094,12 +1035,21 @@ async function main() {
   logSection('2. AGENTS.md 历史踩坑反例代码与架构红线静态扫描');
 
   const astroFiles = getFiles(SRC_DIR, ['.astro']);
+  const astroEntries = astroFiles.map((file) => ({
+    file,
+    rel: path.relative(ROOT_DIR, file),
+    content: fs.readFileSync(file, 'utf-8'),
+  }));
   const tsAndJsFiles = getFiles(SRC_DIR, ['.ts', '.js']);
-  const allSourceFiles = [...astroFiles, ...tsAndJsFiles];
+  const tsAndJsEntries = tsAndJsFiles.map((file) => ({
+    file,
+    rel: path.relative(ROOT_DIR, file),
+    content: fs.readFileSync(file, 'utf-8'),
+  }));
+  const allSourceEntries = [...astroEntries, ...tsAndJsEntries];
 
   // 2.1 [Pitfall 1]: 客户端原生内联脚本词法纯净度状态机扫描 (消除任何 TS 语法泄漏)
-  for (const file of astroFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of astroEntries) {
     const scriptRegex = /<script\s+[^>]*(?:define:vars|is:inline)[^>]*>([\s\S]*?)<\/script>/gi;
     let match;
     while ((match = scriptRegex.exec(content)) !== null) {
@@ -1107,7 +1057,7 @@ async function main() {
       const checkResult = InvariantEngine.checkScriptPurity(scriptBody);
       if (!checkResult.pure) {
         logFail(
-          `${path.relative(ROOT_DIR, file)}: [Pitfall 1] 客户端原生 <script> 违反词法纯净度公理！检测到 TS 语法污染: ${checkResult.violations.join(
+          `${rel}: [Pitfall 1] 客户端原生 <script> 违反词法纯净度公理！检测到 TS 语法污染: ${checkResult.violations.join(
             ', '
           )}。浏览器执行将直接引发 SyntaxError 导致整站交互瘫痪！`
         );
@@ -1117,33 +1067,25 @@ async function main() {
   logPass(`[Pitfall 1] 客户端原生内联脚本词法状态机纯净度校验通过`);
 
   // 2.2 [Pitfall 2]: 列表渲染零布局偏移 (CLS) 物理骨架第 0 毫秒确立
-  for (const file of astroFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of astroEntries) {
     const emptyGridRegex = /<div[^>]*id=["']products-grid["'][^>]*>\s*<\/div>/gi;
     if (emptyGridRegex.test(content)) {
       logFail(
-        `${path.relative(
-          ROOT_DIR,
-          file
-        )}: [Pitfall 2] 检测到空的产品货架容器 '<div id="products-grid"></div>'！违反零 CLS 物理骨架确立公理。必须由 SSR 预渲染首批卡片或骨架撑开初始物理高度。`
+        `${rel}: [Pitfall 2] 检测到空的产品货架容器 '<div id="products-grid"></div>'！违反零 CLS 物理骨架确立公理。必须由 SSR 预渲染首批卡片或骨架撑开初始物理高度。`
       );
     }
   }
   logPass(`[Pitfall 2] 列表渲染 CLS 零偏移物理骨架校验通过`);
 
   // 2.3 [Pitfall 3 & 6]: 序列化信息熵与 HTML 属性轻量化公理
-  for (const file of astroFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of astroEntries) {
     // 拦截 define:vars 内部字符串二次转义
     const defineVarsRegex = /<script\s+[^>]*define:vars=\{([^}]+)\}[^>]*>/gi;
     let match;
     while ((match = defineVarsRegex.exec(content)) !== null) {
       if (match[1].includes('JSON.stringify(')) {
         logFail(
-          `${path.relative(
-            ROOT_DIR,
-            file
-          )}: [Pitfall 3] 严禁在 define:vars 中嵌套使用 JSON.stringify()！双重反斜杠转义将引发体积数倍膨胀。`
+          `${rel}: [Pitfall 3] 严禁在 define:vars 中嵌套使用 JSON.stringify()！双重反斜杠转义将引发体积数倍膨胀。`
         );
       }
     }
@@ -1153,10 +1095,7 @@ async function main() {
     const attrMatch = content.match(attrJsonRegex);
     if (attrMatch) {
       logFail(
-        `${path.relative(
-          ROOT_DIR,
-          file
-        )}: [Pitfall 6] 检测到在 HTML 节点属性中序列化宽对象 (${attrMatch.join(
+        `${rel}: [Pitfall 6] 检测到在 HTML 节点属性中序列化宽对象 (${attrMatch.join(
           ', '
         )})！引号转义为 &quot; 会造成 40KB+ 页面体积虚高。`
       );
@@ -1165,18 +1104,14 @@ async function main() {
   logPass(`[Pitfall 3 & 6] 数据序列化信息熵与 HTML 属性轻量化校验通过`);
 
   // 2.4 [Pitfall 4]: 外链字体非阻塞加载公理
-  for (const file of astroFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of astroEntries) {
     if (content.includes('fonts.googleapis.com')) {
       const linkMatch = content.match(/<link[^>]*href=["'][^"']*fonts\.googleapis\.com[^"']*["'][^>]*>/gi);
       if (linkMatch) {
         for (const linkTag of linkMatch) {
           if (linkTag.includes('rel="stylesheet"') && !linkTag.includes('media="print"')) {
             logFail(
-              `${path.relative(
-                ROOT_DIR,
-                file
-              )}: [Pitfall 4] 检测到阻塞式外链字体: ${linkTag}。必须采用 preload 异步打印机制消除首屏白屏。`
+              `${rel}: [Pitfall 4] 检测到阻塞式外链字体: ${linkTag}。必须采用 preload 异步打印机制消除首屏白屏。`
             );
           }
         }
@@ -1210,8 +1145,7 @@ async function main() {
   logPass(`[Pitfall 8] 首屏视口图片动态加载策略校验通过`);
 
   // 2.7 [Pitfall 9]: Scroll 监听器零强制回流公理 (读写分离与 rAF)
-  for (const file of allSourceFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of allSourceEntries) {
     const scrollListenerRegex = /addEventListener\(['"]scroll['"]\s*,\s*(\([^)]*\)|[a-zA-Z0-9_]+)\s*=>?\s*\{([^}]+)\}/g;
     let match;
     while ((match = scrollListenerRegex.exec(content)) !== null) {
@@ -1223,10 +1157,7 @@ async function main() {
         !handlerBody.includes('requestAnimationFrame')
       ) {
         logFail(
-          `${path.relative(
-            ROOT_DIR,
-            file
-          )}: [Pitfall 9] 在 scroll 监听器中直接同步读取 DOM 几何属性，将引发强制同步重排与滚动卡顿！耗性能计算必须剥离至 resize/load 并挂载 requestAnimationFrame。`
+          `${rel}: [Pitfall 9] 在 scroll 监听器中直接同步读取 DOM 几何属性，将引发强制同步重排与滚动卡顿！耗性能计算必须剥离至 resize/load 并挂载 requestAnimationFrame。`
         );
       }
     }
@@ -1234,8 +1165,7 @@ async function main() {
   logPass(`[Pitfall 9] Scroll 监听器读写分离与零强制回流校验通过`);
 
   // 2.8 [Pitfall 12]: Cloudflare 原生环境变量获取公理 (禁 locals.runtime.env)
-  for (const file of allSourceFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of allSourceEntries) {
     if (content.includes('locals.runtime.env') || content.includes('locals.runtime?.env')) {
       logFail(
         `${path.relative(
@@ -1248,12 +1178,11 @@ async function main() {
   logPass(`[Pitfall 12] Cloudflare Workers 原生环境变量安全获取校验通过`);
 
   // 2.9 [Pitfall 13]: 物理视口空间极限方程校验 (网格列数与临界断点方程)
-  for (const file of astroFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of astroEntries) {
     const spatialCheck = InvariantEngine.checkGridSpatialLimit(content);
     if (!spatialCheck.valid) {
       for (const violation of spatialCheck.violations) {
-        logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 13] ${violation}`);
+        logFail(`${rel}: [Pitfall 13] ${violation}`);
       }
     }
   }
@@ -1291,38 +1220,32 @@ async function main() {
   logPass(`[Principle II] Tailwind v4 纯 CSS 引擎无配置污染校验通过`);
 
   // 2.12 [Principle II]: 组件扁平正交与绝对路径别名
-  for (const file of allSourceFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of allSourceEntries) {
     if (content.includes('../../components') || content.includes('../../../components')) {
-      logFail(`${path.relative(ROOT_DIR, file)}: [Principle II] 发现深层嵌套相对组件导入！全站一律使用路径别名 '@components'。`);
+      logFail(`${rel}: [Principle II] 发现深层嵌套相对组件导入！全站一律使用路径别名 '@components'。`);
     }
   }
   logPass(`[Principle II] 组件扁平正交与 @components 路径别名校验通过`);
 
   // 2.13 [Pitfall 14]: 国际 B2B 货币标准化对齐 (统一采用 USD / $)
-  for (const file of astroFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of astroEntries) {
     if (
       file.includes('pages/products/index.astro') &&
       (content.includes('>¥<') || content.includes('>¥') || content.includes("${item.wholesalePrice || (item.category === 'silk' ? '32.00'"))
     ) {
       logFail(
-        `${path.relative(ROOT_DIR, file)}: [Pitfall 14] 产品大厅价格硬编码了人民币符号 (¥)！必须与国际外贸 USD ($) 对齐。`
+        `${rel}: [Pitfall 14] 产品大厅价格硬编码了人民币符号 (¥)！必须与国际外贸 USD ($) 对齐。`
       );
     }
   }
   logPass(`[Pitfall 14] 产品大厅全站外贸标准统一货币 (USD / $) 校验通过`);
 
   // 2.14 [Pitfall 15]: 触屏与平板交互无障碍可用性 (iPad 触控无延迟适配)
-  for (const file of astroFiles) {
+  for (const { file, rel, content } of astroEntries) {
     if (file.includes('LanguagePicker.astro')) {
-      const content = fs.readFileSync(file, 'utf-8');
       if (!content.includes('is-open') || !content.includes('addEventListener') || !content.includes('touch-manipulation')) {
         logFail(
-          `${path.relative(
-            ROOT_DIR,
-            file
-          )}: [Pitfall 15] 语言切换面板未适配触屏！严禁仅依赖 CSS hover，必须具备 click/touch 状态切换 (.is-open) 并声明 touch-manipulation。`
+          `${rel}: [Pitfall 15] 语言切换面板未适配触屏！严禁仅依赖 CSS hover，必须具备 click/touch 状态切换 (.is-open) 并声明 touch-manipulation。`
         );
       }
     }
@@ -1477,9 +1400,9 @@ async function main() {
   const globalsCssPath = path.join(SRC_DIR, 'styles', 'globals.css');
   if (fs.existsSync(globalsCssPath)) {
     const globalsCssContent = fs.readFileSync(globalsCssPath, 'utf-8');
-    const templateFiles = astroFiles.map((file) => ({
-      file: path.relative(ROOT_DIR, file),
-      content: fs.readFileSync(file, 'utf-8'),
+    const templateFiles = astroEntries.map((e) => ({
+      file: e.rel,
+      content: e.content,
     }));
     const geomCheck = InvariantEngine.checkGeometricTopClearance(globalsCssContent, templateFiles);
     if (!geomCheck.valid) {
@@ -1492,35 +1415,36 @@ async function main() {
   }
 
   // 2.20 [Pitfall 21-23]: Astro 组件 Frontmatter AST、Props 守卫与客户端 <script> 封闭性联合扫描 (Single-Pass)
-  // 单轮遍历所有 .astro 文件，仅读取与解析 1 次文件内容，流水线执行：
-  // 1) [Pitfall 22] Frontmatter 语法完整性与作用域零重复声明
+  // 单轮遍历所有 astroEntries，每文件仅构建 1 棵 Frontmatter AST，流水线复用执行：
+  // 1) [Pitfall 22] Frontmatter 语法完整性与作用域零重复声明 (兼顶层变量收集)
   // 2) [Pitfall 23] Props 字符串原型方法 (.trim/.split/.replace) 安全类型守卫
   // 3) [Pitfall 21] 客户端内联脚本自由变量闭合与 define:vars 注入校验
-  for (const file of astroFiles) {
-    const relFile = path.relative(ROOT_DIR, file);
-    const content = fs.readFileSync(file, 'utf-8');
+  for (const { file, rel, content } of astroEntries) {
     const fm = InvariantEngine.extractFrontmatter(content);
+    let topLevelVars = new Set<string>();
 
     if (fm) {
-      // 2.21 [Pitfall 22]: Astro Frontmatter 语法树解析与词法作用域重复声明检测
-      const dupCheck = InvariantEngine.checkFrontmatterDuplicateDeclarations(fm.code, fm.startLine);
+      const sf = ts.createSourceFile('fm.ts', fm.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+
+      // 2.21 [Pitfall 22]: Astro Frontmatter 语法树解析与词法作用域重复声明检测 (兼顶层变量收集)
+      const dupCheck = InvariantEngine.checkFrontmatterDuplicateDeclarations(sf, fm.startLine);
+      topLevelVars = dupCheck.topLevelVars;
       if (!dupCheck.valid) {
         for (const v of dupCheck.violations) {
-          logFail(`${relFile}: [Pitfall 22] ${v}`);
+          logFail(`${rel}: [Pitfall 22] ${v}`);
         }
       }
 
-      // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测
-      const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(fm.code, fm.startLine);
+      // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测 (复用同一个 AST SourceFile)
+      const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(sf, fm.startLine);
       if (!propCheck.valid) {
         for (const v of propCheck.violations) {
-          logFail(`${relFile}: [Pitfall 23] ${v}`);
+          logFail(`${rel}: [Pitfall 23] ${v}`);
         }
       }
     }
 
     // 2.20 [Pitfall 21]: 客户端原生内联脚本自由变量闭合与 define:vars 漏传 AST 分析
-    const serverVars = fm ? InvariantEngine.extractFrontmatterTopLevelVars(fm.code) : new Set<string>();
     const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
     let match;
     while ((match = scriptRegex.exec(content)) !== null) {
@@ -1532,17 +1456,17 @@ async function main() {
       const fullTag = match[0];
       const definedVars = InvariantEngine.extractDefineVars(fullTag);
 
-      const scopeCheck = InvariantEngine.checkScriptScopeClosed(scriptBody, definedVars, serverVars);
+      const scopeCheck = InvariantEngine.checkScriptScopeClosed(scriptBody, definedVars, topLevelVars);
       if (!scopeCheck.valid) {
         for (const v of scopeCheck.violations) {
           if (v.isServerVar) {
             logFail(
-              `${relFile}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
+              `${rel}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
               `检测到服务端顶层变量 '${v.identifier}' 被客户端 <script> 直接引用，但未在 define:vars 中传入！Astro 服务端与客户端隔离，直接引用将触发 ReferenceError！`
             );
           } else {
             logFail(
-              `${relFile}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
+              `${rel}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
               `检测到未声明游离标识符: '${v.identifier}'。若需从 SSR 传入请在 define:vars 中显式声明，或在脚本内提供局部声明 / typeof 保护，否则客户端将触发 Uncaught ReferenceError！`
             );
           }
@@ -1555,9 +1479,9 @@ async function main() {
   logPass(`[Pitfall 23] 组件原始 Props 字符串原型方法安全类型守卫校验通过 (零 SSR TypeError 隐患)`);
 
   // 2.23 [Pitfall 24]: Sanity Schema 多语言字段与前端提取白名单自动同构对齐
-  // 动态扫描所有 Section Schema 中的 localeString、localeText、localeMarkdown 字段，并与前端 ALL_SECTION_TEXT_FIELDS 自动求差集；若有新增多语言字段未登记，立即阻断并列出需补齐的字段名。
+  // 直接利用内存中已加载的 schemaTypes 进行同构差集比对，零额外磁盘 I/O
   const schemaAlignment = InvariantEngine.checkSchemaTextAlignment(
-    path.join(ROOT_DIR, 'studio/schemaTypes'),
+    schemaTypes,
     path.join(SRC_DIR, 'data/blocks.ts')
   );
   if (!schemaAlignment.valid) {
