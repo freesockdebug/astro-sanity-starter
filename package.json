@@ -6,6 +6,7 @@
     "start": "node ./astro-cli.mjs dev --host 0.0.0.0 --port 3000",
     "build": "node ./astro-cli.mjs build && node scripts/ensure-asset-aliases.cjs",
     "check": "npx tsx scripts/check-preflight.ts",
+    "check:fast": "npx tsx scripts/check-preflight.ts --fast",
     "check:full": "npx tsx scripts/check-preflight.ts --full",
     "check:cf": "node ./node_modules/typescript/bin/tsc --noEmit",
     "preview": "node ./astro-cli.mjs preview --host 0.0.0.0 --port 3000",

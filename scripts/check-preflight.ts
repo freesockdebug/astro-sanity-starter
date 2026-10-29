@@ -53,6 +53,7 @@ import { schemaTypes } from '../studio/schemaTypes/index';
 
 const isFullMode = process.argv.includes('--full');
 const isDataMode = process.argv.includes('--data') || isFullMode;
+const isFastMode = process.argv.includes('--fast') || process.argv.includes('--skip-ts');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SRC_DIR = path.join(ROOT_DIR, 'src');
 const STUDIO_DIR = path.join(ROOT_DIR, 'studio');
@@ -951,33 +952,37 @@ async function main() {
   }
 
   // 0.2 进程内 TypeScript 编译器全量类型检查
-  const tsConfigPath = path.join(ROOT_DIR, 'tsconfig.json');
-  if (fs.existsSync(tsConfigPath)) {
-    const parsedCmd = ts.getParsedCommandLineOfConfigFile(
-      tsConfigPath,
-      {},
-      {
-        ...ts.sys,
-        onUnRecoverableConfigFileDiagnostic: (diag) => {
-          logFail(`tsconfig.json 解析失败: ${diag.messageText}`);
-        },
-      }
-    );
-    if (parsedCmd) {
-      const program = ts.createProgram({
-        rootNames: parsedCmd.fileNames,
-        options: parsedCmd.options,
-      });
-      const diagnostics = ts.getPreEmitDiagnostics(program);
-      if (diagnostics.length > 0) {
-        for (const diag of diagnostics) {
-          const file = diag.file ? path.relative(ROOT_DIR, diag.file.fileName) : 'unknown';
-          const line = diag.file && diag.start !== undefined ? diag.file.getLineAndCharacterOfPosition(diag.start).line + 1 : 0;
-          const msg = ts.flattenDiagnosticMessageText(diag.messageText, '\n');
-          logFail(`${file}:${line} - TS${diag.code}: ${msg}`);
+  if (isFastMode) {
+    logPass(`[TS In-Process Diagnostics] 已通过 --fast 参数跳过全量 TS 深度类型推导 (~18s 耗时优化)`);
+  } else {
+    const tsConfigPath = path.join(ROOT_DIR, 'tsconfig.json');
+    if (fs.existsSync(tsConfigPath)) {
+      const parsedCmd = ts.getParsedCommandLineOfConfigFile(
+        tsConfigPath,
+        {},
+        {
+          ...ts.sys,
+          onUnRecoverableConfigFileDiagnostic: (diag) => {
+            logFail(`tsconfig.json 解析失败: ${diag.messageText}`);
+          },
         }
-      } else {
-        logPass(`[TS In-Process Diagnostics] TypeScript 全量类型检查通过 (0 TS Errors)`);
+      );
+      if (parsedCmd) {
+        const program = ts.createProgram({
+          rootNames: parsedCmd.fileNames,
+          options: parsedCmd.options,
+        });
+        const diagnostics = ts.getPreEmitDiagnostics(program);
+        if (diagnostics.length > 0) {
+          for (const diag of diagnostics) {
+            const file = diag.file ? path.relative(ROOT_DIR, diag.file.fileName) : 'unknown';
+            const line = diag.file && diag.start !== undefined ? diag.file.getLineAndCharacterOfPosition(diag.start).line + 1 : 0;
+            const msg = ts.flattenDiagnosticMessageText(diag.messageText, '\n');
+            logFail(`${file}:${line} - TS${diag.code}: ${msg}`);
+          }
+        } else {
+          logPass(`[TS In-Process Diagnostics] TypeScript 全量类型检查通过 (0 TS Errors)`);
+        }
       }
     }
   }
@@ -1486,14 +1491,36 @@ async function main() {
     }
   }
 
-  // 2.20 [Pitfall 21]: 客户端原生内联脚本自由变量闭合与 define:vars 漏传 AST 分析
-  // 自动解析所有 .astro 文件中的服务端顶层变量表与客户端 <script define:vars={{ ... }}> 注入列表。
-  // 一旦 <script> 内部引用了未传入 define:vars 的服务端变量（如 productUrlPrefix、swatchKitSku）或未声明的自由变量，立即红字报错阻断。
+  // 2.20 [Pitfall 21-23]: Astro 组件 Frontmatter AST、Props 守卫与客户端 <script> 封闭性联合扫描 (Single-Pass)
+  // 单轮遍历所有 .astro 文件，仅读取与解析 1 次文件内容，流水线执行：
+  // 1) [Pitfall 22] Frontmatter 语法完整性与作用域零重复声明
+  // 2) [Pitfall 23] Props 字符串原型方法 (.trim/.split/.replace) 安全类型守卫
+  // 3) [Pitfall 21] 客户端内联脚本自由变量闭合与 define:vars 注入校验
   for (const file of astroFiles) {
+    const relFile = path.relative(ROOT_DIR, file);
     const content = fs.readFileSync(file, 'utf-8');
     const fm = InvariantEngine.extractFrontmatter(content);
-    const serverVars = fm ? InvariantEngine.extractFrontmatterTopLevelVars(fm.code) : new Set<string>();
 
+    if (fm) {
+      // 2.21 [Pitfall 22]: Astro Frontmatter 语法树解析与词法作用域重复声明检测
+      const dupCheck = InvariantEngine.checkFrontmatterDuplicateDeclarations(fm.code, fm.startLine);
+      if (!dupCheck.valid) {
+        for (const v of dupCheck.violations) {
+          logFail(`${relFile}: [Pitfall 22] ${v}`);
+        }
+      }
+
+      // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测
+      const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(fm.code, fm.startLine);
+      if (!propCheck.valid) {
+        for (const v of propCheck.violations) {
+          logFail(`${relFile}: [Pitfall 23] ${v}`);
+        }
+      }
+    }
+
+    // 2.20 [Pitfall 21]: 客户端原生内联脚本自由变量闭合与 define:vars 漏传 AST 分析
+    const serverVars = fm ? InvariantEngine.extractFrontmatterTopLevelVars(fm.code) : new Set<string>();
     const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
     let match;
     while ((match = scriptRegex.exec(content)) !== null) {
@@ -1510,12 +1537,12 @@ async function main() {
         for (const v of scopeCheck.violations) {
           if (v.isServerVar) {
             logFail(
-              `${path.relative(ROOT_DIR, file)}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
+              `${relFile}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
               `检测到服务端顶层变量 '${v.identifier}' 被客户端 <script> 直接引用，但未在 define:vars 中传入！Astro 服务端与客户端隔离，直接引用将触发 ReferenceError！`
             );
           } else {
             logFail(
-              `${path.relative(ROOT_DIR, file)}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
+              `${relFile}: [Pitfall 21] 客户端原生内联脚本违反作用域封闭性公理！` +
               `检测到未声明游离标识符: '${v.identifier}'。若需从 SSR 传入请在 define:vars 中显式声明，或在脚本内提供局部声明 / typeof 保护，否则客户端将触发 Uncaught ReferenceError！`
             );
           }
@@ -1524,37 +1551,7 @@ async function main() {
     }
   }
   logPass(`[Pitfall 21] 客户端原生内联脚本自由变量闭合与 define:vars 注入校验通过`);
-
-  // 2.21 [Pitfall 22]: Astro Frontmatter 语法树解析与词法作用域重复声明检测
-  // 使用 ts.createSourceFile 解析 .astro 顶部 Frontmatter，自动捕获语法错误及同一块级作用域下的重复声明（如重复声明 const sectionId），并精确报告两处冲突行号。
-  for (const file of astroFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
-    const fm = InvariantEngine.extractFrontmatter(content);
-    if (fm) {
-      const dupCheck = InvariantEngine.checkFrontmatterDuplicateDeclarations(fm.code, fm.startLine);
-      if (!dupCheck.valid) {
-        for (const v of dupCheck.violations) {
-          logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 22] ${v}`);
-        }
-      }
-    }
-  }
   logPass(`[Pitfall 22] Astro Frontmatter 语法树完整性与词法作用域零重复声明校验通过`);
-
-  // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测
-  // 追踪从 Astro.props 解构出的原始变量（及其一阶未解包赋值与 || 表达式），拦截未经 typeof === 'string' 或 toText() / getLocalizedValue() 解包就直接调用 .trim() / .split() / .replace() 的操作。
-  for (const file of astroFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
-    const fm = InvariantEngine.extractFrontmatter(content);
-    if (fm) {
-      const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(fm.code, fm.startLine);
-      if (!propCheck.valid) {
-        for (const v of propCheck.violations) {
-          logFail(`${path.relative(ROOT_DIR, file)}: [Pitfall 23] ${v}`);
-        }
-      }
-    }
-  }
   logPass(`[Pitfall 23] 组件原始 Props 字符串原型方法安全类型守卫校验通过 (零 SSR TypeError 隐患)`);
 
   // 2.23 [Pitfall 24]: Sanity Schema 多语言字段与前端提取白名单自动同构对齐
