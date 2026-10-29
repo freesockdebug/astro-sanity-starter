@@ -142,8 +142,38 @@ class InvariantEngine {
   }
 
   /**
-   * 1.1 客户端原生内联脚本作用域封闭性公理 (Closed-Scope Invariant)
-   * 扫描 <script define:vars> 与 <script is:inline>，利用 AST 验证所有引用的游离标识符
+   * 1.1 提取 define:vars={{ ... }} 注入的对象属性名 (基于 AST 解析，杜绝双大括号截断与逗号拆分 Bug)
+   */
+  public static extractDefineVars(fullTag: string): string[] {
+    const match = fullTag.match(/define:vars=\{([\s\S]*?)\}(?=\s|>)/);
+    if (!match) return [];
+    const rawExpr = match[1].trim();
+    const dummyCode = `const __vars = ${rawExpr};`;
+    try {
+      const sf = ts.createSourceFile('vars.ts', dummyCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+      const declaredNames: string[] = [];
+      function visit(node: ts.Node) {
+        if (ts.isObjectLiteralExpression(node)) {
+          for (const prop of node.properties) {
+            if (ts.isPropertyAssignment(prop) && (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name))) {
+              declaredNames.push(prop.name.text);
+            } else if (ts.isShorthandPropertyAssignment(prop)) {
+              declaredNames.push(prop.name.text);
+            }
+          }
+        }
+        ts.forEachChild(node, visit);
+      }
+      visit(sf);
+      return declaredNames;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * 1.2 客户端原生内联脚本作用域封闭性公理 (Closed-Scope Invariant)
+   * 扫描客户端内联脚本，利用 AST 验证所有引用的游离标识符
    * 是否已在本地声明、通过 define:vars 注入、或为标准浏览器全局对象，杜绝运行时 ReferenceError 崩溃。
    */
   public static checkScriptScopeClosed(
@@ -159,6 +189,8 @@ class InvariantEngine {
       'URL', 'URLSearchParams', 'AbortController', 'AbortSignal', 'Headers', 'Request',
       'Response', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'TouchEvent',
       'HTMLElement', 'Element', 'Node', 'HTMLTemplateElement', 'HTMLInputElement', 'HTMLButtonElement',
+      'FormData', 'Blob', 'File', 'FileReader', 'Image', 'Audio', 'DocumentFragment', 'Text', 'Comment',
+      'EventTarget', 'ScrollBehavior',
       'Math', 'JSON', 'Date', 'Array', 'Object', 'String', 'Number', 'Boolean',
       'Set', 'Map', 'WeakSet', 'WeakMap', 'RegExp', 'Error', 'TypeError', 'RangeError',
       'Promise', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent',
@@ -167,13 +199,24 @@ class InvariantEngine {
       'globalThis', 'self', 'undefined', 'NaN', 'Infinity', 'Intl', 'Symbol', 'Proxy', 'Reflect'
     ]);
 
-    const sourceFile = ts.createSourceFile('inline.js', scriptBody, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const sourceFile = ts.createSourceFile('inline.ts', scriptBody, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const declared = new Set<string>([...definedVars, ...BROWSER_GLOBALS]);
     const undeclaredUsed = new Map<string, boolean>();
 
-    // 1. 递归扫描所有本地声明
+    // 1. 递归扫描所有本地声明 (含 import 导入、类型声明、变量与函数)
     function collectDeclarations(node: ts.Node) {
-      if (ts.isVariableDeclaration(node)) {
+      if (ts.isImportDeclaration(node) && node.importClause) {
+        if (node.importClause.name) declared.add(node.importClause.name.text);
+        if (node.importClause.namedBindings) {
+          if (ts.isNamedImports(node.importClause.namedBindings)) {
+            for (const el of node.importClause.namedBindings.elements) {
+              declared.add(el.name.text);
+            }
+          } else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
+            declared.add(node.importClause.namedBindings.name.text);
+          }
+        }
+      } else if (ts.isVariableDeclaration(node)) {
         if (ts.isIdentifier(node.name)) {
           declared.add(node.name.text);
         } else if (ts.isObjectBindingPattern(node.name) || ts.isArrayBindingPattern(node.name)) {
@@ -186,6 +229,10 @@ class InvariantEngine {
       } else if (ts.isFunctionDeclaration(node) && node.name) {
         declared.add(node.name.text);
       } else if (ts.isClassDeclaration(node) && node.name) {
+        declared.add(node.name.text);
+      } else if (ts.isTypeAliasDeclaration(node) && node.name) {
+        declared.add(node.name.text);
+      } else if (ts.isInterfaceDeclaration(node) && node.name) {
         declared.add(node.name.text);
       } else if (ts.isParameter(node)) {
         if (ts.isIdentifier(node.name)) {
@@ -204,10 +251,26 @@ class InvariantEngine {
     }
     collectDeclarations(sourceFile);
 
+    // 判断标识符是否处于 TypeScript 类型节点中 (运行时会被擦除，不属于运行时变量引用)
+    function isTypePosition(node: ts.Node): boolean {
+      let curr: ts.Node | undefined = node;
+      while (curr) {
+        if (ts.isTypeNode(curr) || ts.isInterfaceDeclaration(curr) || ts.isTypeAliasDeclaration(curr)) {
+          return true;
+        }
+        curr = curr.parent;
+      }
+      return false;
+    }
+
     // 2. 递归扫描未声明游离标识符
     function checkIdentifier(node: ts.Node) {
       if (node.parent && ts.isTypeOfExpression(node.parent)) {
         return; // 防御性判断 typeof x !== 'undefined'
+      }
+
+      if (isTypePosition(node)) {
+        return; // TypeScript 编译期类型注解，运行时完全擦除
       }
 
       if (ts.isIdentifier(node)) {
@@ -223,8 +286,12 @@ class InvariantEngine {
           if (ts.isParameter(parent) && parent.name === node) return;
           if (ts.isClassDeclaration(parent) && parent.name === node) return;
           if (ts.isBindingElement(parent) && parent.name === node) return;
+          if (ts.isImportSpecifier(parent) && parent.name === node) return;
           if (ts.isCatchClause(parent)) return;
         }
+
+        // 标准 DOM 类或全局前缀 (如 HTMLDivElement, SVGElement, etc.)
+        if (/^(HTML|SVG|DOM|CSS|WebGL)[A-Z]/.test(name)) return;
 
         if (!declared.has(name)) {
           undeclaredUsed.set(name, serverVars.has(name));
@@ -293,6 +360,7 @@ class InvariantEngine {
 
   /**
    * 1.4 Astro Frontmatter 语法树解析与词法作用域重复声明检测
+   * (全面支持普通变量、解构赋值与 import 符号的重复冲突拦截)
    */
   public static checkFrontmatterDuplicateDeclarations(
     frontmatterCode: string,
@@ -300,32 +368,57 @@ class InvariantEngine {
   ): { valid: boolean; violations: string[] } {
     const violations: string[] = [];
     const sf = ts.createSourceFile('fm.ts', frontmatterCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-
     const declared = new Map<string, number>();
+
+    function checkAndAdd(name: string, line: number) {
+      if (declared.has(name)) {
+        violations.push(
+          `检测到 Frontmatter 重复声明: '${name}'！第 ${declared.get(name)} 行与第 ${line} 行冲突，将导致 [PARSE_ERROR] Identifier '${name}' has already been declared 编译报错！`
+        );
+      } else {
+        declared.set(name, line);
+      }
+    }
+
+    function collectBindingNames(binding: ts.Node) {
+      if (ts.isIdentifier(binding)) {
+        const line = sf.getLineAndCharacterOfPosition(binding.getStart()).line + startLine;
+        checkAndAdd(binding.text, line);
+      } else if (ts.isObjectBindingPattern(binding) || ts.isArrayBindingPattern(binding)) {
+        for (const el of binding.elements) {
+          if (ts.isBindingElement(el)) {
+            collectBindingNames(el.name);
+          }
+        }
+      }
+    }
+
     for (const stmt of sf.statements) {
       if (ts.isVariableStatement(stmt)) {
         for (const decl of stmt.declarationList.declarations) {
-          if (ts.isIdentifier(decl.name)) {
-            const name = decl.name.text;
-            const line = sf.getLineAndCharacterOfPosition(decl.getStart()).line + startLine;
-            if (declared.has(name)) {
-              violations.push(
-                `检测到 Frontmatter 重复声明: '${name}'！第 ${declared.get(name)} 行与第 ${line} 行冲突，将导致 [PARSE_ERROR] Identifier '${name}' has already been declared 编译报错！`
-              );
-            } else {
-              declared.set(name, line);
-            }
-          }
+          collectBindingNames(decl.name);
         }
       } else if (ts.isFunctionDeclaration(stmt) && stmt.name) {
-        const name = stmt.name.text;
-        const line = sf.getLineAndCharacterOfPosition(stmt.getStart()).line + startLine;
-        if (declared.has(name)) {
-          violations.push(
-            `检测到 Frontmatter 函数与变量同名重复声明: '${name}'！第 ${declared.get(name)} 行与第 ${line} 行冲突！`
-          );
-        } else {
-          declared.set(name, line);
+        const line = sf.getLineAndCharacterOfPosition(stmt.name.getStart()).line + startLine;
+        checkAndAdd(stmt.name.text, line);
+      } else if (ts.isClassDeclaration(stmt) && stmt.name) {
+        const line = sf.getLineAndCharacterOfPosition(stmt.name.getStart()).line + startLine;
+        checkAndAdd(stmt.name.text, line);
+      } else if (ts.isImportDeclaration(stmt) && stmt.importClause) {
+        if (stmt.importClause.name) {
+          const line = sf.getLineAndCharacterOfPosition(stmt.importClause.name.getStart()).line + startLine;
+          checkAndAdd(stmt.importClause.name.text, line);
+        }
+        if (stmt.importClause.namedBindings) {
+          if (ts.isNamedImports(stmt.importClause.namedBindings)) {
+            for (const el of stmt.importClause.namedBindings.elements) {
+              const line = sf.getLineAndCharacterOfPosition(el.name.getStart()).line + startLine;
+              checkAndAdd(el.name.text, line);
+            }
+          } else if (ts.isNamespaceImport(stmt.importClause.namedBindings)) {
+            const line = sf.getLineAndCharacterOfPosition(stmt.importClause.namedBindings.name.getStart()).line + startLine;
+            checkAndAdd(stmt.importClause.namedBindings.name.text, line);
+          }
         }
       }
     }
@@ -334,6 +427,7 @@ class InvariantEngine {
 
   /**
    * 1.5 组件原始 Props 字符串原型方法安全守卫检测
+   * (全面支持裸调用、一阶别名以及括号逻辑或复合表达式 (prop || 'default').trim())
    */
   public static checkPropsStringPrototypeGuards(
     frontmatterCode: string,
@@ -377,13 +471,28 @@ class InvariantEngine {
       }
     }
 
+    function unwrapReceiver(node: ts.Node): ts.Node {
+      let curr = node;
+      while (ts.isParenthesizedExpression(curr)) {
+        curr = curr.expression;
+      }
+      if (
+        ts.isBinaryExpression(curr) &&
+        (curr.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+         curr.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+      ) {
+        return unwrapReceiver(curr.left);
+      }
+      return curr;
+    }
+
     function visit(node: ts.Node) {
       if (ts.isCallExpression(node)) {
         const expr = node.expression;
         if (ts.isPropertyAccessExpression(expr)) {
           const method = expr.name.text;
           if (['trim', 'replace', 'split'].includes(method)) {
-            const receiver = expr.expression;
+            const receiver = unwrapReceiver(expr.expression);
             if (ts.isIdentifier(receiver) && (rawProps.has(receiver.text) || rawAliases.has(receiver.text))) {
               let isGuarded = false;
               let p: ts.Node | undefined = node.parent;
@@ -507,25 +616,43 @@ class InvariantEngine {
   public static runAdversarialSelfTests(): { valid: boolean; violations: string[] } {
     const violations: string[] = [];
 
-    // 故障注入 1: 客户端自由变量漏传
-    const mockScript = "function test(){ return unpassedServerVar + 1; }";
-    const res1 = InvariantEngine.checkScriptScopeClosed(mockScript, ['definedA'], new Set(['unpassedServerVar']));
+    // 故障注入 1: 客户端自由变量漏传与 AST 级 define:vars 边界解析
+    const mockTagComplex = `<script define:vars={{ productUrlPrefix: getLocalizedPath('/products', currentLang), swatchKitSku, limit: 50 }}>`;
+    const parsedVars = InvariantEngine.extractDefineVars(mockTagComplex);
+    if (!parsedVars.includes('productUrlPrefix') || !parsedVars.includes('swatchKitSku') || !parsedVars.includes('limit')) {
+      violations.push("探针 1A (define:vars 复杂表达式 AST 提取) 自检失败：嵌套函数参数逗号或双花括号导致属性提取丢失！");
+    }
+
+    const mockBareScript = "function test(){ return unpassedServerVar + 1; }";
+    const res1 = InvariantEngine.checkScriptScopeClosed(mockBareScript, ['definedA'], new Set(['unpassedServerVar']));
     if (res1.valid || !res1.violations.some((v) => v.identifier === 'unpassedServerVar' && v.isServerVar)) {
-      violations.push("探针 1 (客户端自由变量漏传) 自检失败：未能精准拦截未传入 define:vars 的服务端变量！");
+      violations.push("探针 1B (客户端自由变量漏传) 自检失败：未能精准拦截未传入 define:vars 的服务端变量！");
     }
 
-    // 故障注入 2: Frontmatter 重复声明
+    // 故障注入 2: Frontmatter 重复声明 (含普通变量与解构模式同名冲突)
     const mockFmDuplicate = "const duplicateTrapVar = 1;\nconst duplicateTrapVar = 2;";
-    const res2 = InvariantEngine.checkFrontmatterDuplicateDeclarations(mockFmDuplicate, 1);
-    if (res2.valid || !res2.violations.some((v) => v.includes("duplicateTrapVar") && v.includes("第 1 行与第 2 行"))) {
-      violations.push("探针 2 (Frontmatter 重复声明) 自检失败：未能捕获重复声明及其冲突行号！");
+    const res2A = InvariantEngine.checkFrontmatterDuplicateDeclarations(mockFmDuplicate, 1);
+    if (res2A.valid || !res2A.violations.some((v) => v.includes("duplicateTrapVar") && v.includes("第 1 行与第 2 行"))) {
+      violations.push("探针 2A (Frontmatter 普通变量重复声明) 自检失败：未能捕获重复声明及其冲突行号！");
     }
 
-    // 故障注入 3: Props 原型方法未加守卫
+    const mockFmDestructuringDup = "const { duplicatePropTrap } = Astro.props;\nconst duplicatePropTrap = 'conflict';";
+    const res2B = InvariantEngine.checkFrontmatterDuplicateDeclarations(mockFmDestructuringDup, 1);
+    if (res2B.valid || !res2B.violations.some((v) => v.includes("duplicatePropTrap"))) {
+      violations.push("探针 2B (Frontmatter 解构赋值与后续声明冲突) 自检失败：未能捕获解构变量同名冲突！");
+    }
+
+    // 故障注入 3: Props 原型方法未加守卫 (含直接调用与复合逻辑或/括号表达式)
     const mockFmUnguarded = "const { rawPropTrap } = Astro.props;\nconst res = rawPropTrap.replace(/\\D/g, '');";
-    const res3 = InvariantEngine.checkPropsStringPrototypeGuards(mockFmUnguarded, 1);
-    if (res3.valid || !res3.violations.some((v) => v.includes("rawPropTrap") && v.includes(".replace()"))) {
-      violations.push("探针 3 (Props 原型方法守卫) 自检失败：未能拦截裸调用 .replace() 的原始 Prop！");
+    const res3A = InvariantEngine.checkPropsStringPrototypeGuards(mockFmUnguarded, 1);
+    if (res3A.valid || !res3A.violations.some((v) => v.includes("rawPropTrap") && v.includes(".replace()"))) {
+      violations.push("探针 3A (Props 原型方法守卫) 自检失败：未能拦截裸调用 .replace() 的原始 Prop！");
+    }
+
+    const mockFmCompoundUnguarded = "const { rawPropTrap } = Astro.props;\nconst res = (rawPropTrap || 'fallback').trim();";
+    const res3B = InvariantEngine.checkPropsStringPrototypeGuards(mockFmCompoundUnguarded, 1);
+    if (res3B.valid || !res3B.violations.some((v) => v.includes("rawPropTrap") && v.includes(".trim()"))) {
+      violations.push("探针 3B (Props 原型方法复合表达式守卫) 自检失败：未能拦截 (prop || fallback).trim() 复合表达式！");
     }
 
     // 故障注入 4: Schema 多语言字段差集
@@ -1367,20 +1494,16 @@ async function main() {
     const fm = InvariantEngine.extractFrontmatter(content);
     const serverVars = fm ? InvariantEngine.extractFrontmatterTopLevelVars(fm.code) : new Set<string>();
 
-    const scriptRegex = /<script\s+[^>]*(?:define:vars|is:inline)[^>]*>([\s\S]*?)<\/script>/gi;
+    const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
     let match;
     while ((match = scriptRegex.exec(content)) !== null) {
-      const fullTag = match[0];
-      const scriptBody = match[1];
-      const defineVarsMatch = fullTag.match(/define:vars=\{([^}]+)\}/);
-      const definedVars: string[] = [];
-      if (defineVarsMatch) {
-        const inner = defineVarsMatch[1];
-        inner.split(',').forEach((p) => {
-          const parts = p.trim().split(':');
-          if (parts[0]) definedVars.push(parts[0].trim());
-        });
+      const attrs = match[1] || '';
+      const scriptBody = match[2];
+      if (attrs.includes('src=') || attrs.includes('type="application/json"') || attrs.includes('type="application/ld+json"')) {
+        continue;
       }
+      const fullTag = match[0];
+      const definedVars = InvariantEngine.extractDefineVars(fullTag);
 
       const scopeCheck = InvariantEngine.checkScriptScopeClosed(scriptBody, definedVars, serverVars);
       if (!scopeCheck.valid) {
