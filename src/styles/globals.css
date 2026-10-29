@@ -225,8 +225,8 @@ body {
   .product-hero-overview {
     padding-top: 0.35rem !important;
     padding-bottom: 0.35rem !important;
-    height: calc(100svh - var(--apple-header-offset)) !important;
-    max-height: calc(100svh - var(--apple-header-offset)) !important;
+    min-height: calc(100svh - var(--apple-header-offset) - var(--apple-breadcrumbs-h, 0px)) !important;
+    max-height: calc(100svh - var(--apple-header-offset) - var(--apple-breadcrumbs-h, 0px)) !important;
   }
   .product-gallery-col .carousel-thumb {
     width: 48px !important;

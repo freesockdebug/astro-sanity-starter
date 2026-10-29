@@ -70,10 +70,11 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
     line-height: clamp(1.6, 1.58 + 0.1vw, 1.68);
     text-wrap: pretty;
     letter-spacing: -0.011em;
-    /* Ergonomic Maximum Reading Measure: 72ch prevents neck & saccadic fatigue */
-    max-width: min(100%, 72ch);
+    /* Flush Alignment with 8-Column Grid Track */
+    width: 100%;
+    max-width: 100%;
     margin-left: 0;
-    margin-right: auto;
+    margin-right: 0;
   }
 
   /* --------------------------------------------------------------------------
