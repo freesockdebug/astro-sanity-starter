@@ -273,11 +273,16 @@ const sectionId = elementId || sectionAnchor || 'collections';
   const prevBtn = document.getElementById('collections-prev-btn') as HTMLButtonElement | null;
   const nextBtn = document.getElementById('collections-next-btn') as HTMLButtonElement | null;
 
+  let arrowStatesRaf = 0;
   function updateArrowStates() {
-    if (!shelf || !prevBtn || !nextBtn) return;
-    const { scrollLeft, scrollWidth, clientWidth } = shelf;
-    prevBtn.disabled = scrollLeft <= 10;
-    nextBtn.disabled = scrollLeft + clientWidth >= scrollWidth - 10;
+    if (arrowStatesRaf) return;
+    arrowStatesRaf = requestAnimationFrame(() => {
+      arrowStatesRaf = 0;
+      if (!shelf || !prevBtn || !nextBtn) return;
+      const { scrollLeft, scrollWidth, clientWidth } = shelf;
+      prevBtn.disabled = scrollLeft <= 10;
+      nextBtn.disabled = scrollLeft + clientWidth >= scrollWidth - 10;
+    });
   }
 
   function checkShelfOverflow() {

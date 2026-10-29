@@ -65,11 +65,13 @@ const BROWSER_GLOBALS = new Set([
   'localStorage', 'sessionStorage', 'setTimeout', 'clearTimeout', 'setInterval',
   'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
   'IntersectionObserver', 'MutationObserver', 'ResizeObserver', 'PerformanceObserver',
+  'IntersectionObserverEntry', 'ResizeObserverEntry', 'MutationRecord',
   'URL', 'URLSearchParams', 'AbortController', 'AbortSignal', 'Headers', 'Request',
   'Response', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'TouchEvent',
   'HTMLElement', 'Element', 'Node', 'HTMLTemplateElement', 'HTMLInputElement', 'HTMLButtonElement',
   'FormData', 'Blob', 'File', 'FileReader', 'Image', 'Audio', 'DocumentFragment', 'Text', 'Comment',
-  'EventTarget', 'ScrollBehavior',
+  'EventTarget', 'ScrollBehavior', 'performance', 'getComputedStyle', 'matchMedia', 'DOMParser',
+  'CSS', 'customElements', 'indexedDB', 'DOMRect', 'CSSStyleDeclaration',
   'Math', 'JSON', 'Date', 'Array', 'Object', 'String', 'Number', 'Boolean',
   'Set', 'Map', 'WeakSet', 'WeakMap', 'RegExp', 'Error', 'TypeError', 'RangeError',
   'Promise', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent',
@@ -126,37 +128,54 @@ function getFiles(dir: string, exts: string[]): string[] {
 // =========================================================================
 class InvariantEngine {
   /**
-   * 1. 词法状态机：剔除字符串与注释后，检测 TS 类型标注泄漏
+   * 1. 客户端原生脚本 TypeScript 语法泄漏检测 (基于 TS AST 精准捕获非空断言、泛型、类型注解等)
    */
   public static checkScriptPurity(rawScript: string): { pure: boolean; violations: string[] } {
     const violations: string[] = [];
-    // 状态机剥离: 1. 单行注释 2. 多行注释 3. 单双引号及反引号字符串
-    let sanitized = rawScript
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/\/\/.*$/gm, '')
-      .replace(/(["'`])(?:\\.|(?!\1)[^\\])*\1/g, '""');
+    let sf: ts.SourceFile;
+    try {
+      sf = ts.createSourceFile('inline.ts', rawScript, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    } catch {
+      return { pure: true, violations: [] };
+    }
 
-    // 检测 TS 类型断言: \bas\s+[A-Za-z0-9_$]+
-    const asMatch = sanitized.match(/\bas\s+([A-Za-z0-9_$]+)/g);
-    if (asMatch) {
-      for (const m of asMatch) {
-        if (!m.includes('as const')) { // 允许标准字面量断言或特殊排除
-          violations.push(`TS Type Assertion: '${m}'`);
-        }
+    function visit(node: ts.Node) {
+      if (ts.isAsExpression(node)) {
+        violations.push(`TS Type Assertion (as): '${node.getText(sf)}'`);
+      } else if (ts.isNonNullExpression(node)) {
+        violations.push(`TS Non-null Assertion (!): '${node.getText(sf)}'`);
+      } else if (ts.isSatisfiesExpression(node)) {
+        violations.push(`TS Satisfies Expression: '${node.getText(sf)}'`);
+      } else if (ts.isTypeAliasDeclaration(node)) {
+        violations.push(`TS Type Alias: '${node.name.text}'`);
+      } else if (ts.isInterfaceDeclaration(node)) {
+        violations.push(`TS Interface Declaration: '${node.name.text}'`);
+      } else if (ts.isEnumDeclaration(node)) {
+        violations.push(`TS Enum Declaration: '${node.name.text}'`);
+      } else if (ts.isTypeAssertionExpression(node)) {
+        violations.push(`TS Type Assertion (<T>): '${node.getText(sf)}'`);
+      } else if (
+        (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
+        node.typeArguments &&
+        node.typeArguments.length > 0
+      ) {
+        violations.push(`TS Generic Type Arguments: '${node.getText(sf)}'`);
+      } else if (
+        (ts.isVariableDeclaration(node) ||
+          ts.isParameter(node) ||
+          ts.isFunctionDeclaration(node) ||
+          ts.isArrowFunction(node) ||
+          ts.isFunctionExpression(node) ||
+          ts.isMethodDeclaration(node) ||
+          ts.isPropertyDeclaration(node)) &&
+        (node as any).type !== undefined
+      ) {
+        violations.push(`TS Type Annotation: '${(node as any).type.getText(sf)}'`);
       }
-    }
 
-    // 检测变量类型注解: (let|const|var)\s+[a-zA-Z0-9_$]+\s*:\s*[a-zA-Z0-9_$]+
-    const varTypeMatch = sanitized.match(/\b(let|const|var)\s+[a-zA-Z0-9_$]+\s*:\s*([a-zA-Z0-9_$]+)/g);
-    if (varTypeMatch) {
-      violations.push(...varTypeMatch.map((v) => `TS Variable Type Annotation: '${v}'`));
+      ts.forEachChild(node, visit);
     }
-
-    // 检测函数参数类型注解: function(a: string) 或 (a: number) =>
-    const paramTypeMatch = sanitized.match(/\([a-zA-Z0-9_$,\s]*\s*:\s*(string|number|boolean|any|object)[^)]*\)/g);
-    if (paramTypeMatch) {
-      violations.push(...paramTypeMatch.map((p) => `TS Parameter Type Annotation: '${p}'`));
-    }
+    visit(sf);
 
     return { pure: violations.length === 0, violations };
   }
@@ -193,8 +212,8 @@ class InvariantEngine {
 
   /**
    * 1.2 客户端原生内联脚本作用域封闭性公理 (Closed-Scope Invariant)
-   * 扫描客户端内联脚本，利用 AST 验证所有引用的游离标识符
-   * 是否已在本地声明、通过 define:vars 注入、或为标准浏览器全局对象，杜绝运行时 ReferenceError 崩溃。
+   * 采用词法作用域栈 (Scope Stack) 深度遍历，杜绝函数同名变量遮蔽 (Shadowing) 导致的游离漏检，
+   * 验证所有引用的游离标识符是否已在本地声明、通过 define:vars 注入、或为标准浏览器全局对象。
    */
   public static checkScriptScopeClosed(
     scriptBody: string,
@@ -202,54 +221,47 @@ class InvariantEngine {
     serverVars: Set<string> = new Set()
   ): { valid: boolean; violations: { identifier: string; isServerVar: boolean }[] } {
     const sourceFile = ts.createSourceFile('inline.ts', scriptBody, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-    const declared = new Set<string>([...definedVars, ...BROWSER_GLOBALS]);
+    const rootScope = new Set<string>([...definedVars, ...BROWSER_GLOBALS]);
+    const scopeStack: Set<string>[] = [rootScope];
     const undeclaredUsed = new Map<string, boolean>();
 
-    function collectBindingNames(binding: ts.Node) {
+    function isDeclared(name: string): boolean {
+      for (let i = scopeStack.length - 1; i >= 0; i--) {
+        if (scopeStack[i].has(name)) return true;
+      }
+      return false;
+    }
+
+    function addBinding(binding: ts.Node, targetScope: Set<string>) {
       if (ts.isIdentifier(binding)) {
-        declared.add(binding.text);
+        targetScope.add(binding.text);
       } else if (ts.isObjectBindingPattern(binding) || ts.isArrayBindingPattern(binding)) {
         for (const el of binding.elements) {
           if (ts.isBindingElement(el)) {
-            collectBindingNames(el.name);
+            addBinding(el.name, targetScope);
           }
         }
       }
     }
 
-    // 1. 递归扫描所有本地声明 (含 import 导入、类型声明、变量与嵌套解构函数参数)
-    function collectDeclarations(node: ts.Node) {
-      if (ts.isImportDeclaration(node) && node.importClause) {
-        if (node.importClause.name) declared.add(node.importClause.name.text);
-        if (node.importClause.namedBindings) {
-          if (ts.isNamedImports(node.importClause.namedBindings)) {
-            for (const el of node.importClause.namedBindings.elements) {
-              declared.add(el.name.text);
-            }
-          } else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
-            declared.add(node.importClause.namedBindings.name.text);
+    // 预收集顶层函数声明、类与 import 导入并提升至根作用域
+    for (const stmt of sourceFile.statements) {
+      if (ts.isFunctionDeclaration(stmt) && stmt.name) {
+        rootScope.add(stmt.name.text);
+      } else if (ts.isClassDeclaration(stmt) && stmt.name) {
+        rootScope.add(stmt.name.text);
+      } else if (ts.isImportDeclaration(stmt) && stmt.importClause) {
+        if (stmt.importClause.name) rootScope.add(stmt.importClause.name.text);
+        if (stmt.importClause.namedBindings) {
+          if (ts.isNamedImports(stmt.importClause.namedBindings)) {
+            for (const el of stmt.importClause.namedBindings.elements) rootScope.add(el.name.text);
+          } else if (ts.isNamespaceImport(stmt.importClause.namedBindings)) {
+            rootScope.add(stmt.importClause.namedBindings.name.text);
           }
         }
-      } else if (ts.isVariableDeclaration(node)) {
-        collectBindingNames(node.name);
-      } else if (ts.isFunctionDeclaration(node) && node.name) {
-        declared.add(node.name.text);
-      } else if (ts.isClassDeclaration(node) && node.name) {
-        declared.add(node.name.text);
-      } else if (ts.isTypeAliasDeclaration(node) && node.name) {
-        declared.add(node.name.text);
-      } else if (ts.isInterfaceDeclaration(node) && node.name) {
-        declared.add(node.name.text);
-      } else if (ts.isParameter(node)) {
-        collectBindingNames(node.name);
-      } else if (ts.isCatchClause(node) && node.variableDeclaration && ts.isIdentifier(node.variableDeclaration.name)) {
-        declared.add(node.variableDeclaration.name.text);
       }
-      ts.forEachChild(node, collectDeclarations);
     }
-    collectDeclarations(sourceFile);
 
-    // 判断标识符是否处于 TypeScript 类型节点中 (运行时会被擦除，不属于运行时变量引用)
     function isTypePosition(node: ts.Node): boolean {
       let curr: ts.Node | undefined = node;
       while (curr) {
@@ -261,44 +273,92 @@ class InvariantEngine {
       return false;
     }
 
-    // 2. 递归扫描未声明游离标识符
-    function checkIdentifier(node: ts.Node) {
-      if (node.parent && ts.isTypeOfExpression(node.parent)) {
-        return; // 防御性判断 typeof x !== 'undefined'
+    function walk(node: ts.Node) {
+      let pushedScope = false;
+      const isFunctionScope =
+        ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isArrowFunction(node) ||
+        ts.isMethodDeclaration(node);
+      const isBlockScope =
+        ts.isBlock(node) ||
+        ts.isForStatement(node) ||
+        ts.isForOfStatement(node) ||
+        ts.isForInStatement(node) ||
+        ts.isCatchClause(node);
+
+      if (isFunctionScope || isBlockScope) {
+        const newScope = new Set<string>();
+        if (isFunctionScope) {
+          const fn = node as ts.FunctionLikeDeclaration;
+          if (fn.name && ts.isIdentifier(fn.name)) {
+            newScope.add(fn.name.text);
+          }
+          if (fn.parameters) {
+            for (const param of fn.parameters) {
+              addBinding(param.name, newScope);
+            }
+          }
+          if (fn.body && ts.isBlock(fn.body)) {
+            for (const stmt of fn.body.statements) {
+              if (ts.isFunctionDeclaration(stmt) && stmt.name) {
+                newScope.add(stmt.name.text);
+              }
+            }
+          }
+        } else if (ts.isCatchClause(node) && node.variableDeclaration) {
+          addBinding(node.variableDeclaration.name, newScope);
+        }
+        scopeStack.push(newScope);
+        pushedScope = true;
       }
 
-      if (isTypePosition(node)) {
-        return; // TypeScript 编译期类型注解，运行时完全擦除
+      if (ts.isVariableDeclaration(node)) {
+        const currentScope = scopeStack[scopeStack.length - 1];
+        addBinding(node.name, currentScope);
       }
 
       if (ts.isIdentifier(node)) {
-        const name = node.text;
-        const parent = node.parent;
-
-        if (parent) {
-          if (ts.isPropertyAccessExpression(parent) && parent.name === node) return;
-          if (ts.isPropertyAssignment(parent) && parent.name === node) return;
-          if (ts.isMethodDeclaration(parent) && parent.name === node) return;
-          if (ts.isVariableDeclaration(parent) && parent.name === node) return;
-          if (ts.isFunctionDeclaration(parent) && parent.name === node) return;
-          if (ts.isParameter(parent) && parent.name === node) return;
-          if (ts.isClassDeclaration(parent) && parent.name === node) return;
-          if (ts.isBindingElement(parent) && parent.name === node) return;
-          if (ts.isImportSpecifier(parent) && parent.name === node) return;
-          if (ts.isCatchClause(parent)) return;
-        }
-
-        // 标准 DOM 类或全局前缀 (如 HTMLDivElement, SVGElement, etc.)
-        if (/^(HTML|SVG|DOM|CSS|WebGL)[A-Z]/.test(name)) return;
-
-        if (!declared.has(name)) {
-          undeclaredUsed.set(name, serverVars.has(name));
-        }
+        checkIdentifier(node);
       }
 
-      ts.forEachChild(node, checkIdentifier);
+      ts.forEachChild(node, walk);
+
+      if (pushedScope) {
+        scopeStack.pop();
+      }
     }
-    checkIdentifier(sourceFile);
+
+    function checkIdentifier(node: ts.Identifier) {
+      if (node.parent && ts.isTypeOfExpression(node.parent)) return;
+      if (isTypePosition(node)) return;
+
+      const name = node.text;
+      const parent = node.parent;
+      if (parent) {
+        if (ts.isPropertyAccessExpression(parent) && parent.name === node) return;
+        if (ts.isPropertyAssignment(parent) && parent.name === node) return;
+        if (ts.isMethodDeclaration(parent) && parent.name === node) return;
+        if (ts.isVariableDeclaration(parent) && parent.name === node) return;
+        if (ts.isFunctionDeclaration(parent) && parent.name === node) return;
+        if (ts.isFunctionExpression(parent) && parent.name === node) return;
+        if (ts.isParameter(parent) && parent.name === node) return;
+        if (ts.isClassDeclaration(parent) && parent.name === node) return;
+        if (ts.isBindingElement(parent) && parent.name === node) return;
+        if (ts.isImportSpecifier(parent) && parent.name === node) return;
+        if (ts.isCatchClause(parent)) return;
+        if (ts.isBreakOrContinueStatement(parent)) return;
+        if (ts.isLabeledStatement(parent) && parent.label === node) return;
+      }
+
+      if (/^(HTML|SVG|DOM|CSS|WebGL)[A-Z]/.test(name)) return;
+
+      if (!isDeclared(name)) {
+        undeclaredUsed.set(name, serverVars.has(name));
+      }
+    }
+
+    walk(sourceFile);
 
     const violations = Array.from(undeclaredUsed.entries()).map(([identifier, isServerVar]) => ({
       identifier,
@@ -327,6 +387,16 @@ class InvariantEngine {
     const sf = typeof input === 'string'
       ? ts.createSourceFile('fm.ts', input, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
       : input;
+
+    // 捕获 Frontmatter 内部的语法诊断错误 (如缺少逗号、未闭合括号等语法崩溃)
+    if ((sf as any).parseDiagnostics && (sf as any).parseDiagnostics.length > 0) {
+      for (const diag of (sf as any).parseDiagnostics) {
+        const line = sf.getLineAndCharacterOfPosition(diag.start || 0).line + startLine;
+        const msg = ts.flattenDiagnosticMessageText(diag.messageText, '\n');
+        violations.push(`Frontmatter 第 ${line} 行存在语法错误: ${msg}`);
+      }
+    }
+
     const declared = new Map<string, number>();
 
     function checkAndAdd(name: string, line: number) {
@@ -386,7 +456,7 @@ class InvariantEngine {
 
   /**
    * 1.4 组件原始 Props 字符串原型方法安全守卫检测
-   * (全面支持裸调用、一阶别名 || / ?? 以及括号逻辑或复合表达式 (prop || 'default').trim())
+   * (全面支持解构变量、Astro.props.xxx 链式访问、一阶别名 || / ?? 以及括号逻辑复合表达式)
    */
   public static checkPropsStringPrototypeGuards(
     input: string | ts.SourceFile,
@@ -398,6 +468,7 @@ class InvariantEngine {
       : input;
     const rawProps = new Set<string>();
     const rawAliases = new Set<string>();
+    const rawPropHolders = new Set<string>(['Astro.props']);
 
     for (const stmt of sf.statements) {
       if (ts.isVariableStatement(stmt)) {
@@ -409,6 +480,7 @@ class InvariantEngine {
               }
             } else if (ts.isIdentifier(decl.name)) {
               rawProps.add(decl.name.text);
+              rawPropHolders.add(decl.name.text);
             }
           }
         }
@@ -452,42 +524,110 @@ class InvariantEngine {
       return curr;
     }
 
+    const PROPS_STRING_METHODS = new Set([
+      'trim', 'trimStart', 'trimEnd',
+      'replace', 'replaceAll', 'split',
+      'toLowerCase', 'toUpperCase',
+      'slice', 'substring', 'substr',
+      'startsWith', 'endsWith', 'includes',
+      'padStart', 'padEnd', 'match', 'matchAll',
+    ]);
+
     function visit(node: ts.Node) {
       if (ts.isCallExpression(node)) {
         const expr = node.expression;
         if (ts.isPropertyAccessExpression(expr)) {
           const method = expr.name.text;
-          if (['trim', 'replace', 'split'].includes(method)) {
+          if (PROPS_STRING_METHODS.has(method)) {
             const receiver = unwrapReceiver(expr.expression);
+            let rawPropName: string | null = null;
             if (ts.isIdentifier(receiver) && (rawProps.has(receiver.text) || rawAliases.has(receiver.text))) {
+              rawPropName = receiver.text;
+            } else if (ts.isPropertyAccessExpression(receiver)) {
+              const fullExprText = receiver.getText(sf);
+              if (fullExprText.startsWith('Astro.props.') || rawPropHolders.has(receiver.expression.getText(sf))) {
+                rawPropName = receiver.name.text;
+              }
+            }
+
+            if (rawPropName) {
               let isGuarded = false;
               let p: ts.Node | undefined = node.parent;
-              // 严格向上回溯父级条件作用域，杜绝爬升至 SourceFile 根部发生全局误报/漏报
+              // 严格向上回溯父级条件作用域，必须在有效正分支内调用
               while (p && p !== sf) {
-                if (
-                  ts.isIfStatement(p) ||
-                  ts.isConditionalExpression(p) ||
-                  ts.isBinaryExpression(p)
-                ) {
-                  const cond = ts.isIfStatement(p) ? p.expression : ts.isConditionalExpression(p) ? p.condition : p;
-                  const condText = cond.getText(sf);
+                if (ts.isIfStatement(p)) {
+                  const condText = p.expression.getText(sf);
                   if (
-                    condText.includes(`typeof ${receiver.text} === 'string'`) ||
-                    condText.includes(`typeof ${receiver.text} === "string"`) ||
-                    condText.includes(`toText(${receiver.text})`) ||
-                    condText.includes(`getLocalizedValue(${receiver.text}`) ||
-                    condText.includes(`String(${receiver.text})`)
+                    condText.includes(`typeof ${rawPropName} === 'string'`) ||
+                    condText.includes(`typeof ${rawPropName} === "string"`) ||
+                    condText.includes(`toText(${rawPropName})`) ||
+                    condText.includes(`getLocalizedValue(${rawPropName}`) ||
+                    condText.includes(`String(${rawPropName})`)
                   ) {
-                    isGuarded = true;
-                    break;
+                    if (node.getStart() >= p.thenStatement.getStart() && node.getEnd() <= p.thenStatement.getEnd()) {
+                      isGuarded = true;
+                      break;
+                    }
+                  }
+                } else if (ts.isConditionalExpression(p)) {
+                  const condText = p.condition.getText(sf);
+                  if (
+                    condText.includes(`typeof ${rawPropName} === 'string'`) ||
+                    condText.includes(`typeof ${rawPropName} === "string"`) ||
+                    condText.includes(`toText(${rawPropName})`) ||
+                    condText.includes(`getLocalizedValue(${rawPropName}`) ||
+                    condText.includes(`String(${rawPropName})`)
+                  ) {
+                    if (node.getStart() >= p.whenTrue.getStart() && node.getEnd() <= p.whenTrue.getEnd()) {
+                      isGuarded = true;
+                      break;
+                    }
+                  }
+                } else if (ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+                  const leftText = p.left.getText(sf);
+                  if (
+                    leftText.includes(`typeof ${rawPropName} === 'string'`) ||
+                    leftText.includes(`typeof ${rawPropName} === "string"`)
+                  ) {
+                    if (node.getStart() >= p.right.getStart() && node.getEnd() <= p.right.getEnd()) {
+                      isGuarded = true;
+                      break;
+                    }
                   }
                 }
                 p = p.parent;
               }
+
+              // 检查当前代码块内先前的早退守卫 (如 if (typeof x !== 'string') return;)
+              if (!isGuarded) {
+                let currBlock: ts.Node | undefined = node;
+                while (currBlock && !ts.isBlock(currBlock) && currBlock !== sf) {
+                  currBlock = currBlock.parent;
+                }
+                if (currBlock && (ts.isBlock(currBlock) || ts.isSourceFile(currBlock))) {
+                  const stmts = ts.isBlock(currBlock) ? currBlock.statements : (currBlock as ts.SourceFile).statements;
+                  for (const s of stmts) {
+                    if (s.getEnd() > node.getStart()) break;
+                    if (ts.isIfStatement(s)) {
+                      const cText = s.expression.getText(sf);
+                      if (
+                        (cText.includes(`typeof ${rawPropName} !== 'string'`) ||
+                         cText.includes(`typeof ${rawPropName} !== "string"`) ||
+                         cText.includes(`!${rawPropName}`)) &&
+                        (s.thenStatement.getText(sf).includes('return') || s.thenStatement.getText(sf).includes('throw'))
+                      ) {
+                        isGuarded = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+
               if (!isGuarded) {
                 const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + startLine;
                 violations.push(
-                  `原始 Prop 变量 '${receiver.text}' 在第 ${line} 行未经过 typeof === 'string' 或 toText() / String() 类型守卫即调用 .${method}()！若上游 CMS 传入多语言对象或 null 将导致 SSR 崩溃！`
+                  `原始 Prop 变量 '${rawPropName}' 在第 ${line} 行未经过 typeof === 'string' 或 toText() / String() 类型守卫即调用 .${method}()！若上游 CMS 传入多语言对象或 null 将导致 SSR 崩溃！`
                 );
               }
             }
@@ -503,7 +643,7 @@ class InvariantEngine {
 
   /**
    * 1.5 Sanity Schema 多语言字段与前端提取白名单自动同构对齐
-   * (直接基于内存 schemaTypes 运行时反射，天然支持未来新增或拆分文件，零额外磁盘 I/O 与 AST 开销)
+   * (递归解析顶层与嵌套 fields/of 结构，直接基于内存已载入的 schemaTypes 反射，零额外磁盘 I/O)
    */
   public static checkSchemaTextAlignment(
     schemaTypesList: any[],
@@ -523,29 +663,60 @@ class InvariantEngine {
       (fieldsMatch[1].match(/'([^']+)'|"([^"]+)"/g) || []).map((s) => s.replace(/['"]/g, ''))
     );
 
-    // 2. 从内存已载入的 schemaTypes 反射提取所有 Section Schema 顶层 localeString / localeText / localeMarkdown 字段
-    const schemaLocaleFields = new Set<string>();
+    // 2. 递归提取 Section Schema 中所有顶层与嵌套的多语言字段
+    function extractLocaleFields(fields: any[], prefix = ''): { name: string; fullPath: string; isTopLevel: boolean }[] {
+      const results: { name: string; fullPath: string; isTopLevel: boolean }[] = [];
+      if (!Array.isArray(fields)) return results;
+      for (const f of fields) {
+        if (!f || typeof f !== 'object') continue;
+        const currentPath = prefix ? `${prefix}.${f.name}` : f.name;
+        if (['localeString', 'localeText', 'localeMarkdown'].includes(f.type)) {
+          results.push({ name: f.name, fullPath: currentPath, isTopLevel: !prefix });
+        }
+        if (Array.isArray(f.fields)) {
+          results.push(...extractLocaleFields(f.fields, currentPath));
+        }
+        if (f.type === 'array' && Array.isArray(f.of)) {
+          for (const item of f.of) {
+            if (item && Array.isArray(item.fields)) {
+              results.push(...extractLocaleFields(item.fields, `${currentPath}[]`));
+            } else if (['localeString', 'localeText', 'localeMarkdown'].includes(item?.type)) {
+              results.push({ name: item.name || f.name, fullPath: `${currentPath}[]`, isTopLevel: false });
+            }
+          }
+        }
+      }
+      return results;
+    }
+
+    const missingTopLevel: string[] = [];
+    const missingNested: string[] = [];
+
     for (const schema of schemaTypesList) {
       if (schema && Array.isArray(schema.fields) && schema.name && schema.name.endsWith('Section')) {
-        for (const field of schema.fields) {
-          if (field && ['localeString', 'localeText', 'localeMarkdown'].includes(field.type)) {
-            schemaLocaleFields.add(field.name);
+        const localeFields = extractLocaleFields(schema.fields);
+        for (const lf of localeFields) {
+          if (lf.isTopLevel) {
+            if (!registeredFields.has(lf.name)) {
+              missingTopLevel.push(`${schema.name}.${lf.name}`);
+            }
+          } else {
+            if (!registeredFields.has(lf.name) && !blocksContent.includes(lf.name)) {
+              missingNested.push(`${schema.name}.${lf.fullPath}`);
+            }
           }
         }
       }
     }
 
-    // 3. 求差集：Schema 中存在但前端未登记
-    const missing: string[] = [];
-    for (const f of schemaLocaleFields) {
-      if (!registeredFields.has(f)) {
-        missing.push(f);
-      }
-    }
-
-    if (missing.length > 0) {
+    if (missingTopLevel.length > 0) {
       violations.push(
-        `Sanity Section Schema 中包含多语言字段 [${missing.join(', ')}]，但在前端 src/data/blocks.ts 的 ALL_SECTION_TEXT_FIELDS 白名单中未登记！多语言页面下将导致向下游组件传递未解包对象导致 SSR 崩溃！`
+        `Sanity Section Schema 中包含顶层多语言字段 [${missingTopLevel.join(', ')}]，但在前端 src/data/blocks.ts 的 ALL_SECTION_TEXT_FIELDS 白名单中未登记！多语言页面下将导致向下游组件传递未解包对象导致 SSR 崩溃！`
+      );
+    }
+    if (missingNested.length > 0) {
+      violations.push(
+        `Sanity Section Schema 中包含嵌套多语言字段 [${missingNested.join(', ')}]，但在前端 src/data/blocks.ts 中未找到对应的数据提取映射逻辑！`
       );
     }
 
@@ -558,17 +729,35 @@ class InvariantEngine {
   public static runAdversarialSelfTests(): { valid: boolean; violations: string[] } {
     const violations: string[] = [];
 
-    // 故障注入 1: 客户端自由变量漏传与 AST 级 define:vars 边界解析
+    // 故障注入 1A: 客户端自由变量漏传与 AST 级 define:vars 边界解析
     const mockTagComplex = `<script define:vars={{ productUrlPrefix: getLocalizedPath('/products', currentLang), swatchKitSku, limit: 50 }}>`;
     const parsedVars = InvariantEngine.extractDefineVars(mockTagComplex);
     if (!parsedVars.includes('productUrlPrefix') || !parsedVars.includes('swatchKitSku') || !parsedVars.includes('limit')) {
       violations.push("探针 1A (define:vars 复杂表达式 AST 提取) 自检失败：嵌套函数参数逗号或双花括号导致属性提取丢失！");
     }
 
+    // 故障注入 1B: 客户端未定义服务端变量
     const mockBareScript = "function test(){ return unpassedServerVar + 1; }";
-    const res1 = InvariantEngine.checkScriptScopeClosed(mockBareScript, ['definedA'], new Set(['unpassedServerVar']));
-    if (res1.valid || !res1.violations.some((v) => v.identifier === 'unpassedServerVar' && v.isServerVar)) {
+    const res1B = InvariantEngine.checkScriptScopeClosed(mockBareScript, ['definedA'], new Set(['unpassedServerVar']));
+    if (res1B.valid || !res1B.violations.some((v) => v.identifier === 'unpassedServerVar' && v.isServerVar)) {
       violations.push("探针 1B (客户端自由变量漏传) 自检失败：未能精准拦截未传入 define:vars 的服务端变量！");
+    }
+
+    // 故障注入 1C: 客户端函数同名作用域遮蔽防漏检 (跨函数作用域隔离)
+    const mockShadowingScript = `
+      function a() { const localProductId = 123; }
+      function b() { fetch('/api?id=' + localProductId); }
+    `;
+    const res1C = InvariantEngine.checkScriptScopeClosed(mockShadowingScript, [], new Set(['localProductId']));
+    if (res1C.valid || !res1C.violations.some((v) => v.identifier === 'localProductId')) {
+      violations.push("探针 1C (客户端作用域遮蔽防漏) 自检失败：跨函数局部变量未隔离，导致未定义自由变量逃逸！");
+    }
+
+    // 故障注入 1D: 客户端内联脚本 TypeScript 语法泄漏 (AST 级别拦截非空断言与泛型)
+    const mockTsPurityScript = `const btn = document.getElementById('btn')!;`;
+    const res1D = InvariantEngine.checkScriptPurity(mockTsPurityScript);
+    if (res1D.pure || !res1D.violations.some((v) => v.includes('Non-null Assertion'))) {
+      violations.push("探针 1D (客户端内联 TS 纯净度 AST 拦截) 自检失败：未能捕获原生内联脚本中的非空断言 (!) 语法！");
     }
 
     // 故障注入 2: Frontmatter 重复声明 (含普通变量与解构模式同名冲突)
@@ -597,12 +786,22 @@ class InvariantEngine {
       violations.push("探针 3B (Props 原型方法复合表达式守卫) 自检失败：未能拦截 (prop || fallback).trim() 复合表达式！");
     }
 
-    // 故障注入 4: Schema 多语言字段差集
-    const mockRegistered = new Set(['title']);
-    const mockSchemaFields = new Set(['title', 'unregisteredLocaleFieldTrap']);
-    const mockMissing = Array.from(mockSchemaFields).filter((f) => !mockRegistered.has(f));
-    if (mockMissing.length === 0 || mockMissing[0] !== 'unregisteredLocaleFieldTrap') {
-      violations.push("探针 4 (Schema 多语言字段差集) 自检失败：未能识别未登记的多语言字段！");
+    // 故障注入 4: Schema 多语言字段差集真实函数调用
+    const mockTrapSchema = [
+      {
+        name: 'trapSection',
+        fields: [
+          { name: 'title', type: 'localeString' },
+          { name: 'unregisteredLocaleFieldTrap', type: 'localeString' },
+        ],
+      },
+    ];
+    const res4 = InvariantEngine.checkSchemaTextAlignment(
+      mockTrapSchema,
+      path.join(SRC_DIR, 'data/blocks.ts')
+    );
+    if (res4.valid || !res4.violations.some((v) => v.includes('unregisteredLocaleFieldTrap'))) {
+      violations.push("探针 4 (Schema 多语言字段差集真实调用) 自检失败：未能通过 checkSchemaTextAlignment 拦截未登记的多语言字段！");
     }
 
     return { valid: violations.length === 0, violations };
@@ -1079,14 +1278,32 @@ async function main() {
 
   // 2.3 [Pitfall 3 & 6]: 序列化信息熵与 HTML 属性轻量化公理
   for (const { file, rel, content } of astroEntries) {
-    // 拦截 define:vars 内部字符串二次转义
-    const defineVarsRegex = /<script\s+[^>]*define:vars=\{([^}]+)\}[^>]*>/gi;
-    let match;
-    while ((match = defineVarsRegex.exec(content)) !== null) {
-      if (match[1].includes('JSON.stringify(')) {
-        logFail(
-          `${rel}: [Pitfall 3] 严禁在 define:vars 中嵌套使用 JSON.stringify()！双重反斜杠转义将引发体积数倍膨胀。`
-        );
+    // 拦截 define:vars 内部字符串二次转义 (基于 AST 解析，避免首个 } 提前截断)
+    const scriptTagRegex = /<script\b([^>]*)>/gi;
+    let tagMatch;
+    while ((tagMatch = scriptTagRegex.exec(content)) !== null) {
+      const fullTag = tagMatch[0];
+      if (fullTag.includes('define:vars=')) {
+        const dvMatch = fullTag.match(/define:vars=\{([\s\S]*?)\}(?=\s|>)/);
+        if (dvMatch) {
+          const rawExpr = dvMatch[1].trim();
+          try {
+            const sf = ts.createSourceFile('dv.ts', `const __dv = ${rawExpr};`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+            let hasJsonStringify = false;
+            function checkDv(node: ts.Node) {
+              if (ts.isCallExpression(node) && node.expression.getText(sf).includes('JSON.stringify')) {
+                hasJsonStringify = true;
+              }
+              ts.forEachChild(node, checkDv);
+            }
+            checkDv(sf);
+            if (hasJsonStringify) {
+              logFail(
+                `${rel}: [Pitfall 3] 严禁在 define:vars 中嵌套使用 JSON.stringify()！双重反斜杠转义将引发体积数倍膨胀。`
+              );
+            }
+          } catch {}
+        }
       }
     }
 
@@ -1144,22 +1361,71 @@ async function main() {
   }
   logPass(`[Pitfall 8] 首屏视口图片动态加载策略校验通过`);
 
-  // 2.7 [Pitfall 9]: Scroll 监听器零强制回流公理 (读写分离与 rAF)
+  // 2.7 [Pitfall 9]: Scroll 监听器零强制回流公理 (基于 AST 遍历函数体，读写分离与 rAF)
   for (const { file, rel, content } of allSourceEntries) {
-    const scrollListenerRegex = /addEventListener\(['"]scroll['"]\s*,\s*(\([^)]*\)|[a-zA-Z0-9_]+)\s*=>?\s*\{([^}]+)\}/g;
-    let match;
-    while ((match = scrollListenerRegex.exec(content)) !== null) {
-      const handlerBody = match[2];
-      if (
-        (handlerBody.includes('.offsetWidth') ||
-          handlerBody.includes('.getBoundingClientRect') ||
-          handlerBody.includes('.offsetHeight')) &&
-        !handlerBody.includes('requestAnimationFrame')
-      ) {
-        logFail(
-          `${rel}: [Pitfall 9] 在 scroll 监听器中直接同步读取 DOM 几何属性，将引发强制同步重排与滚动卡顿！耗性能计算必须剥离至 resize/load 并挂载 requestAnimationFrame。`
-        );
+    const scriptBlocks: string[] = [];
+    if (file.endsWith('.astro')) {
+      const sRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+      let m;
+      while ((m = sRegex.exec(content)) !== null) {
+        scriptBlocks.push(m[1]);
       }
+    } else {
+      scriptBlocks.push(content);
+    }
+
+    const FORCED_REFLOW_PROPS = new Set([
+      'offsetWidth', 'offsetHeight', 'offsetTop', 'offsetLeft', 'getBoundingClientRect',
+      'clientWidth', 'clientHeight', 'clientTop', 'clientLeft'
+    ]);
+
+    for (const code of scriptBlocks) {
+      try {
+        const sf = ts.createSourceFile('script.ts', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+        function checkScroll(node: ts.Node) {
+          if (
+            ts.isCallExpression(node) &&
+            (node.expression.getText(sf).endsWith('.addEventListener') || node.expression.getText(sf) === 'addEventListener')
+          ) {
+            const args = node.arguments;
+            if (args.length >= 2 && ts.isStringLiteral(args[0]) && args[0].text === 'scroll') {
+              const handler = args[1];
+              let handlerNode: ts.Node | null = null;
+              if (ts.isArrowFunction(handler) || ts.isFunctionExpression(handler)) {
+                handlerNode = handler;
+              } else if (ts.isIdentifier(handler)) {
+                const handlerName = handler.text;
+                function findFn(n: ts.Node) {
+                  if (ts.isFunctionDeclaration(n) && n.name && n.name.text === handlerName) {
+                    handlerNode = n;
+                  }
+                  ts.forEachChild(n, findFn);
+                }
+                findFn(sf);
+              }
+
+              if (handlerNode) {
+                const handlerText = handlerNode.getText(sf);
+                let readsLayout = false;
+                for (const prop of FORCED_REFLOW_PROPS) {
+                  if (handlerText.includes(prop)) {
+                    readsLayout = true;
+                    break;
+                  }
+                }
+                if (readsLayout && !handlerText.includes('requestAnimationFrame') && !handlerText.includes('setTimeout')) {
+                  const line = sf.getLineAndCharacterOfPosition(handlerNode.getStart()).line + 1;
+                  logFail(
+                    `${rel}:${line} [Pitfall 9] 在 scroll 监听器中直接同步读取 DOM 几何属性，将引发强制同步重排与滚动卡顿！耗性能计算必须剥离至 resize/load 并挂载 requestAnimationFrame。`
+                  );
+                }
+              }
+            }
+          }
+          ts.forEachChild(node, checkScroll);
+        }
+        checkScroll(sf);
+      } catch {}
     }
   }
   logPass(`[Pitfall 9] Scroll 监听器读写分离与零强制回流校验通过`);
@@ -1188,25 +1454,49 @@ async function main() {
   }
   logPass(`[Pitfall 13] 产品货架大屏空间几何极限方程与断点公理校验通过`);
 
-  // 2.10 [Principle I.2]: 弹性熔断上限公理 (外部 fetch 刚性超时保护 T <= 6000ms)
+  // 2.10 [Principle I.2]: 弹性熔断上限公理 (基于 AST 遍历每一处外部 fetch 调用，刚性超时保护 T <= 6000ms)
   const apiFiles = getFiles(path.join(SRC_DIR, 'pages', 'api'), ['.ts', '.js']);
   const cdnImageFiles = getFiles(path.join(SRC_DIR, 'pages', 'cdn-image'), ['.ts', '.js']);
   const serverEndpointFiles = [...apiFiles, ...cdnImageFiles];
   for (const file of serverEndpointFiles) {
     const content = fs.readFileSync(file, 'utf-8');
-    const fetchRegex = /fetch\s*\(([^)]+)\)/g;
-    let match;
-    while ((match = fetchRegex.exec(content)) !== null) {
-      const callArgs = match[1];
-      if (!callArgs.includes('signal') && !content.includes('AbortSignal.timeout')) {
-        logFail(
-          `${path.relative(
-            ROOT_DIR,
-            file
-          )}: [Principle I.2] 外部网络 fetch 调用未挂载超时控制信号，网络抖动可能拖死边缘 Worker 引发 504！`
-        );
+    const relFile = path.relative(ROOT_DIR, file);
+    try {
+      const sf = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+      function checkFetch(node: ts.Node) {
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'fetch') {
+          const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+          const optionsArg = node.arguments[1];
+          let hasSignal = false;
+          if (optionsArg) {
+            if (ts.isObjectLiteralExpression(optionsArg)) {
+              for (const prop of optionsArg.properties) {
+                if (
+                  (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop)) &&
+                  prop.name &&
+                  prop.name.getText(sf) === 'signal'
+                ) {
+                  hasSignal = true;
+                  break;
+                }
+              }
+            } else {
+              const text = optionsArg.getText(sf);
+              if (text.includes('signal') || text.includes('timeout') || text.includes('AbortSignal')) {
+                hasSignal = true;
+              }
+            }
+          }
+          if (!hasSignal) {
+            logFail(
+              `${relFile}:${line} [Principle I.2] 外部网络 fetch 调用未挂载超时控制信号 (signal: AbortSignal.timeout(6000))，网络抖动可能拖死边缘 Worker 引发 504！`
+            );
+          }
+        }
+        ts.forEachChild(node, checkFetch);
       }
-    }
+      checkFetch(sf);
+    } catch {}
   }
   logPass(`[Principle I.2] 服务端外部网络调用刚性超时熔断保护校验通过`);
 
@@ -1435,8 +1725,30 @@ async function main() {
         }
       }
 
-      // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测 (复用同一个 AST SourceFile)
-      const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(sf, fm.startLine);
+      // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测 (合并 HTML 模板区嵌入表达式 {...})
+      const templateExpressions: string[] = [];
+      const secondFence = content.indexOf('---', 3);
+      if (secondFence !== -1) {
+        const templatePart = content.slice(secondFence + 3);
+        const cleanedTemplate = templatePart
+          .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+        const exprRegex = /\{([^}{]+)\}/g;
+        let em;
+        while ((em = exprRegex.exec(cleanedTemplate)) !== null) {
+          const expr = em[1].trim();
+          if (expr && !expr.startsWith('/*') && !expr.startsWith('//')) {
+            templateExpressions.push(`(() => { return (${expr}); });`);
+          }
+        }
+      }
+
+      const combinedCode = templateExpressions.length > 0
+        ? `${fm.code}\n${templateExpressions.join('\n')}`
+        : fm.code;
+      const combinedSf = ts.createSourceFile('fm_combined.ts', combinedCode, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+
+      const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(combinedSf, fm.startLine);
       if (!propCheck.valid) {
         for (const v of propCheck.violations) {
           logFail(`${rel}: [Pitfall 23] ${v}`);
