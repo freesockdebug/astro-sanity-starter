@@ -259,12 +259,20 @@ const sectionId = elementId || sectionAnchor || 'collections';
   import { addToQuote } from '@stores/quoteCart';
 
   // Mark already-cached shelf images as loaded so progressive Apple shimmer stops cleanly
-  document.querySelectorAll('.shelf-card-img').forEach((img) => {
-    const htmlImg = img as HTMLImageElement;
-    if (htmlImg.complete && htmlImg.parentElement) {
-      htmlImg.parentElement.classList.add('apple-img-loaded');
-    }
-  });
+  const syncShelfLoadedImages = () => {
+    document.querySelectorAll('.shelf-card-img').forEach((img) => {
+      const htmlImg = img as HTMLImageElement;
+      if (htmlImg.complete && htmlImg.parentElement) {
+        htmlImg.parentElement.classList.add('apple-img-loaded');
+      }
+    });
+  };
+  syncShelfLoadedImages();
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(syncShelfLoadedImages, { timeout: 600 });
+  } else {
+    setTimeout(syncShelfLoadedImages, 120);
+  }
 
   // Desktop horizontal shelf scroll arrows & dynamic centering
   const shelf = document.getElementById('collections-shelf');

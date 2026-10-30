@@ -783,12 +783,20 @@ const productStructuredData: Record<string, any> = {
 
   <script>
       // Mark already-cached gallery images as loaded to stop progressive Apple shimmer
-      document.querySelectorAll('.pdp-gallery-img').forEach((img) => {
-        const htmlImg = img as HTMLImageElement;
-        if (htmlImg.complete && htmlImg.parentElement) {
-          htmlImg.parentElement.classList.add('apple-img-loaded');
-        }
-      });
+      const syncCompletedGalleryImages = () => {
+        document.querySelectorAll('.pdp-gallery-img').forEach((img) => {
+          const htmlImg = img as HTMLImageElement;
+          if (htmlImg.complete && htmlImg.parentElement) {
+            htmlImg.parentElement.classList.add('apple-img-loaded');
+          }
+        });
+      };
+      syncCompletedGalleryImages();
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(syncCompletedGalleryImages, { timeout: 500 });
+      } else {
+        setTimeout(syncCompletedGalleryImages, 120);
+      }
 
       // Instant Apple Product Detail Skeleton reveal when switching between Prev/Next silhouettes
       const pdpSkeleton = document.getElementById('pdp-transition-skeleton');

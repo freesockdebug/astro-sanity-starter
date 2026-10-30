@@ -125,5 +125,20 @@ const resolvedImage = imageSrc
             />
         )}
 
+        <!-- 2. Idle Shimmer Activator: Unlock GPU shimmer animation after first paint -->
+        <script is:inline>
+            (function () {
+                var runIdle = function (cb) {
+                    if ('requestIdleCallback' in window) {
+                        window.requestIdleCallback(cb, { timeout: 600 });
+                    } else {
+                        setTimeout(cb, 120);
+                    }
+                };
+                runIdle(function () {
+                    document.documentElement.classList.add('apple-shimmer-ready');
+                });
+            })();
+        </script>
     </body>
 </html>

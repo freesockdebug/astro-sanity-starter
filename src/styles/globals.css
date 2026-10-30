@@ -267,6 +267,7 @@ html.apple-snap-active {
   background-color: #f5f5f7;
 }
 
+/* 1. 静态伪元素底板：首屏 Paint 阶段默认不开启 animation 与 will-change，零合成层开销 */
 .apple-shimmer-wave,
 .apple-skeleton::after,
 .apple-skeleton-warm::after,
@@ -275,7 +276,6 @@ html.apple-snap-active {
   position: absolute;
   inset: 0;
   transform: translate3d(-100%, 0, 0);
-  will-change: transform;
   backface-visibility: hidden;
   background-image: linear-gradient(
     90deg,
@@ -285,11 +285,20 @@ html.apple-snap-active {
     rgba(255, 255, 255, 0.65) 55%,
     rgba(255, 255, 255, 0) 100%
   );
-  animation: apple-shimmer-wave 1.75s var(--apple-ease-in-out, cubic-bezier(0.42, 0, 0.58, 1)) infinite;
   pointer-events: none;
 }
 
-/* Once an image inside a progressive skeleton wrapper finishes loading, stop the shimmer & release GPU layer */
+/* 2. 仅在 requestIdleCallback 空闲激活后，才提升 GPU 图层并启动扫光动画 */
+.apple-shimmer-wave.is-shimmer-active,
+.apple-shimmer-ready .apple-shimmer-wave:not(.apple-img-loaded),
+.apple-shimmer-ready .apple-skeleton:not(.apple-img-loaded)::after,
+.apple-shimmer-ready .apple-skeleton-warm:not(.apple-img-loaded)::after,
+.apple-shimmer-ready .apple-skeleton-surface:not(.apple-img-loaded)::after {
+  will-change: transform;
+  animation: apple-shimmer-wave 1.75s var(--apple-ease-in-out, cubic-bezier(0.42, 0, 0.58, 1)) infinite;
+}
+
+/* 3. 图片加载完成后立即停止动画并释放 GPU 图层 */
 .apple-img-loaded.apple-shimmer-wave,
 .apple-img-loaded.apple-skeleton::after,
 .apple-img-loaded.apple-skeleton-warm::after,

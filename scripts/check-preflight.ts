@@ -72,6 +72,7 @@ const BROWSER_GLOBALS = new Set([
   'window', 'document', 'console', 'location', 'history', 'navigator', 'screen',
   'localStorage', 'sessionStorage', 'setTimeout', 'clearTimeout', 'setInterval',
   'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
+  'requestIdleCallback', 'cancelIdleCallback',
   'IntersectionObserver', 'MutationObserver', 'ResizeObserver', 'PerformanceObserver',
   'IntersectionObserverEntry', 'ResizeObserverEntry', 'MutationRecord',
   'URL', 'URLSearchParams', 'AbortController', 'AbortSignal', 'Headers', 'Request',

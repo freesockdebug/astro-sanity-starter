@@ -415,6 +415,14 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   const loadTriggerSentinel = document.getElementById('catalog-load-trigger');
   let skeletonTimer = null;
 
+  var runCatalogIdle = function (cb) {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(cb, { timeout: 600 });
+    } else {
+      setTimeout(cb, 120);
+    }
+  };
+
   function hydrateCompletedImages(scope) {
     const root = scope || document;
     const imgs = root.querySelectorAll('.catalog-card-img');
@@ -738,6 +746,9 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     if (displayedCountLabel) displayedCountLabel.textContent = String(displayedCount);
     if (gridContainer) {
       hydrateCompletedImages(gridContainer);
+      runCatalogIdle(function () {
+        hydrateCompletedImages(gridContainer);
+      });
     }
     if (displayedCount >= filteredList.length) {
       if (allLoadedNotice) {
