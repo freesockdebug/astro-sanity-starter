@@ -46,10 +46,17 @@ html:has(.breadcrumbs-bar) {
   --apple-breadcrumbs-h: 36px;
 }
 
-/* Establish Root Layout Query Container on Body / Main */
+/* Global Zero-Obscurity Flow Container */
+.page-top-clearance,
+.catalog-container {
+  padding-top: var(--apple-page-top);
+}
+
+html {
+  scroll-padding-top: var(--apple-header-offset);
+}
+
 body {
-  container-type: inline-size;
-  container-name: root-canvas;
   font-family: var(--font-sans);
   background-color: var(--apple-bg-white);
   color: var(--apple-text-primary);
@@ -57,28 +64,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   letter-spacing: -0.015em;
-}
-
-html {
-  scroll-padding-top: var(--apple-header-offset);
-}
-
-/* Global Zero-Obscurity Flow Container */
-.page-top-clearance,
-.catalog-container {
-  padding-top: var(--apple-page-top);
-}
-
-/* Container-Scoped Spacing Evaluation (cqi resolves dynamically against root-canvas) */
-@container root-canvas (min-width: 0px) {
-  .apple-rail-header,
-  .apple-rail-footer,
-  .apple-rail-narrow,
-  .apple-rail-bento,
-  .apple-rail-showcase,
-  .apple-rail-wide {
-    --rail-gutter: clamp(1rem, 0.25rem + 2.25cqi, 3.5rem);
-  }
 }
 
 /* ==========================================================================
@@ -95,12 +80,9 @@ html {
   margin-inline: auto;
 }
 
-/* Make Bento & Section Wrappers Independent Inline Containers for Child Components */
 .apple-rail-bento,
 .apple-rail-showcase,
 .apple-rail-wide {
-  container-type: inline-size;
-  container-name: bento-rail;
   width: min(calc(100% - 2 * var(--rail-gutter)), var(--rail-max-bento));
   margin-inline: auto;
 }
@@ -207,15 +189,15 @@ html {
   gap: var(--space-bento-gap);
 }
 
-/* Container Query for 7-Column Shelf (Replaces @media (min-width: 1760px)) */
-@container root-canvas (min-width: 1760px) {
+/* 超大外接显示器产品货架 7 列标准 (>= 1760px) */
+@media (min-width: 1760px) {
   #products-grid {
     grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   }
 }
 
-/* Container Query for Stage Nav Dock (Replaces @media (1024px <= width <= 1366px)) */
-@container root-canvas (min-width: 1024px) and (max-width: 1366px) {
+/* 中等桌面与矮视口右侧导航胶囊防御 (1024px ~ 1366px) */
+@media (min-width: 1024px) and (max-width: 1366px) {
   .apple-stage-nav-dock {
     right: 0.5rem;
   }
@@ -228,8 +210,8 @@ html {
   }
 }
 
-/* Container Query for Footer Accordion (Replaces @media (min-width: 768px)) */
-@container root-canvas (min-width: 768px) {
+/* Apple Footer 桌面端手风琴自展开 */
+@media (min-width: 768px) {
   details.apple-footer-col summary {
     pointer-events: none;
   }
