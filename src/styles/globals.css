@@ -37,6 +37,9 @@
   --space-section-pt: clamp(0.75rem, min(4vw, 6svh - 1.75rem), 4.5rem);
   --space-section-pb: clamp(0.5rem, min(2.5vw, 3.5svh - 1rem), 2.5rem);
   --space-bento-gap: clamp(0.5rem, min(1.25vw, 1.8svh), 1.25rem);
+
+  /* 6. Apple HIG / Core Animation Standard Ease-In-Out Curve */
+  --apple-ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
 }
 
 html:has(.breadcrumbs-bar) {
@@ -258,10 +261,10 @@ html.apple-snap-active {
    ========================================================================== */
 @keyframes apple-shimmer-wave {
   0% {
-    transform: translateX(-100%);
+    transform: translate3d(-100%, 0, 0);
   }
   100% {
-    transform: translateX(100%);
+    transform: translate3d(100%, 0, 0);
   }
 }
 
@@ -282,13 +285,16 @@ html.apple-snap-active {
   background-color: #f5f5f7;
 }
 
+.apple-shimmer-wave,
 .apple-skeleton::after,
 .apple-skeleton-warm::after,
 .apple-skeleton-surface::after {
   content: "";
   position: absolute;
   inset: 0;
-  transform: translateX(-100%);
+  transform: translate3d(-100%, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
   background-image: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0) 0%,
@@ -297,22 +303,27 @@ html.apple-snap-active {
     rgba(255, 255, 255, 0.65) 55%,
     rgba(255, 255, 255, 0) 100%
   );
-  animation: apple-shimmer-wave 1.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: apple-shimmer-wave 1.75s var(--apple-ease-in-out, cubic-bezier(0.42, 0, 0.58, 1)) infinite;
   pointer-events: none;
 }
 
-/* Once an image inside a progressive skeleton wrapper finishes loading, stop the shimmer */
+/* Once an image inside a progressive skeleton wrapper finishes loading, stop the shimmer & release GPU layer */
+.apple-img-loaded.apple-shimmer-wave,
 .apple-img-loaded.apple-skeleton::after,
+.apple-img-loaded.apple-skeleton-warm::after,
 .apple-img-loaded.apple-skeleton-surface::after {
   animation: none;
+  will-change: auto;
   display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .apple-shimmer-wave,
   .apple-skeleton::after,
   .apple-skeleton-warm::after,
   .apple-skeleton-surface::after {
     animation: none;
+    will-change: auto;
     background-image: none;
   }
 }
