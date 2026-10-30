@@ -1894,8 +1894,8 @@ async function main() {
   const globalsCssFile = path.join(SRC_DIR, 'styles', 'globals.css');
   if (fs.existsSync(globalsCssFile)) {
     const content = fs.readFileSync(globalsCssFile, 'utf-8');
-    if (!content.includes('.specs-section') || !content.includes('max-height: 620px')) {
-      logFail(`src/styles/globals.css: [Pitfall 17] 全局样式未将 .specs-section 纳入桌面矮视口阶梯自适应规则！`);
+    if (!content.includes('.specs-section') || (!content.includes('max-height: 620px') && !content.includes('--space-section-pt'))) {
+      logFail(`src/styles/globals.css: [Pitfall 17] 全局样式未将 .specs-section 纳入矮视口自适应或连续流体呼吸系统！`);
     }
   }
   logPass(`[Pitfall 17] Bento 展台胶囊防溢出与矮视口多维自适应校验通过`);
