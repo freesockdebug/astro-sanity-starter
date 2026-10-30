@@ -27,31 +27,29 @@ const specCards = [0, 1, 2, 3, 4, 5];
     <!-- Center 12-Column Split Grid Skeleton -->
     <div class="apple-rail-bento">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
-        <!-- LEFT 7 COLS: Vertical Thumbnail Rail + Main Gallery Viewport -->
-        <div class="w-full min-w-0 lg:col-span-7 flex flex-col justify-start">
-          <div class="flex flex-col lg:flex-row gap-2.5 sm:gap-3 lg:gap-3.5 items-start">
-            <!-- Thumbnail Strip -->
-            <div class="order-2 lg:order-1 flex flex-row lg:flex-col gap-2 shrink-0">
-              {thumbItems.map((idx) => (
-                <div
-                  class:list={[
-                    'shrink-0 w-14 h-14 sm:w-15 sm:h-15 lg:w-[68px] lg:h-[68px] xl:w-[74px] xl:h-[74px] rounded-xl apple-skeleton',
-                    idx === 0 ? 'ring-2 ring-black/15' : 'opacity-75',
-                  ]}
-                ></div>
-              ))}
+        <!-- LEFT 7 COLS: Main Gallery Viewport + Thumbnail Rail Below -->
+        <div class="w-full min-w-0 lg:col-span-7 flex flex-col justify-start space-y-2.5 sm:space-y-3">
+          <!-- Main Gallery Stage -->
+          <div class="relative w-full max-w-full min-w-0 aspect-square max-h-[min(72vh,700px)] rounded-2xl overflow-hidden apple-skeleton border border-black/5">
+            <!-- Top SKU & MOQ Pill Placeholders -->
+            <div class="absolute top-3 left-3 flex items-center gap-2">
+              <div class="h-5 w-24 rounded-full bg-white/80"></div>
+              <div class="h-5 w-20 rounded-full bg-black/15"></div>
             </div>
+            <!-- Top-Right Counter Pill Placeholder -->
+            <div class="absolute top-3 right-3 h-5 w-11 rounded-full bg-black/15"></div>
+          </div>
 
-            <!-- Main Gallery Stage -->
-            <div class="order-1 lg:order-2 relative w-full flex-1 aspect-square sm:aspect-[4/3] lg:aspect-[4/3] rounded-2xl overflow-hidden apple-skeleton border border-black/5">
-              <!-- Top SKU & MOQ Pill Placeholders -->
-              <div class="absolute top-3 left-3 flex items-center gap-2">
-                <div class="h-5 w-24 rounded-full bg-white/80"></div>
-                <div class="h-5 w-20 rounded-full bg-black/15"></div>
-              </div>
-              <!-- Top-Right Counter Pill Placeholder -->
-              <div class="absolute top-3 right-3 h-5 w-11 rounded-full bg-black/15"></div>
-            </div>
+          <!-- Thumbnail Strip (Positioned below the main image across all viewports) -->
+          <div class="flex flex-row gap-2 sm:gap-2.5 overflow-hidden shrink-0 w-full max-w-full pb-1 justify-start">
+            {thumbItems.map((idx) => (
+              <div
+                class:list={[
+                  'shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-[68px] lg:h-[68px] xl:w-[72px] xl:h-[72px] rounded-xl apple-skeleton',
+                  idx === 0 ? 'ring-2 ring-black/15' : 'opacity-75',
+                ]}
+              ></div>
+            ))}
           </div>
         </div>
 
