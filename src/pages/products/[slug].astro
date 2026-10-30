@@ -779,6 +779,12 @@ const productStructuredData: Record<string, any> = {
   </div>
 
   <script>
+      import { useIntersectionShimmer } from '@utils/useIntersectionShimmer';
+
+      const galleryShimmer = useIntersectionShimmer('.product-gallery-col .apple-skeleton-surface', {
+        rootMargin: '160px 160px',
+      });
+
       // Mark already-cached gallery images as loaded to stop progressive Apple shimmer
       const syncCompletedGalleryImages = () => {
         document.querySelectorAll('.pdp-gallery-img').forEach((img) => {
@@ -786,9 +792,7 @@ const productStructuredData: Record<string, any> = {
           if (htmlImg.complete && htmlImg.parentElement) {
             htmlImg.parentElement.classList.add('apple-img-loaded');
             htmlImg.parentElement.classList.remove('is-shimmer-active');
-            if (typeof window !== 'undefined' && (window as any).__unobserveAppleShimmer) {
-              (window as any).__unobserveAppleShimmer(htmlImg.parentElement);
-            }
+            galleryShimmer.unobserve(htmlImg.parentElement);
           }
         });
       };

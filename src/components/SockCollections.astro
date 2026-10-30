@@ -257,6 +257,11 @@ const sectionId = elementId || sectionAnchor || 'collections';
 
 <script>
   import { addToQuote } from '@stores/quoteCart';
+  import { useIntersectionShimmer } from '@utils/useIntersectionShimmer';
+
+  const shelfShimmer = useIntersectionShimmer('#collections-shelf .apple-skeleton-surface', {
+    rootMargin: '160px 160px',
+  });
 
   // Mark already-cached shelf images as loaded so progressive Apple shimmer stops cleanly
   const syncShelfLoadedImages = () => {
@@ -265,9 +270,7 @@ const sectionId = elementId || sectionAnchor || 'collections';
       if (htmlImg.complete && htmlImg.parentElement) {
         htmlImg.parentElement.classList.add('apple-img-loaded');
         htmlImg.parentElement.classList.remove('is-shimmer-active');
-        if (typeof window !== 'undefined' && (window as any).__unobserveAppleShimmer) {
-          (window as any).__unobserveAppleShimmer(htmlImg.parentElement);
-        }
+        shelfShimmer.unobserve(htmlImg.parentElement);
       }
     });
   };
