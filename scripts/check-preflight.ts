@@ -484,10 +484,10 @@ class InvariantEngine {
   /**
    * 1.2 提取 Astro Frontmatter 代码及起始行号
    */
-  public static extractFrontmatter(content: string): { code: string; startLine: number } | null {
+  public static extractFrontmatter(content: string): { code: string; startLine: number; endOffset: number } | null {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!match) return null;
-    return { code: match[1], startLine: 2 };
+    return { code: match[1], startLine: 2, endOffset: match[0].length };
   }
 
   /**
@@ -513,24 +513,30 @@ class InvariantEngine {
 
     const declared = new Map<string, number>();
 
-    function checkAndAdd(name: string, line: number) {
+    function checkAndAdd(name: string, line: number, scopeDesc: string = 'Frontmatter') {
       if (declared.has(name)) {
         violations.push(
-          `检测到 Frontmatter 重复声明: '${name}'！第 ${declared.get(name)} 行与第 ${line} 行冲突，将导致 [PARSE_ERROR] Identifier '${name}' has already been declared 编译报错！`
+          `检测到 ${scopeDesc} 重复声明: '${name}'！第 ${declared.get(name)} 行与第 ${line} 行冲突，将导致 [PARSE_ERROR] Identifier '${name}' has already been declared 编译报错！`
         );
       } else {
         declared.set(name, line);
       }
     }
 
-    function collectBindingNames(binding: ts.Node) {
+    function collectBindingNames(binding: ts.Node, targetMap: Map<string, number>, scopeDesc: string) {
       if (ts.isIdentifier(binding)) {
         const line = sf.getLineAndCharacterOfPosition(binding.getStart()).line + startLine;
-        checkAndAdd(binding.text, line);
+        if (targetMap.has(binding.text)) {
+          violations.push(
+            `检测到 ${scopeDesc} 重复声明: '${binding.text}'！第 ${targetMap.get(binding.text)} 行与第 ${line} 行冲突，将导致 [PARSE_ERROR] Identifier '${binding.text}' has already been declared 编译报错！`
+          );
+        } else {
+          targetMap.set(binding.text, line);
+        }
       } else if (ts.isObjectBindingPattern(binding) || ts.isArrayBindingPattern(binding)) {
         for (const el of binding.elements) {
           if (ts.isBindingElement(el)) {
-            collectBindingNames(el.name);
+            collectBindingNames(el.name, targetMap, scopeDesc);
           }
         }
       }
@@ -539,32 +545,67 @@ class InvariantEngine {
     for (const stmt of sf.statements) {
       if (ts.isVariableStatement(stmt)) {
         for (const decl of stmt.declarationList.declarations) {
-          collectBindingNames(decl.name);
+          collectBindingNames(decl.name, declared, 'Frontmatter');
         }
       } else if (ts.isFunctionDeclaration(stmt) && stmt.name) {
         const line = sf.getLineAndCharacterOfPosition(stmt.name.getStart()).line + startLine;
-        checkAndAdd(stmt.name.text, line);
+        checkAndAdd(stmt.name.text, line, 'Frontmatter');
       } else if (ts.isClassDeclaration(stmt) && stmt.name) {
         const line = sf.getLineAndCharacterOfPosition(stmt.name.getStart()).line + startLine;
-        checkAndAdd(stmt.name.text, line);
+        checkAndAdd(stmt.name.text, line, 'Frontmatter');
       } else if (ts.isImportDeclaration(stmt) && stmt.importClause) {
         if (stmt.importClause.name) {
           const line = sf.getLineAndCharacterOfPosition(stmt.importClause.name.getStart()).line + startLine;
-          checkAndAdd(stmt.importClause.name.text, line);
+          checkAndAdd(stmt.importClause.name.text, line, 'Frontmatter');
         }
         if (stmt.importClause.namedBindings) {
           if (ts.isNamedImports(stmt.importClause.namedBindings)) {
             for (const el of stmt.importClause.namedBindings.elements) {
               const line = sf.getLineAndCharacterOfPosition(el.name.getStart()).line + startLine;
-              checkAndAdd(el.name.text, line);
+              checkAndAdd(el.name.text, line, 'Frontmatter');
             }
           } else if (ts.isNamespaceImport(stmt.importClause.namedBindings)) {
             const line = sf.getLineAndCharacterOfPosition(stmt.importClause.namedBindings.name.getStart()).line + startLine;
-            checkAndAdd(stmt.importClause.namedBindings.name.text, line);
+            checkAndAdd(stmt.importClause.namedBindings.name.text, line, 'Frontmatter');
           }
         }
       }
     }
+
+    // 块级作用域重复声明检测 (扫描 if/for/while/try/function 等块级内部的重名声明)
+    function visitBlocks(node: ts.Node) {
+      if (ts.isBlock(node)) {
+        const blockDeclared = new Map<string, number>();
+        for (const s of node.statements) {
+          if (ts.isVariableStatement(s)) {
+            for (const decl of s.declarationList.declarations) {
+              collectBindingNames(decl.name, blockDeclared, 'Frontmatter 块级作用域');
+            }
+          } else if (ts.isFunctionDeclaration(s) && s.name) {
+            const line = sf.getLineAndCharacterOfPosition(s.name.getStart()).line + startLine;
+            if (blockDeclared.has(s.name.text)) {
+              violations.push(
+                `检测到 Frontmatter 块级作用域 重复声明: '${s.name.text}'！第 ${blockDeclared.get(s.name.text)} 行与第 ${line} 行冲突，将导致 [PARSE_ERROR] Identifier '${s.name.text}' has already been declared 编译报错！`
+              );
+            } else {
+              blockDeclared.set(s.name.text, line);
+            }
+          } else if (ts.isClassDeclaration(s) && s.name) {
+            const line = sf.getLineAndCharacterOfPosition(s.name.getStart()).line + startLine;
+            if (blockDeclared.has(s.name.text)) {
+              violations.push(
+                `检测到 Frontmatter 块级作用域 重复声明: '${s.name.text}'！第 ${blockDeclared.get(s.name.text)} 行与第 ${line} 行冲突，将导致 [PARSE_ERROR] Identifier '${s.name.text}' has already been declared 编译报错！`
+              );
+            } else {
+              blockDeclared.set(s.name.text, line);
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visitBlocks);
+    }
+    visitBlocks(sf);
+
     return { valid: violations.length === 0, violations, topLevelVars: new Set(declared.keys()) };
   }
 
@@ -602,46 +643,57 @@ class InvariantEngine {
       }
     }
 
-    // 追踪一阶未解包赋值与 || / ?? 表达式 (防漏追踪 safe = prop ?? '')
-    for (const stmt of sf.statements) {
-      if (ts.isVariableStatement(stmt)) {
-        for (const decl of stmt.declarationList.declarations) {
-          if (decl.initializer && ts.isIdentifier(decl.name)) {
-            if (
-              ts.isBinaryExpression(decl.initializer) &&
-              (decl.initializer.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
-               decl.initializer.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
-            ) {
-              const receivers = unwrapReceivers(decl.initializer.left);
-              for (const r of receivers) {
-                if (ts.isIdentifier(r) && rawProps.has(r.text)) {
-                  rawAliases.add(decl.name.text);
-                }
-              }
-            } else if (ts.isIdentifier(decl.initializer) && rawProps.has(decl.initializer.text)) {
-              rawAliases.add(decl.name.text);
-            }
-          }
-        }
-      }
-    }
-
-    function unwrapReceivers(node: ts.Node): ts.Node[] {
+    function unwrapReceivers(node: ts.Node, currentSf: ts.SourceFile = sf): ts.Node[] {
       let curr = node;
       while (ts.isParenthesizedExpression(curr)) {
         curr = curr.expression;
       }
       if (ts.isConditionalExpression(curr)) {
-        return [...unwrapReceivers(curr.whenTrue), ...unwrapReceivers(curr.whenFalse)];
+        const condText = curr.condition.getText(currentSf);
+        const trueReceivers = unwrapReceivers(curr.whenTrue, currentSf).filter((r) => {
+          if (ts.isIdentifier(r)) {
+            return !condText.includes(`typeof ${r.text} === 'string'`) &&
+                   !condText.includes(`typeof ${r.text} === "string"`);
+          }
+          return true;
+        });
+        const falseReceivers = unwrapReceivers(curr.whenFalse, currentSf).filter((r) => {
+          if (ts.isIdentifier(r)) {
+            return !condText.includes(`typeof ${r.text} !== 'string'`) &&
+                   !condText.includes(`typeof ${r.text} !== "string"`);
+          }
+          return true;
+        });
+        return [...trueReceivers, ...falseReceivers];
       }
       if (
         ts.isBinaryExpression(curr) &&
         (curr.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
          curr.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
       ) {
-        return [...unwrapReceivers(curr.left), ...unwrapReceivers(curr.right)];
+        return [...unwrapReceivers(curr.left, currentSf), ...unwrapReceivers(curr.right, currentSf)];
       }
       return [curr];
+    }
+
+    // 追踪未解包别名与 || / ?? / 三元 / 嵌套别名传递 (如 safe = prop ?? '', b = safe)
+    let aliasCountBefore = -1;
+    while (rawAliases.size > aliasCountBefore) {
+      aliasCountBefore = rawAliases.size;
+      for (const stmt of sf.statements) {
+        if (ts.isVariableStatement(stmt)) {
+          for (const decl of stmt.declarationList.declarations) {
+            if (decl.initializer && ts.isIdentifier(decl.name)) {
+              const receivers = unwrapReceivers(decl.initializer);
+              for (const r of receivers) {
+                if (ts.isIdentifier(r) && (rawProps.has(r.text) || rawAliases.has(r.text))) {
+                  rawAliases.add(decl.name.text);
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
     const PROPS_STRING_METHODS = new Set([
@@ -658,7 +710,7 @@ class InvariantEngine {
       if (ts.isPropertyAccessExpression(expr)) {
         const method = expr.name.text;
         if (PROPS_STRING_METHODS.has(method)) {
-          const receivers = unwrapReceivers(expr.expression);
+          const receivers = unwrapReceivers(expr.expression, currentSf);
           for (const receiver of receivers) {
             let rawPropName: string | null = null;
             if (ts.isIdentifier(receiver) && (rawProps.has(receiver.text) || rawAliases.has(receiver.text))) {
@@ -744,8 +796,7 @@ class InvariantEngine {
                       const cText = s.expression.getText(currentSf);
                       if (
                         (cText.includes(`typeof ${rawPropName} !== 'string'`) ||
-                         cText.includes(`typeof ${rawPropName} !== "string"`) ||
-                         cText.includes(`!${rawPropName}`)) &&
+                         cText.includes(`typeof ${rawPropName} !== "string"`)) &&
                         (s.thenStatement.getText(currentSf).includes('return') || s.thenStatement.getText(currentSf).includes('throw'))
                       ) {
                         isGuarded = true;
@@ -776,14 +827,15 @@ class InvariantEngine {
     }
     visit(sf);
 
-    // 独立检测模板插值表达式 (保持精确的源文件模板行号)
+    // 独立检测模板插值表达式 (TSX 解析 JSX 语法，保持精确的源文件模板行号)
     if (templateExpressions && templateExpressions.length > 0) {
       for (const tmpl of templateExpressions) {
         try {
-          const exprSf = ts.createSourceFile('expr.ts', `(() => (${tmpl.expr}))`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+          const exprSf = ts.createSourceFile('expr.tsx', `(() => (${tmpl.expr}))`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
           function visitExpr(n: ts.Node) {
             if (ts.isCallExpression(n)) {
-              checkCall(n, exprSf, tmpl.line);
+              const relLine = exprSf.getLineAndCharacterOfPosition(n.getStart(exprSf)).line;
+              checkCall(n, exprSf, tmpl.line + relLine);
             }
             ts.forEachChild(n, visitExpr);
           }
@@ -952,6 +1004,13 @@ class InvariantEngine {
       violations.push("探针 2B (Frontmatter 解构赋值与后续声明冲突) 自检失败：未能捕获解构变量同名冲突！");
     }
 
+    // 故障注入 2C: Frontmatter 块级作用域重复声明
+    const mockFmBlockDuplicate = "if (true) {\n  const blockTrapVar = 1;\n  const blockTrapVar = 2;\n}";
+    const res2C = InvariantEngine.checkFrontmatterDuplicateDeclarations(mockFmBlockDuplicate, 1);
+    if (res2C.valid || !res2C.violations.some((v) => v.includes("blockTrapVar") && v.includes("第 2 行与第 3 行"))) {
+      violations.push("探针 2C (Frontmatter 块级作用域重复声明) 自检失败：未能捕获块级同名重复声明！");
+    }
+
     // 故障注入 3: Props 原型方法未加守卫 (含直接调用与复合逻辑或/括号表达式)
     const mockFmUnguarded = "const { rawPropTrap } = Astro.props;\nconst res = rawPropTrap.replace(/\\D/g, '');";
     const res3A = InvariantEngine.checkPropsStringPrototypeGuards(mockFmUnguarded, 1);
@@ -977,6 +1036,37 @@ class InvariantEngine {
     const res3D = InvariantEngine.checkPropsStringPrototypeGuards(mockFmTernaryUnguarded, 1);
     if (res3D.valid || !res3D.violations.some((v) => v.includes("rawPropTrap") && v.includes(".trim()"))) {
       violations.push("探针 3D (三元表达式 Props 原型方法穿透拦截) 自检失败：未能穿透三元分支拦截裸调用的原始 Prop！");
+    }
+
+    // 故障注入 3E: 多阶别名与右操作数别名拦截
+    const mockFmMultiAlias = "const { rawPropTrap } = Astro.props;\nconst a = '' || rawPropTrap;\nconst b = cond ? a : '';\nconst res = b.trim();";
+    const res3E = InvariantEngine.checkPropsStringPrototypeGuards(mockFmMultiAlias, 1);
+    if (res3E.valid || !res3E.violations.some((v) => v.includes("b") && v.includes(".trim()"))) {
+      violations.push("探针 3E (多阶与右操作数别名传递拦截) 自检失败：未能追踪多阶别名裸调用！");
+    }
+
+    // 故障注入 3F: 伪守卫 if (!prop) return 漏检防漏（CMS 宽对象穿透拦截）
+    const mockFmFalsyGuardTrap = "const { rawPropTrap } = Astro.props;\nif (!rawPropTrap) return;\nrawPropTrap.trim();";
+    const res3F = InvariantEngine.checkPropsStringPrototypeGuards(mockFmFalsyGuardTrap, 1);
+    if (res3F.valid || !res3F.violations.some((v) => v.includes("rawPropTrap") && v.includes(".trim()"))) {
+      violations.push("探针 3F (CMS 宽对象伪守卫防漏) 自检失败：未能拦截 !prop 假守卫后的裸调用！");
+    }
+
+    // 故障注入 3G: 模板 TSX/JSX 语法树解析与多行相对行号精准映射
+    const mockTmplExprs = [
+      {
+        expr: "isReady && (\n  <div data-slug={rawPropTrap.trim()}>\n    {rawPropTrap.toLowerCase()}\n  </div>\n)",
+        line: 10,
+      },
+    ];
+    const mockFmTmpl = "const { rawPropTrap } = Astro.props;";
+    const res3G = InvariantEngine.checkPropsStringPrototypeGuards(mockFmTmpl, 1, mockTmplExprs);
+    if (
+      res3G.valid ||
+      !res3G.violations.some((v) => v.includes("第 11 行") && v.includes(".trim()")) ||
+      !res3G.violations.some((v) => v.includes("第 12 行") && v.includes(".toLowerCase()"))
+    ) {
+      violations.push("探针 3G (模板 TSX/JSX 语法树解析与多行相对行号) 自检失败：未能通过 TSX 正确解析 JSX 节点内部方法调用及精准行号！");
     }
 
     // 故障注入 4: Schema 多语言字段差集真实函数调用
@@ -1330,11 +1420,20 @@ async function main() {
         }
       );
       if (parsedCmd) {
-        const program = ts.createProgram({
+        const cacheDir = path.join(ROOT_DIR, 'node_modules/.cache');
+        if (!fs.existsSync(cacheDir)) {
+          fs.mkdirSync(cacheDir, { recursive: true });
+        }
+        const tsBuildInfoFile = path.join(cacheDir, 'tsbuildinfo');
+        const program = ts.createIncrementalProgram({
           rootNames: parsedCmd.fileNames,
-          options: parsedCmd.options,
+          options: {
+            ...parsedCmd.options,
+            incremental: true,
+            tsBuildInfoFile,
+          },
         });
-        const diagnostics = ts.getPreEmitDiagnostics(program);
+        const diagnostics = ts.getPreEmitDiagnostics(program.getProgram());
         if (diagnostics.length > 0) {
           for (const diag of diagnostics) {
             const file = diag.file ? path.relative(ROOT_DIR, diag.file.fileName) : 'unknown';
@@ -1343,6 +1442,9 @@ async function main() {
             logFail(`${file}:${line} - TS${diag.code}: ${msg}`);
           }
         } else {
+          try {
+            program.emitBuildInfo();
+          } catch {}
           logPass(`[TS In-Process Diagnostics] TypeScript 全量类型检查通过 (0 TS Errors)`);
         }
       }
@@ -1938,11 +2040,9 @@ async function main() {
 
       // 2.22 [Pitfall 23]: 组件原始 Props 字符串原型方法安全守卫检测 (精确行号模板表达式提取)
       const templateExpressions: { expr: string; line: number }[] = [];
-      const secondFence = content.indexOf('---', 3);
-      if (secondFence !== -1) {
-        const templatePart = content.slice(secondFence + 3);
-        const templateBaseOffset = secondFence + 3;
-        let p = 0;
+      const templatePart = content.slice(fm.endOffset);
+      const templateBaseOffset = fm.endOffset;
+      let p = 0;
         while (p < templatePart.length) {
           if (templatePart.startsWith('<!--', p)) {
             const end = templatePart.indexOf('-->', p + 4);
@@ -1991,7 +2091,6 @@ async function main() {
           }
           p++;
         }
-      }
 
       const propCheck = InvariantEngine.checkPropsStringPrototypeGuards(sf, fm.startLine, templateExpressions);
       if (!propCheck.valid) {
