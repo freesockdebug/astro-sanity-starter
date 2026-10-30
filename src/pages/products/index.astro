@@ -100,20 +100,20 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   <div class="catalog-container min-h-screen bg-white text-[#1d1d1f] pb-6 sm:pb-8">
     
     <!-- 1. Catalog Hero Header (Apple Rail Narrow) -->
-    <section class="catalog-hero-header apple-rail-narrow text-center mb-6 sm:mb-9 space-y-1.5 sm:space-y-2.5">
-      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-semibold text-[#52525b] uppercase tracking-wider">
+    <section class="catalog-hero-header apple-rail-narrow text-center mb-3 sm:mb-4 space-y-1">
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#f5f5f7] border border-black/5 text-[10px] font-semibold text-[#52525b] uppercase tracking-wider">
         <span>{getLocalizedValue(catalogSettings?.badgeText, currentLang, t('catalog.badge'))}</span>
       </div>
       <h1 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
         {getLocalizedValue(catalogSettings?.title, currentLang, t('catalog.title'))}
       </h1>
-      <p class="text-xs sm:text-sm text-[#52525b] max-w-xl mx-auto font-normal leading-relaxed">
+      <p class="text-xs sm:text-[13px] text-[#52525b] max-w-xl mx-auto font-normal leading-relaxed">
         {getLocalizedValue(catalogSettings?.subtitle, currentLang, t('catalog.subtitle'))}
       </p>
     </section>
 
     <!-- 2. Sticky Control Toolbar: Search & Category Filter Rail (Dynamic offset to match fixed header stack) -->
-    <div class="catalog-sticky-toolbar sticky top-[var(--apple-header-offset)] z-40 bg-white/95 backdrop-blur-md border-y border-black/5 py-2.5 mb-6 transition-shadow shadow-xs">
+    <div class="catalog-sticky-toolbar sticky top-[var(--apple-header-offset)] z-40 bg-white/95 backdrop-blur-md border-y border-black/5 py-1.5 sm:py-2 mb-3 sm:mb-4 transition-shadow shadow-xs">
       <div class="apple-rail-wide flex flex-col md:flex-row md:items-center justify-between gap-3">
         
         <!-- Category Filter Tabs (Horizontal Swipe on Mobile) -->
@@ -205,10 +205,10 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       -->
       <div
         id="products-grid"
-        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5 min-h-[50vh]"
+        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-2.5 lg:gap-x-3 lg:gap-y-3.5 min-h-[50vh]"
       >
         {initialProducts.map((item: any, idx: number) => (
-          <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between" data-product-id={item.id}>
+          <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-1.5 sm:p-2 flex flex-col justify-between" data-product-id={item.id}>
             <div class="flex-1 min-h-0 flex flex-col">
               <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with Apple Progressive Skeleton Shimmer -->
               <a
@@ -234,7 +234,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               </a>
 
               <!-- 2. Taobao Colorway / Mini Swatch Row -->
-              <div class="shrink-0 flex items-center justify-between pt-2 pb-1 px-0.5">
+              <div class="shrink-0 flex items-center justify-between pt-1.5 pb-0.5 px-0.5">
                 <div class="flex items-center gap-1">
                   {(item.colors || []).slice(0, 4).map((hex: string) => (
                     <span class="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:scale-125 transition-transform" title={`Color: ${hex}`}>
@@ -246,7 +246,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               </div>
 
               <!-- 3. Title: Relative em-metric 2-line clamp ensuring resilience to user font-scaling -->
-              <div class="shrink-0 min-h-[2.8em] mt-0.5 px-0.5">
+              <div class="shrink-0 min-h-[2.5em] mt-0.5 px-0.5">
                 <a href={getLocalizedPath(`/products/${item.slug}`, currentLang)} class="block">
                   <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug" title={getLocalizedValue(item.title, currentLang)}>
                     {getLocalizedValue(item.shortTitle || item.title, currentLang)}
@@ -255,11 +255,11 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               </div>
 
               <!-- 4. Composition subtitle -->
-              <p class="text-[10px] text-[#52525b] px-0.5 mt-1 line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
+              <p class="text-[10px] text-[#52525b] px-0.5 mt-0.5 line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
             </div>
 
             <!-- 5. Wholesale Price & Action Bottom Row -->
-            <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
+            <div class="shrink-0 mt-2 pt-1.5 border-t border-black/5 flex items-center justify-between px-0.5">
               <div class="flex flex-col">
                 <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
                   <span class="text-[10px] font-mono">{item.currencySymbol || item.currency || '$'}</span>
@@ -289,7 +289,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
       <!-- Client-side Clone Template (Single Source of Truth for product cards) -->
       <template id="catalog-card-tpl">
-        <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-2 sm:p-2.5 flex flex-col justify-between">
+        <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-1.5 sm:p-2 flex flex-col justify-between">
           <div class="flex-1 min-h-0 flex flex-col">
             <a
               href=""
@@ -310,21 +310,21 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               </div>
             </a>
 
-            <div class="shrink-0 flex items-center justify-between pt-2 pb-1 px-0.5">
+            <div class="shrink-0 flex items-center justify-between pt-1.5 pb-0.5 px-0.5">
               <div class="card-colors flex items-center gap-1"></div>
               <span class="card-lead text-[10px] text-[#52525b] font-mono">15-20d</span>
             </div>
 
-            <div class="shrink-0 min-h-[2.8em] mt-0.5 px-0.5">
+            <div class="shrink-0 min-h-[2.5em] mt-0.5 px-0.5">
               <a href="" class="card-link-title block">
                 <h3 class="card-title text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug"></h3>
               </a>
             </div>
 
-            <p class="card-comp text-[10px] text-[#52525b] px-0.5 mt-1 line-clamp-1 truncate"></p>
+            <p class="card-comp text-[10px] text-[#52525b] px-0.5 mt-0.5 line-clamp-1 truncate"></p>
           </div>
 
-          <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
+          <div class="shrink-0 mt-2 pt-1.5 border-t border-black/5 flex items-center justify-between px-0.5">
             <div class="flex flex-col">
               <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
                 <span class="card-curr text-[10px] font-mono">$</span>

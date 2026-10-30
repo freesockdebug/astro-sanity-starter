@@ -355,17 +355,17 @@ const productStructuredData: Record<string, any> = {
   <AppleProductDetailSkeleton id="pdp-transition-skeleton" class="hidden" />
 
   <div id="pdp-live-content">
-  <section id="product-overview" class="product-hero-overview w-full pt-3 pb-6 sm:pt-4 sm:pb-8 lg:pt-4 lg:pb-8 border-b border-black/5 bg-white overflow-visible scroll-mt-[var(--apple-header-offset)] flex flex-col justify-start">
+  <section id="product-overview" class="product-hero-overview w-full pt-3 pb-6 sm:pt-4 sm:pb-8 lg:py-0 lg:h-[calc(100svh-var(--apple-header-offset))] lg:max-h-[920px] lg:min-h-[580px] border-b border-black/5 bg-white overflow-visible scroll-mt-[var(--apple-header-offset)] flex flex-col justify-center">
 
         <!-- Center: 2-Column Showcase Grid -->
         <div class="apple-rail-bento w-full">
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 xl:gap-7 items-center">
             
             <!-- LEFT: Apple-Style Multi-Image Carousel / Gallery (7 Cols for Balanced Ratio) -->
-            <div class="product-gallery-col w-full min-w-0 lg:col-span-7 flex flex-col justify-start space-y-2.5 sm:space-y-3">
+            <div class="product-gallery-col w-full min-w-0 lg:col-span-7 flex flex-col justify-center space-y-2 sm:space-y-2.5">
               
               <!-- Main Viewport Box with Controls (Strict Responsive Aspect Ratio: Fluid & Adaptive to Screen Height) -->
-              <div class="relative w-full max-w-full min-w-0 aspect-square max-h-[min(72vh,700px)] rounded-2xl overflow-hidden bg-[#fafafa] border border-zinc-200/80 shadow-xs group flex items-center justify-center">
+              <div class="relative w-full max-w-full min-w-0 aspect-square max-h-[min(58vh,540px)] lg:max-h-[min(calc(100svh-var(--apple-header-offset)-115px),580px)] rounded-2xl overflow-hidden bg-[#fafafa] border border-zinc-200/80 shadow-xs group flex items-center justify-center">
                 <!-- Carousel Images Track (Native Scroll Snap for Silky Mobile Touch Swipe & Desktop Fluidity) -->
                 <div 
                   id="carousel-track" 
@@ -449,13 +449,13 @@ const productStructuredData: Record<string, any> = {
               </div>
 
               <!-- Thumbnail Gallery (Positioned below the main image across all viewports) -->
-              <div class="flex flex-row gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar shrink-0 w-full max-w-full pb-1 scrollbar-none justify-start">
+              <div class="flex flex-row gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar shrink-0 w-full max-w-full pb-0.5 scrollbar-none justify-start">
                 {currentProduct.gallery.map((img: any, idx: number) => (
                   <button
                     type="button"
                     data-thumb-index={idx}
                     aria-label={`View image ${idx + 1}`}
-                    class={`carousel-thumb shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-[68px] lg:h-[68px] xl:w-[72px] xl:h-[72px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer bg-[#fafafa] apple-skeleton-surface flex items-center justify-center ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
+                    class={`carousel-thumb shrink-0 w-12 h-12 sm:w-14 sm:h-14 lg:w-[58px] lg:h-[58px] xl:w-[64px] xl:h-[64px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer bg-[#fafafa] apple-skeleton-surface flex items-center justify-center ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
                   >
                     <img
                       src={SanityImageService.thumbnail(img.src, 160)}
@@ -469,15 +469,15 @@ const productStructuredData: Record<string, any> = {
                 ))}
               </div>
 
-              <p class="text-[10px] text-zinc-400 font-mono text-center lg:text-left mt-1.5 shrink-0">
+              <p class="text-[10px] text-zinc-400 font-mono text-center lg:text-left mt-1 shrink-0">
                 {getLocalizedValue(currentProduct.galleryHint, currentLang, t('pdp.galleryHint'))}
               </p>
             </div>
 
             <!-- RIGHT: Product Info, Tiered Wholesale Pricing & B2B Actions (5 Cols for Snug Symmetry) -->
-            <div class="product-info-col w-full min-w-0 lg:col-span-5 flex flex-col justify-start space-y-3 sm:space-y-3.5 xl:space-y-4">
+            <div class="product-info-col w-full min-w-0 lg:col-span-5 flex flex-col justify-center space-y-2.5 sm:space-y-3 xl:space-y-3.5">
               <!-- Header Info -->
-              <div class="space-y-1 xl:space-y-1.5 shrink-0">
+              <div class="space-y-1 shrink-0">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 text-zinc-800 font-medium">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -489,21 +489,21 @@ const productStructuredData: Record<string, any> = {
                     </span>
                   )}
                 </div>
-                <h1 class="text-xl sm:text-2xl xl:text-3xl font-bold tracking-tight text-zinc-950 leading-snug">
+                <h1 class="text-xl sm:text-2xl xl:text-[28px] font-bold tracking-tight text-zinc-950 leading-tight">
                   {currentProductTitle}
                 </h1>
-                <p class="text-xs sm:text-[13px] text-zinc-600 font-normal leading-relaxed line-clamp-2 sm:line-clamp-none">
+                <p class="text-xs sm:text-[13px] text-zinc-600 font-normal leading-relaxed line-clamp-2">
                   {currentProductTagline}
                 </p>
               </div>
 
               <!-- Tiered Wholesale Pricing Matrix (Compact) -->
-              <div class="pricing-tier-card p-3 sm:p-3.5 xl:p-4 rounded-xl xl:rounded-2xl bg-[#fbf9f5] border border-zinc-200/80 space-y-1.5 shrink-0">
+              <div class="pricing-tier-card p-2.5 sm:p-3 xl:p-3.5 rounded-xl xl:rounded-2xl bg-[#fbf9f5] border border-zinc-200/80 space-y-1 shrink-0">
                 <div class="flex items-center justify-between text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
                   <span>{t('pdp.wholesaleTiers')}</span>
                   <span>{t('pdp.unitPrice')}</span>
                 </div>
-                <div class="space-y-1 xl:space-y-1.5">
+                <div class="space-y-1">
                   {currentProduct.pricingTiers.map((tier: any) => (
                     <div class="flex items-center justify-between text-xs sm:text-sm py-0.5 border-b border-zinc-200/50 last:border-none">
                       <span class="text-zinc-700 font-medium">
@@ -521,7 +521,7 @@ const productStructuredData: Record<string, any> = {
               </div>
 
               <!-- Palette Selector & Quick Technical Specs Bar -->
-              <div class="space-y-2 shrink-0">
+              <div class="space-y-1.5 shrink-0">
                 <!-- Available Color Swatches with interactive selection -->
                 <div class="space-y-1">
                   <div class="flex items-center justify-between">
@@ -581,7 +581,7 @@ const productStructuredData: Record<string, any> = {
                   <button
                     type="button"
                     id="btn-add-quote"
-                    class="w-full py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-semibold bg-[#1d1d1f] hover:bg-black text-white group flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                    class="w-full py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-[#1d1d1f] hover:bg-black text-white group flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer"
                     data-id={currentProduct.slug}
                     data-title={currentProductShortTitle}
                     data-sku={currentProduct.sku || "SKU"}
@@ -602,7 +602,7 @@ const productStructuredData: Record<string, any> = {
                     target="_blank"
                     rel="noopener noreferrer"
                     id="btn-amazon-sample"
-                    class="w-full py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-semibold bg-[#f5f5f7] hover:bg-[#ff9900]/10 hover:border-[#ff9900]/40 text-[#1d1d1f] hover:text-[#111] border border-black/10 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
+                    class="w-full py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-[#f5f5f7] hover:bg-[#ff9900]/10 hover:border-[#ff9900]/40 text-[#1d1d1f] hover:text-[#111] border border-black/10 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
                     title={sampleButtonText}
                   >
                     <svg class="w-4 h-4 text-[#232f3e] group-hover:text-[#ff9900] transition-colors" viewBox="0 0 24 24" fill="currentColor">
@@ -642,7 +642,7 @@ const productStructuredData: Record<string, any> = {
               )}
 
               <!-- Lead Time & Guarantee Badges -->
-              <div class="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-100 text-[11px] text-zinc-600 shrink-0">
+              <div class="grid grid-cols-2 gap-2 pt-1.5 border-t border-zinc-100 text-[11px] text-zinc-600 shrink-0">
                 <div class="flex items-center gap-1.5">
                   <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />

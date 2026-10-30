@@ -73,13 +73,13 @@ const items = Array.from({ length: count }, (_, idx) => idx);
     aria-label="Loading product catalog grid"
     aria-busy="true"
     class:list={[
-      'apple-grid-skeleton grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-x-4 lg:gap-y-5 select-none pointer-events-none',
+      'apple-grid-skeleton grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-2.5 lg:gap-x-3 lg:gap-y-3.5 select-none pointer-events-none',
       className,
     ]}
   >
     {items.map((idx) => (
       <div
-        class="rounded-2xl bg-white border border-black/8 p-2 sm:p-2.5 flex flex-col justify-between"
+        class="rounded-2xl bg-white border border-black/8 p-1.5 sm:p-2 flex flex-col justify-between"
         style={`animation-delay: ${(idx % 6) * 50}ms`}
       >
         <div class="flex-1 min-h-0 flex flex-col">
@@ -89,7 +89,7 @@ const items = Array.from({ length: count }, (_, idx) => idx);
           </div>
 
           <!-- Swatch Dots & Lead Time Row -->
-          <div class="shrink-0 flex items-center justify-between pt-2 pb-1 px-0.5">
+          <div class="shrink-0 flex items-center justify-between pt-1.5 pb-0.5 px-0.5">
             <div class="flex items-center gap-1.5">
               <span class="w-2.5 h-2.5 rounded-full apple-skeleton"></span>
               <span class="w-2.5 h-2.5 rounded-full apple-skeleton"></span>
@@ -99,20 +99,20 @@ const items = Array.from({ length: count }, (_, idx) => idx);
             <span class="w-9 h-2.5 rounded-sm apple-skeleton"></span>
           </div>
 
-          <!-- Two-Line Title Placeholder (36px exact height match) -->
-          <div class="shrink-0 h-[36px] mt-0.5 px-0.5 flex flex-col justify-center space-y-1.5">
+          <!-- Two-Line Title Placeholder (32px exact height match) -->
+          <div class="shrink-0 h-[32px] mt-0.5 px-0.5 flex flex-col justify-center space-y-1">
             <div class="h-3 w-11/12 rounded-sm apple-skeleton"></div>
             <div class="h-3 w-2/3 rounded-sm apple-skeleton"></div>
           </div>
 
           <!-- Composition Subtitle Placeholder -->
-          <div class="px-0.5 mt-1">
+          <div class="px-0.5 mt-0.5">
             <div class="h-2.5 w-3/4 rounded-sm apple-skeleton"></div>
           </div>
         </div>
 
         <!-- Bottom Price, MOQ & Quote Pill Button Placeholder -->
-        <div class="shrink-0 mt-2.5 pt-2 border-t border-black/5 flex items-center justify-between px-0.5">
+        <div class="shrink-0 mt-2 pt-1.5 border-t border-black/5 flex items-center justify-between px-0.5">
           <div class="space-y-1">
             <div class="h-3.5 w-14 rounded-sm apple-skeleton"></div>
             <div class="h-2.5 w-16 rounded-sm apple-skeleton"></div>

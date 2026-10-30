@@ -23,14 +23,14 @@ const specCards = [0, 1, 2, 3, 4, 5];
   class:list={['apple-pdp-skeleton w-full bg-white select-none pointer-events-none', className]}
 >
   <!-- 1. First-Screen Hero Overview Skeleton (Matches 12-Col Bento Split below Layout Breadcrumbs) -->
-  <section class="w-full pt-4 pb-8 sm:pt-6 sm:pb-10 lg:pt-6 lg:pb-12 border-b border-black/5 bg-white">
+  <section class="w-full pt-3 pb-6 sm:pt-4 sm:pb-8 lg:py-0 lg:h-[calc(100svh-var(--apple-header-offset))] lg:max-h-[920px] lg:min-h-[580px] border-b border-black/5 bg-white flex flex-col justify-center">
     <!-- Center 12-Column Split Grid Skeleton -->
-    <div class="apple-rail-bento">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
+    <div class="apple-rail-bento w-full">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 xl:gap-7 items-center">
         <!-- LEFT 7 COLS: Main Gallery Viewport + Thumbnail Rail Below -->
-        <div class="w-full min-w-0 lg:col-span-7 flex flex-col justify-start space-y-2.5 sm:space-y-3">
+        <div class="w-full min-w-0 lg:col-span-7 flex flex-col justify-center space-y-2 sm:space-y-2.5">
           <!-- Main Gallery Stage -->
-          <div class="relative w-full max-w-full min-w-0 aspect-square max-h-[min(72vh,700px)] rounded-2xl overflow-hidden apple-skeleton border border-black/5">
+          <div class="relative w-full max-w-full min-w-0 aspect-square max-h-[min(58vh,540px)] lg:max-h-[min(calc(100svh-var(--apple-header-offset)-115px),580px)] rounded-2xl overflow-hidden apple-skeleton border border-black/5">
             <!-- Top SKU & MOQ Pill Placeholders -->
             <div class="absolute top-3 left-3 flex items-center gap-2">
               <div class="h-5 w-24 rounded-full bg-white/80"></div>
@@ -41,11 +41,11 @@ const specCards = [0, 1, 2, 3, 4, 5];
           </div>
 
           <!-- Thumbnail Strip (Positioned below the main image across all viewports) -->
-          <div class="flex flex-row gap-2 sm:gap-2.5 overflow-hidden shrink-0 w-full max-w-full pb-1 justify-start">
+          <div class="flex flex-row gap-2 sm:gap-2.5 overflow-hidden shrink-0 w-full max-w-full pb-0.5 justify-start">
             {thumbItems.map((idx) => (
               <div
                 class:list={[
-                  'shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-[68px] lg:h-[68px] xl:w-[72px] xl:h-[72px] rounded-xl apple-skeleton',
+                  'shrink-0 w-12 h-12 sm:w-14 sm:h-14 lg:w-[58px] lg:h-[58px] xl:w-[64px] xl:h-[64px] rounded-xl apple-skeleton',
                   idx === 0 ? 'ring-2 ring-black/15' : 'opacity-75',
                 ]}
               ></div>
@@ -54,7 +54,7 @@ const specCards = [0, 1, 2, 3, 4, 5];
         </div>
 
         <!-- RIGHT 5 COLS: Product Header, Volume Tier Pricing Matrix, Color Swatches & CTA Buttons -->
-        <div class="lg:col-span-5 flex flex-col justify-start space-y-3.5 sm:space-y-4 bg-[#f5f5f7]/60 rounded-2xl p-4 sm:p-5 border border-black/5">
+        <div class="lg:col-span-5 flex flex-col justify-center space-y-2.5 sm:space-y-3 bg-[#f5f5f7]/60 rounded-2xl p-3.5 sm:p-4 border border-black/5">
           <div class="space-y-2.5">
             <!-- Category & Lead-Time Badges -->
             <div class="flex items-center justify-between gap-2">
