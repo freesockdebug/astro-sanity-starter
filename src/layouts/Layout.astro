@@ -125,19 +125,119 @@ const resolvedImage = imageSrc
             />
         )}
 
-        <!-- 2. Idle Shimmer Activator: Unlock GPU shimmer animation after first paint -->
+        <!-- 2. Idle + Viewport Shimmer Manager: Defers initialization until browser idle, then only activates GPU shimmer for in-viewport items -->
         <script is:inline>
             (function () {
-                var runIdle = function (cb) {
+                var SELECTOR = '.apple-skeleton, .apple-skeleton-warm, .apple-skeleton-surface, .apple-shimmer-wave';
+                var shimmerObserver = null;
+                var pendingRoots = [];
+                var isIdleReady = false;
+
+                function runWhenIdle(cb) {
                     if ('requestIdleCallback' in window) {
                         window.requestIdleCallback(cb, { timeout: 600 });
                     } else {
-                        setTimeout(cb, 120);
+                        window.setTimeout(cb, 120);
+                    }
+                }
+
+                function ensureObserver() {
+                    if (shimmerObserver || !('IntersectionObserver' in window)) return shimmerObserver;
+                    shimmerObserver = new window.IntersectionObserver(
+                        function (entries) {
+                            for (var i = 0; i < entries.length; i++) {
+                                var entry = entries[i];
+                                var target = entry.target;
+                                if (target.classList.contains('apple-img-loaded')) {
+                                    target.classList.remove('is-shimmer-active');
+                                    shimmerObserver.unobserve(target);
+                                    continue;
+                                }
+                                if (entry.isIntersecting) {
+                                    target.classList.add('is-shimmer-active');
+                                } else {
+                                    target.classList.remove('is-shimmer-active');
+                                }
+                            }
+                        },
+                        {
+                            root: null,
+                            rootMargin: '160px 160px',
+                            threshold: 0.01,
+                        }
+                    );
+                    return shimmerObserver;
+                }
+
+                function observeNodesInRoot(root) {
+                    var scope = root && root.querySelectorAll ? root : document;
+                    var nodes = scope.querySelectorAll(SELECTOR);
+                    var obs = ensureObserver();
+
+                    if (scope !== document && scope.matches && scope.matches(SELECTOR)) {
+                        if (scope.classList.contains('apple-img-loaded')) {
+                            scope.classList.remove('is-shimmer-active');
+                        } else if (obs) {
+                            obs.observe(scope);
+                        } else {
+                            scope.classList.add('is-shimmer-active');
+                        }
+                    }
+
+                    for (var i = 0; i < nodes.length; i++) {
+                        var el = nodes[i];
+                        if (el.classList.contains('apple-img-loaded')) {
+                            el.classList.remove('is-shimmer-active');
+                            continue;
+                        }
+                        if (obs) {
+                            obs.observe(el);
+                        } else {
+                            el.classList.add('is-shimmer-active');
+                        }
+                    }
+                }
+
+                window.__observeAppleShimmer = function (root) {
+                    var targetRoot = root || document;
+                    if (!isIdleReady) {
+                        if (pendingRoots.indexOf(targetRoot) === -1) {
+                            pendingRoots.push(targetRoot);
+                        }
+                        return;
+                    }
+                    runWhenIdle(function () {
+                        observeNodesInRoot(targetRoot);
+                    });
+                };
+
+                window.__unobserveAppleShimmer = function (el) {
+                    if (!el || !el.classList) return;
+                    el.classList.remove('is-shimmer-active');
+                    if (shimmerObserver) {
+                        shimmerObserver.unobserve(el);
                     }
                 };
-                runIdle(function () {
-                    document.documentElement.classList.add('apple-shimmer-ready');
-                });
+
+                function initIdleViewportShimmer() {
+                    runWhenIdle(function () {
+                        isIdleReady = true;
+                        document.documentElement.classList.add('apple-shimmer-ready');
+                        observeNodesInRoot(document);
+                        while (pendingRoots.length > 0) {
+                            var nextRoot = pendingRoots.shift();
+                            if (nextRoot && nextRoot !== document) {
+                                observeNodesInRoot(nextRoot);
+                            }
+                        }
+                    });
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initIdleViewportShimmer, { once: true });
+                } else {
+                    initIdleViewportShimmer();
+                }
             })();
         </script>
     </body>

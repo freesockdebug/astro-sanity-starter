@@ -387,7 +387,7 @@ const productStructuredData: Record<string, any> = {
                         loading={idx === 0 ? 'eager' : 'lazy'}
                         fetchpriority={idx === 0 ? 'high' : 'auto'}
                         decoding="async"
-                        onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
+                        onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
                       />
                     </div>
                   ))}
@@ -463,7 +463,7 @@ const productStructuredData: Record<string, any> = {
                       class="pdp-gallery-img w-full h-full object-contain p-0.5"
                       loading="lazy"
                       decoding="async"
-                      onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
+                      onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
                     />
                   </button>
                 ))}
@@ -785,6 +785,10 @@ const productStructuredData: Record<string, any> = {
           const htmlImg = img as HTMLImageElement;
           if (htmlImg.complete && htmlImg.parentElement) {
             htmlImg.parentElement.classList.add('apple-img-loaded');
+            htmlImg.parentElement.classList.remove('is-shimmer-active');
+            if (typeof window !== 'undefined' && (window as any).__unobserveAppleShimmer) {
+              (window as any).__unobserveAppleShimmer(htmlImg.parentElement);
+            }
           }
         });
       };

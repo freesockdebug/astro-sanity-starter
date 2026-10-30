@@ -288,21 +288,23 @@ html.apple-snap-active {
   pointer-events: none;
 }
 
-/* 2. 仅在 requestIdleCallback 空闲激活后，才提升 GPU 图层并启动扫光动画 */
-.apple-shimmer-wave.is-shimmer-active,
-.apple-shimmer-ready .apple-shimmer-wave:not(.apple-img-loaded),
-.apple-shimmer-ready .apple-skeleton:not(.apple-img-loaded)::after,
-.apple-shimmer-ready .apple-skeleton-warm:not(.apple-img-loaded)::after,
-.apple-shimmer-ready .apple-skeleton-surface:not(.apple-img-loaded)::after {
+/* 2. 仅在 requestIdleCallback 空闲调度 + IntersectionObserver 视口激活后，才提升 GPU 图层并启动流光动画 */
+.apple-shimmer-wave.is-shimmer-active:not(.apple-img-loaded),
+.apple-skeleton.is-shimmer-active:not(.apple-img-loaded)::after,
+.apple-skeleton-warm.is-shimmer-active:not(.apple-img-loaded)::after,
+.apple-skeleton-surface.is-shimmer-active:not(.apple-img-loaded)::after {
   will-change: transform;
   animation: apple-shimmer-wave 1.75s var(--apple-ease-in-out, cubic-bezier(0.42, 0, 0.58, 1)) infinite;
 }
 
-/* 3. 图片加载完成后立即停止动画并释放 GPU 图层 */
+/* 3. 图片加载完成后立即停止动画并释放 GPU 图层与观察器 */
 .apple-img-loaded.apple-shimmer-wave,
 .apple-img-loaded.apple-skeleton::after,
 .apple-img-loaded.apple-skeleton-warm::after,
-.apple-img-loaded.apple-skeleton-surface::after {
+.apple-img-loaded.apple-skeleton-surface::after,
+.apple-skeleton.apple-img-loaded::after,
+.apple-skeleton-warm.apple-img-loaded::after,
+.apple-skeleton-surface.apple-img-loaded::after {
   animation: none;
   will-change: auto;
   display: none;

@@ -226,7 +226,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                   decoding="async"
                   width="240"
                   height="240"
-                  onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
+                  onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
                 />
                 <div class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
                   {item.category ? item.category.toUpperCase() : 'OEM'}
@@ -303,7 +303,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                 decoding="async"
                 width="240"
                 height="240"
-                onload="this.parentElement && this.parentElement.classList.add('apple-img-loaded')"
+                onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
               />
               <div class="card-category absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
                 OEM
@@ -429,6 +429,10 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     imgs.forEach((img) => {
       if (img.complete && img.parentElement) {
         img.parentElement.classList.add('apple-img-loaded');
+        img.parentElement.classList.remove('is-shimmer-active');
+        if (typeof window !== 'undefined' && window.__unobserveAppleShimmer) {
+          window.__unobserveAppleShimmer(img.parentElement);
+        }
       }
     });
   }
@@ -613,6 +617,10 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       const card = createCardElement(item);
       gridContainer.appendChild(card);
     });
+
+    if (typeof window !== 'undefined' && window.__observeAppleShimmer) {
+      window.__observeAppleShimmer(gridContainer);
+    }
 
     displayedCount += nextBatch.length;
     if (displayedCountLabel) displayedCountLabel.textContent = String(displayedCount);
