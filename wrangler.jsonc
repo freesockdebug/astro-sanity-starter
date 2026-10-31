@@ -20,6 +20,13 @@
     "LOGTO_ENDPOINT": "https://8tvr1q.logto.app/",
     "LOGTO_APP_ID": "btx7meodkblwjce23ulpc"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "b2b",
+      "database_id": "ee9bf95f-2f23-4df7-aea4-cb81346473dd"
+    }
+  ],
   "observability": {
     "enabled": true
   }
