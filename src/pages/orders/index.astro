@@ -4,6 +4,7 @@ import Layout from '@layouts/Layout.astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, type OrderRecord } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
+import { fetchNormalizedProducts } from '@data/products';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -69,6 +70,12 @@ if (currentSearch) {
   });
 }
 
+const products = await fetchNormalizedProducts().catch(() => []);
+const productMap = new Map<string, { image: string; slug: string }>();
+(products || []).forEach((p) => {
+  if (p?.id) productMap.set(p.id, { image: p.image, slug: p.id });
+});
+
 const pageTitle = 'My Orders & RFQs | GwenVenni B2B Atelier';
 const pageDesc = 'Track and manage your B2B quotation requests, production approvals, and global shipments.';
 
@@ -76,14 +83,26 @@ const resolveItemImage = (item: any) => {
   if (item?.image_url && item.image_url.trim()) {
     return item.image_url.replace('https://cdn.sanity.io', '/cdn-image');
   }
-  const str = `${item?.title || ''} ${item?.sku || ''}`.toLowerCase();
+  const pid = item?.product_id ? String(item.product_id).trim() : '';
+  if (pid && productMap.has(pid)) {
+    return productMap.get(pid)!.image;
+  }
+  const str = `${item?.title || ''} ${item?.sku || ''} ${pid}`.toLowerCase();
   if (str.includes('spec') || str.includes('pdf') || str.includes('dossier')) {
     return '/images/spec-light.webp';
   }
-  if (str.includes('ruffle') || str.includes('gv-ru')) {
+  if (str.includes('ruffle') || str.includes('gv-ru') || str.includes('lace')) {
     return '/images/products/gv-ruffle-detail.webp';
   }
   return '/images/hero-light.webp';
+};
+
+const getItemProductUrl = (item: any) => {
+  const pid = item?.product_id ? String(item.product_id).trim() : '';
+  if (!pid) return null;
+  if (pid.startsWith('spec-')) return getLocalizedPath(`/products/${pid.replace(/^spec-/, '')}`, currentLang);
+  if (pid === 'swatch-kit-sample' || pid.startsWith('swatch-')) return getLocalizedPath('/#collection', currentLang);
+  return getLocalizedPath(`/products/${pid}`, currentLang);
 };
 ---
 
@@ -420,27 +439,61 @@ const resolveItemImage = (item: any) => {
 
                 <!-- Items Table -->
                 <div class="divide-y divide-black/5">
-                  {(order.items || []).map((item) => (
-                    <div class="py-2.5 flex items-center justify-between text-xs gap-3">
-                      <div class="flex items-center gap-3 min-w-0">
-                        <img
-                          src={resolveItemImage(item)}
-                          alt={item.title}
-                          class="w-10 h-10 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 shrink-0"
-                          loading="lazy"
-                        />
-                        <div class="min-w-0">
-                          <p class="font-medium text-[#1d1d1f] truncate">{item.title}</p>
-                          <p class="text-[11px] text-[#86868b] truncate font-mono">
-                            {item.sku ? `${item.sku} · ` : ''}{item.variant || 'Standard Spec'}
-                          </p>
+                  {(order.items || []).map((item) => {
+                    const itemUrl = getItemProductUrl(item);
+                    return (
+                      <div class="py-2.5 flex items-center justify-between text-xs gap-3">
+                        <div class="flex items-center gap-3 min-w-0">
+                          {itemUrl ? (
+                            <a
+                              href={itemUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="shrink-0 group block"
+                              title={`View ${item.title}`}
+                            >
+                              <img
+                                src={resolveItemImage(item)}
+                                alt={item.title}
+                                class="w-10 h-10 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 group-hover:border-black/30 transition-all shrink-0"
+                                loading="lazy"
+                              />
+                            </a>
+                          ) : (
+                            <img
+                              src={resolveItemImage(item)}
+                              alt={item.title}
+                              class="w-10 h-10 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 shrink-0"
+                              loading="lazy"
+                            />
+                          )}
+                          <div class="min-w-0">
+                            {itemUrl ? (
+                              <a
+                                href={itemUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="font-medium text-[#1d1d1f] hover:text-black hover:underline truncate block inline-flex items-center gap-1 group"
+                              >
+                                <span class="truncate">{item.title}</span>
+                                <svg class="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            ) : (
+                              <p class="font-medium text-[#1d1d1f] truncate">{item.title}</p>
+                            )}
+                            <p class="text-[11px] text-[#86868b] truncate font-mono">
+                              {item.sku ? `${item.sku} · ` : ''}{item.variant || 'Standard Spec'}
+                            </p>
+                          </div>
+                        </div>
+                        <div class="font-mono tabular-nums font-semibold text-right shrink-0">
+                          {item.quantity} pcs
                         </div>
                       </div>
-                      <div class="font-mono tabular-nums font-semibold text-right shrink-0">
-                        {item.quantity} pcs
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <!-- Footer Summary -->

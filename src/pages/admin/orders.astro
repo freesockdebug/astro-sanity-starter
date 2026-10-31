@@ -4,6 +4,7 @@ import Layout from '@layouts/Layout.astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { listAdminOrders } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
+import { fetchNormalizedProducts } from '@data/products';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -21,10 +22,18 @@ if (!sessionUser || !sessionUser.isAdmin) {
 const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
 const currentSearch = Astro.url.searchParams.get('search') || '';
 
-const { orders, total, stats } = await listAdminOrders({
-  status: currentStatus,
-  search: currentSearch,
-  limit: 50,
+const [{ orders, total, stats }, products] = await Promise.all([
+  listAdminOrders({
+    status: currentStatus,
+    search: currentSearch,
+    limit: 50,
+  }),
+  fetchNormalizedProducts().catch(() => []),
+]);
+
+const productMap = new Map<string, { image: string; slug: string }>();
+(products || []).forEach((p) => {
+  if (p?.id) productMap.set(p.id, { image: p.image, slug: p.id });
 });
 
 const pageTitle = 'B2B Admin Fulfillment Workspace | GwenVenni Atelier';
@@ -33,14 +42,26 @@ const resolveItemImage = (item: any) => {
   if (item?.image_url && item.image_url.trim()) {
     return item.image_url.replace('https://cdn.sanity.io', '/cdn-image');
   }
-  const str = `${item?.title || ''} ${item?.sku || ''}`.toLowerCase();
+  const pid = item?.product_id ? String(item.product_id).trim() : '';
+  if (pid && productMap.has(pid)) {
+    return productMap.get(pid)!.image;
+  }
+  const str = `${item?.title || ''} ${item?.sku || ''} ${pid}`.toLowerCase();
   if (str.includes('spec') || str.includes('pdf') || str.includes('dossier')) {
     return '/images/spec-light.webp';
   }
-  if (str.includes('ruffle') || str.includes('gv-ru')) {
+  if (str.includes('ruffle') || str.includes('gv-ru') || str.includes('lace')) {
     return '/images/products/gv-ruffle-detail.webp';
   }
   return '/images/hero-light.webp';
+};
+
+const getItemProductUrl = (item: any) => {
+  const pid = item?.product_id ? String(item.product_id).trim() : '';
+  if (!pid) return null;
+  if (pid.startsWith('spec-')) return getLocalizedPath(`/products/${pid.replace(/^spec-/, '')}`, currentLang);
+  if (pid === 'swatch-kit-sample' || pid.startsWith('swatch-')) return getLocalizedPath('/#collection', currentLang);
+  return getLocalizedPath(`/products/${pid}`, currentLang);
 };
 ---
 
@@ -377,32 +398,66 @@ const resolveItemImage = (item: any) => {
 
                               <div class="divide-y divide-black/5 max-h-72 overflow-y-auto pr-1">
                                 {(order.items && order.items.length > 0) ? (
-                                  order.items.map((item) => (
-                                    <div class="py-2.5 flex items-center justify-between gap-3 text-xs">
-                                      <div class="flex items-center gap-3 min-w-0">
-                                        <img
-                                          src={resolveItemImage(item)}
-                                          alt={item.title}
-                                          class="w-11 h-11 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 shrink-0"
-                                          loading="lazy"
-                                        />
-                                        <div class="min-w-0">
-                                          <p class="font-medium text-[#1d1d1f] truncate text-xs">{item.title}</p>
-                                          <div class="flex items-center gap-2 text-[11px] text-[#86868b] mt-0.5 font-mono">
-                                            {item.sku && (
-                                              <span class="bg-[#f5f5f7] px-1.5 py-0.5 rounded text-[10px] text-[#52525b] border border-black/5">
-                                                {item.sku}
-                                              </span>
+                                  order.items.map((item) => {
+                                    const itemUrl = getItemProductUrl(item);
+                                    return (
+                                      <div class="py-2.5 flex items-center justify-between gap-3 text-xs">
+                                        <div class="flex items-center gap-3 min-w-0">
+                                          {itemUrl ? (
+                                            <a
+                                              href={itemUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              class="shrink-0 group block"
+                                              title={`View ${item.title}`}
+                                            >
+                                              <img
+                                                src={resolveItemImage(item)}
+                                                alt={item.title}
+                                                class="w-11 h-11 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 group-hover:border-black/30 transition-all shrink-0"
+                                                loading="lazy"
+                                              />
+                                            </a>
+                                          ) : (
+                                            <img
+                                              src={resolveItemImage(item)}
+                                              alt={item.title}
+                                              class="w-11 h-11 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 shrink-0"
+                                              loading="lazy"
+                                            />
+                                          )}
+                                          <div class="min-w-0">
+                                            {itemUrl ? (
+                                              <a
+                                                href={itemUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="font-medium text-[#1d1d1f] hover:text-black hover:underline truncate block inline-flex items-center gap-1 group"
+                                              >
+                                                <span class="truncate">{item.title}</span>
+                                                <svg class="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                </svg>
+                                              </a>
+                                            ) : (
+                                              <p class="font-medium text-[#1d1d1f] truncate text-xs">{item.title}</p>
                                             )}
-                                            <span class="truncate">{item.variant || 'Standard Spec'}</span>
+                                            <div class="flex items-center gap-2 text-[11px] text-[#86868b] mt-0.5 font-mono">
+                                              {item.sku && (
+                                                <span class="bg-[#f5f5f7] px-1.5 py-0.5 rounded text-[10px] text-[#52525b] border border-black/5">
+                                                  {item.sku}
+                                                </span>
+                                              )}
+                                              <span class="truncate">{item.variant || 'Standard Spec'}</span>
+                                            </div>
                                           </div>
                                         </div>
+                                        <div class="font-mono font-semibold text-xs tabular-nums text-right shrink-0">
+                                          {item.quantity} pcs
+                                        </div>
                                       </div>
-                                      <div class="font-mono font-semibold text-xs tabular-nums text-right shrink-0">
-                                        {item.quantity} pcs
-                                      </div>
-                                    </div>
-                                  ))
+                                    );
+                                  })
                                 ) : (
                                   <div class="py-4 text-center text-xs text-[#86868b]">
                                     No item details recorded.
