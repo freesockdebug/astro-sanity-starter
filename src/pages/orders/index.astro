@@ -2,7 +2,7 @@
 // src/pages/orders/index.astro
 import Layout from '@layouts/Layout.astro';
 import { getSessionFromRequest } from '@utils/auth';
-import { getOrdersByUserId, claimOrdersByEmail, type OrderRecord } from '@utils/db';
+import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, type OrderRecord } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -13,7 +13,12 @@ Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-ag
 const currentLang = getLangFromUrl(Astro.url);
 const sessionUser = await getSessionFromRequest(Astro.request, cfEnv);
 
-let orders: OrderRecord[] = [];
+const viewMode = Astro.url.searchParams.get('view') || 'my';
+const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
+const currentSearch = (Astro.url.searchParams.get('search') || '').trim().toLowerCase();
+
+let myOrders: OrderRecord[] = [];
+let allOrders: OrderRecord[] = [];
 let claimedCount = 0;
 
 if (sessionUser) {
@@ -22,7 +27,46 @@ if (sessionUser) {
   } catch (e) {
     // Non-blocking
   }
-  orders = await getOrdersByUserId(sessionUser.id);
+  myOrders = await getOrdersByUserId(sessionUser.id, sessionUser.email);
+
+  if (sessionUser.isAdmin) {
+    const adminRes = await listAdminOrders({ limit: 100 });
+    allOrders = adminRes.orders;
+  }
+}
+
+// Active dataset based on viewMode
+const isViewingAll = sessionUser?.isAdmin && viewMode === 'all';
+let rawActiveOrders = isViewingAll ? allOrders : myOrders;
+
+// Status counts based on the active dataset
+const stats = {
+  all: rawActiveOrders.length,
+  pending: rawActiveOrders.filter((o) => o.status === 'PENDING_APPROVAL').length,
+  approved: rawActiveOrders.filter((o) => o.status === 'APPROVED').length,
+  shipped: rawActiveOrders.filter((o) => o.status === 'SHIPPED').length,
+  rejected: rawActiveOrders.filter((o) => o.status === 'REJECTED').length,
+};
+
+// Apply status filter
+let filteredOrders = rawActiveOrders;
+if (currentStatus !== 'ALL') {
+  filteredOrders = filteredOrders.filter((o) => o.status === currentStatus);
+}
+
+// Apply search filter
+if (currentSearch) {
+  filteredOrders = filteredOrders.filter((o) => {
+    const matchNo = o.order_no.toLowerCase().includes(currentSearch);
+    const matchEmail = o.buyer_email.toLowerCase().includes(currentSearch);
+    const matchCompany = (o.company_name || '').toLowerCase().includes(currentSearch);
+    const matchCountry = (o.destination_country || '').toLowerCase().includes(currentSearch);
+    const matchNotes = (o.customer_notes || '').toLowerCase().includes(currentSearch);
+    const matchItems = (o.items || []).some((item) =>
+      item.title.toLowerCase().includes(currentSearch) || (item.sku || '').toLowerCase().includes(currentSearch)
+    );
+    return matchNo || matchEmail || matchCompany || matchCountry || matchNotes || matchItems;
+  });
 }
 
 const pageTitle = 'My Orders & RFQs | GwenVenni B2B Atelier';
@@ -34,7 +78,7 @@ const pageDesc = 'Track and manage your B2B quotation requests, production appro
     <div class="max-w-4xl mx-auto px-4 sm:px-6">
       
       <!-- Breadcrumb & Top Bar -->
-      <div class="flex items-center justify-between pb-6 border-b border-black/5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
         <div>
           <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
             <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">Home</a>
@@ -51,9 +95,13 @@ const pageDesc = 'Track and manage your B2B quotation requests, production appro
             {sessionUser.isAdmin && (
               <a
                 href="/admin/orders"
-                class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs"
+                class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs inline-flex items-center gap-1.5"
               >
-                Admin Workspace
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span>Fulfillment Workspace</span>
               </a>
             )}
             <a
@@ -112,11 +160,39 @@ const pageDesc = 'Track and manage your B2B quotation requests, production appro
               </div>
             </div>
 
-            <div class="flex items-center gap-2 text-[#86868b]">
-              <span>Orders: <strong class="text-[#1d1d1f] font-mono tabular-nums">{orders.length}</strong></span>
-              <span>·</span>
-              <span class="text-emerald-700">Auto-Claim Active</span>
-            </div>
+            <!-- Admin View Mode Switcher -->
+            {sessionUser.isAdmin && (
+              <div class="flex items-center gap-1.5 p-1 bg-[#f5f5f7] rounded-xl border border-black/5 self-start sm:self-auto">
+                <a
+                  href={`/orders?view=my${currentStatus !== 'ALL' ? `&status=${currentStatus}` : ''}`}
+                  class={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                    !isViewingAll
+                      ? 'bg-white text-[#1d1d1f] shadow-xs'
+                      : 'text-[#86868b] hover:text-black'
+                  }`}
+                >
+                  My Orders ({myOrders.length})
+                </a>
+                <a
+                  href={`/orders?view=all${currentStatus !== 'ALL' ? `&status=${currentStatus}` : ''}`}
+                  class={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                    isViewingAll
+                      ? 'bg-[#1d1d1f] text-white shadow-xs'
+                      : 'text-[#86868b] hover:text-black'
+                  }`}
+                >
+                  All Platform Orders ({allOrders.length})
+                </a>
+              </div>
+            )}
+
+            {!sessionUser.isAdmin && (
+              <div class="flex items-center gap-2 text-[#86868b]">
+                <span>Total Orders: <strong class="text-[#1d1d1f] font-mono tabular-nums">{myOrders.length}</strong></span>
+                <span>·</span>
+                <span class="text-emerald-700">Auto-Claim Active</span>
+              </div>
+            )}
           </div>
 
           <!-- Auto-Claim Notification Banner if claimed -->
@@ -129,29 +205,101 @@ const pageDesc = 'Track and manage your B2B quotation requests, production appro
             </div>
           )}
 
+          <!-- Filter & Search Bar -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <!-- Status Tabs -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              {[
+                { key: 'ALL', label: 'All', count: stats.all },
+                { key: 'PENDING_APPROVAL', label: 'Pending', count: stats.pending },
+                { key: 'APPROVED', label: 'Approved', count: stats.approved },
+                { key: 'SHIPPED', label: 'Shipped', count: stats.shipped },
+                { key: 'REJECTED', label: 'Rejected', count: stats.rejected },
+              ].map((tab) => {
+                const isActive = currentStatus === tab.key;
+                const viewParam = isViewingAll ? '&view=all' : '';
+                const searchParam = currentSearch ? `&search=${encodeURIComponent(currentSearch)}` : '';
+                const href = `/orders?status=${tab.key}${viewParam}${searchParam}`;
+
+                return (
+                  <a
+                    href={href}
+                    class={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border ${
+                      isActive
+                        ? 'bg-[#1d1d1f] text-white border-black shadow-xs'
+                        : 'bg-white text-[#52525b] border-black/5 hover:border-black/20 hover:text-black'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span class={`ml-1 font-mono text-[11px] tabular-nums ${isActive ? 'text-white/80' : 'text-[#86868b]'}`}>
+                      ({tab.count})
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+
+            <!-- Search Form -->
+            <form method="GET" action="/orders" class="relative sm:w-64">
+              {isViewingAll && <input type="hidden" name="view" value="all" />}
+              {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
+              <input
+                type="text"
+                name="search"
+                value={currentSearch}
+                placeholder="Search orders, SKU..."
+                class="w-full pl-8 pr-7 py-1.5 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs"
+              />
+              <svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {currentSearch && (
+                <a
+                  href={`/orders?${isViewingAll ? 'view=all&' : ''}${currentStatus !== 'ALL' ? `status=${currentStatus}` : ''}`}
+                  class="absolute right-2.5 top-2 text-xs text-[#86868b] hover:text-black"
+                >
+                  ✕
+                </a>
+              )}
+            </form>
+          </div>
+
           <!-- Empty Orders List -->
-          {orders.length === 0 && (
+          {filteredOrders.length === 0 && (
             <div class="bg-white rounded-2xl border border-black/5 p-12 text-center shadow-sm">
               <div class="w-12 h-12 mx-auto rounded-full bg-[#f5f5f7] flex items-center justify-center text-[#86868b] mb-3">
                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <h3 class="text-base font-semibold mb-1">No Orders Found</h3>
+              <h3 class="text-base font-semibold mb-1">
+                {currentSearch || currentStatus !== 'ALL' ? 'No Matching Orders' : 'No Orders Found'}
+              </h3>
               <p class="text-xs text-[#86868b] max-w-sm mx-auto mb-5">
-                You haven't submitted any RFQ or procurement orders with this account yet.
+                {currentSearch || currentStatus !== 'ALL'
+                  ? 'Try clearing your filters or search keywords.'
+                  : "You haven't submitted any RFQ or procurement orders with this account yet."}
               </p>
-              <a
-                href={getLocalizedPath('/#collection', currentLang)}
-                class="inline-flex items-center px-5 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all"
-              >
-                Explore Styles & Request Swatches
-              </a>
+              {currentSearch || currentStatus !== 'ALL' ? (
+                <a
+                  href={`/orders${isViewingAll ? '?view=all' : ''}`}
+                  class="inline-flex items-center px-4 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all"
+                >
+                  Clear All Filters
+                </a>
+              ) : (
+                <a
+                  href={getLocalizedPath('/#collection', currentLang)}
+                  class="inline-flex items-center px-5 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all"
+                >
+                  Explore Styles & Request Swatches
+                </a>
+              )}
             </div>
           )}
 
           <!-- Orders List -->
-          {orders.map((order) => {
+          {filteredOrders.map((order) => {
             const isPending = order.status === 'PENDING_APPROVAL';
             const isApproved = order.status === 'APPROVED';
             const isShipped = order.status === 'SHIPPED';

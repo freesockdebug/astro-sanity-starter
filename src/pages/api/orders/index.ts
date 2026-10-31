@@ -23,7 +23,7 @@ export const GET: APIRoute = async ({ request }) => {
     console.error('Error auto-claiming orders:', err);
   }
 
-  const orders = await getOrdersByUserId(user.id);
+  const orders = await getOrdersByUserId(user.id, user.email);
 
   return new Response(
     JSON.stringify({

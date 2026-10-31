@@ -316,7 +316,7 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
          SET user_id = ?1,
              claimed_at = datetime('now'),
              updated_at = datetime('now')
-         WHERE user_id IS NULL
+         WHERE (user_id IS NULL OR user_id = '' OR user_id != ?1)
            AND LOWER(buyer_email) = LOWER(?2)`
       )
       .bind(userId, normalizedEmail)
@@ -330,10 +330,10 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
        SET user_id = ?,
            claimed_at = datetime('now'),
            updated_at = datetime('now')
-       WHERE user_id IS NULL
+       WHERE (user_id IS NULL OR user_id = '' OR user_id != ?)
          AND LOWER(buyer_email) = LOWER(?)`
     );
-    const info = stmt.run(userId, normalizedEmail);
+    const info = stmt.run(userId, userId, normalizedEmail);
     return info?.changes || 0;
   }
 
@@ -341,30 +341,52 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
 }
 
 /**
- * Retrieves all orders belonging to a specific user
+ * Retrieves all orders belonging to a specific user (by userId or buyerEmail)
  */
-export async function getOrdersByUserId(userId: string): Promise<OrderRecord[]> {
-  if (!userId) return [];
+export async function getOrdersByUserId(userId: string, buyerEmail?: string): Promise<OrderRecord[]> {
+  if (!userId && !buyerEmail) return [];
   const { isD1, db } = await getDbHandle();
+  const normalizedEmail = buyerEmail ? buyerEmail.trim().toLowerCase() : null;
 
   let orders: OrderRecord[] = [];
   if (isD1 && db) {
-    const { results } = await db
-      .prepare(
+    if (normalizedEmail && userId) {
+      const { results } = await db
+        .prepare(
+          `SELECT * FROM orders
+           WHERE user_id = ?1 OR LOWER(buyer_email) = LOWER(?2)
+           ORDER BY created_at DESC`
+        )
+        .bind(userId, normalizedEmail)
+        .all();
+      orders = (results || []) as OrderRecord[];
+    } else {
+      const { results } = await db
+        .prepare(
+          `SELECT * FROM orders
+           WHERE user_id = ?1
+           ORDER BY created_at DESC`
+        )
+        .bind(userId)
+        .all();
+      orders = (results || []) as OrderRecord[];
+    }
+  } else if (db) {
+    if (normalizedEmail && userId) {
+      const stmt = db.prepare(
+        `SELECT * FROM orders
+         WHERE user_id = ? OR LOWER(buyer_email) = LOWER(?)
+         ORDER BY created_at DESC`
+      );
+      orders = (stmt.all(userId, normalizedEmail) || []) as OrderRecord[];
+    } else {
+      const stmt = db.prepare(
         `SELECT * FROM orders
          WHERE user_id = ?
          ORDER BY created_at DESC`
-      )
-      .bind(userId)
-      .all();
-    orders = (results || []) as OrderRecord[];
-  } else if (db) {
-    const stmt = db.prepare(
-      `SELECT * FROM orders
-       WHERE user_id = ?
-       ORDER BY created_at DESC`
-    );
-    orders = (stmt.all(userId) || []) as OrderRecord[];
+      );
+      orders = (stmt.all(userId) || []) as OrderRecord[];
+    }
   }
 
   // Hydrate items for each order
