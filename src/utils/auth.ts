@@ -20,8 +20,9 @@ const DEFAULT_TTL_SECONDS = 7 * 24 * 3600; // 7 days
 /**
  * Resolves runtime environment variable across Cloudflare Workers & Node.js
  */
-export function getRuntimeEnv(key: string): string | undefined {
+export function getRuntimeEnv(key: string, customEnv?: any): string | undefined {
   return (
+    customEnv?.[key] ||
     (typeof process !== 'undefined' && process.env && (process.env as any)[key]) ||
     (import.meta.env && (import.meta.env as any)[key]) ||
     (globalThis as any)?.[key]
@@ -31,12 +32,12 @@ export function getRuntimeEnv(key: string): string | undefined {
 /**
  * Checks if a user is an administrator based on email whitelist or Logto roles
  */
-export function checkIsAdmin(email: string, roles: string[] = []): boolean {
+export function checkIsAdmin(email: string, roles: string[] = [], customEnv?: any): boolean {
   if (roles.map((r) => r.toLowerCase()).includes('admin')) {
     return true;
   }
 
-  const rawWhitelist = getRuntimeEnv('ADMIN_EMAILS') || 'forhaisome@gmail.com';
+  const rawWhitelist = getRuntimeEnv('ADMIN_EMAILS', customEnv) || 'forhaisome@gmail.com';
   const whitelist = rawWhitelist
     .split(',')
     .map((e) => e.trim().toLowerCase())
@@ -86,11 +87,12 @@ async function getHmacKey(secret: string): Promise<CryptoKey> {
  */
 export async function createSessionToken(
   user: AuthUser,
-  ttlSeconds = DEFAULT_TTL_SECONDS
+  ttlSeconds = DEFAULT_TTL_SECONDS,
+  customEnv?: any
 ): Promise<string> {
   const secret =
-    getRuntimeEnv('SESSION_SECRET') ||
-    getRuntimeEnv('LOGTO_APP_SECRET') ||
+    getRuntimeEnv('SESSION_SECRET', customEnv) ||
+    getRuntimeEnv('LOGTO_APP_SECRET', customEnv) ||
     'gwenvenni-b2b-secure-session-key-2026';
 
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
@@ -118,15 +120,15 @@ export async function createSessionToken(
 /**
  * Verifies and decodes a session token
  */
-export async function verifySessionToken(token: string): Promise<AuthUser | null> {
+export async function verifySessionToken(token: string, customEnv?: any): Promise<AuthUser | null> {
   if (!token || !token.includes('.')) return null;
   const [encodedPayload, encodedSig] = token.split('.');
   if (!encodedPayload || !encodedSig) return null;
 
   try {
     const secret =
-      getRuntimeEnv('SESSION_SECRET') ||
-      getRuntimeEnv('LOGTO_APP_SECRET') ||
+      getRuntimeEnv('SESSION_SECRET', customEnv) ||
+      getRuntimeEnv('LOGTO_APP_SECRET', customEnv) ||
       'gwenvenni-b2b-secure-session-key-2026';
 
     const key = await getHmacKey(secret);
@@ -176,11 +178,11 @@ export function getCookieValue(cookieHeader: string | null | undefined, name: st
 /**
  * Extracts authenticated user from request Cookie
  */
-export async function getSessionFromRequest(request: Request): Promise<AuthUser | null> {
+export async function getSessionFromRequest(request: Request, customEnv?: any): Promise<AuthUser | null> {
   const cookieHeader = request.headers.get('cookie');
   const token = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
   if (!token) return null;
-  return verifySessionToken(token);
+  return verifySessionToken(token, customEnv);
 }
 
 /**

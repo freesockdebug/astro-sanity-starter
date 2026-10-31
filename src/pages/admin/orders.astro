@@ -4,12 +4,14 @@ import Layout from '@layouts/Layout.astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { listAdminOrders } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0');
 
 const currentLang = getLangFromUrl(Astro.url);
-const sessionUser = await getSessionFromRequest(Astro.request);
+const sessionUser = await getSessionFromRequest(Astro.request, cfEnv);
 
 if (!sessionUser || !sessionUser.isAdmin) {
   // If not authenticated or not admin, return forbidden / redirect

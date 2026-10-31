@@ -9,6 +9,8 @@ import {
   type AuthUser,
 } from '@utils/auth';
 import { claimOrdersByEmail } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
@@ -41,9 +43,9 @@ export const GET: APIRoute = async ({ request, url }) => {
   let authUser: AuthUser | null = null;
 
   // 1. Live Logto OIDC Authorization Code Exchange
-  const endpoint = getRuntimeEnv('LOGTO_ENDPOINT')?.replace(/\/+$/, '');
-  const appId = getRuntimeEnv('LOGTO_APP_ID');
-  const appSecret = getRuntimeEnv('LOGTO_APP_SECRET');
+  const endpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv)?.replace(/\/+$/, '');
+  const appId = getRuntimeEnv('LOGTO_APP_ID', cfEnv);
+  const appSecret = getRuntimeEnv('LOGTO_APP_SECRET', cfEnv);
 
   if (code && endpoint && appId && appSecret) {
     try {
@@ -64,7 +66,8 @@ export const GET: APIRoute = async ({ request, url }) => {
       });
 
       if (!tokenRes.ok) {
-        throw new Error(`Token exchange failed: ${tokenRes.status}`);
+        const errText = await tokenRes.text();
+        throw new Error(`Token exchange failed: ${tokenRes.status} ${errText}`);
       }
 
       const tokenData = (await tokenRes.json()) as any;
@@ -77,13 +80,14 @@ export const GET: APIRoute = async ({ request, url }) => {
       });
 
       if (!meRes.ok) {
-        throw new Error(`UserInfo retrieval failed: ${meRes.status}`);
+        const meErr = await meRes.text();
+        throw new Error(`UserInfo retrieval failed: ${meRes.status} ${meErr}`);
       }
 
       const userInfo = (await meRes.json()) as any;
       const email = userInfo.email || `${userInfo.sub}@logto.user`;
       const roles: string[] = Array.isArray(userInfo.roles) ? userInfo.roles : [];
-      const isAdmin = checkIsAdmin(email, roles);
+      const isAdmin = checkIsAdmin(email, roles, cfEnv);
 
       authUser = {
         id: userInfo.sub,
@@ -96,12 +100,18 @@ export const GET: APIRoute = async ({ request, url }) => {
       console.error('[Auth Callback] Logto exchange error:', err);
       return new Response(`Authentication Error: ${err.message}`, { status: 500 });
     }
+  } else if (code && (!endpoint || !appId || !appSecret)) {
+    console.error('[Auth Callback] Missing Logto config:', { endpoint: !!endpoint, appId: !!appId, appSecret: !!appSecret });
+    return new Response(
+      `Configuration Error: Server is missing Logto credentials (endpoint=${Boolean(endpoint)}, appId=${Boolean(appId)}, appSecret=${Boolean(appSecret)}).`,
+      { status: 500 }
+    );
   } else if (mockEmail) {
     // 2. Simulated Local Development Login Fallback
     const email = mockEmail.trim().toLowerCase();
     const name = mockName?.trim() || email.split('@')[0];
     const roles: string[] = mockAdmin === '1' ? ['admin'] : [];
-    const isAdmin = mockAdmin === '1' || checkIsAdmin(email, roles);
+    const isAdmin = mockAdmin === '1' || checkIsAdmin(email, roles, cfEnv);
     const userId = `usr_${Math.abs(
       email.split('').reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)
     ).toString(16)}`;
@@ -128,7 +138,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   }
 
   // 4. Generate Tamper-Proof Session Cookie
-  const sessionToken = await createSessionToken(authUser);
+  const sessionToken = await createSessionToken(authUser, undefined, cfEnv);
   const sessionCookie = formatSessionCookie(sessionToken);
   const clearStateCookie = 'logto_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
 

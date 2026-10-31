@@ -2,11 +2,13 @@
 import type { APIRoute } from 'astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { getOrderById, getOrderByNo } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ request, params }) => {
-  const user = await getSessionFromRequest(request);
+  const user = await getSessionFromRequest(request, cfEnv);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Unauthorized.' }), {
       status: 401,

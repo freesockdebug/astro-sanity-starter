@@ -2,11 +2,13 @@
 import type { APIRoute } from 'astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { updateOrderStatus, type OrderStatus } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request, params }) => {
-  const user = await getSessionFromRequest(request);
+  const user = await getSessionFromRequest(request, cfEnv);
   if (!user || !user.isAdmin) {
     return new Response(JSON.stringify({ error: 'Forbidden. Administrator access required.' }), {
       status: 403,
