@@ -43,3 +43,4 @@ export const GET: APIRoute = async ({ request, params }) => {
     headers: { 'Content-Type': 'application/json' },
   });
 };
+

@@ -150,10 +150,29 @@ async function setupLogto() {
       console.log(`   ✓ Found existing "admin" role (ID: ${adminRole.id})`);
     }
 
+    // Fetch App Secret
+    let appSecretValue = targetApp.secret;
+    if (!appSecretValue) {
+      try {
+        const secRes = await fetch(`${endpoint}/api/applications/${targetApp.id}/secrets`, {
+          headers,
+          signal: AbortSignal.timeout(6000),
+        });
+        if (secRes.ok) {
+          const secList = await secRes.json();
+          if (Array.isArray(secList) && secList.length > 0) {
+            appSecretValue = secList[0].value;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     console.log('\n🎉 Logto M2M Initialization Complete!');
     console.log('───────────────────────────────────────────────────');
     console.log(`LOGTO_APP_ID=${targetApp.id}`);
-    console.log(`LOGTO_APP_SECRET=${targetApp.secret || '<See Logto Console App Secret>'}`);
+    console.log(`LOGTO_APP_SECRET=${appSecretValue || '<See Logto Console App Secret>'}`);
     console.log('───────────────────────────────────────────────────');
     console.log('You can now add LOGTO_APP_ID and LOGTO_APP_SECRET to your .env or Cloudflare Worker secrets.');
   } catch (err: any) {
@@ -162,3 +181,4 @@ async function setupLogto() {
 }
 
 setupLogto();
+

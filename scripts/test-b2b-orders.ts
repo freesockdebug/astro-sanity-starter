@@ -117,3 +117,4 @@ runSelfCheck().catch((err) => {
   console.error('❌ Self-check failed:', err);
   process.exit(1);
 });
+
