@@ -20,13 +20,6 @@
     "LOGTO_ENDPOINT": "https://8tvr1q.logto.app/",
     "LOGTO_APP_ID": "btx7meodkblwjce23ulpc"
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "gwenvenni-b2b",
-      "database_id": "gwenvenni-b2b-d1"
-    }
-  ],
   "observability": {
     "enabled": true
   }
