@@ -29,6 +29,7 @@ interface ValidatedItem {
   sku: string;
   variant: string;
   quantity: number;
+  imageUrl?: string;
 }
 
 interface ValidationResult {
@@ -96,6 +97,12 @@ function validateQuotePayload(body: any): ValidationResult {
     const sku = typeof item.sku === 'string' ? item.sku.trim().slice(0, 80) : '';
     const variant = typeof item.variant === 'string' ? item.variant.trim().slice(0, 80) : '';
     const parsedQty = Math.max(1, Math.min(100_000, Number(item.quantity) || 1));
+    const imageUrl =
+      typeof item.imageUrl === 'string' && item.imageUrl.trim().length > 0
+        ? item.imageUrl.trim()
+        : typeof item.image === 'string' && item.image.trim().length > 0
+          ? item.image.trim()
+          : undefined;
 
     validatedItems.push({
       id: typeof item.id === 'string' ? item.id.slice(0, 80) : undefined,
@@ -103,6 +110,7 @@ function validateQuotePayload(body: any): ValidationResult {
       sku,
       variant,
       quantity: parsedQty,
+      imageUrl,
     });
   }
 
@@ -336,6 +344,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
             title: i.title,
             variant: i.variant,
             quantity: i.quantity,
+            imageUrl: i.imageUrl,
           })),
         });
         orderId = result.orderId;

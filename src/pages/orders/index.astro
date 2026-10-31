@@ -71,6 +71,20 @@ if (currentSearch) {
 
 const pageTitle = 'My Orders & RFQs | GwenVenni B2B Atelier';
 const pageDesc = 'Track and manage your B2B quotation requests, production approvals, and global shipments.';
+
+const resolveItemImage = (item: any) => {
+  if (item?.image_url && item.image_url.trim()) {
+    return item.image_url.replace('https://cdn.sanity.io', '/cdn-image');
+  }
+  const str = `${item?.title || ''} ${item?.sku || ''}`.toLowerCase();
+  if (str.includes('spec') || str.includes('pdf') || str.includes('dossier')) {
+    return '/images/spec-light.webp';
+  }
+  if (str.includes('ruffle') || str.includes('gv-ru')) {
+    return '/images/products/gv-ruffle-detail.webp';
+  }
+  return '/images/hero-light.webp';
+};
 ---
 
 <Layout title={pageTitle} description={pageDesc}>
@@ -410,7 +424,7 @@ const pageDesc = 'Track and manage your B2B quotation requests, production appro
                     <div class="py-2.5 flex items-center justify-between text-xs gap-3">
                       <div class="flex items-center gap-3 min-w-0">
                         <img
-                          src={item.image_url || '/images/hero-light.webp'}
+                          src={resolveItemImage(item)}
                           alt={item.title}
                           class="w-10 h-10 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 shrink-0"
                           loading="lazy"
