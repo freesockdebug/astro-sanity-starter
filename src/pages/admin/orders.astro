@@ -1,0 +1,518 @@
+---
+// src/pages/admin/orders.astro
+import Layout from '@layouts/Layout.astro';
+import { getSessionFromRequest } from '@utils/auth';
+import { listAdminOrders } from '@utils/db';
+import { getLangFromUrl, getLocalizedPath } from '@i18n';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0');
+
+const currentLang = getLangFromUrl(Astro.url);
+const sessionUser = await getSessionFromRequest(Astro.request);
+
+if (!sessionUser || !sessionUser.isAdmin) {
+  // If not authenticated or not admin, return forbidden / redirect
+  return Astro.redirect(`/api/auth/login?returnUrl=/admin/orders`);
+}
+
+const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
+const currentSearch = Astro.url.searchParams.get('search') || '';
+
+const { orders, total, stats } = await listAdminOrders({
+  status: currentStatus,
+  search: currentSearch,
+  limit: 50,
+});
+
+const pageTitle = 'B2B Admin Fulfillment Workspace | GwenVenni Atelier';
+---
+
+<Layout title={pageTitle}>
+  <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+
+      <!-- Breadcrumbs & Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
+        <div>
+          <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
+            <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">Home</a>
+            <span>/</span>
+            <a href="/orders" class="hover:text-black transition-colors">Orders</a>
+            <span>/</span>
+            <span class="text-[#1d1d1f] font-medium">Admin Workspace</span>
+          </nav>
+          <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
+            Order Fulfillment & Approval
+          </h1>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-[#86868b] hidden sm:inline">
+            Admin: <strong class="text-[#1d1d1f] font-mono">{sessionUser.email}</strong>
+          </span>
+          <a
+            href="/orders"
+            class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs"
+          >
+            Buyer View
+          </a>
+          <a
+            href="/api/auth/logout"
+            class="px-3 py-1.5 rounded-full text-xs font-medium text-[#86868b] hover:text-black hover:bg-black/5 transition-all"
+          >
+            Sign Out
+          </a>
+        </div>
+      </div>
+
+      <!-- Stats Summary Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6">
+        <a
+          href="/admin/orders"
+          class={`p-3.5 rounded-xl border text-xs transition-all ${
+            currentStatus === 'ALL'
+              ? 'bg-[#1d1d1f] text-white border-black shadow-xs'
+              : 'bg-white text-[#1d1d1f] border-black/5 hover:border-black/20'
+          }`}
+        >
+          <span class="text-[11px] block opacity-75">All Orders</span>
+          <span class="text-lg font-bold font-mono tabular-nums">{stats.all}</span>
+        </a>
+
+        <a
+          href="/admin/orders?status=PENDING_APPROVAL"
+          class={`p-3.5 rounded-xl border text-xs transition-all ${
+            currentStatus === 'PENDING_APPROVAL'
+              ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+              : 'bg-white text-amber-900 border-black/5 hover:border-amber-300'
+          }`}
+        >
+          <span class="text-[11px] block opacity-75">Pending Approval</span>
+          <span class="text-lg font-bold font-mono tabular-nums text-amber-600 ${currentStatus === 'PENDING_APPROVAL' ? '!text-white' : ''}">
+            {stats.pending}
+          </span>
+        </a>
+
+        <a
+          href="/admin/orders?status=APPROVED"
+          class={`p-3.5 rounded-xl border text-xs transition-all ${
+            currentStatus === 'APPROVED'
+              ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
+              : 'bg-white text-blue-900 border-black/5 hover:border-blue-300'
+          }`}
+        >
+          <span class="text-[11px] block opacity-75">Approved (To Ship)</span>
+          <span class="text-lg font-bold font-mono tabular-nums text-blue-600 ${currentStatus === 'APPROVED' ? '!text-white' : ''}">
+            {stats.approved}
+          </span>
+        </a>
+
+        <a
+          href="/admin/orders?status=SHIPPED"
+          class={`p-3.5 rounded-xl border text-xs transition-all ${
+            currentStatus === 'SHIPPED'
+              ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+              : 'bg-white text-emerald-900 border-black/5 hover:border-emerald-300'
+          }`}
+        >
+          <span class="text-[11px] block opacity-75">Shipped</span>
+          <span class="text-lg font-bold font-mono tabular-nums text-emerald-600 ${currentStatus === 'SHIPPED' ? '!text-white' : ''}">
+            {stats.shipped}
+          </span>
+        </a>
+
+        <a
+          href="/admin/orders?status=REJECTED"
+          class={`p-3.5 rounded-xl border text-xs transition-all ${
+            currentStatus === 'REJECTED'
+              ? 'bg-zinc-700 text-white border-zinc-800 shadow-xs'
+              : 'bg-white text-zinc-700 border-black/5 hover:border-zinc-300'
+          }`}
+        >
+          <span class="text-[11px] block opacity-75">Rejected</span>
+          <span class="text-lg font-bold font-mono tabular-nums">{stats.rejected}</span>
+        </a>
+      </div>
+
+      <!-- Search & Filter Bar -->
+      <div class="mt-6 flex flex-col sm:flex-row gap-3">
+        <form method="GET" action="/admin/orders" class="flex-1 flex gap-2">
+          {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
+          <div class="relative flex-1">
+            <input
+              type="text"
+              name="search"
+              value={currentSearch}
+              placeholder="Search by Order No, buyer email or company name..."
+              class="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
+            />
+            {currentSearch && (
+              <a
+                href={currentStatus !== 'ALL' ? `/admin/orders?status=${currentStatus}` : '/admin/orders'}
+                class="absolute right-3 top-2 text-xs text-[#86868b] hover:text-black"
+              >
+                ✕
+              </a>
+            )}
+          </div>
+          <button
+            type="submit"
+            class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer"
+          >
+            Filter
+          </button>
+        </form>
+      </div>
+
+      <!-- Orders Table Container -->
+      <div class="mt-6 bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        
+        {orders.length === 0 ? (
+          <div class="py-16 text-center text-xs text-[#86868b]">
+            No orders matching the current filter.
+          </div>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-[#fbfbfd] border-b border-black/5 text-[#86868b] font-medium">
+                  <th class="py-3 px-4">Order No / Date</th>
+                  <th class="py-3 px-4">Buyer / Company</th>
+                  <th class="py-3 px-4">Destination</th>
+                  <th class="py-3 px-4 text-right">Styles / Qty</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4 text-right">Fulfillment Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-black/5">
+                {orders.map((order) => {
+                  const isPending = order.status === 'PENDING_APPROVAL';
+                  const isApproved = order.status === 'APPROVED';
+                  const isShipped = order.status === 'SHIPPED';
+                  const isRejected = order.status === 'REJECTED';
+
+                  return (
+                    <tr class="hover:bg-[#fbfbfd] transition-colors">
+                      <!-- Order No & Date -->
+                      <td class="py-3.5 px-4 font-mono">
+                        <span class="font-semibold text-[#1d1d1f] block">{order.order_no}</span>
+                        <span class="text-[11px] text-[#86868b]">{order.created_at.slice(0, 16)}</span>
+                      </td>
+
+                      <!-- Buyer & Company -->
+                      <td class="py-3.5 px-4">
+                        <span class="font-medium text-[#1d1d1f] block truncate max-w-[180px]">
+                          {order.company_name || order.contact_name || 'Independent Buyer'}
+                        </span>
+                        <span class="text-[11px] text-[#86868b] font-mono block truncate max-w-[180px]">
+                          {order.buyer_email}
+                        </span>
+                      </td>
+
+                      <!-- Destination -->
+                      <td class="py-3.5 px-4 text-[#52525b]">
+                        {order.destination_country || 'Unspecified'}
+                      </td>
+
+                      <!-- Items & Quantity -->
+                      <td class="py-3.5 px-4 text-right font-mono tabular-nums">
+                        <span class="font-semibold text-[#1d1d1f]">{order.total_quantity} pcs</span>
+                        <span class="text-[11px] text-[#86868b] block">{order.total_styles} style(s)</span>
+                      </td>
+
+                      <!-- Status Badge -->
+                      <td class="py-3.5 px-4">
+                        {isPending && (
+                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            Pending Approval
+                          </span>
+                        )}
+                        {isApproved && (
+                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                            Approved
+                          </span>
+                        )}
+                        {isShipped && (
+                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Shipped
+                          </span>
+                        )}
+                        {isRejected && (
+                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">
+                            Rejected
+                          </span>
+                        )}
+                      </td>
+
+                      <!-- Actions Column -->
+                      <td class="py-3.5 px-4 text-right">
+                        <div class="flex items-center justify-end gap-1.5">
+                          {isPending && (
+                            <>
+                              <button
+                                type="button"
+                                class="action-approve-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+                                data-id={order.id}
+                                data-no={order.order_no}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                class="action-reject-btn px-2.5 py-1 rounded-lg text-[11px] font-medium bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer"
+                                data-id={order.id}
+                                data-no={order.order_no}
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+
+                          {isApproved && (
+                            <button
+                              type="button"
+                              class="action-ship-btn px-3 py-1 rounded-lg text-[11px] font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-colors cursor-pointer flex items-center gap-1"
+                              data-id={order.id}
+                              data-no={order.order_no}
+                            >
+                              <span>Fulfill & Ship</span>
+                              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                              </svg>
+                            </button>
+                          )}
+
+                          {isShipped && (
+                            <div class="text-right text-[11px] text-[#86868b] font-mono">
+                              <span>{order.carrier || 'Standard'}</span>
+                              {order.tracking_number && (
+                                <span class="block text-[#1d1d1f] font-semibold truncate max-w-[130px]" title={order.tracking_number}>
+                                  {order.tracking_number}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {isRejected && (
+                            <span class="text-[11px] text-[#86868b] italic">No actions</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Ship Modal Dialog -->
+  <dialog id="ship-modal" class="modal bg-black/40 backdrop-blur-xs p-4 rounded-2xl max-w-md w-full mx-auto my-auto border border-black/10 shadow-2xl">
+    <div class="bg-white p-6 rounded-2xl space-y-4 text-xs text-[#1d1d1f]">
+      <div class="flex items-center justify-between pb-2 border-b border-black/5">
+        <h3 class="text-sm font-semibold">Fulfill Order & Enter Logistics</h3>
+        <button id="close-ship-modal" type="button" class="text-base text-[#86868b] hover:text-black">✕</button>
+      </div>
+
+      <p class="text-[#86868b]">Order Number: <strong id="ship-modal-order-no" class="font-mono text-[#1d1d1f]"></strong></p>
+
+      <form id="ship-form" class="space-y-3">
+        <input type="hidden" id="ship-order-id" name="order_id" />
+        
+        <div>
+          <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Carrier / Express Name</label>
+          <select
+            id="ship-carrier-select"
+            name="carrier"
+            required
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black"
+          >
+            <option value="DHL Express">DHL Express</option>
+            <option value="FedEx International">FedEx International</option>
+            <option value="UPS Worldwide">UPS Worldwide</option>
+            <option value="SF Express (International)">SF Express (顺丰国际)</option>
+            <option value="Sea Freight (DDP)">Sea Freight (海运专线 DDP)</option>
+            <option value="Air Freight">Air Freight (空运专线)</option>
+            <option value="Other">Other / Custom Carrier</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Tracking / Waybill Number</label>
+          <input
+            type="text"
+            id="ship-tracking-number"
+            name="tracking_number"
+            required
+            placeholder="e.g. 78349281923"
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono"
+          />
+        </div>
+
+        <div>
+          <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Admin Remarks / Dispatch Notes (Optional)</label>
+          <textarea
+            id="ship-remark"
+            name="admin_remark"
+            rows="2"
+            placeholder="e.g. Packed in 2 cartons, estimated delivery Nov 12."
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none"
+          ></textarea>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button
+            type="button"
+            id="cancel-ship-btn"
+            class="px-4 py-2 rounded-full text-xs font-medium text-[#86868b] hover:bg-[#f5f5f7]"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            id="confirm-ship-btn"
+            class="px-5 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer"
+          >
+            Confirm Shipment
+          </button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+</Layout>
+
+<script>
+  // Handle Approve
+  document.querySelectorAll<HTMLButtonElement>('.action-approve-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const orderId = btn.getAttribute('data-id');
+      const orderNo = btn.getAttribute('data-no');
+      if (!orderId || !confirm(`Approve order ${orderNo}? It will be marked as APPROVED and ready for shipping.`)) return;
+
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'approve' }),
+        });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Approval failed');
+        }
+      } catch (err: any) {
+        alert(err.message || 'Network error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  // Handle Reject
+  document.querySelectorAll<HTMLButtonElement>('.action-reject-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const orderId = btn.getAttribute('data-id');
+      const orderNo = btn.getAttribute('data-no');
+      if (!orderId) return;
+
+      const reason = prompt(`Enter reason for rejecting order ${orderNo}:`);
+      if (reason === null) return; // user cancelled
+
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reject', adminRemark: reason }),
+        });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Rejection failed');
+        }
+      } catch (err: any) {
+        alert(err.message || 'Network error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  // Handle Ship Modal
+  const shipModal = document.getElementById('ship-modal') as HTMLDialogElement | null;
+  const closeShipModal = document.getElementById('close-ship-modal');
+  const cancelShipBtn = document.getElementById('cancel-ship-btn');
+  const shipForm = document.getElementById('ship-form') as HTMLFormElement | null;
+  const shipOrderIdInput = document.getElementById('ship-order-id') as HTMLInputElement | null;
+  const shipOrderNoLabel = document.getElementById('ship-modal-order-no');
+
+  document.querySelectorAll<HTMLButtonElement>('.action-ship-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const orderId = btn.getAttribute('data-id');
+      const orderNo = btn.getAttribute('data-no');
+      if (!orderId || !shipModal) return;
+
+      if (shipOrderIdInput) shipOrderIdInput.value = orderId;
+      if (shipOrderNoLabel) shipOrderNoLabel.textContent = orderNo || orderId;
+
+      shipModal.showModal();
+    });
+  });
+
+  const hideModal = () => {
+    if (shipModal) shipModal.close();
+  };
+
+  closeShipModal?.addEventListener('click', hideModal);
+  cancelShipBtn?.addEventListener('click', hideModal);
+
+  shipForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const orderId = shipOrderIdInput?.value;
+    if (!orderId) return;
+
+    const formData = new FormData(shipForm);
+    const carrier = formData.get('carrier')?.toString();
+    const trackingNumber = formData.get('tracking_number')?.toString();
+    const adminRemark = formData.get('admin_remark')?.toString();
+
+    const submitBtn = document.getElementById('confirm-ship-btn') as HTMLButtonElement | null;
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'ship',
+          carrier,
+          trackingNumber,
+          adminRemark,
+        }),
+      });
+
+      if (res.ok) {
+        hideModal();
+        window.location.reload();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to dispatch shipment');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Network error');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+</script>

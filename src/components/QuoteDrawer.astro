@@ -128,6 +128,7 @@ if (reqCountryCode) {
           <span>{drawerSubtitle}</span>
           <span class="text-emerald-700 font-medium">{drawerStatus}</span>
         </div>
+        <div id="quote-user-auth-status" class="hidden text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200"></div>
 
         <form id="rfq-form" class="space-y-2.5">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -258,10 +259,38 @@ if (reqCountryCode) {
       .catch(() => {});
   }
 
+  let currentAuthUser: any = null;
+
+  async function checkDrawerAuth() {
+    try {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      if (data && data.authenticated && data.user) {
+        currentAuthUser = data.user;
+        const emailInput = document.querySelector('#quote-drawer-root input[name="email"]') as HTMLInputElement | null;
+        const nameInput = document.querySelector('#quote-drawer-root input[name="buyer_name"]') as HTMLInputElement | null;
+        if (emailInput && !emailInput.value.trim()) {
+          emailInput.value = data.user.email;
+        }
+        if (nameInput && !nameInput.value.trim() && data.user.name) {
+          nameInput.value = data.user.name;
+        }
+        const userStatusLabel = document.getElementById('quote-user-auth-status');
+        if (userStatusLabel) {
+          userStatusLabel.textContent = `✓ Signed in: ${data.user.email}`;
+          userStatusLabel.classList.remove('hidden');
+        }
+      }
+    } catch {
+      // non-blocking
+    }
+  }
+
   // Expose global drawer opener
   (window as any).openQuoteDrawer = () => {
     ensureTurnstileLoaded();
     autoFillVisitorCountry();
+    checkDrawerAuth();
     const toggle = document.getElementById('quote-drawer-toggle') as HTMLInputElement | null;
     if (toggle) toggle.checked = true;
   };
@@ -610,9 +639,20 @@ if (reqCountryCode) {
       const data = await res.json();
 
       if (res.ok && data.success) {
+        const orderNo = data.orderNo || 'Recorded';
         if (alertBox) {
-          alertBox.className = 'p-3 rounded-xl text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 block';
-          alertBox.textContent = submitBtn?.dataset.successMessage || '✓ Official RFQ Received!';
+          alertBox.className = 'p-3.5 rounded-xl text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 block space-y-2';
+          alertBox.innerHTML = `
+            <div class="font-semibold text-emerald-900">✓ Official RFQ & Order Received!</div>
+            <div class="text-[11px]">Official Order No: <strong class="font-mono">${escapeHtml(orderNo)}</strong></div>
+            <div class="pt-1">
+              ${
+                currentAuthUser
+                  ? `<a href="/orders" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all">Track in My Orders →</a>`
+                  : `<button type="button" onclick="window.openAuthLogin && window.openAuthLogin('/orders')" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer">Sign In with this email to Track Order →</button>`
+              }
+            </div>
+          `;
         }
         rfqForm.reset();
         clearQuote();
@@ -620,12 +660,6 @@ if (reqCountryCode) {
         // Hide Turnstile container on success so it does not re-verify or distract
         const turnstileContainer = rfqForm.querySelector('.cf-turnstile') as HTMLElement;
         if (turnstileContainer) turnstileContainer.style.display = 'none';
-
-        setTimeout(() => {
-          (window as any).closeQuoteDrawer();
-          if (alertBox) alertBox.className = 'hidden';
-          if (turnstileContainer) turnstileContainer.style.display = '';
-        }, 3000);
       } else {
         throw new Error(data.error || 'Submission failed');
       }

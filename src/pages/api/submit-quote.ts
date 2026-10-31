@@ -3,6 +3,8 @@ import { createClient } from '@sanity/client';
 import { SecurityService } from '@utils/security';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
+import { getSessionFromRequest } from '@utils/auth';
+import { createOrder } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -309,7 +311,42 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }
     }
 
-    // 3. Execute Sanity write, Resend email, and Webhook notification concurrently
+    // 3. Create Official B2B Order in Cloudflare D1
+    const sessionUser = await getSessionFromRequest(request);
+    const userId = sessionUser ? sessionUser.id : null;
+
+    let orderNo = '';
+    let orderId = '';
+    let d1WriteError: string | null = null;
+
+    const d1WriteTask = (async () => {
+      try {
+        const result = await createOrder({
+          userId,
+          buyerEmail: buyerInfo.email,
+          companyName: buyerInfo.company,
+          contactName: buyerInfo.name,
+          whatsapp: buyerInfo.whatsapp,
+          destinationCountry: resolvedDestination,
+          customerNotes: buyerInfo.message,
+          inquiryType,
+          items: items.map((i) => ({
+            productId: i.id,
+            sku: i.sku,
+            title: i.title,
+            variant: i.variant,
+            quantity: i.quantity,
+          })),
+        });
+        orderId = result.orderId;
+        orderNo = result.orderNo;
+      } catch (err: any) {
+        console.error('Could not write order to D1:', err);
+        d1WriteError = err?.message || 'D1 create failed';
+      }
+    })();
+
+    // 4. Execute Sanity write, Resend email, and Webhook notification concurrently
     let sanityRecordId: string | null = null;
     let sanityWriteError: string | null = null;
     const sanityToken =
@@ -473,13 +510,13 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }
     })();
 
-    await Promise.allSettled([sanityWriteTask, emailTask, webhookTask]);
+    await Promise.allSettled([d1WriteTask, sanityWriteTask, emailTask, webhookTask]);
 
-    if (!sanityRecordId) {
-      console.error('Inquiry not saved to Sanity:', sanityWriteError);
+    if (!sanityRecordId && !orderNo) {
+      console.error('Inquiry could not be recorded in Sanity or D1:', sanityWriteError, d1WriteError);
       return new Response(
         JSON.stringify({
-          error: `Inquiry could not be saved to Sanity: ${sanityWriteError}.`,
+          error: `Inquiry could not be saved: ${sanityWriteError || d1WriteError}.`,
           success: false,
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -489,7 +526,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Your RFQ has been received. Our account manager will contact you within 24 hours.',
+        orderNo: orderNo || undefined,
+        orderId: orderId || undefined,
+        message: 'Your RFQ and Official Order have been received. Our account manager will contact you within 24 hours.',
         sanityRecordId,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }

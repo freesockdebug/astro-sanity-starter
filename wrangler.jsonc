@@ -15,8 +15,16 @@
     "SANITY_PROJECT_ID": "xvhhd8u0",
     "SANITY_DATASET": "production",
     "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFXbqPn5Jkh6bMhV",
-    "TURNSTILE_HOSTNAMES": "localhost,127.0.0.1,gwenvenni.com"
+    "TURNSTILE_HOSTNAMES": "localhost,127.0.0.1,gwenvenni.com",
+    "ADMIN_EMAILS": "forhaisome@gmail.com"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gwenvenni-b2b",
+      "database_id": "gwenvenni-b2b-d1"
+    }
+  ],
   "observability": {
     "enabled": true
   }

@@ -33,6 +33,9 @@ scripts/*
 !scripts/preflight-rules.json
 !scripts/verify-cf-deploy.mjs
 !scripts/ensure-asset-aliases.cjs
+!scripts/setup-logto.ts
+!scripts/test-b2b-orders.ts
+!scripts/b2borderimplementation_plan.md
 amazon_*.json
 studio/.sanity/
 # AI agent documentation & IDE rules

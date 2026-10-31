@@ -1,0 +1,344 @@
+---
+// src/pages/orders/index.astro
+import Layout from '@layouts/Layout.astro';
+import { getSessionFromRequest } from '@utils/auth';
+import { getOrdersByUserId, claimOrdersByEmail, type OrderRecord } from '@utils/db';
+import { getLangFromUrl, getLocalizedPath } from '@i18n';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0');
+
+const currentLang = getLangFromUrl(Astro.url);
+const sessionUser = await getSessionFromRequest(Astro.request);
+
+let orders: OrderRecord[] = [];
+let claimedCount = 0;
+
+if (sessionUser) {
+  try {
+    claimedCount = await claimOrdersByEmail(sessionUser.email, sessionUser.id);
+  } catch (e) {
+    // Non-blocking
+  }
+  orders = await getOrdersByUserId(sessionUser.id);
+}
+
+const pageTitle = 'My Orders & RFQs | GwenVenni B2B Atelier';
+const pageDesc = 'Track and manage your B2B quotation requests, production approvals, and global shipments.';
+---
+
+<Layout title={pageTitle} description={pageDesc}>
+  <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6">
+      
+      <!-- Breadcrumb & Top Bar -->
+      <div class="flex items-center justify-between pb-6 border-b border-black/5">
+        <div>
+          <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
+            <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">Home</a>
+            <span>/</span>
+            <span class="text-[#1d1d1f] font-medium">Orders</span>
+          </nav>
+          <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
+            Order Center
+          </h1>
+        </div>
+
+        {sessionUser && (
+          <div class="flex items-center gap-3">
+            {sessionUser.isAdmin && (
+              <a
+                href="/admin/orders"
+                class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs"
+              >
+                Admin Workspace
+              </a>
+            )}
+            <a
+              href="/api/auth/logout"
+              class="px-3.5 py-1.5 rounded-full text-xs font-medium text-[#86868b] hover:text-black hover:bg-black/5 transition-all"
+            >
+              Sign Out
+            </a>
+          </div>
+        )}
+      </div>
+
+      <!-- State 1: Unauthenticated Buyer -->
+      {!sessionUser && (
+        <div class="mt-12 bg-white rounded-2xl border border-black/5 p-8 sm:p-12 text-center max-w-xl mx-auto shadow-sm">
+          <div class="w-16 h-16 mx-auto rounded-full bg-[#f5f5f7] flex items-center justify-center text-[#1d1d1f] mb-4">
+            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+          </div>
+          <h2 class="text-xl font-semibold mb-2">Track Your B2B RFQs & Orders</h2>
+          <p class="text-sm text-[#86868b] max-w-md mx-auto mb-6 leading-relaxed">
+            Sign in with your work email to view approval statuses, real-time logistics tracking, and sample specifications. Any past orders placed with this email will be linked automatically.
+          </p>
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              id="orders-signin-btn"
+              class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm cursor-pointer"
+            >
+              Sign In with Work Email
+            </button>
+            <a
+              href={getLocalizedPath('/#collection', currentLang)}
+              class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-black/10 transition-all text-center"
+            >
+              Browse Sock Collections
+            </a>
+          </div>
+        </div>
+      )}
+
+      <!-- State 2: Authenticated Buyer -->
+      {sessionUser && (
+        <div class="mt-8 space-y-6">
+          
+          <!-- Buyer Account Information Banner -->
+          <div class="bg-white rounded-xl border border-black/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-semibold uppercase text-xs">
+                {sessionUser.name ? sessionUser.name.charAt(0) : sessionUser.email.charAt(0)}
+              </div>
+              <div>
+                <span class="font-semibold text-[#1d1d1f]">{sessionUser.name || 'B2B Client'}</span>
+                <span class="text-[#86868b] block font-mono text-[11px]">{sessionUser.email}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 text-[#86868b]">
+              <span>Orders: <strong class="text-[#1d1d1f] font-mono tabular-nums">{orders.length}</strong></span>
+              <span>·</span>
+              <span class="text-emerald-700">Auto-Claim Active</span>
+            </div>
+          </div>
+
+          <!-- Auto-Claim Notification Banner if claimed -->
+          {claimedCount > 0 && (
+            <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl p-3 flex items-center gap-2">
+              <svg class="w-4 h-4 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Successfully linked <strong>{claimedCount}</strong> past guest order(s) submitted with this email to your account!</span>
+            </div>
+          )}
+
+          <!-- Empty Orders List -->
+          {orders.length === 0 && (
+            <div class="bg-white rounded-2xl border border-black/5 p-12 text-center shadow-sm">
+              <div class="w-12 h-12 mx-auto rounded-full bg-[#f5f5f7] flex items-center justify-center text-[#86868b] mb-3">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h3 class="text-base font-semibold mb-1">No Orders Found</h3>
+              <p class="text-xs text-[#86868b] max-w-sm mx-auto mb-5">
+                You haven't submitted any RFQ or procurement orders with this account yet.
+              </p>
+              <a
+                href={getLocalizedPath('/#collection', currentLang)}
+                class="inline-flex items-center px-5 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all"
+              >
+                Explore Styles & Request Swatches
+              </a>
+            </div>
+          )}
+
+          <!-- Orders List -->
+          {orders.map((order) => {
+            const isPending = order.status === 'PENDING_APPROVAL';
+            const isApproved = order.status === 'APPROVED';
+            const isShipped = order.status === 'SHIPPED';
+            const isRejected = order.status === 'REJECTED';
+
+            return (
+              <div class="bg-white rounded-2xl border border-black/5 p-5 sm:p-6 space-y-4 shadow-sm transition-all hover:shadow-md">
+                
+                <!-- Order Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-black/5 text-xs">
+                  <div>
+                    <div class="flex items-center gap-2.5">
+                      <span class="font-mono font-semibold text-sm tracking-tight text-[#1d1d1f]">
+                        {order.order_no}
+                      </span>
+                      <button
+                        type="button"
+                        class="copy-btn text-[#86868b] hover:text-black transition-colors"
+                        data-copy={order.order_no}
+                        title="Copy Order Number"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                    <p class="text-[#86868b] text-[11px] font-mono mt-0.5">
+                      Submitted: {order.created_at}
+                    </p>
+                  </div>
+
+                  <!-- Status Badge -->
+                  <div>
+                    {isPending && (
+                      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                        Pending Approval (待审批)
+                      </span>
+                    )}
+                    {isApproved && (
+                      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        Approved · Preparing Shipment (已审批待发货)
+                      </span>
+                    )}
+                    {isShipped && (
+                      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Shipped (已发货)
+                      </span>
+                    )}
+                    {isRejected && (
+                      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+                        Rejected (已驳回)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <!-- Shipping & Logistics Card (If Shipped) -->
+                {isShipped && (
+                  <div class="bg-[#f5f5f7] rounded-xl p-3.5 border border-black/5 text-xs space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <span class="font-semibold text-[#1d1d1f]">Carrier & Tracking Information:</span>
+                      <span class="text-[#86868b] font-mono text-[11px]">Shipped at: {order.shipped_at || 'Recently'}</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs">
+                      <div>
+                        <span class="text-[#86868b]">Carrier:</span>{' '}
+                        <strong class="text-[#1d1d1f]">{order.carrier || 'Standard Express'}</strong>
+                      </div>
+                      {order.tracking_number && (
+                        <div class="flex items-center gap-1.5">
+                          <span class="text-[#86868b]">Tracking No:</span>
+                          <span class="font-mono font-semibold text-[#1d1d1f]">{order.tracking_number}</span>
+                          <button
+                            type="button"
+                            class="copy-btn text-[#86868b] hover:text-black transition-colors"
+                            data-copy={order.tracking_number}
+                            title="Copy Tracking Number"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {order.admin_remark && (
+                      <p class="text-[11px] text-[#52525b] border-t border-black/5 pt-1 mt-1">
+                        Note: {order.admin_remark}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <!-- Rejection Note (If Rejected) -->
+                {isRejected && order.admin_remark && (
+                  <div class="bg-rose-50 rounded-xl p-3 border border-rose-200 text-xs text-rose-800">
+                    <strong>Reason for rejection:</strong> {order.admin_remark}
+                  </div>
+                )}
+
+                <!-- Items Table -->
+                <div class="divide-y divide-black/5">
+                  {(order.items || []).map((item) => (
+                    <div class="py-2.5 flex items-center justify-between text-xs gap-3">
+                      <div class="flex items-center gap-3 min-w-0">
+                        <img
+                          src={item.image_url || '/images/hero-light.webp'}
+                          alt={item.title}
+                          class="w-10 h-10 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 shrink-0"
+                          loading="lazy"
+                        />
+                        <div class="min-w-0">
+                          <p class="font-medium text-[#1d1d1f] truncate">{item.title}</p>
+                          <p class="text-[11px] text-[#86868b] truncate font-mono">
+                            {item.sku ? `${item.sku} · ` : ''}{item.variant || 'Standard Spec'}
+                          </p>
+                        </div>
+                      </div>
+                      <div class="font-mono tabular-nums font-semibold text-right shrink-0">
+                        {item.quantity} pcs
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <!-- Footer Summary -->
+                <div class="pt-3 border-t border-black/5 flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-[#86868b] gap-2">
+                  <div class="flex items-center gap-3">
+                    <span>Destination: <strong class="text-[#1d1d1f]">{order.destination_country || 'Worldwide'}</strong></span>
+                    <span>·</span>
+                    <span>Total Quantity: <strong class="text-[#1d1d1f] font-mono tabular-nums">{order.total_quantity} pcs</strong></span>
+                  </div>
+                  {order.customer_notes && (
+                    <p class="truncate max-w-xs text-zinc-500 italic">
+                      Notes: "{order.customer_notes}"
+                    </p>
+                  )}
+                </div>
+
+              </div>
+            );
+          })}
+
+        </div>
+      )}
+
+    </div>
+  </main>
+</Layout>
+
+<script>
+  // Setup sign in popup trigger
+  const signinBtn = document.getElementById('orders-signin-btn');
+  if (signinBtn) {
+    signinBtn.addEventListener('click', () => {
+      function handleAuthMessage(event: MessageEvent) {
+        if (event.data?.type === 'LOGTO_AUTH_SUCCESS') {
+          window.removeEventListener('message', handleAuthMessage);
+          window.location.reload();
+        }
+      }
+      window.addEventListener('message', handleAuthMessage);
+      window.open(
+        '/api/auth/login?popup=1',
+        'LogtoAuth',
+        'width=480,height=640,menubar=no,toolbar=no,location=no,status=no'
+      );
+    });
+  }
+
+  // Copy buttons
+  document.querySelectorAll<HTMLButtonElement>('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const text = btn.getAttribute('data-copy');
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span style="color:#10b981;font-size:10px;">✓</span>';
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+        }, 1500);
+      } catch (err) {
+        // ignore
+      }
+    });
+  });
+</script>
