@@ -312,7 +312,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     }
 
     // 3. Create Official B2B Order in Cloudflare D1
-    const sessionUser = await getSessionFromRequest(request);
+    const sessionUser = await getSessionFromRequest(request, cfEnv);
     const userId = sessionUser ? sessionUser.id : null;
 
     let orderNo = '';
