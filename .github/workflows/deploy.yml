@@ -43,7 +43,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          LOGTO_APP_SECRET: ${{ secrets.LOGTO_APP_SECRET }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::warning::CLOUDFLARE_API_TOKEN secret is not set in GitHub Repository Secrets. Skipping GitHub Actions deploy step (if using Cloudflare Dashboard Git integration, deployment is handled automatically by Cloudflare)."
@@ -54,57 +53,6 @@ jobs:
           else
             echo "::notice::CLOUDFLARE_ACCOUNT_ID secret not set; Wrangler will auto-resolve if the API token is scoped to a single account."
           fi
-          if [ -n "$LOGTO_APP_SECRET" ]; then
-            echo "$LOGTO_APP_SECRET" | npx wrangler secret put LOGTO_APP_SECRET || true
-          fi
-
-          # Auto-discover and persist Cloudflare D1 database binding so redeployment never unbinds D1
-          HAS_VALID_D1=$(node -e '
-            const fs = require("fs");
-            const text = fs.readFileSync("wrangler.jsonc", "utf8");
-            const match = text.match(/"database_id":\s*"([0-9a-fA-F-]{36})"/);
-            console.log(match ? match[1] : "");
-          ')
-
-          if [ -z "$HAS_VALID_D1" ]; then
-            echo "Searching Cloudflare for user D1 database..."
-            RESOLVED_D1=$(npx wrangler d1 list --json 2>/dev/null | node -e '
-              let input = "";
-              process.stdin.on("data", c => input += c);
-              process.stdin.on("end", () => {
-                try {
-                  const dbs = JSON.parse(input);
-                  if (Array.isArray(dbs) && dbs.length > 0) {
-                    const match = dbs.find(d => /b2b/i.test(d.name)) || dbs[0];
-                    if (match && match.uuid) {
-                      console.log(match.name + ":::" + match.uuid);
-                    }
-                  }
-                } catch {}
-              });
-            ' || true)
-
-            if [ -n "$RESOLVED_D1" ]; then
-              DB_NAME="${RESOLVED_D1%%:::*}"
-              DB_UUID="${RESOLVED_D1##*:::}"
-              echo "✓ Found D1 database in Cloudflare account: $DB_NAME ($DB_UUID)"
-              node -e "
-                const fs = require('fs');
-                let text = fs.readFileSync('wrangler.jsonc', 'utf8');
-                if (!text.includes('\"d1_databases\"')) {
-                  const d1Block = '  \"d1_databases\": [\n    {\n      \"binding\": \"DB\",\n      \"database_name\": \"$DB_NAME\",\n      \"database_id\": \"$DB_UUID\"\n    }\n  ],\n  \"observability\"';
-                  text = text.replace('\"observability\"', d1Block);
-                  fs.writeFileSync('wrangler.jsonc', text, 'utf8');
-                  console.log('Successfully injected D1 binding into wrangler.jsonc');
-                }
-              "
-              # Ensure D1 tables exist
-              npx wrangler d1 execute "$DB_NAME" --remote --file=scripts/d1-schema.sql || true
-            else
-              echo "::warning::No D1 database found matching 'b2b'. Please ensure D1 database is created in Cloudflare."
-            fi
-          fi
-
           npx wrangler deploy --keep-vars
 
       - name: Purge Cloudflare Edge Cache
