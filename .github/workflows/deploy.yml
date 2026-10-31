@@ -53,6 +53,61 @@ jobs:
           else
             echo "::notice::CLOUDFLARE_ACCOUNT_ID secret not set; Wrangler will auto-resolve if the API token is scoped to a single account."
           fi
+
+          # Auto-resolve or provision Cloudflare D1 database if database_id is placeholder
+          CURRENT_DB_ID=$(node -e 'try { const w = JSON.parse(require("fs").readFileSync("wrangler.jsonc", "utf8")); console.log(w.d1_databases?.[0]?.database_id || ""); } catch { console.log(""); }')
+          
+          if [[ ! "$CURRENT_DB_ID" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            echo "Searching Cloudflare for existing D1 database 'gwenvenni-b2b'..."
+            RESOLVED_ID=$(npx wrangler d1 list --json 2>/dev/null | node -e '
+              let input = "";
+              process.stdin.on("data", c => input += c);
+              process.stdin.on("end", () => {
+                try {
+                  const dbs = JSON.parse(input);
+                  const found = Array.isArray(dbs) ? dbs.find(d => d.name === "gwenvenni-b2b") : null;
+                  console.log(found ? found.uuid : "");
+                } catch { console.log(""); }
+              });
+            ' || true)
+
+            if [ -z "$RESOLVED_ID" ]; then
+              echo "Creating new Cloudflare D1 database 'gwenvenni-b2b'..."
+              RESOLVED_ID=$(npx wrangler d1 create gwenvenni-b2b --json 2>/dev/null | node -e '
+                let input = "";
+                process.stdin.on("data", c => input += c);
+                process.stdin.on("end", () => {
+                  try {
+                    const res = JSON.parse(input);
+                    console.log(res.uuid || "");
+                  } catch { console.log(""); }
+                });
+              ' || true)
+            fi
+
+            if [ -n "$RESOLVED_ID" ]; then
+              echo "✓ Resolved D1 database ID: $RESOLVED_ID"
+              node -e "
+                const fs = require('fs');
+                let content = fs.readFileSync('wrangler.jsonc', 'utf8');
+                content = content.replace(/\"database_id\":\s*\"[^\"]+\"/, '\"database_id\": \"$RESOLVED_ID\"');
+                fs.writeFileSync('wrangler.jsonc', content);
+                console.log('Updated wrangler.jsonc with valid D1 UUID');
+              "
+              # Apply SQL schema to remote D1
+              echo "Applying schema to remote Cloudflare D1 database..."
+              npx wrangler d1 execute gwenvenni-b2b --remote --file=db/schema.sql || true
+            else
+              echo "::warning::Could not resolve D1 database. Temporarily stripping unverified d1_databases binding to prevent blocking worker deploy."
+              node -e "
+                const fs = require('fs');
+                let content = fs.readFileSync('wrangler.jsonc', 'utf8');
+                content = content.replace(/\"d1_databases\":\s*\[[\s\S]*?\],?/, '');
+                fs.writeFileSync('wrangler.jsonc', content);
+              "
+            fi
+          fi
+
           npx wrangler deploy --keep-vars
 
       - name: Purge Cloudflare Edge Cache
