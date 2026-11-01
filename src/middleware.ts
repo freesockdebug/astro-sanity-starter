@@ -51,17 +51,43 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
 
-  // 3. Bypass cache for APIs, Sanity Studio admin, dynamic auth, and static asset chunks
+  // 3. Bypass cache for APIs, Sanity Studio admin, Orders, dynamic auth, and static asset chunks
+  const isOrdersPath = pathname === '/orders' || pathname.startsWith('/orders/') || pathname.includes('/orders');
+  const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.includes('/admin');
+  const cookieHeader = request.headers.get('cookie') || '';
+  const hasUserSession = cookieHeader.includes('gwenvenni_session');
+
   if (
+    isOrdersPath ||
+    isAdminPath ||
+    hasUserSession ||
     pathname.startsWith('/api/') ||
-    pathname.startsWith('/admin') ||
     pathname.startsWith('/studio') ||
     pathname.startsWith('/cdn-image/') ||
     pathname === '/favicon.ico' ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap-index.xml'
   ) {
-    return next();
+    // Actively evict any stale cache entry for dynamic order/admin views
+    if ((isOrdersPath || isAdminPath) && typeof caches !== 'undefined' && (caches as any).default) {
+      try {
+        const canonicalUrl = new URL(pathname, url.origin);
+        await (caches as any).default.delete(new Request(canonicalUrl.toString(), { method: 'GET' }));
+      } catch {
+        // non-blocking
+      }
+    }
+
+    const response = await next();
+    if (isOrdersPath || isAdminPath || hasUserSession) {
+      response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+      response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+      response.headers.set('CDN-Cache-Control', 'no-store');
+      response.headers.set('Pragma', 'no-cache');
+      response.headers.set('Expires', '0');
+      response.headers.set('X-Edge-Cache', 'BYPASS');
+    }
+    return response;
   }
 
   // 3. Bypass cache if client explicitly requests preview or draft mode
