@@ -35,12 +35,25 @@ export interface UserRecord {
   status: UserStatus;
   admin_notes: string;
   last_login_at: string;
+  last_login_ip?: string;
+  last_login_country?: string;
   created_at: string;
   updated_at: string;
   total_orders?: number;
   pending_orders?: number;
   shipped_orders?: number;
   latest_order_date?: string;
+}
+
+export interface LoginRecord {
+  id?: number;
+  user_id: string;
+  email: string;
+  ip: string;
+  country: string;
+  city: string;
+  user_agent: string;
+  created_at: string;
 }
 
 export interface OrderItem {
@@ -153,6 +166,16 @@ const DDL_STATEMENTS = [
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 )`,
+  `CREATE TABLE IF NOT EXISTS user_logins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  ip TEXT DEFAULT '',
+  country TEXT DEFAULT '',
+  city TEXT DEFAULT '',
+  user_agent TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no)`,
@@ -160,7 +183,9 @@ const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)`,
   `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
   `CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier)`,
-  `CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`
+  `CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_logins_user_id ON user_logins(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_logins_created_at ON user_logins(created_at)`
 ];
 
 const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
@@ -1030,7 +1055,9 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
         COUNT(o.id) as total_orders,
         SUM(CASE WHEN o.status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as pending_orders,
         SUM(CASE WHEN o.status = 'SHIPPED' THEN 1 ELSE 0 END) as shipped_orders,
-        MAX(o.created_at) as latest_order_date
+        MAX(o.created_at) as latest_order_date,
+        (SELECT ip FROM user_logins WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_login_ip,
+        (SELECT country FROM user_logins WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_login_country
       FROM users u
       LEFT JOIN orders o ON (o.user_id = u.id OR LOWER(o.buyer_email) = LOWER(u.email))
       ${whereSql}
@@ -1160,13 +1187,195 @@ export async function updateUserAdminMeta(
 }
 
 /**
- * Retrieves full user details along with their recent orders for the slide-over drawer
+ * Updates a user's self-maintained profile (Name, Company, Country, Phone/WhatsApp)
  */
-export async function getUserDetailsWithOrders(userId: string): Promise<{ user: UserRecord | null; recentOrders: OrderRecord[] }> {
+export async function updateUserProfile(
+  userId: string,
+  input: { name?: string; company?: string; country?: string; phone?: string }
+): Promise<boolean> {
+  if (!userId) return false;
+  const { isD1, db } = await getDbHandle();
+  if (!db) return false;
+
+  return executeWithAutoSchema(isD1, db, async () => {
+    if (isD1) {
+      const res = await db
+        .prepare(
+          `UPDATE users
+           SET name = COALESCE(?1, name),
+               company = COALESCE(?2, company),
+               country = COALESCE(?3, country),
+               phone = COALESCE(?4, phone),
+               updated_at = datetime('now')
+           WHERE id = ?5`
+        )
+        .bind(
+          input.name !== undefined ? input.name.trim() : null,
+          input.company !== undefined ? input.company.trim() : null,
+          input.country !== undefined ? input.country.trim() : null,
+          input.phone !== undefined ? input.phone.trim() : null,
+          userId
+        )
+        .run();
+      return (res?.meta?.changes ?? 0) > 0;
+    }
+
+    const stmt = db.prepare(
+      `UPDATE users
+       SET name = COALESCE(?, name),
+           company = COALESCE(?, company),
+           country = COALESCE(?, country),
+           phone = COALESCE(?, phone),
+           updated_at = datetime('now')
+       WHERE id = ?`
+    );
+    const info = stmt.run(
+      input.name !== undefined ? input.name.trim() : null,
+      input.company !== undefined ? input.company.trim() : null,
+      input.country !== undefined ? input.country.trim() : null,
+      input.phone !== undefined ? input.phone.trim() : null,
+      userId
+    );
+    return (info?.changes ?? 0) > 0;
+  });
+}
+
+/**
+ * Records a successful user login with IP, Geo location, and Device information.
+ * Automatically retains logs for 90 days by purging records older than 90 days.
+ */
+export async function recordUserLogin(input: {
+  userId: string;
+  email: string;
+  ip?: string;
+  country?: string;
+  city?: string;
+  userAgent?: string;
+}): Promise<boolean> {
+  if (!input.userId || !input.email) return false;
+  const { isD1, db } = await getDbHandle();
+  if (!db) return false;
+
+  const safeIp = input.ip?.trim() || '';
+  const safeCountry = input.country?.trim() || '';
+  const safeCity = input.city?.trim() || '';
+  const safeUA = input.userAgent?.slice(0, 500) || '';
+
+  return executeWithAutoSchema(isD1, db, async () => {
+    try {
+      if (isD1) {
+        await db
+          .prepare(
+            `INSERT INTO user_logins (user_id, email, ip, country, city, user_agent, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))`
+          )
+          .bind(input.userId, input.email.toLowerCase().trim(), safeIp, safeCountry, safeCity, safeUA)
+          .run();
+
+        // 90-day retention cleanup
+        await db.prepare(`DELETE FROM user_logins WHERE created_at < datetime('now', '-90 days')`).run();
+        return true;
+      }
+
+      const stmt = db.prepare(
+        `INSERT INTO user_logins (user_id, email, ip, country, city, user_agent, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+      );
+      stmt.run(input.userId, input.email.toLowerCase().trim(), safeIp, safeCountry, safeCity, safeUA);
+
+      db.prepare(`DELETE FROM user_logins WHERE created_at < datetime('now', '-90 days')`).run();
+      return true;
+    } catch (e) {
+      console.warn('[DB] recordUserLogin non-fatal warning:', e);
+      return false;
+    }
+  });
+}
+
+/**
+ * Retrieves login history for a specific user (User self-service view)
+ */
+export async function getUserLoginHistory(userId: string, limit: number = 20): Promise<LoginRecord[]> {
+  if (!userId) return [];
+  const { isD1, db } = await getDbHandle();
+  if (!db) return [];
+
+  return executeWithAutoSchema(isD1, db, async () => {
+    try {
+      if (isD1) {
+        const res = await db
+          .prepare(
+            `SELECT * FROM user_logins
+             WHERE user_id = ?1
+             ORDER BY created_at DESC
+             LIMIT ?2`
+          )
+          .bind(userId, limit)
+          .all();
+        return (res?.results || []) as LoginRecord[];
+      }
+
+      const stmt = db.prepare(
+        `SELECT * FROM user_logins
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+         LIMIT ?`
+      );
+      return (stmt.all(userId, limit) || []) as LoginRecord[];
+    } catch {
+      return [];
+    }
+  });
+}
+
+/**
+ * Retrieves all recent login records across all users (Admin audit view)
+ */
+export async function listAllLoginHistory(limit: number = 50): Promise<LoginRecord[]> {
+  const { isD1, db } = await getDbHandle();
+  if (!db) return [];
+
+  return executeWithAutoSchema(isD1, db, async () => {
+    try {
+      if (isD1) {
+        const res = await db
+          .prepare(
+            `SELECT * FROM user_logins
+             ORDER BY created_at DESC
+             LIMIT ?1`
+          )
+          .bind(limit)
+          .all();
+        return (res?.results || []) as LoginRecord[];
+      }
+
+      const stmt = db.prepare(
+        `SELECT * FROM user_logins
+         ORDER BY created_at DESC
+         LIMIT ?`
+      );
+      return (stmt.all(limit) || []) as LoginRecord[];
+    } catch {
+      return [];
+    }
+  });
+}
+
+/**
+ * Retrieves full user details along with recent orders and recent login history for slide-over drawer
+ */
+export async function getUserDetailsWithOrders(userId: string): Promise<{
+  user: UserRecord | null;
+  recentOrders: OrderRecord[];
+  recentLogins: LoginRecord[];
+}> {
   const user = await getUserByIdOrEmail(userId, null);
   if (!user) {
-    return { user: null, recentOrders: [] };
+    return { user: null, recentOrders: [], recentLogins: [] };
   }
-  const orders = await getOrdersByUserId(user.id, user.email);
-  return { user, recentOrders: orders.slice(0, 5) };
+  const [orders, logins] = await Promise.all([
+    getOrdersByUserId(user.id, user.email),
+    getUserLoginHistory(user.id, 10),
+  ]);
+  return { user, recentOrders: orders.slice(0, 5), recentLogins: logins };
 }

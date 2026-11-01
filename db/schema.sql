@@ -54,6 +54,17 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS user_logins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  ip TEXT DEFAULT '',
+  country TEXT DEFAULT '',
+  city TEXT DEFAULT '',
+  user_agent TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Indexes for performance & idempotent claiming
 CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
@@ -63,4 +74,6 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_user_logins_user_id ON user_logins(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_logins_created_at ON user_logins(created_at);
 

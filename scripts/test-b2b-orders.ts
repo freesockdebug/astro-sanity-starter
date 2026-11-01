@@ -12,6 +12,10 @@ import {
   listAdminUsers,
   updateUserAdminMeta,
   getUserByIdOrEmail,
+  updateUserProfile,
+  recordUserLogin,
+  getUserLoginHistory,
+  listAllLoginHistory,
 } from '../src/utils/db';
 import {
   createSessionToken,
@@ -204,6 +208,43 @@ async function runSelfCheck() {
   assert.strictEqual(afterOrderUser?.country, 'France', 'Country should be backfilled from first order');
   assert.strictEqual(afterOrderUser?.phone, '+33-6-12345678', 'Phone should be backfilled from first order');
   console.log('✔ [PASS] createOrder backfills empty users table fields for logged-in buyers');
+
+  // 14. User Self-Service Profile Update
+  const updateProfileOk = await updateUserProfile(freshUserId, {
+    name: 'Madame Colette',
+    company: 'Atelier de Lyon',
+    country: 'France',
+    phone: '+33-6-98765432',
+  });
+  assert.strictEqual(updateProfileOk, true);
+  const updatedProfileUser = await getUserByIdOrEmail(freshUserId, null);
+  assert.strictEqual(updatedProfileUser?.name, 'Madame Colette');
+  assert.strictEqual(updatedProfileUser?.company, 'Atelier de Lyon');
+  assert.strictEqual(updatedProfileUser?.phone, '+33-6-98765432');
+  console.log('✔ [PASS] updateUserProfile self-service maintenance verified');
+
+  // 15. Record Login History with IP, Geo and 90-day retention
+  const loginOk = await recordUserLogin({
+    userId: freshUserId,
+    email: freshEmail,
+    ip: '192.0.2.1',
+    country: 'FR',
+    city: 'Paris',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+  });
+  assert.strictEqual(loginOk, true);
+
+  const userLogins = await getUserLoginHistory(freshUserId);
+  assert.ok(userLogins.length >= 1);
+  assert.strictEqual(userLogins[0].ip, '192.0.2.1');
+  assert.strictEqual(userLogins[0].country, 'FR');
+  assert.strictEqual(userLogins[0].city, 'Paris');
+  console.log('✔ [PASS] User login session recorded and queried successfully');
+
+  // 16. Admin View of Global Logins
+  const allLogins = await listAllLoginHistory(10);
+  assert.ok(allLogins.length >= 1);
+  console.log('✔ [PASS] Admin view of all login sessions verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

@@ -8,7 +8,7 @@ import {
   getCookieValue,
   type AuthUser,
 } from '@utils/auth';
-import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail } from '@utils/db';
+import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -169,6 +169,24 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
     });
   } catch (syncErr) {
     console.error('[Auth Callback] User D1 sync failed:', syncErr);
+  }
+
+  // 4.5. Record Login History (IP, Geo, Device) with 90-day retention
+  try {
+    const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '';
+    const country = request.headers.get('cf-ipcountry') || '';
+    const city = request.headers.get('cf-ipcity') || '';
+    const userAgent = request.headers.get('user-agent') || '';
+    await recordUserLogin({
+      userId: authUser.id,
+      email: authUser.email,
+      ip: clientIp,
+      country,
+      city,
+      userAgent,
+    });
+  } catch (logErr) {
+    console.warn('[Auth Callback] Failed to record login audit log:', logErr);
   }
 
   // 5. Auto-Claim Historical Unclaimed Orders matching buyer_email

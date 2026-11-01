@@ -1,0 +1,346 @@
+---
+// src/pages/account.astro
+import Layout from '@layouts/Layout.astro';
+import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
+import { getUserByIdOrEmail, getUserLoginHistory } from '@utils/db';
+import { getLangFromUrl, getLocalizedPath } from '@i18n';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+
+const currentLang = getLangFromUrl(Astro.url);
+const sessionUser = await getSessionFromRequest(Astro, cfEnv);
+
+if (!sessionUser) {
+  return Astro.redirect(`/api/auth/login?returnUrl=/account`);
+}
+
+const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
+const loginHistory = await getUserLoginHistory(sessionUser.id, 20);
+
+const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);
+const pageTitle = 'Account & Security Settings | GwenVenni Atelier';
+const pageDesc = 'Manage your B2B atelier profile, authentication credentials, and inspect security login sessions.';
+---
+
+<Layout title={pageTitle} description={pageDesc}>
+  <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 space-y-6">
+
+      <!-- Breadcrumb & Top Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
+        <div>
+          <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
+            <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">Home</a>
+            <span>/</span>
+            <span class="text-[#1d1d1f] font-medium">Account & Security</span>
+          </nav>
+          <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
+            Client Profile & Security
+          </h1>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <a
+            href="/orders"
+            class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs inline-flex items-center gap-1.5"
+          >
+            <span>📦 Order Center</span>
+          </a>
+          {sessionUser.isAdmin && (
+            <a
+              href="/admin/users"
+              class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs"
+            >
+              Admin Workspace
+            </a>
+          )}
+          <a
+            href="/api/auth/logout"
+            class="px-3.5 py-1.5 rounded-full text-xs font-medium text-[#86868b] hover:text-black hover:bg-black/5 transition-all"
+          >
+            Sign Out
+          </a>
+        </div>
+      </div>
+
+      <!-- Identity Summary Badge -->
+      <div class="bg-white rounded-2xl border border-black/5 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+        <div class="flex items-center gap-3.5">
+          <div class="w-11 h-11 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-sm uppercase shrink-0">
+            {(dbUser?.name || sessionUser.name || sessionUser.email)[0]}
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-semibold text-sm text-[#1d1d1f]">{dbUser?.name || sessionUser.name || 'B2B Client'}</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                {dbUser?.tier || 'STANDARD'} TIER
+              </span>
+            </div>
+            <span class="text-xs text-[#86868b] font-mono block mt-0.5">{sessionUser.email}</span>
+          </div>
+        </div>
+
+        <div class="text-left sm:text-right text-[11px] text-[#86868b]">
+          <span>Member ID: <strong class="font-mono text-[#1d1d1f]">{sessionUser.id.slice(0, 16)}...</strong></span>
+          <span class="block">Identity Protected by <strong class="text-[#1d1d1f]">Logto OIDC Cloud</strong></span>
+        </div>
+      </div>
+
+      <!-- Section 1: Profile Maintenance -->
+      <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
+        <div>
+          <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">B2B Client Information</h2>
+          <p class="text-[11px] text-[#86868b] mt-0.5">
+            Keep your couture house, delivery destination, and contact details up to date for faster quote verification.
+          </p>
+        </div>
+
+        <form id="profile-form" class="space-y-4 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="profile-name" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Contact Name</label>
+              <input
+                type="text"
+                id="profile-name"
+                name="name"
+                value={dbUser?.name || sessionUser.name || ''}
+                placeholder="e.g. Eleanor Vance"
+                class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
+              />
+            </div>
+
+            <div>
+              <label for="profile-email" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Work Email (Read-only)</label>
+              <input
+                type="email"
+                id="profile-email"
+                value={sessionUser.email}
+                disabled
+                class="w-full px-3.5 py-2 rounded-xl bg-black/5 border border-black/10 text-[#86868b] font-mono cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label for="profile-company" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Company / Atelier Name</label>
+              <input
+                type="text"
+                id="profile-company"
+                name="company"
+                value={dbUser?.company || ''}
+                placeholder="e.g. Maison de Haute Couture Paris"
+                class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
+              />
+            </div>
+
+            <div>
+              <label for="profile-country" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Destination Country / Region</label>
+              <input
+                type="text"
+                id="profile-country"
+                name="country"
+                value={dbUser?.country || ''}
+                placeholder="e.g. France, Germany, United States"
+                class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
+              />
+            </div>
+
+            <div class="sm:col-span-2">
+              <label for="profile-phone" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Phone / WhatsApp (For Expedited Delivery Updates)</label>
+              <input
+                type="text"
+                id="profile-phone"
+                name="phone"
+                value={dbUser?.phone || ''}
+                placeholder="e.g. +33 6 12 34 56 78"
+                class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
+              />
+            </div>
+          </div>
+
+          <div id="profile-feedback" class="hidden p-3 rounded-xl text-xs font-medium"></div>
+
+          <div class="flex items-center justify-end pt-2">
+            <button
+              type="submit"
+              id="save-profile-btn"
+              class="px-5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs active:scale-95 cursor-pointer"
+            >
+              Save Profile Changes
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Section 2: Security & Password Management -->
+      <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">Password & Security Credentials</h2>
+            <p class="text-[11px] text-[#86868b] mt-0.5">
+              Your authentication credentials are encrypted and governed by Logto OpenID Connect protocols.
+            </p>
+          </div>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shrink-0">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Logto Cloud Active
+          </span>
+        </div>
+
+        <div class="p-4 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <span class="font-semibold text-xs text-[#1d1d1f] block">Account Password</span>
+            <p class="text-[11px] text-[#86868b] max-w-lg leading-relaxed">
+              To protect your account against credential stuffing, password updates and two-factor resets are authenticated directly through Logto's security shield.
+            </p>
+          </div>
+
+          <a
+            href="/api/auth/reset-password?returnUrl=/account"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="px-4 py-2 rounded-xl text-xs font-semibold bg-white border border-black/15 hover:border-black text-[#1d1d1f] hover:bg-[#fbfbfd] transition-all shadow-2xs text-center shrink-0 inline-flex items-center justify-center gap-1.5"
+          >
+            <span>Change Password in Logto</span>
+            <svg class="w-3.5 h-3.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Section 3: Login History & Security Audit -->
+      <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">Login Activity & Security Sessions</h2>
+            <p class="text-[11px] text-[#86868b] mt-0.5">
+              Review recent sign-ins to ensure your atelier account has not been accessed without authorization.
+            </p>
+          </div>
+          <span class="text-[11px] text-[#86868b] font-mono">Retention: 90 Days</span>
+        </div>
+
+        {loginHistory.length === 0 ? (
+          <div class="p-6 rounded-xl bg-[#f5f5f7] text-center text-xs text-[#86868b]">
+            No historical login sessions recorded yet. New sessions will appear here automatically.
+          </div>
+        ) : (
+          <div class="overflow-x-auto rounded-xl border border-black/5">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-[#f5f5f7] text-[#86868b] font-medium border-b border-black/5">
+                <tr>
+                  <th class="py-2.5 px-3.5">Sign-in Date & Time</th>
+                  <th class="py-2.5 px-3.5">IP Address</th>
+                  <th class="py-2.5 px-3.5">Location</th>
+                  <th class="py-2.5 px-3.5">Device & Browser</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-black/5 bg-white">
+                {loginHistory.map((item, idx) => {
+                  const isLatest = idx === 0;
+                  const dateStr = item.created_at || '';
+                  const locationStr = [item.city, item.country].filter(Boolean).join(', ') || 'Global';
+                  
+                  // Clean simplified device summary
+                  let deviceSummary = 'Desktop Web';
+                  if (/mobile|iphone|android/i.test(item.user_agent)) deviceSummary = 'Mobile Device';
+                  else if (/macintosh|mac os/i.test(item.user_agent)) deviceSummary = 'macOS Browser';
+                  else if (/windows/i.test(item.user_agent)) deviceSummary = 'Windows PC';
+
+                  return (
+                    <tr class="hover:bg-[#fbfbfd] transition-colors">
+                      <td class="py-3 px-3.5 font-mono text-[11px]">
+                        <span class="text-[#1d1d1f] font-semibold">{dateStr}</span>
+                        {isLatest && (
+                          <span class="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                            Current
+                          </span>
+                        )}
+                      </td>
+                      <td class="py-3 px-3.5 font-mono text-[#52525b] text-[11px]">
+                        {item.ip || '—'}
+                      </td>
+                      <td class="py-3 px-3.5 text-[#52525b]">
+                        {locationStr}
+                      </td>
+                      <td class="py-3 px-3.5 text-[#86868b] text-[11px] max-w-[200px] truncate" title={item.user_agent}>
+                        {deviceSummary}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div class="p-3 rounded-xl bg-[#f5f5f7] text-[11px] text-[#86868b] flex items-start gap-2">
+          <svg class="w-4 h-4 shrink-0 text-[#86868b] mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>
+            Notice any unfamiliar IP or location? We recommend immediately changing your password in Logto to revoke all external active sessions.
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</Layout>
+
+<script>
+  const form = document.getElementById('profile-form') as HTMLFormElement | null;
+  const saveBtn = document.getElementById('save-profile-btn') as HTMLButtonElement | null;
+  const feedbackEl = document.getElementById('profile-feedback');
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!saveBtn) return;
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    const formData = new FormData(form);
+    const payload = {
+      name: formData.get('name'),
+      company: formData.get('company'),
+      country: formData.get('country'),
+      phone: formData.get('phone'),
+    };
+
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        if (feedbackEl) {
+          feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
+          feedbackEl.textContent = '✓ Profile details updated successfully.';
+        }
+        setTimeout(() => {
+          if (feedbackEl) feedbackEl.className = 'hidden';
+        }, 3000);
+      } else {
+        if (feedbackEl) {
+          feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+          feedbackEl.textContent = data.error || 'Failed to update profile';
+        }
+      }
+    } catch (err: any) {
+      if (feedbackEl) {
+        feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+        feedbackEl.textContent = err.message || 'Network error';
+      }
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Profile Changes';
+    }
+  });
+</script>
