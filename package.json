@@ -11,6 +11,8 @@
     "check:cf": "node ./node_modules/typescript/bin/tsc --noEmit",
     "preview": "node ./astro-cli.mjs preview --host 0.0.0.0 --port 3000",
     "preview:cf": "wrangler dev",
+    "d1:sync": "wrangler d1 execute b2b --remote --file=db/schema.sql -y",
+    "d1:local": "wrangler d1 execute b2b --local --file=db/schema.sql -y",
     "deploy": "node ./astro-cli.mjs build && node scripts/ensure-asset-aliases.cjs && wrangler deploy",
     "build:studio": "cd studio && npm run build",
     "deploy:studio": "cd studio && npm run build && npx wrangler deploy --config wrangler.jsonc",

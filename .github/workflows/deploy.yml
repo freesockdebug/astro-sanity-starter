@@ -39,6 +39,21 @@ jobs:
           TURNSTILE_HOSTNAMES: ${{ secrets.TURNSTILE_HOSTNAMES || 'localhost,127.0.0.1,gwenvenni.com' }}
         run: npm run build
 
+      - name: Sync D1 Database Schema
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN secret is not set, skipping D1 schema sync."
+            exit 0
+          fi
+          if [ -n "$CF_ACCOUNT_ID" ]; then
+            export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
+          fi
+          echo "Syncing D1 database schema (db/schema.sql) to remote D1: b2b..."
+          npx wrangler d1 execute b2b --remote --file=db/schema.sql -y
+
       - name: Deploy Web to Cloudflare Workers
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
