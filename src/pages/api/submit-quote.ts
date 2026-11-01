@@ -4,7 +4,7 @@ import { SecurityService } from '@utils/security';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { getSessionFromRequest } from '@utils/auth';
-import { createOrder } from '@utils/db';
+import { createOrder, generateOrderNo } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -136,6 +136,7 @@ function validateQuotePayload(body: any): ValidationResult {
  * Builds HTML template for B2B RFQ notification email
  */
 function buildRfqEmailHtml(params: {
+  orderNo?: string;
   safeCompany: string;
   safeName: string;
   safeEmail: string;
@@ -147,7 +148,7 @@ function buildRfqEmailHtml(params: {
   safeMessage: string;
   items: ValidatedItem[];
 }): string {
-  const { safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeVisitorIp, safeDetectedCountry, safeInquiryType, safeMessage, items } = params;
+  const { orderNo, safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeVisitorIp, safeDetectedCountry, safeInquiryType, safeMessage, items } = params;
 
   const itemsRows = items
     .map(
@@ -164,6 +165,7 @@ function buildRfqEmailHtml(params: {
       <h2 style="margin-top: 0; color: #171717;">New Request for Quotation (RFQ)</h2>
       <p style="color: #525252; font-size: 14px;">A new B2B buyer has submitted a quotation request on ${DEFAULT_BRAND_TITLE}.</p>
       <div style="background-color: #f5f5f7; border-radius: 8px; padding: 16px; margin: 20px 0;">
+        ${orderNo ? `<p style="margin: 4px 0;"><strong>Order / RFQ No:</strong> <span style="font-family: monospace; font-weight: bold; color: #171717;">${orderNo}</span></p>` : ''}
         <p style="margin: 4px 0;"><strong>Company:</strong> ${safeCompany}</p>
         <p style="margin: 4px 0;"><strong>Contact Name:</strong> ${safeName}</p>
         <p style="margin: 4px 0;"><strong>Work Email:</strong> <a href="mailto:${safeEmail}">${safeEmail}</a></p>
@@ -323,13 +325,14 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const sessionUser = await getSessionFromRequest(request, cfEnv);
     const userId = sessionUser ? sessionUser.id : null;
 
-    let orderNo = '';
+    const orderNo = generateOrderNo();
     let orderId = '';
     let d1WriteError: string | null = null;
 
     const d1WriteTask = (async () => {
       try {
         const result = await createOrder({
+          orderNo,
           userId,
           buyerEmail: buyerInfo.email,
           companyName: buyerInfo.company,
@@ -348,7 +351,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           })),
         });
         orderId = result.orderId;
-        orderNo = result.orderNo;
       } catch (err: any) {
         console.error('Could not write order to D1:', err);
         d1WriteError = err?.message || 'D1 create failed';
@@ -381,6 +383,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
         const doc = {
           _type: 'inquiry',
+          orderNo,
           company: buyerInfo.company,
           buyerName: buyerInfo.name,
           email: buyerInfo.email,
@@ -424,6 +427,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         const safeInquiryType = SecurityService.escapeHtml(inquiryType);
 
         const emailHtml = buildRfqEmailHtml({
+          orderNo,
           safeCompany,
           safeName,
           safeEmail,
@@ -458,7 +462,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
             from: fromEmail,
             to: resolvedTo,
             reply_to: buyerInfo.email,
-            subject: `${subjectPrefix} ${safeCompany} - ${items.length} Style(s)`,
+            subject: `${subjectPrefix} [${orderNo}] ${safeCompany} - ${items.length} Style(s)`,
             html: emailHtml,
           }),
         });
@@ -480,7 +484,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         
         const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
         const ipNotice = visitorIp ? `\n🌐 访客 IP：${visitorIp} ${detectedCountry ? `(${detectedCountry})` : ''}` : '';
-        const plainText = `🔔 【Gwenvenni 官网收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${resolvedDestination}${ipNotice}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
+        const plainText = `🔔 【Gwenvenni 官网收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n📦 订单号：${orderNo}\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${resolvedDestination}${ipNotice}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
 
         let webhookBody: any;
         if (webhookUrl.includes('qyapi.weixin.qq.com')) {
@@ -492,8 +496,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           webhookBody = {
             msgtype: 'markdown',
             markdown: {
-              title: `【新询盘】${buyerInfo.company || buyerInfo.name || '买手咨询'}`,
-              text: `### 🔔 Gwenvenni 官网收到新询价单\n\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`
+              title: `【新询盘】${buyerInfo.company || buyerInfo.name || '买手咨询'} [${orderNo}]`,
+              text: `### 🔔 Gwenvenni 官网收到新询价单\n\n- **订单号**：${orderNo}\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`
             }
           };
         } else if (webhookUrl.includes('feishu.cn') || webhookUrl.includes('larksuite.com')) {
@@ -507,6 +511,17 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
             content: plainText
           };
         }
+
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(webhookBody),
+          signal: AbortSignal.timeout(6_000),
+        });
+      } catch (webhookErr) {
+        console.warn('Webhook notification failed or timed out (skipping):', webhookErr);
+      }
+    })();
 
         await fetch(webhookUrl, {
           method: 'POST',

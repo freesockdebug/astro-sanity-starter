@@ -96,7 +96,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
 
       <!-- User Account & Orders Button -->
       <a
-        href="/orders"
+        href={getLocalizedPath('/orders', currentLang)}
         id="nav-user-account-btn"
         class="relative p-2 rounded-full hover:bg-black/5 text-[#1d1d1f] transition-all flex items-center justify-center cursor-pointer"
         aria-label="My Account & Orders"
@@ -136,7 +136,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     {navLinks.map((link: any) => (
       <a href={getLocalizedPath(link.url, currentLang)} class="block py-1 text-zinc-700 hover:text-black">{getLocalizedNavLabel(link)}</a>
     ))}
-    <a href="/orders" class="block py-1 text-zinc-700 hover:text-black font-medium">
+    <a href={getLocalizedPath('/orders', currentLang)} class="block py-1 text-zinc-700 hover:text-black font-medium">
       My Orders & RFQs
     </a>
     {showNavActionButton && actionButton && (

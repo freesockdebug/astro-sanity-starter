@@ -2,7 +2,7 @@
 // src/components/QuoteDrawer.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { DEFAULT_RFQ } from '@data/defaults';
-import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedValue, getLocalizedPath } from '@i18n';
 import { SecurityService } from '@utils/security';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
+const ordersUrl = getLocalizedPath('/orders', currentLang);
 
 const { settings } = Astro.props;
 const rfqSettings = settings ?? (await fetchRfqSettings());
@@ -49,6 +50,7 @@ if (reqCountryCode) {
 <div
   id="quote-drawer-root"
   class="drawer drawer-end z-50"
+  data-orders-url={ordersUrl}
   data-swatch-sku={swatchKitSku}
   data-swatch-title={swatchKitTitle}
   data-swatch-desc={swatchKitDesc}
@@ -640,6 +642,7 @@ if (reqCountryCode) {
 
       if (res.ok && data.success) {
         const orderNo = data.orderNo || 'Recorded';
+        const targetOrdersUrl = document.getElementById('quote-drawer-root')?.getAttribute('data-orders-url') || '/orders';
         if (alertBox) {
           alertBox.className = 'p-3.5 rounded-xl text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 block space-y-2';
           alertBox.innerHTML = `
@@ -648,8 +651,8 @@ if (reqCountryCode) {
             <div class="pt-1">
               ${
                 currentAuthUser
-                  ? `<a href="/orders" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all">Track in My Orders →</a>`
-                  : `<button type="button" onclick="window.openAuthLogin && window.openAuthLogin('/orders')" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer">Sign In with this email to Track Order →</button>`
+                  ? `<a href="${targetOrdersUrl}" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all">Track in My Orders →</a>`
+                  : `<button type="button" onclick="window.openAuthLogin && window.openAuthLogin('${targetOrdersUrl}')" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer">Sign In with this email to Track Order →</button>`
               }
             </div>
           `;

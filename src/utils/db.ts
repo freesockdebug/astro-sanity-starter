@@ -54,6 +54,7 @@ export interface OrderRecord {
 }
 
 export interface CreateOrderInput {
+  orderNo?: string;
   userId?: string | null;
   buyerEmail: string;
   companyName?: string;
@@ -141,7 +142,7 @@ function getLocalNodeDb(): any {
 }
 
 /**
- * Ensures D1 tables exist (idempotent initialization)
+ * Ensures D1 tables exist (Lazy Self-Healing fallback)
  */
 async function ensureSchema(d1: any) {
   if (schemaInitialized) return;
@@ -156,12 +157,27 @@ async function ensureSchema(d1: any) {
 }
 
 /**
+ * Lazy self-healing wrapper: only runs DDL if database throws "no such table"
+ */
+async function executeWithAutoSchema<T>(isD1: boolean, db: any, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    if (isD1 && db && err?.message && err.message.toLowerCase().includes('no such table')) {
+      console.warn('[DB] "no such table" detected; triggering lazy schema initialization...');
+      await ensureSchema(db);
+      return await fn();
+    }
+    throw err;
+  }
+}
+
+/**
  * Resolves current database handle (Cloudflare D1 or Node.js SQLite fallback)
  */
 export async function getDbHandle(): Promise<{ isD1: boolean; db: any }> {
   const runtimeD1 = await getRuntimeD1();
   if (runtimeD1) {
-    await ensureSchema(runtimeD1);
     return { isD1: true, db: runtimeD1 };
   }
 
@@ -204,7 +220,7 @@ function generateUuid(): string {
 export async function createOrder(input: CreateOrderInput): Promise<{ orderId: string; orderNo: string }> {
   const { isD1, db } = await getDbHandle();
   const orderId = generateUuid();
-  const orderNo = generateOrderNo();
+  const orderNo = input.orderNo || generateOrderNo();
   const normalizedEmail = input.buyerEmail.trim().toLowerCase();
   const totalStyles = input.items.length;
   const totalQuantity = input.items.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
@@ -252,7 +268,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
         )
     );
 
-    await db.batch([insertOrderStmt, ...itemStmts]);
+    await executeWithAutoSchema(isD1, db, () => db.batch([insertOrderStmt, ...itemStmts]));
     return { orderId, orderNo };
   }
 
@@ -309,35 +325,37 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
   const normalizedEmail = buyerEmail.trim().toLowerCase();
   const { isD1, db } = await getDbHandle();
 
-  if (isD1 && db) {
-    const res = await db
-      .prepare(
+  return executeWithAutoSchema(isD1, db, async () => {
+    if (isD1 && db) {
+      const res = await db
+        .prepare(
+          `UPDATE orders
+           SET user_id = ?1,
+               claimed_at = datetime('now'),
+               updated_at = datetime('now')
+           WHERE (user_id IS NULL OR user_id = '')
+             AND LOWER(buyer_email) = LOWER(?2)`
+        )
+        .bind(userId, normalizedEmail)
+        .run();
+      return res?.meta?.changes || 0;
+    }
+
+    if (db) {
+      const stmt = db.prepare(
         `UPDATE orders
-         SET user_id = ?1,
+         SET user_id = ?,
              claimed_at = datetime('now'),
              updated_at = datetime('now')
-         WHERE (user_id IS NULL OR user_id = '' OR user_id != ?1)
-           AND LOWER(buyer_email) = LOWER(?2)`
-      )
-      .bind(userId, normalizedEmail)
-      .run();
-    return res?.meta?.changes || 0;
-  }
+         WHERE (user_id IS NULL OR user_id = '')
+           AND LOWER(buyer_email) = LOWER(?)`
+      );
+      const info = stmt.run(userId, normalizedEmail);
+      return info?.changes || 0;
+    }
 
-  if (db) {
-    const stmt = db.prepare(
-      `UPDATE orders
-       SET user_id = ?,
-           claimed_at = datetime('now'),
-           updated_at = datetime('now')
-       WHERE (user_id IS NULL OR user_id = '' OR user_id != ?)
-         AND LOWER(buyer_email) = LOWER(?)`
-    );
-    const info = stmt.run(userId, userId, normalizedEmail);
-    return info?.changes || 0;
-  }
-
-  return 0;
+    return 0;
+  });
 }
 
 /**
@@ -348,53 +366,53 @@ export async function getOrdersByUserId(userId: string, buyerEmail?: string): Pr
   const { isD1, db } = await getDbHandle();
   const normalizedEmail = buyerEmail ? buyerEmail.trim().toLowerCase() : null;
 
-  let orders: OrderRecord[] = [];
-  if (isD1 && db) {
-    if (normalizedEmail && userId) {
-      const { results } = await db
-        .prepare(
+  return executeWithAutoSchema(isD1, db, async () => {
+    let orders: OrderRecord[] = [];
+    if (isD1 && db) {
+      if (normalizedEmail && userId) {
+        const { results } = await db
+          .prepare(
+            `SELECT * FROM orders
+             WHERE user_id = ?1 OR LOWER(buyer_email) = LOWER(?2)
+             ORDER BY created_at DESC`
+          )
+          .bind(userId, normalizedEmail)
+          .all();
+        orders = (results || []) as OrderRecord[];
+      } else {
+        const { results } = await db
+          .prepare(
+            `SELECT * FROM orders
+             WHERE user_id = ?1
+             ORDER BY created_at DESC`
+          )
+          .bind(userId)
+          .all();
+        orders = (results || []) as OrderRecord[];
+      }
+    } else if (db) {
+      if (normalizedEmail && userId) {
+        const stmt = db.prepare(
           `SELECT * FROM orders
-           WHERE user_id = ?1 OR LOWER(buyer_email) = LOWER(?2)
+           WHERE user_id = ? OR LOWER(buyer_email) = LOWER(?)
            ORDER BY created_at DESC`
-        )
-        .bind(userId, normalizedEmail)
-        .all();
-      orders = (results || []) as OrderRecord[];
-    } else {
-      const { results } = await db
-        .prepare(
+        );
+        orders = (stmt.all(userId, normalizedEmail) || []) as OrderRecord[];
+      } else {
+        const stmt = db.prepare(
           `SELECT * FROM orders
-           WHERE user_id = ?1
+           WHERE user_id = ?
            ORDER BY created_at DESC`
-        )
-        .bind(userId)
-        .all();
-      orders = (results || []) as OrderRecord[];
+        );
+        orders = (stmt.all(userId) || []) as OrderRecord[];
+      }
     }
-  } else if (db) {
-    if (normalizedEmail && userId) {
-      const stmt = db.prepare(
-        `SELECT * FROM orders
-         WHERE user_id = ? OR LOWER(buyer_email) = LOWER(?)
-         ORDER BY created_at DESC`
-      );
-      orders = (stmt.all(userId, normalizedEmail) || []) as OrderRecord[];
-    } else {
-      const stmt = db.prepare(
-        `SELECT * FROM orders
-         WHERE user_id = ?
-         ORDER BY created_at DESC`
-      );
-      orders = (stmt.all(userId) || []) as OrderRecord[];
-    }
-  }
 
-  // Hydrate items for each order
-  for (const order of orders) {
-    order.items = await getOrderItems(order.id);
-  }
+    // Hydrate items for each order in a single batch
+    await hydrateOrdersItems(orders);
 
-  return orders;
+    return orders;
+  });
 }
 
 /**
@@ -448,6 +466,52 @@ export async function getOrderById(orderId: string): Promise<OrderRecord | null>
 }
 
 /**
+ * Batch-hydrates line items for an array of orders (O(1) database queries instead of N+1)
+ */
+async function hydrateOrdersItems(orders: OrderRecord[]): Promise<void> {
+  if (!orders || orders.length === 0) return;
+  const { isD1, db } = await getDbHandle();
+  if (!db) {
+    for (const order of orders) {
+      order.items = order.items || [];
+    }
+    return;
+  }
+
+  const orderMap = new Map<string, OrderRecord>();
+  for (const o of orders) {
+    o.items = [];
+    orderMap.set(o.id, o);
+  }
+
+  // Chunk to prevent hitting SQL parameter limits
+  const chunkSize = 50;
+  const allIds = orders.map((o) => o.id);
+
+  for (let i = 0; i < allIds.length; i += chunkSize) {
+    const chunkIds = allIds.slice(i, i + chunkSize);
+    const placeholders = chunkIds.map(() => '?').join(',');
+    const sql = `SELECT * FROM order_items WHERE order_id IN (${placeholders}) ORDER BY id ASC`;
+
+    let items: OrderItem[] = [];
+    if (isD1) {
+      const { results } = await db.prepare(sql).bind(...chunkIds).all();
+      items = (results || []) as OrderItem[];
+    } else {
+      const stmt = db.prepare(sql);
+      items = (stmt.all(...chunkIds) || []) as OrderItem[];
+    }
+
+    for (const item of items) {
+      const order = orderMap.get(item.order_id);
+      if (order) {
+        order.items.push(item);
+      }
+    }
+  }
+}
+
+/**
  * Helper to fetch order items
  */
 async function getOrderItems(orderId: string): Promise<OrderItem[]> {
@@ -494,44 +558,71 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
   const offset = (page - 1) * limit;
   const { isD1, db } = await getDbHandle();
 
-  let whereClauses: string[] = [];
-  let params: any[] = [];
+  return executeWithAutoSchema(isD1, db, async () => {
+    let whereClauses: string[] = [];
+    let params: any[] = [];
 
-  if (status && status !== 'ALL') {
-    whereClauses.push('status = ?');
-    params.push(status);
-  }
+    if (status && status !== 'ALL') {
+      whereClauses.push('status = ?');
+      params.push(status);
+    }
 
-  if (search && search.trim()) {
-    const term = `%${search.trim()}%`;
-    whereClauses.push('(order_no LIKE ? OR buyer_email LIKE ? OR company_name LIKE ?)');
-    params.push(term, term, term);
-  }
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      whereClauses.push('(order_no LIKE ? OR buyer_email LIKE ? OR company_name LIKE ?)');
+      params.push(term, term, term);
+    }
 
-  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-  let orders: OrderRecord[] = [];
-  let total = 0;
-  let stats = { all: 0, pending: 0, approved: 0, shipped: 0, rejected: 0 };
+    let orders: OrderRecord[] = [];
+    let total = 0;
+    let stats = { all: 0, pending: 0, approved: 0, shipped: 0, rejected: 0 };
 
-  if (isD1 && db) {
-    // 1. Fetch filtered orders
-    const listRes = await db
-      .prepare(`SELECT * FROM orders ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
-      .bind(...params, limit, offset)
-      .all();
-    orders = (listRes.results || []) as OrderRecord[];
+    if (isD1 && db) {
+      // 1. Fetch filtered orders
+      const listRes = await db
+        .prepare(`SELECT * FROM orders ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+        .bind(...params, limit, offset)
+        .all();
+      orders = (listRes.results || []) as OrderRecord[];
 
-    // 2. Count total for filter
-    const countRes = await db
-      .prepare(`SELECT COUNT(*) as cnt FROM orders ${whereSql}`)
-      .bind(...params)
-      .first();
-    total = Number(countRes?.cnt || 0);
+      // 2. Count total for filter
+      const countRes = await db
+        .prepare(`SELECT COUNT(*) as cnt FROM orders ${whereSql}`)
+        .bind(...params)
+        .first();
+      total = Number(countRes?.cnt || 0);
 
-    // 3. Stats by status
-    const statsRes = await db
-      .prepare(
+      // 3. Stats by status
+      const statsRes = await db
+        .prepare(
+          `SELECT
+            COUNT(*) as total_all,
+            SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as total_pending,
+            SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as total_approved,
+            SUM(CASE WHEN status = 'SHIPPED' THEN 1 ELSE 0 END) as total_shipped,
+            SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as total_rejected
+          FROM orders`
+        )
+        .first();
+
+      stats = {
+        all: Number(statsRes?.total_all || 0),
+        pending: Number(statsRes?.total_pending || 0),
+        approved: Number(statsRes?.total_approved || 0),
+        shipped: Number(statsRes?.total_shipped || 0),
+        rejected: Number(statsRes?.total_rejected || 0),
+      };
+    } else if (db) {
+      const listStmt = db.prepare(`SELECT * FROM orders ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`);
+      orders = (listStmt.all(...params, limit, offset) || []) as OrderRecord[];
+
+      const countStmt = db.prepare(`SELECT COUNT(*) as cnt FROM orders ${whereSql}`);
+      const countRow = countStmt.get(...params);
+      total = Number(countRow?.cnt || 0);
+
+      const statsStmt = db.prepare(
         `SELECT
           COUNT(*) as total_all,
           SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as total_pending,
@@ -539,49 +630,22 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
           SUM(CASE WHEN status = 'SHIPPED' THEN 1 ELSE 0 END) as total_shipped,
           SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as total_rejected
         FROM orders`
-      )
-      .first();
+      );
+      const statsRow = statsStmt.get();
+      stats = {
+        all: Number(statsRow?.total_all || 0),
+        pending: Number(statsRow?.total_pending || 0),
+        approved: Number(statsRow?.total_approved || 0),
+        shipped: Number(statsRow?.total_shipped || 0),
+        rejected: Number(statsRow?.total_rejected || 0),
+      };
+    }
 
-    stats = {
-      all: Number(statsRes?.total_all || 0),
-      pending: Number(statsRes?.total_pending || 0),
-      approved: Number(statsRes?.total_approved || 0),
-      shipped: Number(statsRes?.total_shipped || 0),
-      rejected: Number(statsRes?.total_rejected || 0),
-    };
-  } else if (db) {
-    const listStmt = db.prepare(`SELECT * FROM orders ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`);
-    orders = (listStmt.all(...params, limit, offset) || []) as OrderRecord[];
+    // Hydrate line items in batch
+    await hydrateOrdersItems(orders);
 
-    const countStmt = db.prepare(`SELECT COUNT(*) as cnt FROM orders ${whereSql}`);
-    const countRow = countStmt.get(...params);
-    total = Number(countRow?.cnt || 0);
-
-    const statsStmt = db.prepare(
-      `SELECT
-        COUNT(*) as total_all,
-        SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as total_pending,
-        SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as total_approved,
-        SUM(CASE WHEN status = 'SHIPPED' THEN 1 ELSE 0 END) as total_shipped,
-        SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as total_rejected
-      FROM orders`
-    );
-    const statsRow = statsStmt.get();
-    stats = {
-      all: Number(statsRow?.total_all || 0),
-      pending: Number(statsRow?.total_pending || 0),
-      approved: Number(statsRow?.total_approved || 0),
-      shipped: Number(statsRow?.total_shipped || 0),
-      rejected: Number(statsRow?.total_rejected || 0),
-    };
-  }
-
-  // Hydrate line items
-  for (const order of orders) {
-    order.items = await getOrderItems(order.id);
-  }
-
-  return { orders, total, page, limit, stats };
+    return { orders, total, page, limit, stats };
+  });
 }
 
 export interface UpdateOrderStatusInput {
@@ -611,7 +675,7 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
   }
 
   if (isD1 && db) {
-    await db
+    const res = await db
       .prepare(
         `UPDATE orders
          SET status = ?1,
@@ -633,7 +697,7 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
         orderId
       )
       .run();
-    return true;
+    return (res?.meta?.changes ?? 0) > 0;
   }
 
   if (db) {
@@ -649,7 +713,7 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
            updated_at = datetime('now')
        WHERE id = ?6`
     );
-    stmt.run(
+    const info = stmt.run(
       input.status,
       input.carrier || null,
       input.trackingNumber || null,
@@ -657,7 +721,7 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
       shippedBy,
       orderId
     );
-    return true;
+    return (info?.changes ?? 0) > 0;
   }
 
   return false;

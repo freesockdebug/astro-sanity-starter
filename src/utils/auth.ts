@@ -83,15 +83,21 @@ async function getHmacKey(secret: string): Promise<CryptoKey> {
 }
 
 /**
- * Resolves candidate secrets for signing / verification to prevent mismatches
+ * Resolves candidate secrets for signing / verification.
+ * In production when secrets are configured, fallback default keys are strictly excluded.
  */
 function getCandidateSecrets(customEnv?: any): string[] {
-  const secrets = [
+  const configured = [
     getRuntimeEnv('SESSION_SECRET', customEnv),
     getRuntimeEnv('LOGTO_APP_SECRET', customEnv),
-    'gwenvenni-b2b-secure-session-key-2026',
   ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
-  return Array.from(new Set(secrets));
+
+  if (configured.length > 0) {
+    return Array.from(new Set(configured));
+  }
+
+  // Only use development fallback key when no production secrets are provided
+  return ['gwenvenni-b2b-secure-session-key-2026'];
 }
 
 /**

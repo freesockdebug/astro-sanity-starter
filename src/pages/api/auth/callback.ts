@@ -26,17 +26,31 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
 
   let returnUrl = '/orders';
   let isPopup = url.searchParams.get('popup') === '1';
+  let parsedState: { state?: string; returnUrl?: string; isPopup?: boolean } | null = null;
 
   // Read stored state cookie
   const cookieHeader = request.headers.get('cookie');
   const rawStateCookie = getCookieValue(cookieHeader, 'logto_oauth_state');
   if (rawStateCookie) {
     try {
-      const parsed = JSON.parse(rawStateCookie);
-      if (parsed.returnUrl) returnUrl = parsed.returnUrl;
-      if (typeof parsed.isPopup === 'boolean') isPopup = parsed.isPopup;
+      parsedState = JSON.parse(rawStateCookie);
+      if (parsedState?.returnUrl) returnUrl = parsedState.returnUrl;
+      if (typeof parsedState?.isPopup === 'boolean') isPopup = parsedState.isPopup;
     } catch {
       // ignore
+    }
+  }
+
+  // Prevent Open Redirect: must strictly be an internal path
+  if (!returnUrl.startsWith('/') || returnUrl.startsWith('//')) {
+    returnUrl = '/orders';
+  }
+
+  // CSRF validation: when returning with an authorization code, state must match
+  if (code) {
+    if (!returnedState || !parsedState?.state || returnedState !== parsedState.state) {
+      console.warn('[Auth Callback] State mismatch or missing CSRF token');
+      return new Response('Invalid OAuth state parameter. Potential CSRF or expired session.', { status: 403 });
     }
   }
 
@@ -46,6 +60,9 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
   const endpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv)?.replace(/\/+$/, '');
   const appId = getRuntimeEnv('LOGTO_APP_ID', cfEnv);
   const appSecret = getRuntimeEnv('LOGTO_APP_SECRET', cfEnv);
+
+  // Local development mock login is strictly forbidden when production Logto is configured or in non-DEV builds
+  const isDevFallbackAllowed = import.meta.env.DEV && (!endpoint || !appId || !appSecret);
 
   if (code && endpoint && appId && appSecret) {
     try {
@@ -106,8 +123,8 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       `Configuration Error: Server is missing Logto credentials (endpoint=${Boolean(endpoint)}, appId=${Boolean(appId)}, appSecret=${Boolean(appSecret)}).`,
       { status: 500 }
     );
-  } else if (mockEmail) {
-    // 2. Simulated Local Development Login Fallback
+  } else if (mockEmail && isDevFallbackAllowed) {
+    // 2. Simulated Local Development Login Fallback (Strictly blocked in production)
     const email = mockEmail.trim().toLowerCase();
     const name = mockName?.trim() || email.split('@')[0];
     const roles: string[] = mockAdmin === '1' ? ['admin'] : [];

@@ -36,6 +36,8 @@ export const POST: APIRoute = async ({ request, params }) => {
 
   const { action, status, carrier, trackingNumber, adminRemark } = body || {};
 
+  const ALLOWED_STATUSES = new Set<OrderStatus>(['PENDING_APPROVAL', 'APPROVED', 'SHIPPED', 'REJECTED']);
+
   let targetStatus: OrderStatus;
   if (action === 'approve') {
     targetStatus = 'APPROVED';
@@ -49,10 +51,10 @@ export const POST: APIRoute = async ({ request, params }) => {
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
-  } else if (status) {
-    targetStatus = status;
+  } else if (status && ALLOWED_STATUSES.has(status as OrderStatus)) {
+    targetStatus = status as OrderStatus;
   } else {
-    return new Response(JSON.stringify({ error: 'Valid action (approve, reject, ship) or status required.' }), {
+    return new Response(JSON.stringify({ error: 'Valid action (approve, reject, ship) or allowed status required.' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -67,8 +69,8 @@ export const POST: APIRoute = async ({ request, params }) => {
   });
 
   if (!success) {
-    return new Response(JSON.stringify({ error: 'Failed to update order status.' }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: 'Order not found or status update failed.' }), {
+      status: 404,
       headers: { 'Content-Type': 'application/json' },
     });
   }

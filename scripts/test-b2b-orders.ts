@@ -110,6 +110,22 @@ async function runSelfCheck() {
   assert.strictEqual(updatedOrders[0].tracking_number, 'DHL-9876543210');
   console.log('✔ [PASS] Admin approval and shipment dispatch workflow verified');
 
+  // 7. Non-existent order update returns false (changes > 0 guard)
+  const nonExistentOk = await updateOrderStatus('non-existent-id-999', { status: 'APPROVED' });
+  assert.strictEqual(nonExistentOk, false, 'Updating non-existent order must return false');
+  console.log('✔ [PASS] updateOrderStatus changes > 0 row existence guard verified');
+
+  // 8. Custom OrderNo pre-generation preservation
+  const preGeneratedNo = 'ORD-20261101-TEST';
+  const customOrder = await createOrder({
+    orderNo: preGeneratedNo,
+    buyerEmail: 'custom-no@test.com',
+    destinationCountry: 'United States',
+    items: [{ sku: 'TEST-SKU', title: 'Test Product', variant: 'Default', quantity: 1 }],
+  });
+  assert.strictEqual(customOrder.orderNo, preGeneratedNo, 'Pre-generated orderNo must be preserved');
+  console.log('✔ [PASS] Pre-generated orderNo preservation verified');
+
   console.log('\n🎉 All B2B Order & Claiming self-checks passed!\n');
 }
 
