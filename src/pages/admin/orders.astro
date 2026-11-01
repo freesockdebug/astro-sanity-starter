@@ -1,6 +1,7 @@
 ---
 // src/pages/admin/orders.astro
 import Layout from '@layouts/Layout.astro';
+import AdminNav from '@components/admin/AdminNav.astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { listAdminOrders } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
@@ -78,39 +79,12 @@ const getItemProductUrl = (item: any) => {
   <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
     <div class="max-w-6xl mx-auto px-4 sm:px-6">
 
-      <!-- Breadcrumbs & Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
-        <div>
-          <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
-            <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">Home</a>
-            <span>/</span>
-            <a href={getLocalizedPath('/orders', currentLang)} class="hover:text-black transition-colors">Orders</a>
-            <span>/</span>
-            <span class="text-[#1d1d1f] font-medium">Admin Workspace</span>
-          </nav>
-          <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
-            Order Fulfillment & Approval
-          </h1>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <span class="text-xs text-[#86868b] hidden sm:inline">
-            Admin: <strong class="text-[#1d1d1f] font-mono">{sessionUser.email}</strong>
-          </span>
-          <a
-            href="/orders"
-            class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs"
-          >
-            Buyer View
-          </a>
-          <a
-            href="/api/auth/logout"
-            class="px-3 py-1.5 rounded-full text-xs font-medium text-[#86868b] hover:text-black hover:bg-black/5 transition-all"
-          >
-            Sign Out
-          </a>
-        </div>
-      </div>
+      <!-- Unified Shared Workspace Nav -->
+      <AdminNav
+        currentTab="orders"
+        sessionEmail={sessionUser.email}
+        pendingOrdersCount={stats.pending}
+      />
 
       <!-- Mobile Filter Strip (< sm): Compact single-row segmented pills with zero overflow -->
       <div class="flex sm:hidden items-center gap-1.5 overflow-x-auto pb-1 mt-4 scrollbar-none">
@@ -307,7 +281,13 @@ const getItemProductUrl = (item: any) => {
                         </span>
                       </div>
                       <div class="flex items-center justify-between text-[11px] text-[#86868b] gap-2 font-mono">
-                        <span class="truncate">{order.buyer_email}</span>
+                        <a
+                          href={`/admin/users?search=${encodeURIComponent(order.buyer_email)}`}
+                          class="truncate hover:text-blue-600 hover:underline transition-colors"
+                          title="View buyer in customer management"
+                        >
+                          {order.buyer_email}
+                        </a>
                         <span class="text-[#1d1d1f] font-semibold shrink-0">
                           {order.total_styles} styles · {order.total_quantity} pcs
                         </span>
@@ -510,9 +490,13 @@ const getItemProductUrl = (item: any) => {
                         <span class="font-medium text-[#1d1d1f] block truncate max-w-[180px]">
                           {order.company_name || order.contact_name || 'Independent Buyer'}
                         </span>
-                        <span class="text-[11px] text-[#86868b] font-mono block truncate max-w-[180px]">
+                        <a
+                          href={`/admin/users?search=${encodeURIComponent(order.buyer_email)}`}
+                          class="text-[11px] text-[#86868b] hover:text-blue-600 hover:underline font-mono block truncate max-w-[180px] transition-colors"
+                          title="View customer profile"
+                        >
                           {order.buyer_email}
-                        </span>
+                        </a>
                       </td>
 
                       <!-- Destination -->
@@ -750,9 +734,19 @@ const getItemProductUrl = (item: any) => {
 
                                 <div>
                                   <span class="text-[11px] text-[#86868b] block">Email:</span>
-                                  <a href={`mailto:${order.buyer_email}`} class="font-mono text-[#1d1d1f] hover:underline font-medium break-all">
-                                    {order.buyer_email}
-                                  </a>
+                                  <div class="flex items-center gap-2 flex-wrap">
+                                    <a href={`mailto:${order.buyer_email}`} class="font-mono text-[#1d1d1f] hover:underline font-medium break-all">
+                                      {order.buyer_email}
+                                    </a>
+                                    <a
+                                      href={`/admin/users?search=${encodeURIComponent(order.buyer_email)}`}
+                                      class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-black/5 hover:bg-black/10 text-[#1d1d1f] transition-all"
+                                      title="Open customer profile in admin"
+                                    >
+                                      <span>👥 Customer</span>
+                                      <span>→</span>
+                                    </a>
+                                  </div>
                                 </div>
 
                                 {order.whatsapp && (

@@ -8,6 +8,10 @@ import {
   getOrdersByUserId,
   listAdminOrders,
   updateOrderStatus,
+  upsertUserOnLogin,
+  listAdminUsers,
+  updateUserAdminMeta,
+  getUserByIdOrEmail,
 } from '../src/utils/db';
 import {
   createSessionToken,
@@ -116,17 +120,55 @@ async function runSelfCheck() {
   console.log('✔ [PASS] updateOrderStatus changes > 0 row existence guard verified');
 
   // 8. Custom OrderNo pre-generation preservation
-  const preGeneratedNo = 'ORD-20261101-TEST';
+  const preGeneratedNo = `ORD-TEST-${Date.now()}`;
+  const customEmail = `eleanor-${Date.now()}@atelier.com`;
   const customOrder = await createOrder({
     orderNo: preGeneratedNo,
-    buyerEmail: 'custom-no@test.com',
+    buyerEmail: customEmail,
     destinationCountry: 'United States',
+    companyName: 'Atelier Manhattan',
+    whatsapp: '+1-555-0199',
     items: [{ sku: 'TEST-SKU', title: 'Test Product', variant: 'Default', quantity: 1 }],
   });
   assert.strictEqual(customOrder.orderNo, preGeneratedNo, 'Pre-generated orderNo must be preserved');
   console.log('✔ [PASS] Pre-generated orderNo preservation verified');
 
-  console.log('\n🎉 All B2B Order & Claiming self-checks passed!\n');
+  // 9. User Upsert on Login & Order Info Backfilling
+  const testUserId = `usr_${Date.now()}`;
+  const syncedUser = await upsertUserOnLogin({
+    id: testUserId,
+    email: customEmail,
+    name: 'Eleanor Vance',
+    roles: ['vip_buyer'],
+  });
+  assert.ok(syncedUser, 'User must be synced');
+  assert.strictEqual(syncedUser.email, customEmail);
+  assert.strictEqual(syncedUser.company, 'Atelier Manhattan', 'Company should backfill from previous order');
+  assert.strictEqual(syncedUser.country, 'United States', 'Country should backfill from previous order');
+  assert.strictEqual(syncedUser.phone, '+1-555-0199', 'Phone should backfill from previous order');
+  console.log('✔ [PASS] User upsert on login & past order metadata backfilling verified');
+
+  // 10. Admin User Management: List & Aggregation
+  const userList = await listAdminUsers({ search: 'Eleanor' });
+  assert.strictEqual(userList.total, 1);
+  assert.strictEqual(userList.users[0].total_orders, 1);
+  console.log('✔ [PASS] Admin user list search & order aggregation verified');
+
+  // 11. Admin User Tier & Status Update
+  const updateMetaOk = await updateUserAdminMeta(testUserId, {
+    tier: 'VIP',
+    status: 'BLOCKED',
+    adminNotes: 'Key Manhattan buyer, test block applied.',
+  });
+  assert.strictEqual(updateMetaOk, true);
+
+  const blockedUser = await getUserByIdOrEmail(testUserId, null);
+  assert.strictEqual(blockedUser?.tier, 'VIP');
+  assert.strictEqual(blockedUser?.status, 'BLOCKED');
+  assert.strictEqual(blockedUser?.admin_notes, 'Key Manhattan buyer, test block applied.');
+  console.log('✔ [PASS] Admin user tier update and security block verified');
+
+  console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 
 runSelfCheck().catch((err) => {

@@ -1,0 +1,99 @@
+---
+// src/components/admin/AdminNav.astro
+interface Props {
+  currentTab: 'orders' | 'users';
+  sessionEmail: string;
+  pendingOrdersCount?: number;
+  totalUsersCount?: number;
+}
+
+const { currentTab, sessionEmail, pendingOrdersCount = 0, totalUsersCount = 0 } = Astro.props;
+---
+
+<header class="mb-8 space-y-4">
+  <!-- Top Bar: Brand, Status, and Global Actions -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-black/10 gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-xs">
+        GV
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold tracking-tight text-[#1d1d1f]">GwenVenni Atelier</span>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Live D1
+          </span>
+        </div>
+        <p class="text-[11px] text-[#86868b]">B2B Enterprise Admin Workspace</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 self-start sm:self-auto">
+      <span class="text-xs text-[#86868b] hidden md:inline mr-1">
+        Admin: <strong class="text-[#1d1d1f] font-mono">{sessionEmail}</strong>
+      </span>
+      <a
+        href="/orders"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs"
+        title="Switch to Buyer View"
+      >
+        <span>Buyer View</span>
+        <svg class="w-3.5 h-3.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      </a>
+      <a
+        href="/api/auth/logout"
+        class="px-3 py-1.5 rounded-full text-xs font-medium text-[#86868b] hover:text-black hover:bg-black/5 transition-all"
+      >
+        Sign Out
+      </a>
+    </div>
+  </div>
+
+  <!-- Workspace Sub-Nav: Orders vs Customers tabs -->
+  <div class="flex items-center justify-between gap-4">
+    <nav class="flex items-center gap-2 p-1 rounded-2xl bg-black/5 w-fit" aria-label="Admin Navigation Tabs">
+      <a
+        href="/admin/orders"
+        class:list={[
+          'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all',
+          currentTab === 'orders'
+            ? 'bg-white text-[#1d1d1f] shadow-xs'
+            : 'text-[#52525b] hover:text-black hover:bg-white/50'
+        ]}
+      >
+        <span>📦 Orders & Fulfillment</span>
+        {pendingOrdersCount > 0 && (
+          <span class:list={[
+            'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
+            currentTab === 'orders' ? 'bg-amber-100 text-amber-900' : 'bg-amber-200 text-amber-950'
+          ]}>
+            {pendingOrdersCount}
+          </span>
+        )}
+      </a>
+
+      <a
+        href="/admin/users"
+        class:list={[
+          'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all',
+          currentTab === 'users'
+            ? 'bg-white text-[#1d1d1f] shadow-xs'
+            : 'text-[#52525b] hover:text-black hover:bg-white/50'
+        ]}
+      >
+        <span>👥 Customers & Access</span>
+        {totalUsersCount > 0 && (
+          <span class:list={[
+            'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
+            currentTab === 'users' ? 'bg-black/10 text-[#1d1d1f]' : 'bg-black/10 text-[#52525b]'
+          ]}>
+            {totalUsersCount}
+          </span>
+        )}
+      </a>
+    </nav>
+  </div>
+</header>

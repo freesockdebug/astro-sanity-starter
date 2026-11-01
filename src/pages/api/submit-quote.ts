@@ -4,7 +4,7 @@ import { SecurityService } from '@utils/security';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { getSessionFromRequest } from '@utils/auth';
-import { createOrder, generateOrderNo } from '@utils/db';
+import { createOrder, generateOrderNo, getUserByIdOrEmail } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -324,6 +324,19 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // 3. Create Official B2B Order in Cloudflare D1
     const sessionUser = await getSessionFromRequest(request, cfEnv);
     const userId = sessionUser ? sessionUser.id : null;
+
+    // Security check: reject if buyer or user is BLOCKED in D1
+    try {
+      const existingBuyer = await getUserByIdOrEmail(userId, buyerInfo.email);
+      if (existingBuyer && existingBuyer.status === 'BLOCKED') {
+        return new Response(
+          JSON.stringify({ error: 'Your account is suspended from submitting quotation requests. Please contact concierge@gwenvenni.com.', success: false }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch {
+      // non-blocking
+    }
 
     const orderNo = generateOrderNo();
     let orderId = '';

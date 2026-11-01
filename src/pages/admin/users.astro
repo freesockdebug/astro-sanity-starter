@@ -1,0 +1,614 @@
+---
+// src/pages/admin/users.astro
+import Layout from '@layouts/Layout.astro';
+import AdminNav from '@components/admin/AdminNav.astro';
+import { getSessionFromRequest } from '@utils/auth';
+import { listAdminUsers, listAdminOrders } from '@utils/db';
+import { getLangFromUrl, getLocalizedPath } from '@i18n';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+
+const currentLang = getLangFromUrl(Astro.url);
+const sessionUser = await getSessionFromRequest(Astro, cfEnv);
+
+if (!sessionUser || !sessionUser.isAdmin) {
+  return Astro.redirect(`/api/auth/login?returnUrl=/admin/users`);
+}
+
+const currentSearch = Astro.url.searchParams.get('search') || '';
+const currentTier = Astro.url.searchParams.get('tier') || 'ALL';
+const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
+const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
+const pageSize = 30;
+
+const [{ users, total, stats }, ordersSummary] = await Promise.all([
+  listAdminUsers({
+    search: currentSearch,
+    tier: currentTier,
+    status: currentStatus,
+    page: currentPage,
+    limit: pageSize,
+  }),
+  listAdminOrders({ limit: 1 }), // for pending orders count badge
+]);
+
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
+---
+
+<Layout title={pageTitle}>
+  <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+
+      <!-- Unified Shared Workspace Nav -->
+      <AdminNav
+        currentTab="users"
+        sessionEmail={sessionUser.email}
+        pendingOrdersCount={ordersSummary?.stats?.pending || 0}
+        totalUsersCount={stats.all}
+      />
+
+      <!-- Metric Cards Header -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+          <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Total Registered</span>
+          <div class="flex items-baseline gap-2">
+            <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight">{stats.all}</span>
+            <span class="text-xs text-[#86868b]">Buyers</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+          <span class="text-[11px] text-amber-800 uppercase tracking-wider font-semibold block mb-1">VIP & Partners</span>
+          <div class="flex items-baseline gap-2">
+            <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-amber-700">
+              {stats.vip + stats.partner}
+            </span>
+            <span class="text-xs text-[#86868b]">High-value</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+          <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Guest Leads</span>
+          <div class="flex items-baseline gap-2">
+            <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight">{stats.unclaimedGuestOrders}</span>
+            <a href="/admin/orders" class="text-xs text-blue-600 hover:underline">Unclaimed →</a>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+          <span class="text-[11px] text-rose-800 uppercase tracking-wider font-semibold block mb-1">Suspended</span>
+          <div class="flex items-baseline gap-2">
+            <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-rose-700">{stats.blocked}</span>
+            <span class="text-xs text-[#86868b]">Blocked</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Tabs & Search Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          {[
+            { key: 'ALL', label: 'All Buyers', count: stats.all },
+            { key: 'VIP', label: 'VIP', count: stats.vip },
+            { key: 'PARTNER', label: 'Partners', count: stats.partner },
+            { key: 'STANDARD', label: 'Standard', count: stats.standard },
+          ].map((tab) => {
+            const isActive = currentTier === tab.key;
+            return (
+              <a
+                href={tab.key === 'ALL' ? '/admin/users' : `/admin/users?tier=${tab.key}`}
+                class:list={[
+                  'px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5',
+                  isActive
+                    ? 'bg-[#1d1d1f] text-white border-black font-semibold shadow-2xs'
+                    : 'bg-white text-[#52525b] border-black/5 hover:border-black/20'
+                ]}
+              >
+                <span>{tab.label}</span>
+                <span class:list={[
+                  'font-mono text-[10px] px-1.5 py-0.2 rounded-md',
+                  isActive ? 'bg-white/20 text-white' : 'bg-[#f5f5f7] text-[#1d1d1f]'
+                ]}>
+                  {tab.count}
+                </span>
+              </a>
+            );
+          })}
+        </div>
+
+        <form method="GET" action="/admin/users" class="relative flex items-center w-full sm:w-72">
+          <input
+            type="text"
+            name="search"
+            value={currentSearch}
+            placeholder="Search email, name, company..."
+            class="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-white border border-black/10 focus:outline-none focus:border-black placeholder:text-[#86868b] transition-all shadow-2xs"
+          />
+          <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {currentSearch && (
+            <a href="/admin/users" class="absolute right-2.5 text-xs text-[#86868b] hover:text-black">✕</a>
+          )}
+        </form>
+      </div>
+
+      <!-- Users Content Table & Cards -->
+      <div class="bg-white rounded-3xl border border-black/10 shadow-sm overflow-hidden">
+        {users.length === 0 ? (
+          <div class="py-16 px-4 text-center">
+            <div class="w-12 h-12 rounded-2xl bg-[#f5f5f7] flex items-center justify-center mx-auto mb-3 text-[#86868b]">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </div>
+            <h3 class="text-sm font-semibold text-[#1d1d1f]">No Customers Found</h3>
+            <p class="text-xs text-[#86868b] mt-1 max-w-sm mx-auto">
+              {currentSearch
+                ? `No customers match query "${currentSearch}". Try a different email or company name.`
+                : 'Customer profiles will automatically appear here once buyers sign in via Logto.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div class="hidden md:block overflow-x-auto">
+              <table class="w-full text-left text-xs text-[#1d1d1f]">
+                <thead class="bg-[#f5f5f7]/60 text-[#86868b] font-medium border-b border-black/5">
+                  <tr>
+                    <th class="py-3 px-4">Customer Profile</th>
+                    <th class="py-3 px-4">Company & Location</th>
+                    <th class="py-3 px-4">Tier & Status</th>
+                    <th class="py-3 px-4">Orders & Inquiries</th>
+                    <th class="py-3 px-4">Last Active</th>
+                    <th class="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-black/5">
+                  {users.map((u) => {
+                    const roles: string[] = (() => {
+                      try { return JSON.parse(u.logto_roles || '[]'); } catch { return []; }
+                    })();
+                    const isUserAdmin = roles.includes('admin') || u.email === 'forhaisome@gmail.com';
+                    const hasPending = (u.pending_orders || 0) > 0;
+
+                    return (
+                      <tr class="hover:bg-[#f5f5f7]/40 transition-colors">
+                        <td class="py-3.5 px-4">
+                          <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                              {(u.name || u.email)[0]}
+                            </div>
+                            <div>
+                              <div class="flex items-center gap-1.5">
+                                <span class="font-semibold text-[#1d1d1f]">{u.name || 'Unnamed Buyer'}</span>
+                                {isUserAdmin && (
+                                  <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                    Admin
+                                  </span>
+                                )}
+                              </div>
+                              <span class="text-[#86868b] font-mono text-[11px] block">{u.email}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td class="py-3.5 px-4">
+                          <span class="font-medium text-[#1d1d1f] block">{u.company || '—'}</span>
+                          <span class="text-[11px] text-[#86868b]">{u.country || u.phone || 'Direct Buyer'}</span>
+                        </td>
+
+                        <td class="py-3.5 px-4">
+                          <div class="flex items-center gap-1.5">
+                            <span class:list={[
+                              'px-2 py-0.5 rounded-md text-[10px] font-semibold border',
+                              u.tier === 'VIP' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                              u.tier === 'PARTNER' ? 'bg-purple-50 text-purple-800 border-purple-200' :
+                              'bg-zinc-100 text-zinc-700 border-zinc-200'
+                            ]}>
+                              {u.tier}
+                            </span>
+                            {u.status === 'BLOCKED' ? (
+                              <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                BLOCKED
+                              </span>
+                            ) : (
+                              <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                ACTIVE
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td class="py-3.5 px-4">
+                          <a
+                            href={`/admin/orders?search=${encodeURIComponent(u.email)}`}
+                            class="inline-flex items-center gap-1.5 font-medium hover:text-blue-600 transition-colors group"
+                            title="Filter orders for this buyer"
+                          >
+                            <span>{u.total_orders || 0} Orders</span>
+                            {hasPending && (
+                              <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                                {u.pending_orders} pending
+                              </span>
+                            )}
+                            <span class="text-[#86868b] group-hover:text-blue-600">→</span>
+                          </a>
+                        </td>
+
+                        <td class="py-3.5 px-4 text-[#86868b] text-[11px]">
+                          {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                        </td>
+
+                        <td class="py-3.5 px-4 text-right">
+                          <button
+                            type="button"
+                            class="action-open-drawer-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-[#1d1d1f] hover:text-white transition-all cursor-pointer border border-black/5"
+                            data-id={u.id}
+                            data-email={u.email}
+                            data-name={u.name}
+                            data-company={u.company}
+                            data-tier={u.tier}
+                            data-status={u.status}
+                            data-notes={u.admin_notes || ''}
+                            data-roles={u.logto_roles}
+                          >
+                            Edit & Notes
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Responsive Cards */}
+            <div class="md:hidden divide-y divide-black/5">
+              {users.map((u) => {
+                const roles: string[] = (() => {
+                  try { return JSON.parse(u.logto_roles || '[]'); } catch { return []; }
+                })();
+                const isUserAdmin = roles.includes('admin') || u.email === 'forhaisome@gmail.com';
+                const hasPending = (u.pending_orders || 0) > 0;
+
+                return (
+                  <div class="p-4 space-y-3">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                          {(u.name || u.email)[0]}
+                        </div>
+                        <div>
+                          <div class="flex items-center gap-1.5">
+                            <span class="font-semibold text-xs text-[#1d1d1f]">{u.name || 'Unnamed Buyer'}</span>
+                            {isUserAdmin && (
+                              <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800">
+                                Admin
+                              </span>
+                            )}
+                          </div>
+                          <span class="text-[#86868b] font-mono text-[11px] block">{u.email}</span>
+                        </div>
+                      </div>
+
+                      <div class="flex items-center gap-1">
+                        <span class:list={[
+                          'px-2 py-0.5 rounded-md text-[10px] font-semibold border',
+                          u.tier === 'VIP' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                          u.tier === 'PARTNER' ? 'bg-purple-50 text-purple-800 border-purple-200' :
+                          'bg-zinc-100 text-zinc-700 border-zinc-200'
+                        ]}>
+                          {u.tier}
+                        </span>
+                        {u.status === 'BLOCKED' && (
+                          <span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            BLOCKED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs text-[#86868b] pt-1">
+                      <span>{u.company || u.country || 'Independent Buyer'}</span>
+                      <a
+                        href={`/admin/orders?search=${encodeURIComponent(u.email)}`}
+                        class="font-semibold text-[#1d1d1f] hover:underline"
+                      >
+                        {u.total_orders || 0} Orders {hasPending && `(${u.pending_orders} pending)`} →
+                      </a>
+                    </div>
+
+                    <div class="pt-2 flex items-center justify-end">
+                      <button
+                        type="button"
+                        class="action-open-drawer-btn w-full py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] text-[#1d1d1f] border border-black/5 hover:bg-black hover:text-white transition-all cursor-pointer text-center"
+                        data-id={u.id}
+                        data-email={u.email}
+                        data-name={u.name}
+                        data-company={u.company}
+                        data-tier={u.tier}
+                        data-status={u.status}
+                        data-notes={u.admin_notes || ''}
+                        data-roles={u.logto_roles}
+                      >
+                        Edit Profile & Remarks
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b]">
+          <div>
+            Showing <strong class="text-[#1d1d1f]">{(currentPage - 1) * pageSize + 1}</strong> to{' '}
+            <strong class="text-[#1d1d1f]">{Math.min(currentPage * pageSize, total)}</strong> of{' '}
+            <strong class="text-[#1d1d1f]">{total}</strong> customers
+          </div>
+          <div class="flex items-center gap-2">
+            <a
+              href={currentPage > 1 ? `?tier=${currentTier}&search=${encodeURIComponent(currentSearch)}&page=${currentPage - 1}` : '#'}
+              class:list={[
+                'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all',
+                currentPage > 1 ? 'border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]' : 'border-transparent text-[#86868b]/40 pointer-events-none'
+              ]}
+              aria-disabled={currentPage <= 1}
+            >
+              ← Previous
+            </a>
+            <span class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">{currentPage} / {totalPages}</span>
+            <a
+              href={currentPage < totalPages ? `?tier=${currentTier}&search=${encodeURIComponent(currentSearch)}&page=${currentPage + 1}` : '#'}
+              class:list={[
+                'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all',
+                currentPage < totalPages ? 'border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]' : 'border-transparent text-[#86868b]/40 pointer-events-none'
+              ]}
+              aria-disabled={currentPage >= totalPages}
+            >
+              Next →
+            </a>
+          </div>
+        </div>
+      )}
+
+    </div>
+  </main>
+
+  <!-- Slide-over Customer Detail & Tier Drawer -->
+  <div id="drawer-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden transition-opacity opacity-0"></div>
+  <aside
+    id="user-drawer"
+    class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white border-l border-black/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col"
+    aria-label="Customer Profile Drawer"
+  >
+    <div class="p-5 border-b border-black/5 flex items-center justify-between">
+      <div>
+        <h3 class="text-sm font-semibold text-[#1d1d1f]">Customer Profile & Access</h3>
+        <p class="text-[11px] text-[#86868b] mt-0.5">Tiering, internal remarks, and security flags</p>
+      </div>
+      <button id="close-drawer-btn" type="button" class="p-1 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] transition-all text-base">✕</button>
+    </div>
+
+    <form id="drawer-form" class="p-5 overflow-y-auto flex-1 space-y-5 text-xs text-[#1d1d1f]">
+      <input type="hidden" id="drawer-user-id" />
+
+      <!-- Identity Card -->
+      <div class="p-3.5 rounded-2xl bg-[#f5f5f7] border border-black/5 space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-xs" id="drawer-user-name"></span>
+          <span id="drawer-roles-badge" class="font-mono text-[10px] px-2 py-0.5 rounded bg-black/10 text-[#1d1d1f]"></span>
+        </div>
+        <p class="font-mono text-[11px] text-[#86868b]" id="drawer-user-email"></p>
+        <p class="text-[11px] text-[#52525b]" id="drawer-user-company"></p>
+      </div>
+
+      <!-- Customer Tier Selection -->
+      <div>
+        <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Customer Tier (B2B Classification)</label>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5">
+            <input type="radio" name="tier" value="STANDARD" class="sr-only" />
+            <span class="font-semibold">Standard</span>
+            <span class="text-[10px] text-[#86868b]">Regular</span>
+          </label>
+          <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-amber-600 has-checked:bg-amber-50">
+            <input type="radio" name="tier" value="VIP" class="sr-only" />
+            <span class="font-semibold text-amber-800">VIP</span>
+            <span class="text-[10px] text-amber-700/80">Key Buyer</span>
+          </label>
+          <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-purple-600 has-checked:bg-purple-50">
+            <input type="radio" name="tier" value="PARTNER" class="sr-only" />
+            <span class="font-semibold text-purple-800">Partner</span>
+            <span class="text-[10px] text-purple-700/80">Atelier Contract</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Account Status (Risk & Block) -->
+      <div>
+        <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Account Status (Security Control)</label>
+        <select
+          id="drawer-status-select"
+          name="status"
+          class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
+        >
+          <option value="ACTIVE">ACTIVE (Normal Ordering & Inquiries)</option>
+          <option value="BLOCKED">BLOCKED (Suspend Submission Privileges)</option>
+        </select>
+      </div>
+
+      <!-- Internal Admin Notes -->
+      <div>
+        <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Internal Admin Remarks (Private to staff)</label>
+        <textarea
+          id="drawer-notes-input"
+          name="admin_notes"
+          rows="3"
+          placeholder="e.g. French Haute Couture buyer, prefers hand-beaded lace swatches, credit terms approved..."
+          class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs placeholder:text-[#86868b]"
+        ></textarea>
+      </div>
+
+      <!-- Order History Fast-Link -->
+      <div class="pt-2 border-t border-black/5">
+        <a
+          id="drawer-orders-link"
+          href="#"
+          class="inline-flex items-center justify-between w-full p-3 rounded-xl bg-[#f5f5f7] hover:bg-black/5 text-[#1d1d1f] font-medium transition-all"
+        >
+          <span>📦 View All Orders By This Customer</span>
+          <span>→</span>
+        </a>
+      </div>
+
+      <!-- Error / Success Alert Bar -->
+      <div id="drawer-feedback" class="hidden p-3 rounded-xl text-xs font-medium leading-relaxed"></div>
+    </form>
+
+    <div class="p-4 border-t border-black/5 flex items-center justify-end gap-2 bg-white">
+      <button
+        type="button"
+        id="cancel-drawer-btn"
+        class="h-9 px-4 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] border border-black/5 transition-all cursor-pointer"
+      >
+        Close
+      </button>
+      <button
+        type="button"
+        id="save-drawer-btn"
+        class="h-9 px-5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer"
+      >
+        Save Changes
+      </button>
+    </div>
+  </aside>
+</Layout>
+
+<script>
+  const backdrop = document.getElementById('drawer-backdrop');
+  const drawer = document.getElementById('user-drawer');
+  const closeBtn = document.getElementById('close-drawer-btn');
+  const cancelBtn = document.getElementById('cancel-drawer-btn');
+  const saveBtn = document.getElementById('save-drawer-btn') as HTMLButtonElement | null;
+  const feedbackEl = document.getElementById('drawer-feedback');
+
+  const userIdInput = document.getElementById('drawer-user-id') as HTMLInputElement | null;
+  const nameLabel = document.getElementById('drawer-user-name');
+  const emailLabel = document.getElementById('drawer-user-email');
+  const companyLabel = document.getElementById('drawer-user-company');
+  const rolesBadge = document.getElementById('drawer-roles-badge');
+  const statusSelect = document.getElementById('drawer-status-select') as HTMLSelectElement | null;
+  const notesInput = document.getElementById('drawer-notes-input') as HTMLTextAreaElement | null;
+  const ordersLink = document.getElementById('drawer-orders-link') as HTMLAnchorElement | null;
+
+  const showDrawer = () => {
+    backdrop?.classList.remove('hidden');
+    setTimeout(() => backdrop?.classList.remove('opacity-0'), 10);
+    drawer?.classList.remove('translate-x-full');
+  };
+
+  const hideDrawer = () => {
+    drawer?.classList.add('translate-x-full');
+    backdrop?.classList.add('opacity-0');
+    setTimeout(() => backdrop?.classList.add('hidden'), 300);
+    if (feedbackEl) {
+      feedbackEl.className = 'hidden';
+      feedbackEl.textContent = '';
+    }
+  };
+
+  closeBtn?.addEventListener('click', hideDrawer);
+  cancelBtn?.addEventListener('click', hideDrawer);
+  backdrop?.addEventListener('click', hideDrawer);
+
+  document.querySelectorAll<HTMLButtonElement>('.action-open-drawer-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id') || '';
+      const email = btn.getAttribute('data-email') || '';
+      const name = btn.getAttribute('data-name') || 'Unnamed Buyer';
+      const company = btn.getAttribute('data-company') || '';
+      const tier = btn.getAttribute('data-tier') || 'STANDARD';
+      const status = btn.getAttribute('data-status') || 'ACTIVE';
+      const notes = btn.getAttribute('data-notes') || '';
+      const rolesRaw = btn.getAttribute('data-roles') || '[]';
+
+      if (userIdInput) userIdInput.value = id;
+      if (nameLabel) nameLabel.textContent = name;
+      if (emailLabel) emailLabel.textContent = email;
+      if (companyLabel) companyLabel.textContent = company || 'No company specified';
+
+      let rolesText = 'Logto: Buyer';
+      try {
+        const roles = JSON.parse(rolesRaw);
+        if (roles.length > 0) rolesText = `Logto: ${roles.join(', ')}`;
+      } catch {}
+      if (rolesBadge) rolesBadge.textContent = rolesText;
+
+      const tierRadio = document.querySelector<HTMLInputElement>(`input[name="tier"][value="${tier}"]`);
+      if (tierRadio) tierRadio.checked = true;
+
+      if (statusSelect) statusSelect.value = status;
+      if (notesInput) notesInput.value = notes;
+      if (ordersLink) ordersLink.href = `/admin/orders?search=${encodeURIComponent(email)}`;
+
+      showDrawer();
+    });
+  });
+
+  saveBtn?.addEventListener('click', async () => {
+    const id = userIdInput?.value;
+    if (!id) return;
+
+    const tierInput = document.querySelector<HTMLInputElement>('input[name="tier"]:checked');
+    const tier = tierInput?.value || 'STANDARD';
+    const status = statusSelect?.value || 'ACTIVE';
+    const adminNotes = notesInput?.value || '';
+
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+    }
+
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier, status, adminNotes }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        if (feedbackEl) {
+          feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
+          feedbackEl.textContent = '✓ Changes saved successfully. Refreshing...';
+        }
+        setTimeout(() => window.location.reload(), 700);
+      } else {
+        if (feedbackEl) {
+          feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+          feedbackEl.textContent = data.error || 'Failed to save changes';
+        }
+      }
+    } catch (err: any) {
+      if (feedbackEl) {
+        feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+        feedbackEl.textContent = err.message || 'Network error';
+      }
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    }
+  });
+</script>

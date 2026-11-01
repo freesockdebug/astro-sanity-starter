@@ -8,7 +8,7 @@ import {
   getCookieValue,
   type AuthUser,
 } from '@utils/auth';
-import { claimOrdersByEmail } from '@utils/db';
+import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -146,7 +146,32 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
     return new Response('Invalid authentication request.', { status: 400 });
   }
 
-  // 3. Auto-Claim Historical Unclaimed Orders matching buyer_email
+  // 3. Security Risk Guard: Check if account is BLOCKED in D1
+  try {
+    const existing = await getUserByIdOrEmail(authUser.id, authUser.email);
+    if (existing && existing.status === 'BLOCKED') {
+      return new Response(
+        'Your account has been suspended by administration. If you believe this is an error, please contact concierge@gwenvenni.com.',
+        { status: 403 }
+      );
+    }
+  } catch (checkErr) {
+    console.warn('[Auth Callback] User status check warning:', checkErr);
+  }
+
+  // 4. Upsert User in D1 (Logto sub, email, name, roles sync + backfill company info)
+  try {
+    await upsertUserOnLogin({
+      id: authUser.id,
+      email: authUser.email,
+      name: authUser.name,
+      roles: authUser.roles,
+    });
+  } catch (syncErr) {
+    console.error('[Auth Callback] User D1 sync failed:', syncErr);
+  }
+
+  // 5. Auto-Claim Historical Unclaimed Orders matching buyer_email
   let claimedCount = 0;
   try {
     claimedCount = await claimOrdersByEmail(authUser.email, authUser.id);
@@ -154,7 +179,7 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
     console.error('[Auth Callback] Auto-claim orders failed:', claimErr);
   }
 
-  // 4. Generate Tamper-Proof Session Cookie
+  // 6. Generate Tamper-Proof Session Cookie
   const sessionToken = await createSessionToken(authUser, undefined, cfEnv);
   const sessionCookie = formatSessionCookie(sessionToken);
   const clearStateCookie = 'logto_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax';

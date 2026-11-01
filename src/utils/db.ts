@@ -14,6 +14,29 @@ async function getRuntimeD1(): Promise<any> {
   }
 }
 
+export type CustomerTier = 'STANDARD' | 'VIP' | 'PARTNER';
+export type UserStatus = 'ACTIVE' | 'BLOCKED';
+
+export interface UserRecord {
+  id: string;
+  email: string;
+  name: string;
+  company: string;
+  country: string;
+  phone: string;
+  logto_roles: string;
+  tier: CustomerTier;
+  status: UserStatus;
+  admin_notes: string;
+  last_login_at: string;
+  created_at: string;
+  updated_at: string;
+  total_orders?: number;
+  pending_orders?: number;
+  shipped_orders?: number;
+  latest_order_date?: string;
+}
+
 export interface OrderItem {
   id?: number;
   order_id?: string;
@@ -111,11 +134,30 @@ CREATE TABLE IF NOT EXISTS order_items (
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT DEFAULT '',
+  company TEXT DEFAULT '',
+  country TEXT DEFAULT '',
+  phone TEXT DEFAULT '',
+  logto_roles TEXT DEFAULT '[]',
+  tier TEXT DEFAULT 'STANDARD',
+  status TEXT DEFAULT 'ACTIVE',
+  admin_notes TEXT DEFAULT '',
+  last_login_at TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 `;
 
 let localNodeDbInstance: any = null;
@@ -725,4 +767,335 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
   }
 
   return false;
+}
+
+/**
+ * Retrieves a user record by user ID or email
+ */
+export async function getUserByIdOrEmail(userId?: string | null, email?: string | null): Promise<UserRecord | null> {
+  if (!userId && !email) return null;
+  const { isD1, db } = await getDbHandle();
+  if (!db) return null;
+
+  return executeWithAutoSchema(isD1, db, async () => {
+    const normalizedEmail = email ? email.trim().toLowerCase() : null;
+    let user: UserRecord | null = null;
+
+    if (isD1) {
+      if (userId && normalizedEmail) {
+        user = await db
+          .prepare(`SELECT * FROM users WHERE id = ?1 OR LOWER(email) = LOWER(?2) LIMIT 1`)
+          .bind(userId, normalizedEmail)
+          .first();
+      } else if (userId) {
+        user = await db.prepare(`SELECT * FROM users WHERE id = ? LIMIT 1`).bind(userId).first();
+      } else if (normalizedEmail) {
+        user = await db.prepare(`SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`).bind(normalizedEmail).first();
+      }
+    } else {
+      if (userId && normalizedEmail) {
+        const stmt = db.prepare(`SELECT * FROM users WHERE id = ? OR LOWER(email) = LOWER(?) LIMIT 1`);
+        user = (stmt.get(userId, normalizedEmail) || null) as UserRecord | null;
+      } else if (userId) {
+        const stmt = db.prepare(`SELECT * FROM users WHERE id = ? LIMIT 1`);
+        user = (stmt.get(userId) || null) as UserRecord | null;
+      } else if (normalizedEmail) {
+        const stmt = db.prepare(`SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`);
+        user = (stmt.get(normalizedEmail) || null) as UserRecord | null;
+      }
+    }
+    return user;
+  });
+}
+
+/**
+ * Upserts a user on login, syncing Logto sub, email, name, and roles.
+ * Also backfills company, country, and phone from previous orders if empty.
+ */
+export async function upsertUserOnLogin(user: {
+  id: string;
+  email: string;
+  name?: string;
+  roles?: string[];
+}): Promise<UserRecord | null> {
+  if (!user.id || !user.email) return null;
+  const { isD1, db } = await getDbHandle();
+  if (!db) return null;
+
+  const normalizedEmail = user.email.trim().toLowerCase();
+  const userName = user.name?.trim() || '';
+  const rolesJson = JSON.stringify(user.roles || []);
+
+  return executeWithAutoSchema(isD1, db, async () => {
+    if (isD1) {
+      await db
+        .prepare(
+          `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
+           VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'), datetime('now'))
+           ON CONFLICT(id) DO UPDATE SET
+             email = excluded.email,
+             name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
+             logto_roles = excluded.logto_roles,
+             last_login_at = datetime('now'),
+             updated_at = datetime('now')`
+        )
+        .bind(user.id, normalizedEmail, userName, rolesJson)
+        .run();
+
+      // Backfill company, country, phone from past orders if blank
+      await db
+        .prepare(
+          `UPDATE users
+           SET company = CASE WHEN (company IS NULL OR company = '') THEN
+                 COALESCE((SELECT company_name FROM orders WHERE (user_id = ?1 OR LOWER(buyer_email) = LOWER(?2)) AND company_name IS NOT NULL AND company_name != '' ORDER BY created_at DESC LIMIT 1), '')
+                 ELSE company END,
+               country = CASE WHEN (country IS NULL OR country = '') THEN
+                 COALESCE((SELECT destination_country FROM orders WHERE (user_id = ?1 OR LOWER(buyer_email) = LOWER(?2)) AND destination_country IS NOT NULL AND destination_country != '' ORDER BY created_at DESC LIMIT 1), '')
+                 ELSE country END,
+               phone = CASE WHEN (phone IS NULL OR phone = '') THEN
+                 COALESCE((SELECT whatsapp FROM orders WHERE (user_id = ?1 OR LOWER(buyer_email) = LOWER(?2)) AND whatsapp IS NOT NULL AND whatsapp != '' ORDER BY created_at DESC LIMIT 1), '')
+                 ELSE phone END
+           WHERE id = ?1`
+        )
+        .bind(user.id, normalizedEmail)
+        .run();
+    } else {
+      const upsertStmt = db.prepare(
+        `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET
+           email = excluded.email,
+           name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
+           logto_roles = excluded.logto_roles,
+           last_login_at = datetime('now'),
+           updated_at = datetime('now')`
+      );
+      upsertStmt.run(user.id, normalizedEmail, userName, rolesJson);
+
+      const backfillStmt = db.prepare(
+        `UPDATE users
+         SET company = CASE WHEN (company IS NULL OR company = '') THEN
+               COALESCE((SELECT company_name FROM orders WHERE (user_id = ? OR LOWER(buyer_email) = LOWER(?)) AND company_name IS NOT NULL AND company_name != '' ORDER BY created_at DESC LIMIT 1), '')
+               ELSE company END,
+             country = CASE WHEN (country IS NULL OR country = '') THEN
+               COALESCE((SELECT destination_country FROM orders WHERE (user_id = ? OR LOWER(buyer_email) = LOWER(?)) AND destination_country IS NOT NULL AND destination_country != '' ORDER BY created_at DESC LIMIT 1), '')
+               ELSE country END,
+             phone = CASE WHEN (phone IS NULL OR phone = '') THEN
+               COALESCE((SELECT whatsapp FROM orders WHERE (user_id = ? OR LOWER(buyer_email) = LOWER(?)) AND whatsapp IS NOT NULL AND whatsapp != '' ORDER BY created_at DESC LIMIT 1), '')
+               ELSE phone END
+         WHERE id = ?`
+      );
+      backfillStmt.run(user.id, normalizedEmail, user.id, normalizedEmail, user.id, normalizedEmail, user.id);
+    }
+
+    return await getUserByIdOrEmail(user.id, normalizedEmail);
+  });
+}
+
+export interface ListAdminUsersFilter {
+  search?: string;
+  tier?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface ListAdminUsersResult {
+  users: UserRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  stats: {
+    all: number;
+    vip: number;
+    partner: number;
+    standard: number;
+    blocked: number;
+    admins: number;
+    unclaimedGuestOrders: number;
+  };
+}
+
+/**
+ * Lists customers/users with order metrics, search, and tier filters
+ */
+export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise<ListAdminUsersResult> {
+  const { search, tier, status, page = 1, limit = 20 } = filter;
+  const offset = (page - 1) * limit;
+  const { isD1, db } = await getDbHandle();
+
+  return executeWithAutoSchema(isD1, db, async () => {
+    let whereClauses: string[] = [];
+    let params: any[] = [];
+
+    if (tier && tier !== 'ALL') {
+      whereClauses.push('u.tier = ?');
+      params.push(tier);
+    }
+
+    if (status && status !== 'ALL') {
+      whereClauses.push('u.status = ?');
+      params.push(status);
+    }
+
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      whereClauses.push('(u.email LIKE ? OR u.name LIKE ? OR u.company LIKE ? OR u.country LIKE ?)');
+      params.push(term, term, term, term);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    let users: UserRecord[] = [];
+    let total = 0;
+    let stats = {
+      all: 0,
+      vip: 0,
+      partner: 0,
+      standard: 0,
+      blocked: 0,
+      admins: 0,
+      unclaimedGuestOrders: 0,
+    };
+
+    const querySql = `
+      SELECT 
+        u.*,
+        COUNT(o.id) as total_orders,
+        SUM(CASE WHEN o.status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as pending_orders,
+        SUM(CASE WHEN o.status = 'SHIPPED' THEN 1 ELSE 0 END) as shipped_orders,
+        MAX(o.created_at) as latest_order_date
+      FROM users u
+      LEFT JOIN orders o ON (o.user_id = u.id OR LOWER(o.buyer_email) = LOWER(u.email))
+      ${whereSql}
+      GROUP BY u.id
+      ORDER BY u.last_login_at DESC, u.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const countSql = `SELECT COUNT(*) as cnt FROM users u ${whereSql}`;
+
+    if (isD1 && db) {
+      const listRes = await db.prepare(querySql).bind(...params, limit, offset).all();
+      users = (listRes.results || []) as UserRecord[];
+
+      const countRes = await db.prepare(countSql).bind(...params).first();
+      total = Number(countRes?.cnt || 0);
+
+      const statsRes = await db
+        .prepare(
+          `SELECT
+            COUNT(*) as total_all,
+            SUM(CASE WHEN tier = 'VIP' THEN 1 ELSE 0 END) as total_vip,
+            SUM(CASE WHEN tier = 'PARTNER' THEN 1 ELSE 0 END) as total_partner,
+            SUM(CASE WHEN tier = 'STANDARD' THEN 1 ELSE 0 END) as total_standard,
+            SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) as total_blocked,
+            SUM(CASE WHEN logto_roles LIKE '%admin%' THEN 1 ELSE 0 END) as total_admins
+          FROM users`
+        )
+        .first();
+
+      const unclaimedRes = await db
+        .prepare(`SELECT COUNT(*) as unclaimed FROM orders WHERE user_id IS NULL OR user_id = ''`)
+        .first();
+
+      stats = {
+        all: Number(statsRes?.total_all || 0),
+        vip: Number(statsRes?.total_vip || 0),
+        partner: Number(statsRes?.total_partner || 0),
+        standard: Number(statsRes?.total_standard || 0),
+        blocked: Number(statsRes?.total_blocked || 0),
+        admins: Number(statsRes?.total_admins || 0),
+        unclaimedGuestOrders: Number(unclaimedRes?.unclaimed || 0),
+      };
+    } else if (db) {
+      const listStmt = db.prepare(querySql);
+      users = (listStmt.all(...params, limit, offset) || []) as UserRecord[];
+
+      const countStmt = db.prepare(countSql);
+      total = Number(countStmt.get(...params)?.cnt || 0);
+
+      const statsStmt = db.prepare(
+        `SELECT
+          COUNT(*) as total_all,
+          SUM(CASE WHEN tier = 'VIP' THEN 1 ELSE 0 END) as total_vip,
+          SUM(CASE WHEN tier = 'PARTNER' THEN 1 ELSE 0 END) as total_partner,
+          SUM(CASE WHEN tier = 'STANDARD' THEN 1 ELSE 0 END) as total_standard,
+          SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) as total_blocked,
+          SUM(CASE WHEN logto_roles LIKE '%admin%' THEN 1 ELSE 0 END) as total_admins
+        FROM users`
+      );
+      const statsRow = statsStmt.get();
+
+      const unclaimedStmt = db.prepare(`SELECT COUNT(*) as unclaimed FROM orders WHERE user_id IS NULL OR user_id = ''`);
+      const unclaimedRow = unclaimedStmt.get();
+
+      stats = {
+        all: Number(statsRow?.total_all || 0),
+        vip: Number(statsRow?.total_vip || 0),
+        partner: Number(statsRow?.total_partner || 0),
+        standard: Number(statsRow?.total_standard || 0),
+        blocked: Number(statsRow?.total_blocked || 0),
+        admins: Number(statsRow?.total_admins || 0),
+        unclaimedGuestOrders: Number(unclaimedRow?.unclaimed || 0),
+      };
+    }
+
+    return { users, total, page, limit, stats };
+  });
+}
+
+/**
+ * Updates customer tier, account status (ACTIVE/BLOCKED), and admin notes
+ */
+export async function updateUserAdminMeta(
+  userId: string,
+  input: {
+    tier?: CustomerTier;
+    status?: UserStatus;
+    adminNotes?: string;
+  }
+): Promise<boolean> {
+  const { isD1, db } = await getDbHandle();
+  if (!db) return false;
+
+  return executeWithAutoSchema(isD1, db, async () => {
+    if (isD1) {
+      const res = await db
+        .prepare(
+          `UPDATE users
+           SET tier = COALESCE(?1, tier),
+               status = COALESCE(?2, status),
+               admin_notes = COALESCE(?3, admin_notes),
+               updated_at = datetime('now')
+           WHERE id = ?4`
+        )
+        .bind(input.tier || null, input.status || null, input.adminNotes !== undefined ? input.adminNotes.trim() : null, userId)
+        .run();
+      return (res?.meta?.changes ?? 0) > 0;
+    }
+
+    const stmt = db.prepare(
+      `UPDATE users
+       SET tier = COALESCE(?1, tier),
+           status = COALESCE(?2, status),
+           admin_notes = COALESCE(?3, admin_notes),
+           updated_at = datetime('now')
+       WHERE id = ?4`
+    );
+    const info = stmt.run(input.tier || null, input.status || null, input.adminNotes !== undefined ? input.adminNotes.trim() : null, userId);
+    return (info?.changes ?? 0) > 0;
+  });
+}
+
+/**
+ * Retrieves full user details along with their recent orders for the slide-over drawer
+ */
+export async function getUserDetailsWithOrders(userId: string): Promise<{ user: UserRecord | null; recentOrders: OrderRecord[] }> {
+  const user = await getUserByIdOrEmail(userId, null);
+  if (!user) {
+    return { user: null, recentOrders: [] };
+  }
+  const orders = await getOrdersByUserId(user.id, user.email);
+  return { user, recentOrders: orders.slice(0, 5) };
 }
