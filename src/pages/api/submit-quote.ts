@@ -523,17 +523,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }
     })();
 
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(webhookBody),
-          signal: AbortSignal.timeout(6_000),
-        });
-      } catch (webhookErr) {
-        console.warn('Webhook notification failed or timed out (skipping):', webhookErr);
-      }
-    })();
-
     await Promise.allSettled([d1WriteTask, sanityWriteTask, emailTask, webhookTask]);
 
     if (!sanityRecordId && !orderNo) {
