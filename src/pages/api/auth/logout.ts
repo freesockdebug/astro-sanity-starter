@@ -6,9 +6,16 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const ALL: APIRoute = async ({ request, url }) => {
+export const ALL: APIRoute = async ({ request, url, cookies }) => {
   const returnUrl = url.searchParams.get('returnUrl') || '/';
   const clearCookie = formatClearSessionCookie();
+
+  try {
+    cookies.delete('gwenvenni_session', { path: '/' });
+    cookies.delete('logto_oauth_state', { path: '/' });
+  } catch {
+    // ignore
+  }
 
   const endpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv)?.replace(/\/+$/, '');
   const appId = getRuntimeEnv('LOGTO_APP_ID', cfEnv);

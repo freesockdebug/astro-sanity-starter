@@ -162,20 +162,9 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     });
   }
 
-  // Expose global helper to open auth popup from anywhere
+  // Expose global helper to navigate to auth login
   (window as any).openAuthLogin = (returnUrl = '/orders') => {
-    function handleAuthMessage(event: MessageEvent) {
-      if (event.data?.type === 'LOGTO_AUTH_SUCCESS') {
-        window.removeEventListener('message', handleAuthMessage);
-        window.location.reload();
-      }
-    }
-    window.addEventListener('message', handleAuthMessage);
-    window.open(
-      `/api/auth/login?popup=1&returnUrl=${encodeURIComponent(returnUrl)}`,
-      'LogtoAuth',
-      'width=480,height=640,menubar=no,toolbar=no,location=no,status=no'
-    );
+    window.location.href = `/api/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`;
   };
 
   // Check auth state on load to light up user dot indicator

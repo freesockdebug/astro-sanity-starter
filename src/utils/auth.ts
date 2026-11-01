@@ -83,6 +83,18 @@ async function getHmacKey(secret: string): Promise<CryptoKey> {
 }
 
 /**
+ * Resolves candidate secrets for signing / verification to prevent mismatches
+ */
+function getCandidateSecrets(customEnv?: any): string[] {
+  const secrets = [
+    getRuntimeEnv('SESSION_SECRET', customEnv),
+    getRuntimeEnv('LOGTO_APP_SECRET', customEnv),
+    'gwenvenni-b2b-secure-session-key-2026',
+  ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+  return Array.from(new Set(secrets));
+}
+
+/**
  * Signs a session payload into a tamper-proof session token
  */
 export async function createSessionToken(
@@ -90,10 +102,7 @@ export async function createSessionToken(
   ttlSeconds = DEFAULT_TTL_SECONDS,
   customEnv?: any
 ): Promise<string> {
-  const secret =
-    getRuntimeEnv('SESSION_SECRET', customEnv) ||
-    getRuntimeEnv('LOGTO_APP_SECRET', customEnv) ||
-    'gwenvenni-b2b-secure-session-key-2026';
+  const secret = getCandidateSecrets(customEnv)[0];
 
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   const sessionData: SessionData = { user, exp };
@@ -118,7 +127,7 @@ export async function createSessionToken(
 }
 
 /**
- * Verifies and decodes a session token
+ * Verifies and decodes a session token against all candidate secrets
  */
 export async function verifySessionToken(token: string, customEnv?: any): Promise<AuthUser | null> {
   if (!token || !token.includes('.')) return null;
@@ -126,12 +135,7 @@ export async function verifySessionToken(token: string, customEnv?: any): Promis
   if (!encodedPayload || !encodedSig) return null;
 
   try {
-    const secret =
-      getRuntimeEnv('SESSION_SECRET', customEnv) ||
-      getRuntimeEnv('LOGTO_APP_SECRET', customEnv) ||
-      'gwenvenni-b2b-secure-session-key-2026';
-
-    const key = await getHmacKey(secret);
+    const secrets = getCandidateSecrets(customEnv);
 
     // Decode provided signature
     let base64Sig = encodedSig.replace(/-/g, '+').replace(/_/g, '/');
@@ -142,12 +146,24 @@ export async function verifySessionToken(token: string, customEnv?: any): Promis
       sigBytes[i] = binarySig.charCodeAt(i);
     }
 
-    const isValid = await crypto.subtle.verify(
-      'HMAC',
-      key,
-      sigBytes,
-      new TextEncoder().encode(encodedPayload)
-    );
+    let isValid = false;
+    for (const sec of secrets) {
+      try {
+        const key = await getHmacKey(sec);
+        const valid = await crypto.subtle.verify(
+          'HMAC',
+          key,
+          sigBytes,
+          new TextEncoder().encode(encodedPayload)
+        );
+        if (valid) {
+          isValid = true;
+          break;
+        }
+      } catch {
+        // try next candidate
+      }
+    }
 
     if (!isValid) return null;
 
@@ -176,11 +192,32 @@ export function getCookieValue(cookieHeader: string | null | undefined, name: st
 }
 
 /**
- * Extracts authenticated user from request Cookie
+ * Extracts authenticated user from request, Astro context, or Cookie header
  */
-export async function getSessionFromRequest(request: Request, customEnv?: any): Promise<AuthUser | null> {
-  const cookieHeader = request.headers.get('cookie');
-  const token = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
+export async function getSessionFromRequest(requestOrContext: any, customEnv?: any): Promise<AuthUser | null> {
+  if (!requestOrContext) return null;
+
+  let token: string | null = null;
+
+  // 1. Astro / AstroCookies context
+  if (requestOrContext.cookies?.get) {
+    token = requestOrContext.cookies.get(SESSION_COOKIE_NAME)?.value || null;
+  } else if (typeof requestOrContext.get === 'function' && !requestOrContext.headers) {
+    const c = requestOrContext.get(SESSION_COOKIE_NAME);
+    token = c?.value || (typeof c === 'string' ? c : null);
+  }
+
+  // 2. Standard Request object
+  if (!token && requestOrContext.headers?.get) {
+    const cookieHeader = requestOrContext.headers.get('cookie');
+    token = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
+  }
+
+  // 3. Direct string cookie header or raw token
+  if (!token && typeof requestOrContext === 'string') {
+    token = getCookieValue(requestOrContext, SESSION_COOKIE_NAME) || (requestOrContext.includes('.') ? requestOrContext : null);
+  }
+
   if (!token) return null;
   return verifySessionToken(token, customEnv);
 }

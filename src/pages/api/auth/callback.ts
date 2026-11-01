@@ -14,7 +14,7 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, url }) => {
+export const GET: APIRoute = async ({ request, url, cookies }) => {
   const reqUrl = new URL(request.url);
   const code = url.searchParams.get('code');
   const returnedState = url.searchParams.get('state');
@@ -142,6 +142,20 @@ export const GET: APIRoute = async ({ request, url }) => {
   const sessionCookie = formatSessionCookie(sessionToken);
   const clearStateCookie = 'logto_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
 
+  // Set natively through Astro Cookies API
+  try {
+    cookies.set('gwenvenni_session', sessionToken, {
+      path: '/',
+      maxAge: 7 * 24 * 3600,
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+    });
+    cookies.delete('logto_oauth_state', { path: '/' });
+  } catch (cookieErr) {
+    console.warn('[Auth Callback] Astro cookies.set fallback:', cookieErr);
+  }
+
   const headers = new Headers();
   headers.append('Set-Cookie', sessionCookie);
   headers.append('Set-Cookie', clearStateCookie);
@@ -177,10 +191,10 @@ export const GET: APIRoute = async ({ request, url }) => {
       // ignore
     }
     setTimeout(function() {
-      if (window.opener) {
+      if (window.opener && !window.opener.closed) {
         window.close();
       } else {
-        window.location.href = ${JSON.stringify(returnUrl)};
+        window.location.replace(${JSON.stringify(returnUrl)});
       }
     }, 300);
   </script>

@@ -7,8 +7,8 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request }) => {
-  const user = await getSessionFromRequest(request, cfEnv);
+export const GET: APIRoute = async (context) => {
+  const user = await getSessionFromRequest(context, cfEnv);
 
   if (!user) {
     return new Response(JSON.stringify({ authenticated: false }), {

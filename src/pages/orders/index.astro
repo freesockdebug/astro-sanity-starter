@@ -12,7 +12,7 @@ export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0');
 
 const currentLang = getLangFromUrl(Astro.url);
-const sessionUser = await getSessionFromRequest(Astro.request, cfEnv);
+const sessionUser = await getSessionFromRequest(Astro, cfEnv);
 
 const viewMode = Astro.url.searchParams.get('view') || 'my';
 const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
@@ -160,13 +160,13 @@ const getItemProductUrl = (item: any) => {
             Sign in with your work email to view approval statuses, real-time logistics tracking, and sample specifications. Any past orders placed with this email will be linked automatically.
           </p>
           <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              type="button"
+            <a
+              href="/api/auth/login?returnUrl=/orders"
               id="orders-signin-btn"
-              class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm cursor-pointer"
+              class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm cursor-pointer text-center inline-flex items-center justify-center gap-1.5"
             >
               Sign In with Work Email
-            </button>
+            </a>
             <a
               href={getLocalizedPath('/#collection', currentLang)}
               class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-black/10 transition-all text-center"
@@ -522,25 +522,6 @@ const getItemProductUrl = (item: any) => {
 </Layout>
 
 <script>
-  // Setup sign in popup trigger
-  const signinBtn = document.getElementById('orders-signin-btn');
-  if (signinBtn) {
-    signinBtn.addEventListener('click', () => {
-      function handleAuthMessage(event: MessageEvent) {
-        if (event.data?.type === 'LOGTO_AUTH_SUCCESS') {
-          window.removeEventListener('message', handleAuthMessage);
-          window.location.reload();
-        }
-      }
-      window.addEventListener('message', handleAuthMessage);
-      window.open(
-        '/api/auth/login?popup=1',
-        'LogtoAuth',
-        'width=480,height=640,menubar=no,toolbar=no,location=no,status=no'
-      );
-    });
-  }
-
   // Copy buttons
   document.querySelectorAll<HTMLButtonElement>('.copy-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {

@@ -12,7 +12,7 @@ export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0');
 
 const currentLang = getLangFromUrl(Astro.url);
-const sessionUser = await getSessionFromRequest(Astro.request, cfEnv);
+const sessionUser = await getSessionFromRequest(Astro, cfEnv);
 
 if (!sessionUser || !sessionUser.isAdmin) {
   // If not authenticated or not admin, return forbidden / redirect
