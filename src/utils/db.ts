@@ -102,8 +102,8 @@ export interface CreateOrderInput {
   }>;
 }
 
-const SCHEMA_DDL = `
-CREATE TABLE IF NOT EXISTS orders (
+const DDL_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   order_no TEXT UNIQUE NOT NULL,
   user_id TEXT,
@@ -126,9 +126,8 @@ CREATE TABLE IF NOT EXISTS orders (
   shipped_by TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS order_items (
+)`,
+  `CREATE TABLE IF NOT EXISTS order_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   order_id TEXT NOT NULL,
   product_id TEXT,
@@ -138,9 +137,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity INTEGER DEFAULT 1,
   image_url TEXT,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS users (
+)`,
+  `CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   name TEXT DEFAULT '',
@@ -154,20 +152,20 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
-);
+)`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no)`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
+  `CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier)`,
+  `CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`
+];
 
-CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier);
-CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
-`;
+const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
 
 let localNodeDbInstance: any = null;
-let schemaInitialized = false;
 
 function getLocalNodeDb(): any {
   if (localNodeDbInstance) return localNodeDbInstance;
@@ -190,17 +188,20 @@ function getLocalNodeDb(): any {
 }
 
 /**
- * Ensures D1 tables exist (Lazy Self-Healing fallback)
+ * Ensures D1 tables exist (Runs each DDL statement individually to avoid multi-statement parse issues)
  */
 async function ensureSchema(d1: any) {
-  if (schemaInitialized) return;
-  try {
-    if (d1?.exec) {
-      await d1.exec(SCHEMA_DDL);
+  if (!d1) return;
+  for (const sql of DDL_STATEMENTS) {
+    try {
+      if (d1.prepare) {
+        await d1.prepare(sql).run();
+      } else if (d1.exec) {
+        await d1.exec(sql);
+      }
+    } catch (err) {
+      console.warn('[DB] ensureSchema statement notice:', err);
     }
-    schemaInitialized = true;
-  } catch (err) {
-    console.error('[DB] ensureSchema failed:', err);
   }
 }
 
@@ -211,7 +212,8 @@ async function executeWithAutoSchema<T>(isD1: boolean, db: any, fn: () => Promis
   try {
     return await fn();
   } catch (err: any) {
-    if (isD1 && db && err?.message && err.message.toLowerCase().includes('no such table')) {
+    const errMsg = (err?.message || String(err)).toLowerCase();
+    if (isD1 && db && errMsg.includes('no such table')) {
       console.warn('[DB] "no such table" detected; triggering lazy schema initialization...');
       await ensureSchema(db);
       return await fn();
@@ -826,35 +828,40 @@ export async function getUserByIdOrEmail(userId?: string | null, email?: string 
   const { isD1, db } = await getDbHandle();
   if (!db) return null;
 
-  return executeWithAutoSchema(isD1, db, async () => {
-    const normalizedEmail = email ? email.trim().toLowerCase() : null;
-    let user: UserRecord | null = null;
+  try {
+    return await executeWithAutoSchema(isD1, db, async () => {
+      const normalizedEmail = email ? email.trim().toLowerCase() : null;
+      let user: UserRecord | null = null;
 
-    if (isD1) {
-      if (userId && normalizedEmail) {
-        user = await db
-          .prepare(`SELECT * FROM users WHERE id = ?1 OR LOWER(email) = LOWER(?2) LIMIT 1`)
-          .bind(userId, normalizedEmail)
-          .first();
-      } else if (userId) {
-        user = await db.prepare(`SELECT * FROM users WHERE id = ? LIMIT 1`).bind(userId).first();
-      } else if (normalizedEmail) {
-        user = await db.prepare(`SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`).bind(normalizedEmail).first();
+      if (isD1) {
+        if (userId && normalizedEmail) {
+          user = await db
+            .prepare(`SELECT * FROM users WHERE id = ?1 OR LOWER(email) = LOWER(?2) LIMIT 1`)
+            .bind(userId, normalizedEmail)
+            .first();
+        } else if (userId) {
+          user = await db.prepare(`SELECT * FROM users WHERE id = ? LIMIT 1`).bind(userId).first();
+        } else if (normalizedEmail) {
+          user = await db.prepare(`SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`).bind(normalizedEmail).first();
+        }
+      } else {
+        if (userId && normalizedEmail) {
+          const stmt = db.prepare(`SELECT * FROM users WHERE id = ? OR LOWER(email) = LOWER(?) LIMIT 1`);
+          user = (stmt.get(userId, normalizedEmail) || null) as UserRecord | null;
+        } else if (userId) {
+          const stmt = db.prepare(`SELECT * FROM users WHERE id = ? LIMIT 1`);
+          user = (stmt.get(userId) || null) as UserRecord | null;
+        } else if (normalizedEmail) {
+          const stmt = db.prepare(`SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`);
+          user = (stmt.get(normalizedEmail) || null) as UserRecord | null;
+        }
       }
-    } else {
-      if (userId && normalizedEmail) {
-        const stmt = db.prepare(`SELECT * FROM users WHERE id = ? OR LOWER(email) = LOWER(?) LIMIT 1`);
-        user = (stmt.get(userId, normalizedEmail) || null) as UserRecord | null;
-      } else if (userId) {
-        const stmt = db.prepare(`SELECT * FROM users WHERE id = ? LIMIT 1`);
-        user = (stmt.get(userId) || null) as UserRecord | null;
-      } else if (normalizedEmail) {
-        const stmt = db.prepare(`SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`);
-        user = (stmt.get(normalizedEmail) || null) as UserRecord | null;
-      }
-    }
-    return user;
-  });
+      return user;
+    });
+  } catch (err) {
+    console.warn('[DB] getUserByIdOrEmail non-fatal fallback:', err);
+    return null;
+  }
 }
 
 /**

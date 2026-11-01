@@ -27,11 +27,15 @@ let allOrders: OrderRecord[] = [];
 let claimedCount = 0;
 
 if (sessionUser) {
-  // Session invalidation guard: check if user is BLOCKED in D1
-  const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
-  if (dbUser && dbUser.status === 'BLOCKED') {
-    Astro.cookies.delete('gwenvenni_session', { path: '/' });
-    return Astro.redirect('/api/auth/login?error=account_suspended');
+  // Session invalidation guard: check if user is BLOCKED in D1 (fail-safe non-blocking)
+  try {
+    const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
+    if (dbUser && dbUser.status === 'BLOCKED') {
+      Astro.cookies.delete('gwenvenni_session', { path: '/' });
+      return Astro.redirect('/api/auth/login?error=account_suspended');
+    }
+  } catch (e) {
+    // Non-blocking: never break order list rendering if user lookup fails
   }
 
   try {
