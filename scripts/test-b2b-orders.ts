@@ -149,7 +149,7 @@ async function runSelfCheck() {
   console.log('✔ [PASS] User upsert on login & past order metadata backfilling verified');
 
   // 10. Admin User Management: List & Aggregation
-  const userList = await listAdminUsers({ search: 'Eleanor' });
+  const userList = await listAdminUsers({ search: customEmail });
   assert.strictEqual(userList.total, 1);
   assert.strictEqual(userList.users[0].total_orders, 1);
   console.log('✔ [PASS] Admin user list search & order aggregation verified');
@@ -167,6 +167,43 @@ async function runSelfCheck() {
   assert.strictEqual(blockedUser?.status, 'BLOCKED');
   assert.strictEqual(blockedUser?.admin_notes, 'Key Manhattan buyer, test block applied.');
   console.log('✔ [PASS] Admin user tier update and security block verified');
+
+  // 12. Account Re-creation Check (same email, new Logto sub ID)
+  const newSubId = `usr_recreated_${Date.now()}`;
+  const reSyncedUser = await upsertUserOnLogin({
+    id: newSubId,
+    email: customEmail,
+    name: 'Eleanor Vance Reborn',
+    roles: ['vip_buyer'],
+  });
+  assert.strictEqual(reSyncedUser.id, newSubId, 'Recreated user should take over the email with the new sub ID');
+  console.log('✔ [PASS] Account recreation with same email verified (no UNIQUE constraint collision)');
+
+  // 13. Backfill users table when a registered user places their first order
+  const freshUserId = `usr_fresh_${Date.now()}`;
+  const freshEmail = `fresh-${Date.now()}@buyer.fr`;
+  await upsertUserOnLogin({
+    id: freshUserId,
+    email: freshEmail,
+    name: 'Fresh Buyer',
+    roles: [],
+  });
+  const beforeOrderUser = await getUserByIdOrEmail(freshUserId, null);
+  assert.strictEqual(beforeOrderUser?.company, '', 'Company should initially be empty');
+
+  await createOrder({
+    userId: freshUserId,
+    buyerEmail: freshEmail,
+    companyName: 'Maison de Haute Couture',
+    destinationCountry: 'France',
+    whatsapp: '+33-6-12345678',
+    items: [{ sku: 'LACE-01', title: 'Chantilly Lace', variant: 'Ivory', quantity: 10 }],
+  });
+  const afterOrderUser = await getUserByIdOrEmail(freshUserId, null);
+  assert.strictEqual(afterOrderUser?.company, 'Maison de Haute Couture', 'Company should be backfilled from first order');
+  assert.strictEqual(afterOrderUser?.country, 'France', 'Country should be backfilled from first order');
+  assert.strictEqual(afterOrderUser?.phone, '+33-6-12345678', 'Phone should be backfilled from first order');
+  console.log('✔ [PASS] createOrder backfills empty users table fields for logged-in buyers');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

@@ -2,7 +2,7 @@
 // src/pages/orders/index.astro
 import Layout from '@layouts/Layout.astro';
 import { getSessionFromRequest } from '@utils/auth';
-import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, type OrderRecord } from '@utils/db';
+import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, getUserByIdOrEmail, type OrderRecord } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
 import { fetchNormalizedProducts } from '@data/products';
 // @ts-ignore
@@ -27,6 +27,13 @@ let allOrders: OrderRecord[] = [];
 let claimedCount = 0;
 
 if (sessionUser) {
+  // Session invalidation guard: check if user is BLOCKED in D1
+  const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
+  if (dbUser && dbUser.status === 'BLOCKED') {
+    Astro.cookies.delete('gwenvenni_session', { path: '/' });
+    return Astro.redirect('/api/auth/login?error=account_suspended');
+  }
+
   try {
     claimedCount = await claimOrdersByEmail(sessionUser.email, sessionUser.id);
   } catch (e) {

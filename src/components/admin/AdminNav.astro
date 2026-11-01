@@ -4,10 +4,9 @@ interface Props {
   currentTab: 'orders' | 'users';
   sessionEmail: string;
   pendingOrdersCount?: number;
-  totalUsersCount?: number;
 }
 
-const { currentTab, sessionEmail, pendingOrdersCount = 0, totalUsersCount = 0 } = Astro.props;
+const { currentTab, sessionEmail, pendingOrdersCount = 0 } = Astro.props;
 ---
 
 <header class="mb-8 space-y-4">
@@ -85,15 +84,8 @@ const { currentTab, sessionEmail, pendingOrdersCount = 0, totalUsersCount = 0 } 
         ]}
       >
         <span>👥 Customers & Access</span>
-        {totalUsersCount > 0 && (
-          <span class:list={[
-            'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
-            currentTab === 'users' ? 'bg-black/10 text-[#1d1d1f]' : 'bg-black/10 text-[#52525b]'
-          ]}>
-            {totalUsersCount}
-          </span>
-        )}
       </a>
     </nav>
   </div>
 </header>
+

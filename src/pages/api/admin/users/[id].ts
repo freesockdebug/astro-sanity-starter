@@ -75,6 +75,14 @@ export const POST: APIRoute = async ({ request, params }) => {
 
   const { tier, status, adminNotes } = body || {};
 
+  // Self-lockout prevention: Admins cannot suspend their own logged-in account
+  if (userId === user.id && status === 'BLOCKED') {
+    return new Response(JSON.stringify({ error: 'You cannot block your own admin account.' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   if (tier && !VALID_TIERS.has(tier)) {
     return new Response(JSON.stringify({ error: 'Invalid tier value. Allowed: STANDARD, VIP, PARTNER.' }), {
       status: 400,
@@ -113,3 +121,4 @@ export const POST: APIRoute = async ({ request, params }) => {
     }
   );
 };
+

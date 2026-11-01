@@ -2,7 +2,7 @@
 // src/pages/admin/users.astro
 import Layout from '@layouts/Layout.astro';
 import AdminNav from '@components/admin/AdminNav.astro';
-import { getSessionFromRequest } from '@utils/auth';
+import { getSessionFromRequest, checkIsAdmin } from '@utils/auth';
 import { listAdminUsers, listAdminOrders } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
 // @ts-ignore
@@ -48,7 +48,6 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
         currentTab="users"
         sessionEmail={sessionUser.email}
         pendingOrdersCount={ordersSummary?.stats?.pending || 0}
-        totalUsersCount={stats.all}
       />
 
       <!-- Metric Cards Header -->
@@ -173,7 +172,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
                     const roles: string[] = (() => {
                       try { return JSON.parse(u.logto_roles || '[]'); } catch { return []; }
                     })();
-                    const isUserAdmin = roles.includes('admin') || u.email === 'forhaisome@gmail.com';
+                    const isUserAdmin = checkIsAdmin(u.email, roles, cfEnv);
                     const hasPending = (u.pending_orders || 0) > 0;
 
                     return (
@@ -273,7 +272,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
                 const roles: string[] = (() => {
                   try { return JSON.parse(u.logto_roles || '[]'); } catch { return []; }
                 })();
-                const isUserAdmin = roles.includes('admin') || u.email === 'forhaisome@gmail.com';
+                const isUserAdmin = checkIsAdmin(u.email, roles, cfEnv);
                 const hasPending = (u.pending_orders || 0) > 0;
 
                 return (
@@ -459,12 +458,19 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
         ></textarea>
       </div>
 
-      <!-- Order History Fast-Link -->
-      <div class="pt-2 border-t border-black/5">
+      <!-- Recent Orders Timeline -->
+      <div class="pt-2 border-t border-black/5 space-y-2">
+        <div class="flex items-center justify-between">
+          <label class="block font-semibold text-[11px] text-[#52525b]">Recent Orders (Latest 5)</label>
+          <span id="drawer-orders-loading" class="text-[10px] text-[#86868b] hidden">Loading...</span>
+        </div>
+        <div id="drawer-recent-orders-list" class="space-y-2">
+          <!-- Rendered via JS -->
+        </div>
         <a
           id="drawer-orders-link"
           href="#"
-          class="inline-flex items-center justify-between w-full p-3 rounded-xl bg-[#f5f5f7] hover:bg-black/5 text-[#1d1d1f] font-medium transition-all"
+          class="inline-flex items-center justify-between w-full p-2.5 rounded-xl bg-[#f5f5f7] hover:bg-black/5 text-[#1d1d1f] font-medium transition-all text-xs"
         >
           <span>📦 View All Orders By This Customer</span>
           <span>→</span>
@@ -510,6 +516,86 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
   const statusSelect = document.getElementById('drawer-status-select') as HTMLSelectElement | null;
   const notesInput = document.getElementById('drawer-notes-input') as HTMLTextAreaElement | null;
   const ordersLink = document.getElementById('drawer-orders-link') as HTMLAnchorElement | null;
+  const ordersListEl = document.getElementById('drawer-recent-orders-list');
+  const ordersLoadingEl = document.getElementById('drawer-orders-loading');
+
+  let currentFetchController: AbortController | null = null;
+
+  async function loadRecentOrders(userId: string) {
+    if (!ordersListEl) return;
+    if (currentFetchController) {
+      currentFetchController.abort();
+    }
+    currentFetchController = new AbortController();
+
+    ordersListEl.innerHTML = '';
+    ordersLoadingEl?.classList.remove('hidden');
+
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        signal: currentFetchController.signal,
+      });
+      if (!res.ok) throw new Error('Failed to load orders');
+      const data = await res.json();
+      const recentOrders: any[] = data.recentOrders || [];
+
+      if (recentOrders.length === 0) {
+        ordersListEl.innerHTML = `
+          <div class="p-3 rounded-xl bg-[#f5f5f7] text-[#86868b] text-[11px] text-center">
+            No orders found for this customer.
+          </div>
+        `;
+        return;
+      }
+
+      ordersListEl.innerHTML = recentOrders
+        .map((order) => {
+          let badgeHtml = '';
+          switch (order.status) {
+            case 'PENDING_APPROVAL':
+              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">Pending</span>';
+              break;
+            case 'APPROVED':
+              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200">Approved</span>';
+              break;
+            case 'SHIPPED':
+              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">Shipped</span>';
+              break;
+            case 'REJECTED':
+              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">Rejected</span>';
+              break;
+            default:
+              badgeHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700">${order.status}</span>`;
+          }
+
+          const date = (order.created_at || '').slice(0, 10);
+          const orderLink = `/admin/orders?search=${encodeURIComponent(order.order_no)}`;
+
+          return `
+            <a href="${orderLink}" class="block p-2.5 rounded-xl border border-black/5 hover:border-black/20 hover:bg-[#fbfbfd] transition-all bg-white">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-mono font-semibold text-[#1d1d1f]">${order.order_no}</span>
+                ${badgeHtml}
+              </div>
+              <div class="flex items-center justify-between text-[11px] text-[#86868b]">
+                <span>${order.total_quantity || 0} pcs (${order.total_styles || 0} style${(order.total_styles || 0) === 1 ? '' : 's'})</span>
+                <span class="font-mono">${date}</span>
+              </div>
+            </a>
+          `;
+        })
+        .join('');
+    } catch (e: any) {
+      if (e.name === 'AbortError') return;
+      ordersListEl.innerHTML = `
+        <div class="p-3 rounded-xl bg-rose-50 text-rose-700 text-[11px] text-center border border-rose-200">
+          Failed to load recent orders.
+        </div>
+      `;
+    } finally {
+      ordersLoadingEl?.classList.add('hidden');
+    }
+  }
 
   const showDrawer = () => {
     backdrop?.classList.remove('hidden');
@@ -561,6 +647,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
       if (notesInput) notesInput.value = notes;
       if (ordersLink) ordersLink.href = `/admin/orders?search=${encodeURIComponent(email)}`;
 
+      loadRecentOrders(id);
       showDrawer();
     });
   });
@@ -612,3 +699,4 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
     }
   });
 </script>
+

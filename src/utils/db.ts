@@ -3,6 +3,12 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { getRuntimeEnv } from './auth';
+
+function getAdminEmailList(): string[] {
+  const raw = getRuntimeEnv('ADMIN_EMAILS') || 'forhaisome@gmail.com';
+  return raw.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
+}
 
 async function getRuntimeD1(): Promise<any> {
   try {
@@ -311,6 +317,29 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
     );
 
     await executeWithAutoSchema(isD1, db, () => db.batch([insertOrderStmt, ...itemStmts]));
+
+    // Backfill any empty company, country, phone in users table for this buyer
+    const safeCompany = input.companyName?.trim() || '';
+    const safeCountry = input.destinationCountry?.trim() || '';
+    const safePhone = input.whatsapp?.trim() || '';
+    if (safeCompany || safeCountry || safePhone) {
+      try {
+        await db
+          .prepare(
+            `UPDATE users
+             SET company = CASE WHEN (company IS NULL OR company = '') AND ?1 != '' THEN ?1 ELSE company END,
+                 country = CASE WHEN (country IS NULL OR country = '') AND ?2 != '' THEN ?2 ELSE country END,
+                 phone   = CASE WHEN (phone IS NULL OR phone = '') AND ?3 != '' THEN ?3 ELSE phone END,
+                 updated_at = datetime('now')
+             WHERE (id = ?4 OR LOWER(email) = LOWER(?5))`
+          )
+          .bind(safeCompany, safeCountry, safePhone, input.userId || '', normalizedEmail)
+          .run();
+      } catch {
+        // Non-blocking
+      }
+    }
+
     return { orderId, orderNo };
   }
 
@@ -353,6 +382,26 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
         item.quantity || 1,
         item.imageUrl || null
       );
+    }
+
+    // Backfill empty company, country, phone in users table for this buyer
+    const safeCompany = input.companyName?.trim() || '';
+    const safeCountry = input.destinationCountry?.trim() || '';
+    const safePhone = input.whatsapp?.trim() || '';
+    if (safeCompany || safeCountry || safePhone) {
+      try {
+        const backfillUser = db.prepare(
+          `UPDATE users
+           SET company = CASE WHEN (company IS NULL OR company = '') AND ? != '' THEN ? ELSE company END,
+               country = CASE WHEN (country IS NULL OR country = '') AND ? != '' THEN ? ELSE country END,
+               phone   = CASE WHEN (phone IS NULL OR phone = '') AND ? != '' THEN ? ELSE phone END,
+               updated_at = datetime('now')
+           WHERE (id = ? OR LOWER(email) = LOWER(?))`
+        );
+        backfillUser.run(safeCompany, safeCompany, safeCountry, safeCountry, safePhone, safePhone, input.userId || '', normalizedEmail);
+      } catch {
+        // Non-blocking
+      }
     }
   }
 
@@ -828,6 +877,12 @@ export async function upsertUserOnLogin(user: {
 
   return executeWithAutoSchema(isD1, db, async () => {
     if (isD1) {
+      // 1. If user with same email exists under a different id (account recreated in Logto), migrate the id first
+      await db
+        .prepare(`UPDATE users SET id = ?1 WHERE LOWER(email) = LOWER(?2) AND id != ?1`)
+        .bind(user.id, normalizedEmail)
+        .run();
+
       await db
         .prepare(
           `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
@@ -860,6 +915,10 @@ export async function upsertUserOnLogin(user: {
         .bind(user.id, normalizedEmail)
         .run();
     } else {
+      // 1. If user with same email exists under a different id (account recreated in Logto), migrate the id first
+      const migrateStmt = db.prepare(`UPDATE users SET id = ? WHERE LOWER(email) = LOWER(?) AND id != ?`);
+      migrateStmt.run(user.id, normalizedEmail, user.id);
+
       const upsertStmt = db.prepare(
         `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
@@ -975,6 +1034,11 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
 
     const countSql = `SELECT COUNT(*) as cnt FROM users u ${whereSql}`;
 
+    const adminEmails = getAdminEmailList();
+    const adminEmailsClause = adminEmails.length > 0
+      ? ` OR LOWER(email) IN (${adminEmails.map((e) => `'${e.replace(/'/g, "''")}'`).join(',')})`
+      : '';
+
     if (isD1 && db) {
       const listRes = await db.prepare(querySql).bind(...params, limit, offset).all();
       users = (listRes.results || []) as UserRecord[];
@@ -990,7 +1054,7 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
             SUM(CASE WHEN tier = 'PARTNER' THEN 1 ELSE 0 END) as total_partner,
             SUM(CASE WHEN tier = 'STANDARD' THEN 1 ELSE 0 END) as total_standard,
             SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) as total_blocked,
-            SUM(CASE WHEN logto_roles LIKE '%admin%' THEN 1 ELSE 0 END) as total_admins
+            SUM(CASE WHEN (logto_roles LIKE '%admin%'${adminEmailsClause}) THEN 1 ELSE 0 END) as total_admins
           FROM users`
         )
         .first();
@@ -1022,7 +1086,7 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
           SUM(CASE WHEN tier = 'PARTNER' THEN 1 ELSE 0 END) as total_partner,
           SUM(CASE WHEN tier = 'STANDARD' THEN 1 ELSE 0 END) as total_standard,
           SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) as total_blocked,
-          SUM(CASE WHEN logto_roles LIKE '%admin%' THEN 1 ELSE 0 END) as total_admins
+          SUM(CASE WHEN (logto_roles LIKE '%admin%'${adminEmailsClause}) THEN 1 ELSE 0 END) as total_admins
         FROM users`
       );
       const statsRow = statsStmt.get();
@@ -1077,11 +1141,11 @@ export async function updateUserAdminMeta(
 
     const stmt = db.prepare(
       `UPDATE users
-       SET tier = COALESCE(?1, tier),
-           status = COALESCE(?2, status),
-           admin_notes = COALESCE(?3, admin_notes),
+       SET tier = COALESCE(?, tier),
+           status = COALESCE(?, status),
+           admin_notes = COALESCE(?, admin_notes),
            updated_at = datetime('now')
-       WHERE id = ?4`
+       WHERE id = ?`
     );
     const info = stmt.run(input.tier || null, input.status || null, input.adminNotes !== undefined ? input.adminNotes.trim() : null, userId);
     return (info?.changes ?? 0) > 0;
