@@ -107,8 +107,36 @@ const getItemProductUrl = (item: any) => {
         </div>
       </div>
 
-      <!-- Stats Summary Cards -->
-      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6">
+      <!-- Mobile Filter Strip (< sm): Compact single-row segmented pills with zero overflow -->
+      <div class="flex sm:hidden items-center gap-1.5 overflow-x-auto pb-1 mt-4 scrollbar-none">
+        {[
+          { key: 'ALL', label: 'All', count: stats.all, active: 'bg-[#1d1d1f] text-white border-black' },
+          { key: 'PENDING_APPROVAL', label: 'Pending', count: stats.pending, active: 'bg-amber-600 text-white border-amber-700' },
+          { key: 'APPROVED', label: 'Approved', count: stats.approved, active: 'bg-blue-600 text-white border-blue-700' },
+          { key: 'SHIPPED', label: 'Shipped', count: stats.shipped, active: 'bg-emerald-600 text-white border-emerald-700' },
+          { key: 'REJECTED', label: 'Rejected', count: stats.rejected, active: 'bg-zinc-700 text-white border-zinc-800' },
+        ].map((tab) => {
+          const isActive = currentStatus === tab.key;
+          return (
+            <a
+              href={tab.key === 'ALL' ? '/admin/orders' : `/admin/orders?status=${tab.key}`}
+              class={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${
+                isActive
+                  ? tab.active + ' shadow-2xs font-semibold'
+                  : 'bg-white text-[#52525b] border-black/5 hover:border-black/20'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span class={`font-mono text-[10px] px-1.5 py-0.5 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-[#f5f5f7] text-[#1d1d1f]'}`}>
+                {tab.count}
+              </span>
+            </a>
+          );
+        })}
+      </div>
+
+      <!-- Desktop Stats Summary Cards (>= sm) -->
+      <div class="hidden sm:grid sm:grid-cols-5 gap-3 mt-6">
         <a
           href="/admin/orders"
           class={`p-3.5 rounded-xl border text-xs transition-all ${
@@ -177,15 +205,15 @@ const getItemProductUrl = (item: any) => {
       </div>
 
       <!-- Search & Filter Bar -->
-      <div class="mt-6 flex flex-col sm:flex-row gap-3">
+      <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
         <form method="GET" action="/admin/orders" class="flex-1 flex gap-2">
           {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
-          <div class="relative flex-1">
+          <div class="relative flex-1 min-w-0">
             <input
               type="text"
               name="search"
               value={currentSearch}
-              placeholder="Search by Order No, buyer email or company name..."
+              placeholder="Search Order No, email, company..."
               class="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
             />
             {currentSearch && (
@@ -199,7 +227,7 @@ const getItemProductUrl = (item: any) => {
           </div>
           <button
             type="submit"
-            class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer"
+            class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer shrink-0"
           >
             Filter
           </button>
@@ -207,15 +235,246 @@ const getItemProductUrl = (item: any) => {
       </div>
 
       <!-- Orders Table Container -->
-      <div class="mt-6 bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <div class="mt-4 sm:mt-6 bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
         
         {orders.length === 0 ? (
           <div class="py-16 text-center text-xs text-[#86868b]">
             No orders matching the current filter.
           </div>
         ) : (
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs border-collapse">
+          <>
+            <!-- Mobile Compact Cards Layout (< md): 100% full width, zero horizontal scrolling -->
+            <div class="block md:hidden divide-y divide-black/5">
+              {orders.map((order) => {
+                const isPending = order.status === 'PENDING_APPROVAL';
+                const isApproved = order.status === 'APPROVED';
+                const isShipped = order.status === 'SHIPPED';
+                const isRejected = order.status === 'REJECTED';
+
+                return (
+                  <div class="p-3.5 space-y-2.5 bg-white">
+                    <!-- Top Bar: Order No + Date + Status -->
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <span class="font-mono font-bold text-xs text-[#1d1d1f] block truncate">
+                          {order.order_no}
+                        </span>
+                        <span class="text-[10px] text-[#86868b] font-mono block mt-0.5">
+                          {order.created_at.slice(0, 16)}
+                        </span>
+                      </div>
+
+                      <div class="shrink-0">
+                        {isPending && (
+                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            Pending
+                          </span>
+                        )}
+                        {isApproved && (
+                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                            Approved
+                          </span>
+                        )}
+                        {isShipped && (
+                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Shipped
+                          </span>
+                        )}
+                        {isRejected && (
+                          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">
+                            Rejected
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <!-- Buyer & Destination Summary Box -->
+                    <div class="bg-[#fbfbfd] p-2.5 rounded-xl border border-black/5 text-xs space-y-1">
+                      <div class="flex items-center justify-between text-[11px] gap-2">
+                        <span class="font-medium text-[#1d1d1f] truncate">
+                          {order.company_name || order.contact_name || 'Independent Buyer'}
+                        </span>
+                        <span class="text-[#86868b] shrink-0 font-mono text-[10px]">
+                          {order.destination_country || 'Worldwide'}
+                        </span>
+                      </div>
+                      <div class="flex items-center justify-between text-[11px] text-[#86868b] gap-2 font-mono">
+                        <span class="truncate">{order.buyer_email}</span>
+                        <span class="text-[#1d1d1f] font-semibold shrink-0">
+                          {order.total_styles} styles · {order.total_quantity} pcs
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Bottom Action Bar (Thumb-friendly buttons) -->
+                    <div class="flex items-center justify-between gap-2 pt-0.5">
+                      <!-- Toggle Details Drawer Button -->
+                      <button
+                        type="button"
+                        class="action-toggle-detail-btn h-8 px-2.5 rounded-lg text-xs font-medium text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] border border-black/10 hover:border-black/30 shadow-2xs inline-flex items-center gap-1 transition-all cursor-pointer active:scale-95 shrink-0"
+                        data-target={`detail-m-${order.id}`}
+                        title="Toggle order breakdown and line items"
+                      >
+                        <span>Items ({order.items?.length || 0})</span>
+                        <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      <!-- Action Buttons -->
+                      <div class="flex items-center gap-1.5 shrink-0">
+                        {isPending && (
+                          <>
+                            <button
+                              type="button"
+                              class="action-approve-btn h-8 px-3 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs shadow-emerald-700/20 inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                              data-id={order.id}
+                              data-no={order.order_no}
+                            >
+                              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
+                              </svg>
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="action-reject-btn h-8 px-2.5 rounded-lg text-xs font-medium bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 hover:border-rose-300 shadow-2xs inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                              data-id={order.id}
+                              data-no={order.order_no}
+                            >
+                              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              <span>Reject</span>
+                            </button>
+                          </>
+                        )}
+
+                        {isApproved && (
+                          <button
+                            type="button"
+                            class="action-ship-btn h-8 px-3 rounded-lg text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white shadow-2xs inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                            data-id={order.id}
+                            data-no={order.order_no}
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                            </svg>
+                            <span>Fulfill & Ship</span>
+                          </button>
+                        )}
+
+                        {isShipped && (
+                          <div class="h-8 inline-flex items-center gap-1 px-2 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-medium truncate max-w-[150px]">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                            <span class="truncate">{order.tracking_number || order.carrier || 'Shipped'}</span>
+                          </div>
+                        )}
+
+                        {isRejected && (
+                          <span class="h-8 inline-flex items-center px-2 rounded-lg bg-zinc-100 text-zinc-500 text-[10px] font-medium border border-zinc-200">
+                            Rejected
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <!-- Expandable Mobile Drawer (Accordion) -->
+                    <div id={`detail-m-${order.id}`} class="hidden pt-2 border-t border-black/5 space-y-2.5">
+                      <!-- Ordered Items List -->
+                      <div class="space-y-1.5">
+                        <div class="flex items-center justify-between text-[11px] font-semibold text-[#1d1d1f]">
+                          <span>Ordered Styles</span>
+                          <span class="font-mono text-[#86868b]">{order.total_quantity} pcs total</span>
+                        </div>
+                        <div class="divide-y divide-black/5 bg-[#fbfbfd] rounded-xl border border-black/5 p-2.5">
+                          {(order.items && order.items.length > 0) ? (
+                            order.items.map((item) => {
+                              const itemUrl = getItemProductUrl(item);
+                              return (
+                                <div class="py-2 first:pt-0 last:pb-0 flex items-center justify-between gap-2.5 text-xs">
+                                  <div class="flex items-center gap-2.5 min-w-0">
+                                    {itemUrl ? (
+                                      <a href={itemUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 group">
+                                        <img
+                                          src={resolveItemImage(item)}
+                                          alt={item.title}
+                                          class="w-9 h-9 rounded-md object-cover bg-white border border-black/5 shrink-0"
+                                          loading="lazy"
+                                        />
+                                      </a>
+                                    ) : (
+                                      <img
+                                        src={resolveItemImage(item)}
+                                        alt={item.title}
+                                        class="w-9 h-9 rounded-md object-cover bg-white border border-black/5 shrink-0"
+                                        loading="lazy"
+                                      />
+                                    )}
+                                    <div class="min-w-0">
+                                      {itemUrl ? (
+                                        <a href={itemUrl} target="_blank" rel="noopener noreferrer" class="font-medium text-[#1d1d1f] hover:underline truncate block text-[11px]">
+                                          {item.title}
+                                        </a>
+                                      ) : (
+                                        <p class="font-medium text-[#1d1d1f] truncate text-[11px]">{item.title}</p>
+                                      )}
+                                      <p class="text-[10px] text-[#86868b] truncate font-mono">
+                                        {item.sku ? `${item.sku} · ` : ''}{item.variant || 'Standard'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div class="font-mono font-semibold text-[11px] tabular-nums shrink-0">
+                                    {item.quantity} pcs
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div class="py-2 text-center text-[11px] text-[#86868b]">No item details recorded.</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <!-- Buyer & Shipping Info -->
+                      <div class="bg-[#fbfbfd] rounded-xl border border-black/5 p-2.5 text-[11px] space-y-1.5">
+                        {order.contact_name && (
+                          <div class="flex items-center justify-between">
+                            <span class="text-[#86868b]">Contact:</span>
+                            <span class="font-medium text-[#1d1d1f]">{order.contact_name}</span>
+                          </div>
+                        )}
+                        {order.whatsapp && (
+                          <div class="flex items-center justify-between">
+                            <span class="text-[#86868b]">WhatsApp:</span>
+                            <a href={`https://wa.me/${order.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" class="font-mono text-emerald-700 hover:underline">
+                              {order.whatsapp}
+                            </a>
+                          </div>
+                        )}
+                        {order.customer_notes && (
+                          <div class="pt-1 border-t border-black/5 text-[#52525b] italic">
+                            "{order.customer_notes}"
+                          </div>
+                        )}
+                        {order.admin_remark && (
+                          <div class="pt-1 border-t border-black/5 text-rose-700">
+                            Remark: {order.admin_remark}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <!-- Desktop Data Table (>= md): Full spreadsheet view -->
+            <div class="hidden md:block overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
               <thead>
                 <tr class="bg-[#fbfbfd] border-b border-black/5 text-[#86868b] font-medium">
                   <th class="py-3 px-4">Order No / Date</th>
@@ -555,7 +814,8 @@ const getItemProductUrl = (item: any) => {
               </tbody>
             </table>
           </div>
-        )}
+        </>
+      )}
       </div>
 
     </div>
@@ -564,7 +824,7 @@ const getItemProductUrl = (item: any) => {
   <!-- Unified Apple-Grade Modals: Approve, Reject, Ship -->
 
   <!-- 1. Approve Confirmation Modal -->
-  <dialog id="approve-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl max-w-sm w-full mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+  <dialog id="approve-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
     <div class="space-y-4 text-xs text-[#1d1d1f]">
       <div class="flex items-center justify-between pb-1">
         <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100/80">
@@ -605,7 +865,7 @@ const getItemProductUrl = (item: any) => {
   </dialog>
 
   <!-- 2. Reject Order Modal -->
-  <dialog id="reject-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl max-w-sm w-full mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+  <dialog id="reject-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
     <div class="space-y-4 text-xs text-[#1d1d1f]">
       <div class="flex items-center justify-between pb-1">
         <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100/80">
@@ -654,7 +914,7 @@ const getItemProductUrl = (item: any) => {
   </dialog>
 
   <!-- 3. Ship & Logistics Dispatch Modal -->
-  <dialog id="ship-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl max-w-md w-full mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+  <dialog id="ship-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-md mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
     <div class="space-y-4 text-xs text-[#1d1d1f]">
       <div class="flex items-center justify-between pb-1 border-b border-black/5">
         <div class="flex items-center gap-2.5">
