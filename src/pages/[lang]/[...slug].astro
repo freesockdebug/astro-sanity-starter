@@ -16,6 +16,11 @@ if (
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
+// Admin backend pages do not use multi-language routing; redirect directly to canonical path
+if (slug?.startsWith('admin')) {
+  return Astro.redirect(`/${slug}`);
+}
+
 if (!(lang in LANGUAGES) || lang === 'en') {
   return Astro.redirect(`/${slug || ''}`);
 }

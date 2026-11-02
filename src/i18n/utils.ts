@@ -45,6 +45,11 @@ export function switchLocalePath(currentPathname: string, targetLang: SupportedL
 
   const rawPath = segments.join('/');
 
+  // Admin and API routes are never localized
+  if (rawPath.startsWith('admin') || rawPath.startsWith('api')) {
+    return `/${rawPath}`;
+  }
+
   if (targetLang === DEFAULT_LOCALE) {
     return `/${rawPath}`;
   }
@@ -85,6 +90,11 @@ export function getLocalizedPath(path: string = '', lang: SupportedLocale = DEFA
     segments.shift();
   }
   const cleanPath = segments.join('/');
+
+  // Admin and API routes are never localized
+  if (cleanPath.startsWith('admin') || cleanPath.startsWith('api')) {
+    return `/${cleanPath}${searchSuffix}${hashSuffix}`;
+  }
 
   // 5. Construct localized path with identical slug
   if (lang === DEFAULT_LOCALE) {

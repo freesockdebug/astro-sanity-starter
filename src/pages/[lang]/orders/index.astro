@@ -1,0 +1,19 @@
+---
+// src/pages/[lang]/orders/index.astro
+import OrdersPage from '../../orders/index.astro';
+import { LANGUAGES } from '@i18n';
+
+export const prerender = false;
+const { lang } = Astro.params;
+
+// Guard against static assets, hidden paths, or file extensions
+if (!lang || lang.startsWith('_') || lang.includes('.')) {
+  return new Response(null, { status: 404, statusText: 'Not Found' });
+}
+
+if (!(lang in LANGUAGES) || lang === 'en') {
+  return Astro.redirect('/orders');
+}
+---
+
+<OrdersPage />

@@ -19,7 +19,7 @@ const currentLang = getLangFromUrl(Astro.url);
 const sessionUser = await getSessionFromRequest(Astro, cfEnv);
 
 if (!sessionUser) {
-  return Astro.redirect(`/api/auth/login?returnUrl=/account`);
+  return Astro.redirect(`/api/auth/login?returnUrl=${encodeURIComponent(Astro.url.pathname)}`);
 }
 
 const user = sessionUser;
@@ -50,7 +50,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
 
         <div class="flex items-center gap-3">
           <a
-            href="/orders"
+            href={getLocalizedPath('/orders', currentLang)}
             class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs inline-flex items-center gap-1.5"
           >
             <span>📦 Order Center</span>

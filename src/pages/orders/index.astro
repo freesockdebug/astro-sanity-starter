@@ -142,7 +142,7 @@ const getItemProductUrl = (item: any) => {
         {sessionUser && (
           <div class="flex items-center gap-3">
             <a
-              href="/account"
+              href={getLocalizedPath('/account', currentLang)}
               class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs inline-flex items-center gap-1.5"
             >
               <span>👤 Account & Security</span>
@@ -183,7 +183,7 @@ const getItemProductUrl = (item: any) => {
           </p>
           <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
             <a
-              href="/api/auth/login?returnUrl=/orders"
+              href={`/api/auth/login?returnUrl=${encodeURIComponent(Astro.url.pathname)}`}
               id="orders-signin-btn"
               class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm cursor-pointer text-center inline-flex items-center justify-center gap-1.5"
             >
@@ -213,7 +213,7 @@ const getItemProductUrl = (item: any) => {
                 <div class="flex items-center gap-2">
                   <span class="font-semibold text-[#1d1d1f]">{sessionUser.name || 'B2B Client'}</span>
                   <a
-                    href="/account"
+                    href={getLocalizedPath('/account', currentLang)}
                     class="text-[10px] text-blue-600 hover:underline font-medium"
                     title="Edit profile & security"
                   >
@@ -228,7 +228,7 @@ const getItemProductUrl = (item: any) => {
             {sessionUser.isAdmin && (
               <div class="flex items-center gap-1.5 p-1 bg-[#f5f5f7] rounded-xl border border-black/5 self-start sm:self-auto">
                 <a
-                  href={`/orders?view=my${currentStatus !== 'ALL' ? `&status=${currentStatus}` : ''}`}
+                  href={getLocalizedPath(`/orders?view=my${currentStatus !== 'ALL' ? `&status=${currentStatus}` : ''}`, currentLang)}
                   class={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                     !isViewingAll
                       ? 'bg-white text-[#1d1d1f] shadow-xs'
@@ -238,7 +238,7 @@ const getItemProductUrl = (item: any) => {
                   My Orders ({myOrders.length})
                 </a>
                 <a
-                  href={`/orders?view=all${currentStatus !== 'ALL' ? `&status=${currentStatus}` : ''}`}
+                  href={getLocalizedPath(`/orders?view=all${currentStatus !== 'ALL' ? `&status=${currentStatus}` : ''}`, currentLang)}
                   class={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                     isViewingAll
                       ? 'bg-[#1d1d1f] text-white shadow-xs'
@@ -283,7 +283,7 @@ const getItemProductUrl = (item: any) => {
                 const isActive = currentStatus === tab.key;
                 const viewParam = isViewingAll ? '&view=all' : '';
                 const searchParam = currentSearch ? `&search=${encodeURIComponent(currentSearch)}` : '';
-                const href = `/orders?status=${tab.key}${viewParam}${searchParam}`;
+                const href = getLocalizedPath(`/orders?status=${tab.key}${viewParam}${searchParam}`, currentLang);
 
                 return (
                   <a
@@ -304,7 +304,7 @@ const getItemProductUrl = (item: any) => {
             </div>
 
             <!-- Search Form -->
-            <form method="GET" action="/orders" class="relative sm:w-64">
+            <form method="GET" action={getLocalizedPath('/orders', currentLang)} class="relative sm:w-64">
               {isViewingAll && <input type="hidden" name="view" value="all" />}
               {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
               <input
@@ -319,7 +319,7 @@ const getItemProductUrl = (item: any) => {
               </svg>
               {currentSearch && (
                 <a
-                  href={`/orders?${isViewingAll ? 'view=all&' : ''}${currentStatus !== 'ALL' ? `status=${currentStatus}` : ''}`}
+                  href={getLocalizedPath(`/orders?${isViewingAll ? 'view=all&' : ''}${currentStatus !== 'ALL' ? `status=${currentStatus}` : ''}`, currentLang)}
                   class="absolute right-2.5 top-2 text-xs text-[#86868b] hover:text-black"
                 >
                   ✕
@@ -346,7 +346,7 @@ const getItemProductUrl = (item: any) => {
               </p>
               {currentSearch || currentStatus !== 'ALL' ? (
                 <a
-                  href={`/orders${isViewingAll ? '?view=all' : ''}`}
+                  href={getLocalizedPath(`/orders${isViewingAll ? '?view=all' : ''}`, currentLang)}
                   class="inline-flex items-center px-4 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all"
                 >
                   Clear All Filters
