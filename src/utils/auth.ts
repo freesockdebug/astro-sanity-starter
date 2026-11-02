@@ -255,9 +255,13 @@ export async function updateLogtoUserPassword(
   customEnv?: any
 ): Promise<{ success: boolean; error?: string }> {
   const endpoint = getRuntimeEnv('LOGTO_ENDPOINT', customEnv)?.replace(/\/+$/, '') || 'https://auth.gwenvenni.com';
-  const m2mAppId = getRuntimeEnv('LOGTO_M2M_APP_ID', customEnv) || '1qn2bybiqi8rbisi75v0v';
-  const m2mAppSecret = getRuntimeEnv('LOGTO_M2M_APP_SECRET', customEnv) || 'wcOY9CVHdaKQ0N3YD9ncGrYZMSAcE7xF';
+  const m2mAppId = getRuntimeEnv('LOGTO_M2M_APP_ID', customEnv);
+  const m2mAppSecret = getRuntimeEnv('LOGTO_M2M_APP_SECRET', customEnv);
   const resource = getRuntimeEnv('LOGTO_MANAGEMENT_RESOURCE', customEnv) || 'https://8tvr1q.logto.app/api';
+
+  if (!m2mAppId || !m2mAppSecret) {
+    return { success: false, error: 'Server authentication configuration missing (LOGTO_M2M credentials).' };
+  }
 
   if (!newPassword || newPassword.length < 8) {
     return { success: false, error: 'Password must be at least 8 characters long.' };

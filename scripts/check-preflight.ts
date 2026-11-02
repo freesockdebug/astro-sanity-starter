@@ -2145,6 +2145,31 @@ async function main() {
     logPass(`[Pitfall 24] Sanity Section Schema 多语言字段与前端 ALL_SECTION_TEXT_FIELDS 自动同构对齐通过`);
   }
 
+  // 2.24 [Principle I.3]: 源码与配置文件严禁硬编码敏感凭据/密钥 (Git 零泄漏公理)
+  const secretSignatures = [
+    { name: 'Sanity Secret Token', regex: /\bsk[a-zA-Z0-9]{32,}\b/ },
+    { name: 'GitHub Personal Access Token', regex: /\b(?:ghp|gho|ghu|ghs|ghr)_[a-zA-Z0-9]{36,}\b/ },
+    { name: 'RSA/EC 私钥', regex: /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/ },
+    { name: 'AWS Access Key', regex: /\bAKIA[0-9A-Z]{16}\b/ },
+    { name: 'Stripe Secret Key', regex: /\bsk_(?:live|test)_[0-9a-zA-Z]{24,}\b/ },
+    { name: 'Logto M2M Secret 明文泄露', regex: /"LOGTO_M2M_APP_SECRET"\s*:\s*"[^"]+"/ },
+  ];
+
+  const wranglerPath = path.join(ROOT_DIR, 'wrangler.jsonc');
+  const filesToScanForSecrets = [
+    ...allSourceEntries,
+    ...(fs.existsSync(wranglerPath) ? [{ file: wranglerPath, rel: 'wrangler.jsonc', content: fs.readFileSync(wranglerPath, 'utf-8') }] : [])
+  ];
+
+  for (const { rel, content } of filesToScanForSecrets) {
+    for (const sig of secretSignatures) {
+      if (sig.regex.test(content)) {
+        logFail(`${rel}: [Principle I.3] 严禁在源码或配置文件中硬编码敏感凭据 (${sig.name})！`);
+      }
+    }
+  }
+  logPass(`[Principle I.3] 源码工程与配置文件零硬编码密钥凭据校验通过`);
+
   // =========================================================================
   // 3. i18n 多语言核心字典树同构与对称性深度分析
   // =========================================================================

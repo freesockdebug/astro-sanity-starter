@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Git Pre-Push Hook: Secret & Credential Leak Prevention Guard
+# Zero external dependencies. Enforces zero secrets in Git commits.
+# ==============================================================================
+
+set -e
+
+# Read pushed refs from stdin: <local ref> <local sha1> <remote ref> <remote sha1>
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Skip branch deletion
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  # Determine range of commits being pushed
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    # New branch: scan commits not in origin/main, or just last 10
+    if git rev-parse --verify origin/main >/dev/null 2>&1; then
+      range="origin/main..$local_sha"
+    else
+      range="$local_sha~5..$local_sha"
+    fi
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  # 1. Block prohibited file types (portable POSIX grep without lookaheads)
+  prohibited_files=$(git diff --name-only "$range" 2>/dev/null | grep -E '(\.env($|\..*)|\.(pem|key|pfx|p12|secret)$|id_rsa|id_ed25519|credentials\.json)' | grep -vE '(\.env[-.](example|sample)$)' || true)
+  if [ -n "$prohibited_files" ]; then
+    echo "============================================================"
+    echo "🚨 [GIT PUSH BLOCKED] 发现禁止推送到远端的私密凭据文件！"
+    echo "$prohibited_files"
+    echo "请将其移出 Git 暂存区并加入 .gitignore 后再尝试推送！"
+    echo "============================================================"
+    exit 1
+  fi
+
+  # 2. Block prohibited secret signatures in diff additions
+  added_lines=$(git diff -U0 "$range" 2>/dev/null | grep -E '^\+[^\+]' || true)
+
+  if [ -n "$added_lines" ]; then
+    # Check for Private Keys
+    if echo "$added_lines" | grep -qE -- '-----BEGIN (RSA |EC )?PRIVATE KEY-----'; then
+      echo "🚨 [GIT PUSH BLOCKED] 发现提交内容中包含 PEM/RSA 私钥特征！"
+      exit 1
+    fi
+
+    # Check for GitHub Tokens
+    if echo "$added_lines" | grep -qE -- '\b(ghp|gho|ghu|ghs|ghr)_[a-zA-Z0-9]{36,}\b'; then
+      echo "🚨 [GIT PUSH BLOCKED] 发现提交内容中包含 GitHub Personal Access Token！"
+      exit 1
+    fi
+
+    # Check for AWS Access Keys
+    if echo "$added_lines" | grep -qE -- '\bAKIA[0-9A-Z]{16}\b'; then
+      echo "🚨 [GIT PUSH BLOCKED] 发现提交内容中包含 AWS Access Key！"
+      exit 1
+    fi
+
+    # Check for hardcoded Logto M2M Secret
+    if echo "$added_lines" | grep -qE -- '"LOGTO_M2M_APP_SECRET"\s*:\s*"[^"]+"'; then
+      echo "🚨 [GIT PUSH BLOCKED] 发现 wrangler.jsonc 中包含明文 LOGTO_M2M_APP_SECRET！"
+      exit 1
+    fi
+
+    # Check for Sanity Secret Tokens (sk...)
+    if echo "$added_lines" | grep -qE -- '\bsk[a-zA-Z0-9]{32,}\b'; then
+      echo "🚨 [GIT PUSH BLOCKED] 发现提交内容中包含 Sanity/Stripe 密钥特征 (\bsk...)！"
+      exit 1
+    fi
+  fi
+done
+
+echo "✔ [PASS] Pre-push 凭据安全扫描通过，未发现敏感密钥泄露。"
+exit 0

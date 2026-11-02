@@ -19,7 +19,8 @@
     "astro": "node ./astro-cli.mjs",
     "create-project": "node ./sanity-export/create-project.js",
     "import": "node ./sanity-export/import.js",
-    "export": "node ./sanity-export/export.js"
+    "export": "node ./sanity-export/export.js",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.4.2",
