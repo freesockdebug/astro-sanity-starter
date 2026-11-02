@@ -41,3 +41,4 @@ export function formatUtcFallback(dateStr?: string | number | Date | null): stri
   const clean = iso.replace('T', ' ').replace(/Z$/, '');
   return `${clean.slice(0, 16)} UTC`;
 }
+
