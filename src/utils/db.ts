@@ -451,7 +451,7 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
            SET user_id = ?1,
                claimed_at = datetime('now'),
                updated_at = datetime('now')
-           WHERE (user_id IS NULL OR user_id = '')
+           WHERE (user_id IS NULL OR user_id != ?1)
              AND LOWER(buyer_email) = LOWER(?2)`
         )
         .bind(userId, normalizedEmail)
@@ -465,7 +465,7 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
          SET user_id = ?,
              claimed_at = datetime('now'),
              updated_at = datetime('now')
-         WHERE (user_id IS NULL OR user_id = '')
+         WHERE (user_id IS NULL OR user_id != ?)
            AND LOWER(buyer_email) = LOWER(?)`
       );
       const info = stmt.run(userId, normalizedEmail);
@@ -540,22 +540,24 @@ export async function getOrderByNo(orderNo: string): Promise<OrderRecord | null>
   if (!orderNo) return null;
   const { isD1, db } = await getDbHandle();
 
-  let order: OrderRecord | null = null;
-  if (isD1 && db) {
-    const res = await db
-      .prepare(`SELECT * FROM orders WHERE order_no = ? LIMIT 1`)
-      .bind(orderNo)
-      .first();
-    order = res as OrderRecord | null;
-  } else if (db) {
-    const stmt = db.prepare(`SELECT * FROM orders WHERE order_no = ? LIMIT 1`);
-    order = (stmt.get(orderNo) || null) as OrderRecord | null;
-  }
+  return executeWithAutoSchema(isD1, db, async () => {
+    let order: OrderRecord | null = null;
+    if (isD1 && db) {
+      const res = await db
+        .prepare(`SELECT * FROM orders WHERE order_no = ? LIMIT 1`)
+        .bind(orderNo)
+        .first();
+      order = res as OrderRecord | null;
+    } else if (db) {
+      const stmt = db.prepare(`SELECT * FROM orders WHERE order_no = ? LIMIT 1`);
+      order = (stmt.get(orderNo) || null) as OrderRecord | null;
+    }
 
-  if (order) {
-    order.items = await getOrderItems(order.id);
-  }
-  return order;
+    if (order) {
+      order.items = await getOrderItems(order.id);
+    }
+    return order;
+  });
 }
 
 /**
@@ -565,22 +567,24 @@ export async function getOrderById(orderId: string): Promise<OrderRecord | null>
   if (!orderId) return null;
   const { isD1, db } = await getDbHandle();
 
-  let order: OrderRecord | null = null;
-  if (isD1 && db) {
-    const res = await db
-      .prepare(`SELECT * FROM orders WHERE id = ? LIMIT 1`)
-      .bind(orderId)
-      .first();
-    order = res as OrderRecord | null;
-  } else if (db) {
-    const stmt = db.prepare(`SELECT * FROM orders WHERE id = ? LIMIT 1`);
-    order = (stmt.get(orderId) || null) as OrderRecord | null;
-  }
+  return executeWithAutoSchema(isD1, db, async () => {
+    let order: OrderRecord | null = null;
+    if (isD1 && db) {
+      const res = await db
+        .prepare(`SELECT * FROM orders WHERE id = ? LIMIT 1`)
+        .bind(orderId)
+        .first();
+      order = res as OrderRecord | null;
+    } else if (db) {
+      const stmt = db.prepare(`SELECT * FROM orders WHERE id = ? LIMIT 1`);
+      order = (stmt.get(orderId) || null) as OrderRecord | null;
+    }
 
-  if (order) {
-    order.items = await getOrderItems(order.id);
-  }
-  return order;
+    if (order) {
+      order.items = await getOrderItems(order.id);
+    }
+    return order;
+  });
 }
 
 /**
@@ -792,9 +796,35 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
     shippedBy = input.adminUser || 'Admin';
   }
 
-  if (isD1 && db) {
-    const res = await db
-      .prepare(
+  return executeWithAutoSchema(isD1, db, async () => {
+    if (isD1 && db) {
+      const res = await db
+        .prepare(
+          `UPDATE orders
+           SET status = ?1,
+               carrier = COALESCE(?2, carrier),
+               tracking_number = COALESCE(?3, tracking_number),
+               admin_remark = COALESCE(?4, admin_remark),
+               approved_at = CASE WHEN ?1 = 'APPROVED' THEN datetime('now') ELSE approved_at END,
+               shipped_at = CASE WHEN ?1 = 'SHIPPED' THEN datetime('now') ELSE shipped_at END,
+               shipped_by = CASE WHEN ?1 = 'SHIPPED' THEN ?5 ELSE shipped_by END,
+               updated_at = datetime('now')
+           WHERE id = ?6`
+        )
+        .bind(
+          input.status,
+          input.carrier || null,
+          input.trackingNumber || null,
+          input.adminRemark || null,
+          shippedBy,
+          orderId
+        )
+        .run();
+      return (res?.meta?.changes ?? 0) > 0;
+    }
+
+    if (db) {
+      const stmt = db.prepare(
         `UPDATE orders
          SET status = ?1,
              carrier = COALESCE(?2, carrier),
@@ -805,44 +835,20 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
              shipped_by = CASE WHEN ?1 = 'SHIPPED' THEN ?5 ELSE shipped_by END,
              updated_at = datetime('now')
          WHERE id = ?6`
-      )
-      .bind(
+      );
+      const info = stmt.run(
         input.status,
         input.carrier || null,
         input.trackingNumber || null,
         input.adminRemark || null,
         shippedBy,
         orderId
-      )
-      .run();
-    return (res?.meta?.changes ?? 0) > 0;
-  }
+      );
+      return (info?.changes ?? 0) > 0;
+    }
 
-  if (db) {
-    const stmt = db.prepare(
-      `UPDATE orders
-       SET status = ?1,
-           carrier = COALESCE(?2, carrier),
-           tracking_number = COALESCE(?3, tracking_number),
-           admin_remark = COALESCE(?4, admin_remark),
-           approved_at = CASE WHEN ?1 = 'APPROVED' THEN datetime('now') ELSE approved_at END,
-           shipped_at = CASE WHEN ?1 = 'SHIPPED' THEN datetime('now') ELSE shipped_at END,
-           shipped_by = CASE WHEN ?1 = 'SHIPPED' THEN ?5 ELSE shipped_by END,
-           updated_at = datetime('now')
-       WHERE id = ?6`
-    );
-    const info = stmt.run(
-      input.status,
-      input.carrier || null,
-      input.trackingNumber || null,
-      input.adminRemark || null,
-      shippedBy,
-      orderId
-    );
-    return (info?.changes ?? 0) > 0;
-  }
-
-  return false;
+    return false;
+  });
 }
 
 /**

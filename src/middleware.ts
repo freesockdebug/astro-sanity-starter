@@ -51,14 +51,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
 
-  // 3. Bypass cache for APIs, Sanity Studio admin, Orders, dynamic auth, and static asset chunks
+  // 3. Bypass cache for APIs, Sanity Studio admin, Orders, Account, dynamic auth, and static asset chunks
   const isOrdersPath = pathname === '/orders' || pathname.startsWith('/orders/') || pathname.includes('/orders');
+  const isAccountPath = pathname === '/account' || pathname.startsWith('/account/') || pathname.includes('/account');
   const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.includes('/admin');
   const cookieHeader = request.headers.get('cookie') || '';
   const hasUserSession = cookieHeader.includes('gwenvenni_session');
 
   if (
     isOrdersPath ||
+    isAccountPath ||
     isAdminPath ||
     hasUserSession ||
     pathname.startsWith('/api/') ||
@@ -68,8 +70,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     pathname === '/robots.txt' ||
     pathname === '/sitemap-index.xml'
   ) {
-    // Actively evict any stale cache entry for dynamic order/admin views
-    if ((isOrdersPath || isAdminPath) && typeof caches !== 'undefined' && (caches as any).default) {
+    // Actively evict any stale cache entry for dynamic order/account/admin views
+    if ((isOrdersPath || isAccountPath || isAdminPath) && typeof caches !== 'undefined' && (caches as any).default) {
       try {
         const canonicalUrl = new URL(pathname, url.origin);
         await (caches as any).default.delete(new Request(canonicalUrl.toString(), { method: 'GET' }));
@@ -79,7 +81,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
 
     const response = await next();
-    if (isOrdersPath || isAdminPath || hasUserSession) {
+    if (isOrdersPath || isAccountPath || isAdminPath || hasUserSession) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
       response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
       response.headers.set('CDN-Cache-Control', 'no-store');

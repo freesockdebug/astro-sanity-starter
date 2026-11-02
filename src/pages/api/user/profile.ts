@@ -30,6 +30,13 @@ export const GET: APIRoute = async ({ request }) => {
     getUserLoginHistory(sessionUser.id, 20),
   ]);
 
+  if (dbUser && dbUser.status === 'BLOCKED') {
+    return new Response(
+      JSON.stringify({ error: 'Your account is suspended. Please contact concierge@gwenvenni.com.' }),
+      { status: 403, headers: NO_CACHE_HEADERS }
+    );
+  }
+
   return new Response(
     JSON.stringify({
       user: dbUser || {
@@ -56,6 +63,14 @@ export const POST: APIRoute = async ({ request }) => {
       status: 401,
       headers: NO_CACHE_HEADERS,
     });
+  }
+
+  const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
+  if (dbUser && dbUser.status === 'BLOCKED') {
+    return new Response(
+      JSON.stringify({ error: 'Your account is suspended. Please contact admin@gwenvenni.com.' }),
+      { status: 403, headers: NO_CACHE_HEADERS }
+    );
   }
 
   let body: any = {};

@@ -1,7 +1,7 @@
 // src/pages/api/orders/index.ts
 import type { APIRoute } from 'astro';
 import { getSessionFromRequest } from '@utils/auth';
-import { getOrdersByUserId, claimOrdersByEmail } from '@utils/db';
+import { getOrdersByUserId, claimOrdersByEmail, getUserByIdOrEmail } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -23,6 +23,19 @@ export const GET: APIRoute = async ({ request }) => {
       JSON.stringify({ error: 'Unauthorized. Please sign in to view your orders.' }),
       { status: 401, headers: NO_CACHE_HEADERS }
     );
+  }
+
+  // Session guard: blocked accounts cannot access orders
+  try {
+    const dbUser = await getUserByIdOrEmail(user.id, user.email);
+    if (dbUser && dbUser.status === 'BLOCKED') {
+      return new Response(
+        JSON.stringify({ error: 'Your account is suspended. Please contact concierge@gwenvenni.com.' }),
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
+  } catch {
+    // Non-blocking
   }
 
   // Idempotently claim any new guest orders matching user's email

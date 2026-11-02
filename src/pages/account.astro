@@ -25,6 +25,12 @@ if (!sessionUser) {
 
 const user = sessionUser;
 const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
+
+if (dbUser && dbUser.status === 'BLOCKED') {
+  Astro.cookies.delete('gwenvenni_session', { path: '/' });
+  return Astro.redirect('/api/auth/login?error=account_suspended');
+}
+
 const loginHistory = await getUserLoginHistory(sessionUser.id, 20);
 
 const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);

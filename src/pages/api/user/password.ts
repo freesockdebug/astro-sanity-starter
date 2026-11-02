@@ -1,7 +1,7 @@
 // src/pages/api/user/password.ts
 import type { APIRoute } from 'astro';
 import { getSessionFromRequest, updateLogtoUserPassword } from '@utils/auth';
-import { recordUserLogin } from '@utils/db';
+import { recordUserLogin, getUserByIdOrEmail } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -23,6 +23,19 @@ export const POST: APIRoute = async ({ request }) => {
       status: 401,
       headers: NO_CACHE_HEADERS,
     });
+  }
+
+  // Session guard: blocked accounts cannot modify password
+  try {
+    const dbUser = await getUserByIdOrEmail(user.id, user.email);
+    if (dbUser && dbUser.status === 'BLOCKED') {
+      return new Response(
+        JSON.stringify({ error: 'Your account is suspended. Please contact concierge@gwenvenni.com.' }),
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
+  } catch {
+    // Non-blocking
   }
 
   let body: any = {};

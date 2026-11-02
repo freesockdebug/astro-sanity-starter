@@ -41,6 +41,23 @@ const [{ users, total, stats }, ordersSummary] = await Promise.all([
 ]);
 
 const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+const buildUsersUrl = (overrides: { page?: number; tier?: string; status?: string; search?: string } = {}) => {
+  const p = new URLSearchParams();
+  const t = overrides.tier !== undefined ? overrides.tier : currentTier;
+  const s = overrides.status !== undefined ? overrides.status : currentStatus;
+  const q = overrides.search !== undefined ? overrides.search : currentSearch;
+  const pg = overrides.page !== undefined ? overrides.page : currentPage;
+
+  if (t && t !== 'ALL') p.set('tier', t);
+  if (s && s !== 'ALL') p.set('status', s);
+  if (q) p.set('search', q);
+  if (pg > 1) p.set('page', String(pg));
+
+  const qs = p.toString();
+  return qs ? `/admin/users?${qs}` : '/admin/users';
+};
+
 const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
 ---
 
@@ -83,39 +100,54 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
           </div>
         </div>
 
-        <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+        <a
+          href={buildUsersUrl({ status: currentStatus === 'BLOCKED' ? 'ALL' : 'BLOCKED', tier: 'ALL', page: 1 })}
+          class={`p-4 rounded-2xl border shadow-2xs transition-all block ${
+            currentStatus === 'BLOCKED'
+              ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500/20'
+              : 'bg-white border-black/5 hover:border-rose-200'
+          }`}
+        >
           <span class="text-[11px] text-rose-800 uppercase tracking-wider font-semibold block mb-1">Suspended</span>
           <div class="flex items-baseline gap-2">
             <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-rose-700">{stats.blocked}</span>
-            <span class="text-xs text-[#86868b]">Blocked</span>
+            <span class="text-xs text-[#86868b]">{currentStatus === 'BLOCKED' ? 'Filtering ✕' : 'Blocked →'}</span>
           </div>
-        </div>
+        </a>
       </div>
 
       <!-- Filter Tabs & Search Bar -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           {[
-            { key: 'ALL', label: 'All Buyers', count: stats.all },
-            { key: 'VIP', label: 'VIP', count: stats.vip },
-            { key: 'PARTNER', label: 'Partners', count: stats.partner },
-            { key: 'STANDARD', label: 'Standard', count: stats.standard },
+            { key: 'ALL', label: 'All Buyers', count: stats.all, isBlocked: false },
+            { key: 'VIP', label: 'VIP', count: stats.vip, isBlocked: false },
+            { key: 'PARTNER', label: 'Partners', count: stats.partner, isBlocked: false },
+            { key: 'STANDARD', label: 'Standard', count: stats.standard, isBlocked: false },
+            { key: 'BLOCKED', label: 'Blocked', count: stats.blocked, isBlocked: true },
           ].map((tab) => {
-            const isActive = currentTier === tab.key;
+            const isActive = tab.isBlocked
+              ? currentStatus === 'BLOCKED'
+              : (currentStatus !== 'BLOCKED' && currentTier === tab.key);
+            const href = tab.isBlocked
+              ? buildUsersUrl({ status: 'BLOCKED', tier: 'ALL', page: 1 })
+              : buildUsersUrl({ status: 'ALL', tier: tab.key, page: 1 });
             return (
               <a
-                href={tab.key === 'ALL' ? '/admin/users' : `/admin/users?tier=${tab.key}`}
+                href={href}
                 class:list={[
                   'px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5',
                   isActive
-                    ? 'bg-[#1d1d1f] text-white border-black font-semibold shadow-2xs'
+                    ? (tab.isBlocked
+                        ? 'bg-rose-700 text-white border-rose-800 font-semibold shadow-2xs'
+                        : 'bg-[#1d1d1f] text-white border-black font-semibold shadow-2xs')
                     : 'bg-white text-[#52525b] border-black/5 hover:border-black/20'
                 ]}
               >
                 <span>{tab.label}</span>
                 <span class:list={[
                   'font-mono text-[10px] px-1.5 py-0.2 rounded-md',
-                  isActive ? 'bg-white/20 text-white' : 'bg-[#f5f5f7] text-[#1d1d1f]'
+                  isActive ? 'bg-white/20 text-white' : (tab.isBlocked ? 'bg-rose-50 text-rose-700' : 'bg-[#f5f5f7] text-[#1d1d1f]')
                 ]}>
                   {tab.count}
                 </span>
@@ -125,6 +157,8 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
         </div>
 
         <form method="GET" action="/admin/users" class="relative flex items-center w-full sm:w-72">
+          {currentTier !== 'ALL' && <input type="hidden" name="tier" value={currentTier} />}
+          {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
           <input
             type="text"
             name="search"
@@ -136,7 +170,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           {currentSearch && (
-            <a href="/admin/users" class="absolute right-2.5 text-xs text-[#86868b] hover:text-black">✕</a>
+            <a href={buildUsersUrl({ search: '', page: 1 })} class="absolute right-2.5 text-xs text-[#86868b] hover:text-black">✕</a>
           )}
         </form>
       </div>
@@ -368,7 +402,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
           </div>
           <div class="flex items-center gap-2">
             <a
-              href={currentPage > 1 ? `?tier=${currentTier}&search=${encodeURIComponent(currentSearch)}&page=${currentPage - 1}` : '#'}
+              href={currentPage > 1 ? buildUsersUrl({ page: currentPage - 1 }) : '#'}
               class:list={[
                 'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all',
                 currentPage > 1 ? 'border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]' : 'border-transparent text-[#86868b]/40 pointer-events-none'
@@ -379,7 +413,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
             </a>
             <span class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">{currentPage} / {totalPages}</span>
             <a
-              href={currentPage < totalPages ? `?tier=${currentTier}&search=${encodeURIComponent(currentSearch)}&page=${currentPage + 1}` : '#'}
+              href={currentPage < totalPages ? buildUsersUrl({ page: currentPage + 1 }) : '#'}
               class:list={[
                 'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all',
                 currentPage < totalPages ? 'border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]' : 'border-transparent text-[#86868b]/40 pointer-events-none'
@@ -524,6 +558,16 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
 </Layout>
 
 <script>
+  function escapeHtml(str: any): string {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   const backdrop = document.getElementById('drawer-backdrop');
   const drawer = document.getElementById('user-drawer');
   const closeBtn = document.getElementById('close-drawer-btn');
@@ -590,21 +634,25 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
                 badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">Rejected</span>';
                 break;
               default:
-                badgeHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700">${order.status}</span>`;
+                badgeHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700">${escapeHtml(order.status)}</span>`;
             }
 
             const date = (order.created_at || '').slice(0, 10);
-            const orderLink = `/admin/orders?search=${encodeURIComponent(order.order_no)}`;
+            const orderLink = `/admin/orders?search=${encodeURIComponent(order.order_no || '')}`;
+            const safeOrderNo = escapeHtml(order.order_no || '');
+            const safeQty = Number(order.total_quantity) || 0;
+            const safeStyles = Number(order.total_styles) || 0;
+            const safeDate = escapeHtml(date);
 
             return `
               <a href="${orderLink}" class="block p-2.5 rounded-xl border border-black/5 hover:border-black/20 hover:bg-[#fbfbfd] transition-all bg-white">
                 <div class="flex items-center justify-between mb-1">
-                  <span class="font-mono font-semibold text-[#1d1d1f]">${order.order_no}</span>
+                  <span class="font-mono font-semibold text-[#1d1d1f]">${safeOrderNo}</span>
                   ${badgeHtml}
                 </div>
                 <div class="flex items-center justify-between text-[11px] text-[#86868b]">
-                  <span>${order.total_quantity || 0} pcs (${order.total_styles || 0} style${(order.total_styles || 0) === 1 ? '' : 's'})</span>
-                  <span class="font-mono">${date}</span>
+                  <span>${safeQty} pcs (${safeStyles} style${safeStyles === 1 ? '' : 's'})</span>
+                  <span class="font-mono">${safeDate}</span>
                 </div>
               </a>
             `;
@@ -640,13 +688,17 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
                   });
                 }
               }
+              const safeIp = escapeHtml(login.ip || '—');
+              const safeLocation = escapeHtml(locationStr);
+              const safeDate = escapeHtml(dateStr);
+              const safeRawDate = escapeHtml(login.created_at || '');
               return `
                 <div class="flex items-center justify-between p-2 rounded-lg bg-[#f5f5f7] text-[11px]">
                   <div>
-                    <span class="font-mono font-medium text-[#1d1d1f]">${login.ip || '—'}</span>
-                    <span class="text-[#86868b] ml-1.5">${locationStr}</span>
+                    <span class="font-mono font-medium text-[#1d1d1f]">${safeIp}</span>
+                    <span class="text-[#86868b] ml-1.5">${safeLocation}</span>
                   </div>
-                  <span class="font-mono text-[#86868b] text-[10px]" title="UTC: ${login.created_at}">${dateStr}</span>
+                  <span class="font-mono text-[#86868b] text-[10px]" title="UTC: ${safeRawDate}">${safeDate}</span>
                 </div>
               `;
             })

@@ -24,7 +24,8 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
   const mockName = url.searchParams.get('mock_name');
   const mockAdmin = url.searchParams.get('mock_admin');
 
-  let returnUrl = '/orders';
+  const rawParamReturnUrl = url.searchParams.get('returnUrl');
+  let returnUrl = (rawParamReturnUrl ? decodeURIComponent(rawParamReturnUrl) : '') || '/orders';
   let isPopup = url.searchParams.get('popup') === '1';
   let parsedState: { state?: string; returnUrl?: string; isPopup?: boolean } | null = null;
 

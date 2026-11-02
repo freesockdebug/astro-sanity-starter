@@ -138,7 +138,7 @@ const getItemProductUrl = (item: any) => {
           }`}
         >
           <span class="text-[11px] block opacity-75">Pending Approval</span>
-          <span class="text-lg font-bold font-mono tabular-nums text-amber-600 ${currentStatus === 'PENDING_APPROVAL' ? '!text-white' : ''}">
+          <span class={`text-lg font-bold font-mono tabular-nums text-amber-600 ${currentStatus === 'PENDING_APPROVAL' ? '!text-white' : ''}`}>
             {stats.pending}
           </span>
         </a>
@@ -152,7 +152,7 @@ const getItemProductUrl = (item: any) => {
           }`}
         >
           <span class="text-[11px] block opacity-75">Approved (To Ship)</span>
-          <span class="text-lg font-bold font-mono tabular-nums text-blue-600 ${currentStatus === 'APPROVED' ? '!text-white' : ''}">
+          <span class={`text-lg font-bold font-mono tabular-nums text-blue-600 ${currentStatus === 'APPROVED' ? '!text-white' : ''}`}>
             {stats.approved}
           </span>
         </a>
@@ -166,7 +166,7 @@ const getItemProductUrl = (item: any) => {
           }`}
         >
           <span class="text-[11px] block opacity-75">Shipped</span>
-          <span class="text-lg font-bold font-mono tabular-nums text-emerald-600 ${currentStatus === 'SHIPPED' ? '!text-white' : ''}">
+          <span class={`text-lg font-bold font-mono tabular-nums text-emerald-600 ${currentStatus === 'SHIPPED' ? '!text-white' : ''}`}>
             {stats.shipped}
           </span>
         </a>

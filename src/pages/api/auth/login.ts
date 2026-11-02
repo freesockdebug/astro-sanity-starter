@@ -112,11 +112,11 @@ export const GET: APIRoute = async ({ request, url }) => {
     <h2>GwenVenni B2B Sign In</h2>
     <p>Sign in with your work email to track RFQs and claim historical orders automatically.</p>
 
-    <a href="/api/auth/callback?mock_email=forhaisome@gmail.com&mock_name=Administrator&mock_admin=1&popup=${isPopup ? '1' : '0'}" class="btn btn-primary">
+    <a href="/api/auth/callback?mock_email=forhaisome@gmail.com&mock_name=Administrator&mock_admin=1&popup=${isPopup ? '1' : '0'}&returnUrl=${encodeURIComponent(returnUrl)}" class="btn btn-primary">
       Sign in as Administrator <span class="badge">forhaisome@gmail.com</span>
     </a>
 
-    <a href="/api/auth/callback?mock_email=buyer@client.com&mock_name=B2B+Buyer&popup=${isPopup ? '1' : '0'}" class="btn btn-secondary">
+    <a href="/api/auth/callback?mock_email=buyer@client.com&mock_name=B2B+Buyer&popup=${isPopup ? '1' : '0'}&returnUrl=${encodeURIComponent(returnUrl)}" class="btn btn-secondary">
       Sign in as Sample Buyer <span class="badge">buyer@client.com</span>
     </a>
 
@@ -124,6 +124,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 
     <form method="GET" action="/api/auth/callback">
       <input type="hidden" name="popup" value="${isPopup ? '1' : '0'}" />
+      <input type="hidden" name="returnUrl" value="${encodeURIComponent(returnUrl)}" />
       <input type="email" name="mock_email" placeholder="name@yourcompany.com" required />
       <input type="text" name="mock_name" placeholder="Contact Name (Optional)" />
       <button type="submit" class="btn btn-secondary" style="margin-bottom:0;">Continue with Work Email</button>

@@ -538,11 +538,11 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
     await Promise.allSettled([d1WriteTask, sanityWriteTask, emailTask, webhookTask]);
 
-    if (!sanityRecordId && !orderNo) {
-      console.error('Inquiry could not be recorded in Sanity or D1:', sanityWriteError, d1WriteError);
+    if (!orderId) {
+      console.error('Order could not be saved to primary database (D1):', d1WriteError, sanityWriteError);
       return new Response(
         JSON.stringify({
-          error: `Inquiry could not be saved: ${sanityWriteError || d1WriteError}.`,
+          error: `Order could not be saved to primary database: ${d1WriteError || sanityWriteError || 'Database write failed'}.`,
           success: false,
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
