@@ -2,6 +2,9 @@
 // src/pages/[lang]/account.astro
 import AccountPage from '../account.astro';
 import { LANGUAGES } from '@i18n';
+import { getSessionFromRequest } from '@utils/auth';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 const { lang } = Astro.params;
@@ -13,6 +16,11 @@ if (!lang || lang.startsWith('_') || lang.includes('.')) {
 
 if (!(lang in LANGUAGES) || lang === 'en') {
   return Astro.redirect('/account');
+}
+
+const sessionUser = await getSessionFromRequest(Astro, cfEnv);
+if (!sessionUser) {
+  return Astro.redirect(`/api/auth/login?returnUrl=${encodeURIComponent(Astro.url.pathname)}`);
 }
 ---
 
