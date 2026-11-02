@@ -7,12 +7,21 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
+const NO_CACHE_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+  'Cloudflare-CDN-Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export const GET: APIRoute = async ({ request, url }) => {
   const user = await getSessionFromRequest(request, cfEnv);
   if (!user || !user.isAdmin) {
     return new Response(JSON.stringify({ error: 'Forbidden. Administrator access required.' }), {
       status: 403,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -30,10 +39,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     }),
     {
       status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, max-age=0',
-      },
+      headers: NO_CACHE_HEADERS,
     }
   );
 };

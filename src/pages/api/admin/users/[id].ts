@@ -12,6 +12,15 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
+const NO_CACHE_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+  'Cloudflare-CDN-Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 const VALID_TIERS = new Set<CustomerTier>(['STANDARD', 'VIP', 'PARTNER']);
 const VALID_STATUSES = new Set<UserStatus>(['ACTIVE', 'BLOCKED']);
 
@@ -20,7 +29,7 @@ export const GET: APIRoute = async ({ request, params }) => {
   if (!user || !user.isAdmin) {
     return new Response(JSON.stringify({ error: 'Forbidden. Admin access required.' }), {
       status: 403,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -28,7 +37,7 @@ export const GET: APIRoute = async ({ request, params }) => {
   if (!userId) {
     return new Response(JSON.stringify({ error: 'User ID is required.' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -36,13 +45,13 @@ export const GET: APIRoute = async ({ request, params }) => {
   if (!data.user) {
     return new Response(JSON.stringify({ error: 'User not found.' }), {
       status: 404,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
   return new Response(JSON.stringify(data), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: NO_CACHE_HEADERS,
   });
 };
 
@@ -106,7 +115,7 @@ export const POST: APIRoute = async ({ request, params }) => {
   if (!success) {
     return new Response(JSON.stringify({ error: 'User not found or update failed.' }), {
       status: 404,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -117,7 +126,7 @@ export const POST: APIRoute = async ({ request, params }) => {
     }),
     {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     }
   );
 };

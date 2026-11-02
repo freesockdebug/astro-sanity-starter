@@ -9,6 +9,10 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+Astro.response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+Astro.response.headers.set('CDN-Cache-Control', 'no-store');
+Astro.response.headers.set('Pragma', 'no-cache');
+Astro.response.headers.set('Expires', '0');
 
 const currentLang = getLangFromUrl(Astro.url);
 const sessionUser = await getSessionFromRequest(Astro, cfEnv);
@@ -17,6 +21,7 @@ if (!sessionUser) {
   return Astro.redirect(`/api/auth/login?returnUrl=/account`);
 }
 
+const user = sessionUser;
 const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
 const loginHistory = await getUserLoginHistory(sessionUser.id, 20);
 
@@ -304,7 +309,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
       <div class="flex items-center justify-between border-b border-black/5 pb-3">
         <div>
           <h3 id="modal-title" class="text-sm font-semibold text-[#1d1d1f]">Update Account Password</h3>
-          <p class="text-[11px] text-[#86868b] mt-0.5">Set a new password for <span class="font-mono text-[#1d1d1f]">{user.email}</span></p>
+          <p class="text-[11px] text-[#86868b] mt-0.5">Set a new password for <span class="font-mono text-[#1d1d1f]">{sessionUser.email}</span></p>
         </div>
         <button
           type="button"

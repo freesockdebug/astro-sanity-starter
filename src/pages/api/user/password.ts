@@ -7,12 +7,21 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
+const NO_CACHE_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+  'Cloudflare-CDN-Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export const POST: APIRoute = async ({ request }) => {
   const user = await getSessionFromRequest(request, cfEnv);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Unauthorized. Please sign in first.' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -22,7 +31,7 @@ export const POST: APIRoute = async ({ request }) => {
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON request payload.' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -31,14 +40,14 @@ export const POST: APIRoute = async ({ request }) => {
   if (!password || typeof password !== 'string' || password.length < 8) {
     return new Response(
       JSON.stringify({ error: 'Password must be at least 8 characters long.' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
+      { status: 400, headers: NO_CACHE_HEADERS }
     );
   }
 
   if (password !== confirmPassword) {
     return new Response(
       JSON.stringify({ error: 'New password and confirmation do not match.' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
+      { status: 400, headers: NO_CACHE_HEADERS }
     );
   }
 
@@ -48,7 +57,7 @@ export const POST: APIRoute = async ({ request }) => {
   if (!result.success) {
     return new Response(
       JSON.stringify({ error: result.error || 'Failed to update password.' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
+      { status: 400, headers: NO_CACHE_HEADERS }
     );
   }
 
@@ -76,7 +85,7 @@ export const POST: APIRoute = async ({ request }) => {
     }),
     {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     }
   );
 };

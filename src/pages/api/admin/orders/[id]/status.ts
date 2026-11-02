@@ -7,12 +7,21 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
+const NO_CACHE_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+  'Cloudflare-CDN-Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export const POST: APIRoute = async ({ request, params }) => {
   const user = await getSessionFromRequest(request, cfEnv);
   if (!user || !user.isAdmin) {
     return new Response(JSON.stringify({ error: 'Forbidden. Administrator access required.' }), {
       status: 403,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -20,7 +29,7 @@ export const POST: APIRoute = async ({ request, params }) => {
   if (!orderId) {
     return new Response(JSON.stringify({ error: 'Order ID is required.' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -30,7 +39,7 @@ export const POST: APIRoute = async ({ request, params }) => {
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON payload.' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -71,7 +80,7 @@ export const POST: APIRoute = async ({ request, params }) => {
   if (!success) {
     return new Response(JSON.stringify({ error: 'Order not found or status update failed.' }), {
       status: 404,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -81,7 +90,7 @@ export const POST: APIRoute = async ({ request, params }) => {
       status: targetStatus,
       message: `Order status updated to ${targetStatus}.`,
     }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
+    { status: 200, headers: NO_CACHE_HEADERS }
   );
 };
 

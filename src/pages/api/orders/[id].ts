@@ -7,12 +7,21 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
+const NO_CACHE_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+  'Cloudflare-CDN-Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export const GET: APIRoute = async ({ request, params }) => {
   const user = await getSessionFromRequest(request, cfEnv);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Unauthorized.' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -20,7 +29,7 @@ export const GET: APIRoute = async ({ request, params }) => {
   if (!idOrNo) {
     return new Response(JSON.stringify({ error: 'Order ID is required.' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -28,7 +37,7 @@ export const GET: APIRoute = async ({ request, params }) => {
   if (!order) {
     return new Response(JSON.stringify({ error: 'Order not found.' }), {
       status: 404,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
@@ -36,13 +45,13 @@ export const GET: APIRoute = async ({ request, params }) => {
   if (order.user_id !== user.id && !user.isAdmin) {
     return new Response(JSON.stringify({ error: 'Forbidden. Access denied.' }), {
       status: 403,
-      headers: { 'Content-Type': 'application/json' },
+      headers: NO_CACHE_HEADERS,
     });
   }
 
   return new Response(JSON.stringify({ success: true, order }), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: NO_CACHE_HEADERS,
   });
 };
 
