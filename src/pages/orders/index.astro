@@ -2,6 +2,7 @@
 // src/pages/orders/index.astro
 import Layout from '@layouts/Layout.astro';
 import LocalTime from '@components/LocalTime.astro';
+import BuyerHeader from '@components/buyer/BuyerHeader.astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, getUserByIdOrEmail, type OrderRecord } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
@@ -27,11 +28,12 @@ const currentSearch = (Astro.url.searchParams.get('search') || '').trim().toLowe
 let myOrders: OrderRecord[] = [];
 let allOrders: OrderRecord[] = [];
 let claimedCount = 0;
+let dbUser: any = null;
 
 if (sessionUser) {
   // Session invalidation guard: check if user is BLOCKED in D1 (fail-safe non-blocking)
   try {
-    const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
+    dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
     if (dbUser && dbUser.status === 'BLOCKED') {
       Astro.cookies.delete('gwenvenni_session', { path: '/' });
       return Astro.redirect('/api/auth/login?error=account_suspended');
@@ -127,48 +129,28 @@ const getItemProductUrl = (item: any) => {
   <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
     <div class="max-w-4xl mx-auto px-4 sm:px-6">
       
-      <!-- Breadcrumb & Top Bar -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
-        <div>
-          <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
-            <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">{t('nav.home')}</a>
-            <span>/</span>
-            <span class="text-[#1d1d1f] font-medium">{t('orders.breadcrumb')}</span>
-          </nav>
-          <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
-            {t('orders.title')}
-          </h1>
-        </div>
-
-        {sessionUser && (
-          <div class="flex items-center gap-3">
-            <a
-              href={getLocalizedPath('/account', currentLang)}
-              class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs inline-flex items-center gap-1.5"
-            >
-              <span>👤 {t('orders.accountBtn')}</span>
-            </a>
-            {sessionUser.isAdmin && (
-              <a
-                href="/admin/orders"
-                class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs inline-flex items-center gap-1.5"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span>{t('orders.adminWorkspace')}</span>
-              </a>
-            )}
-            <a
-              href="/api/auth/logout"
-              class="px-3.5 py-1.5 rounded-full text-xs font-medium text-[#86868b] hover:text-black hover:bg-black/5 transition-all"
-            >
-              {t('orders.signOut')}
-            </a>
+      <!-- Session User: Unified Buyer Header -->
+      {sessionUser ? (
+        <BuyerHeader
+          currentTab="orders"
+          sessionUser={sessionUser}
+          dbUser={dbUser}
+          totalOrdersCount={rawActiveOrders.length}
+        />
+      ) : (
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
+          <div>
+            <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
+              <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">{t('nav.home')}</a>
+              <span>/</span>
+              <span class="text-[#1d1d1f] font-medium">{t('orders.breadcrumb')}</span>
+            </nav>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
+              {t('orders.title')}
+            </h1>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <!-- State 1: Unauthenticated Buyer -->
       {!sessionUser && (
@@ -202,37 +184,17 @@ const getItemProductUrl = (item: any) => {
 
       <!-- State 2: Authenticated Buyer -->
       {sessionUser && (
-        <div class="mt-8 space-y-6">
+        <div class="space-y-6">
           
-          <!-- Buyer Account Information Banner -->
-          <div class="bg-white rounded-xl border border-black/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
-            <div class="flex items-center gap-2.5">
-              <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-semibold uppercase text-xs">
-                {sessionUser.name ? sessionUser.name.charAt(0) : sessionUser.email.charAt(0)}
-              </div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <span class="font-semibold text-[#1d1d1f]">{sessionUser.name || t('orders.totalOrders')}</span>
-                  <a
-                    href={getLocalizedPath('/account', currentLang)}
-                    class="text-[10px] text-blue-600 hover:underline font-medium"
-                    title="Edit profile & security"
-                  >
-                    {t('orders.editProfile')}
-                  </a>
-                </div>
-                <span class="text-[#86868b] block font-mono text-[11px]">{sessionUser.email}</span>
-              </div>
-            </div>
-
-            <!-- Admin View Mode Switcher -->
-            {sessionUser.isAdmin && (
-              <div class="flex items-center gap-1.5 p-1 bg-[#f5f5f7] rounded-xl border border-black/5 self-start sm:self-auto">
+          <!-- Admin View Mode Switcher & Auto Claim Banner -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            {sessionUser.isAdmin ? (
+              <div class="flex items-center gap-1.5 p-1 bg-white rounded-xl border border-black/5 shadow-2xs self-start sm:self-auto">
                 <a
                   href={getLocalizedPath(`/orders?view=my${currentStatus !== 'ALL' ? `&status=${currentStatus}` : ''}`, currentLang)}
                   class={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                     !isViewingAll
-                      ? 'bg-white text-[#1d1d1f] shadow-xs'
+                      ? 'bg-[#1d1d1f] text-white shadow-xs'
                       : 'text-[#86868b] hover:text-black'
                   }`}
                 >
@@ -249,13 +211,11 @@ const getItemProductUrl = (item: any) => {
                   {t('orders.allPlatformOrders')} ({allOrders.length})
                 </a>
               </div>
-            )}
-
-            {!sessionUser.isAdmin && (
+            ) : (
               <div class="flex items-center gap-2 text-[#86868b]">
                 <span>{t('orders.totalOrders')}: <strong class="text-[#1d1d1f] font-mono tabular-nums">{myOrders.length}</strong></span>
                 <span>·</span>
-                <span class="text-emerald-700">{t('orders.autoClaimActive')}</span>
+                <span class="text-emerald-700 font-medium">{t('orders.autoClaimActive')}</span>
               </div>
             )}
           </div>
@@ -371,7 +331,7 @@ const getItemProductUrl = (item: any) => {
             const isRejected = order.status === 'REJECTED';
 
             return (
-              <div class="bg-white rounded-2xl border border-black/5 p-5 sm:p-6 space-y-4 shadow-sm transition-all hover:shadow-md">
+              <div class="bg-white rounded-2xl border border-black/5 p-5 sm:p-6 space-y-4 shadow-sm transition-all hover:shadow-md order-card-container">
                 
                 <!-- Order Header -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-black/5 text-xs">
@@ -382,7 +342,7 @@ const getItemProductUrl = (item: any) => {
                       </span>
                       <button
                         type="button"
-                        class="copy-btn text-[#86868b] hover:text-black transition-colors"
+                        class="copy-btn text-[#86868b] hover:text-black transition-colors cursor-pointer"
                         data-copy={order.order_no}
                         title={t('orders.copy')}
                       >
@@ -425,6 +385,83 @@ const getItemProductUrl = (item: any) => {
                   </div>
                 </div>
 
+                <!-- 4-Step Order Progress Stepper -->
+                {!isRejected ? (
+                  <div class="py-2.5 px-3 bg-[#fbfbfd] rounded-xl border border-black/5">
+                    <div class="relative flex items-center justify-between">
+                      <!-- Background Track -->
+                      <div class="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-0.5 bg-black/10 -z-0"></div>
+                      <!-- Active Progress Fill -->
+                      <div
+                        class="absolute left-6 top-1/2 -translate-y-1/2 h-0.5 bg-emerald-500 transition-all duration-300 -z-0"
+                        style={`width: calc(${isShipped ? '100% - 48px' : isApproved ? '50%' : '0%'})`}
+                      ></div>
+
+                      <!-- Step 1: Submitted -->
+                      <div class="relative z-10 flex flex-col items-center">
+                        <div class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow-2xs">
+                          ✓
+                        </div>
+                        <span class="text-[10px] font-medium text-[#1d1d1f] mt-1.5 whitespace-nowrap">Submitted</span>
+                      </div>
+
+                      <!-- Step 2: Under Review / Approved -->
+                      <div class="relative z-10 flex flex-col items-center">
+                        <div class:list={[
+                          'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shadow-2xs transition-all',
+                          (isApproved || isShipped)
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-amber-400 text-white ring-4 ring-amber-100 animate-pulse'
+                        ]}>
+                          {(isApproved || isShipped) ? '✓' : '2'}
+                        </div>
+                        <span class:list={[
+                          'text-[10px] mt-1.5 whitespace-nowrap',
+                          (isApproved || isShipped) ? 'font-medium text-[#1d1d1f]' : 'font-semibold text-amber-700'
+                        ]}>
+                          {(isApproved || isShipped) ? 'Approved' : 'In Review'}
+                        </span>
+                      </div>
+
+                      <!-- Step 3: Dispatched -->
+                      <div class="relative z-10 flex flex-col items-center">
+                        <div class:list={[
+                          'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shadow-2xs transition-all',
+                          isShipped
+                            ? 'bg-emerald-500 text-white ring-4 ring-emerald-100'
+                            : 'bg-white border-2 border-black/20 text-[#86868b]'
+                        ]}>
+                          {isShipped ? '✓' : '3'}
+                        </div>
+                        <span class:list={[
+                          'text-[10px] mt-1.5 whitespace-nowrap',
+                          isShipped ? 'font-semibold text-emerald-700' : 'text-[#86868b]'
+                        ]}>
+                          {isShipped ? 'Dispatched' : 'Dispatch'}
+                        </span>
+                      </div>
+
+                      <!-- Step 4: Delivered -->
+                      <div class="relative z-10 flex flex-col items-center">
+                        <div class="w-6 h-6 rounded-full bg-white border-2 border-black/20 text-[#86868b] flex items-center justify-center text-[10px] font-bold shadow-2xs">
+                          4
+                        </div>
+                        <span class="text-[10px] text-[#86868b] mt-1.5 whitespace-nowrap">Delivered</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div class="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-center gap-2.5 text-xs text-rose-800">
+                    <svg class="w-4 h-4 shrink-0 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <span class="font-semibold">Order Inquiry Closed</span>
+                      {order.admin_remark && <span class="ml-1 text-rose-700">· {order.admin_remark}</span>}
+                    </div>
+                  </div>
+                )}
+
                 <!-- Shipping & Logistics Card (If Shipped) -->
                 {isShipped && (
                   <div class="bg-[#f5f5f7] rounded-xl p-3.5 border border-black/5 text-xs space-y-1.5">
@@ -432,26 +469,41 @@ const getItemProductUrl = (item: any) => {
                       <span class="font-semibold text-[#1d1d1f]">{t('orders.carrierTracking')}:</span>
                       <span class="text-[#86868b] font-mono text-[11px]">{t('orders.shippedAt')}: {order.shipped_at || 'Recently'}</span>
                     </div>
-                    <div class="flex items-center gap-4 text-xs">
-                      <div>
-                        <span class="text-[#86868b]">{t('orders.carrier')}:</span>{' '}
-                        <strong class="text-[#1d1d1f]">{order.carrier || 'Standard Express'}</strong>
+                    <div class="flex items-center justify-between flex-wrap gap-2 text-xs">
+                      <div class="flex items-center gap-4">
+                        <div>
+                          <span class="text-[#86868b]">{t('orders.carrier')}:</span>{' '}
+                          <strong class="text-[#1d1d1f]">{order.carrier || 'Standard Express'}</strong>
+                        </div>
+                        {order.tracking_number && (
+                          <div class="flex items-center gap-1.5">
+                            <span class="text-[#86868b]">{t('orders.trackingNo')}:</span>
+                            <span class="font-mono font-semibold text-[#1d1d1f]">{order.tracking_number}</span>
+                            <button
+                              type="button"
+                              class="copy-btn text-[#86868b] hover:text-black transition-colors cursor-pointer"
+                              data-copy={order.tracking_number}
+                              title={t('orders.copyTracking')}
+                            >
+                              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
                       </div>
                       {order.tracking_number && (
-                        <div class="flex items-center gap-1.5">
-                          <span class="text-[#86868b]">{t('orders.trackingNo')}:</span>
-                          <span class="font-mono font-semibold text-[#1d1d1f]">{order.tracking_number}</span>
-                          <button
-                            type="button"
-                            class="copy-btn text-[#86868b] hover:text-black transition-colors"
-                            data-copy={order.tracking_number}
-                            title={t('orders.copyTracking')}
-                          >
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          </button>
-                        </div>
+                        <a
+                          href={`https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline print:hidden"
+                        >
+                          <span>Track on 17TRACK</span>
+                          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
                       )}
                     </div>
                     {order.admin_remark && (
@@ -473,8 +525,17 @@ const getItemProductUrl = (item: any) => {
                 <div class="divide-y divide-black/5">
                   {(order.items || []).map((item) => {
                     const itemUrl = getItemProductUrl(item);
+                    const itemImg = resolveItemImage(item);
                     return (
-                      <div class="py-2.5 flex items-center justify-between text-xs gap-3">
+                      <div
+                        class="order-item-row py-2.5 flex items-center justify-between text-xs gap-3"
+                        data-product-id={item.product_id || ''}
+                        data-sku={item.sku || ''}
+                        data-title={item.title || ''}
+                        data-variant={item.variant || ''}
+                        data-quantity={item.quantity || 1}
+                        data-image={itemImg}
+                      >
                         <div class="flex items-center gap-3 min-w-0">
                           {itemUrl ? (
                             <a
@@ -485,7 +546,7 @@ const getItemProductUrl = (item: any) => {
                               title={`View ${item.title}`}
                             >
                               <img
-                                src={resolveItemImage(item)}
+                                src={itemImg}
                                 alt={item.title}
                                 class="w-10 h-10 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 group-hover:border-black/30 transition-all shrink-0"
                                 loading="lazy"
@@ -493,7 +554,7 @@ const getItemProductUrl = (item: any) => {
                             </a>
                           ) : (
                             <img
-                              src={resolveItemImage(item)}
+                              src={itemImg}
                               alt={item.title}
                               class="w-10 h-10 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 shrink-0"
                               loading="lazy"
@@ -528,18 +589,50 @@ const getItemProductUrl = (item: any) => {
                   })}
                 </div>
 
-                <!-- Footer Summary -->
-                <div class="pt-3 border-t border-black/5 flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-[#86868b] gap-2">
-                  <div class="flex items-center gap-3">
+                <!-- Footer Summary & Actions -->
+                <div class="pt-3.5 border-t border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div class="flex items-center gap-3 text-[11px] text-[#86868b] flex-wrap">
                     <span>{t('orders.destination')}: <strong class="text-[#1d1d1f]">{order.destination_country || t('orders.worldwide')}</strong></span>
                     <span>·</span>
                     <span>{t('orders.totalQuantity')}: <strong class="text-[#1d1d1f] font-mono tabular-nums">{order.total_quantity} {t('orders.pcs')}</strong></span>
+                    {order.customer_notes && (
+                      <>
+                        <span>·</span>
+                        <span class="truncate max-w-[200px] text-zinc-500 italic" title={order.customer_notes}>"{order.customer_notes}"</span>
+                      </>
+                    )}
                   </div>
-                  {order.customer_notes && (
-                    <p class="truncate max-w-xs text-zinc-500 italic">
-                      {t('orders.customerNotes')}: "{order.customer_notes}"
-                    </p>
-                  )}
+
+                  <!-- Actions: Reorder, Print, Track -->
+                  <div class="flex items-center gap-2 flex-wrap order-actions print:hidden shrink-0">
+                    {isShipped && order.tracking_number && (
+                      <a
+                        href={`https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all shadow-2xs"
+                      >
+                        <span>Track Parcel</span>
+                        <svg class="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      class="reorder-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs cursor-pointer active:scale-95"
+                    >
+                      <span>↻ Reorder Items</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="print-order-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[#52525b] hover:text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] border border-black/10 transition-all shadow-2xs cursor-pointer active:scale-95"
+                    >
+                      <span>🖨️ Print Sheet</span>
+                    </button>
+                  </div>
                 </div>
 
               </div>
@@ -552,6 +645,28 @@ const getItemProductUrl = (item: any) => {
     </div>
   </main>
 </Layout>
+
+<style>
+  @media print {
+    body {
+      background: white !important;
+    }
+    header, nav, footer, #apple-nav, #apple-footer, .print\:hidden, .order-actions {
+      display: none !important;
+    }
+    main {
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+    }
+    .order-card-container {
+      border: 1px solid #e5e5e5 !important;
+      box-shadow: none !important;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      margin-bottom: 2rem !important;
+    }
+  }
+</style>
 
 <script>
   // Copy buttons
@@ -568,6 +683,59 @@ const getItemProductUrl = (item: any) => {
         }, 1500);
       } catch (err) {
         // ignore
+      }
+    });
+  });
+
+  // Reorder buttons: read order items from card DOM and push into QuoteDrawer
+  document.querySelectorAll<HTMLButtonElement>('.reorder-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      try {
+        const card = btn.closest('.order-card-container');
+        if (!card) return;
+        const itemRows = card.querySelectorAll<HTMLElement>('.order-item-row');
+        if (!itemRows.length) return;
+
+        itemRows.forEach((row) => {
+          if ((window as any).addToQuote) {
+            (window as any).addToQuote({
+              id: row.dataset.productId || row.dataset.sku || 'reorder-item',
+              title: row.dataset.title || 'Reorder Item',
+              sku: row.dataset.sku || '',
+              imageUrl: row.dataset.image || '',
+              variant: row.dataset.variant || 'Standard Spec',
+              quantity: parseInt(row.dataset.quantity || '1', 10) || 1,
+            });
+          }
+        });
+
+        if ((window as any).openQuoteDrawer) {
+          (window as any).openQuoteDrawer();
+        }
+      } catch (e) {
+        console.warn('Reorder failed:', e);
+      }
+    });
+  });
+
+  // Print order sheet
+  document.querySelectorAll<HTMLButtonElement>('.print-order-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const card = btn.closest('.order-card-container');
+      const allCards = document.querySelectorAll('.order-card-container');
+      
+      // Temporarily mark non-target cards as print:hidden
+      if (card) {
+        allCards.forEach((c) => {
+          if (c !== card) c.classList.add('print:hidden');
+        });
+      }
+
+      window.print();
+
+      // Reset after print dialog
+      if (card) {
+        allCards.forEach((c) => c.classList.remove('print:hidden'));
       }
     });
   });

@@ -2,6 +2,7 @@
 // src/pages/account.astro
 import Layout from '@layouts/Layout.astro';
 import LocalTime from '@components/LocalTime.astro';
+import BuyerHeader from '@components/buyer/BuyerHeader.astro';
 import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
 import { getUserByIdOrEmail, getUserLoginHistory } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
@@ -36,274 +37,269 @@ const loginHistory = await getUserLoginHistory(sessionUser.id, 20);
 const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);
 const pageTitle = t('account.metaTitle');
 const pageDesc = t('account.metaDesc');
+const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
 ---
 
 <Layout title={pageTitle} description={pageDesc}>
   <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 space-y-6">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
 
-      <!-- Breadcrumb & Top Bar -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
-        <div>
-          <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
-            <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">{t('nav.home')}</a>
-            <span>/</span>
-            <span class="text-[#1d1d1f] font-medium">{t('account.breadcrumb')}</span>
-          </nav>
-          <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
-            {t('account.title')}
-          </h1>
-        </div>
+      <!-- Unified Buyer Header -->
+      <BuyerHeader
+        currentTab="account"
+        sessionUser={sessionUser}
+        dbUser={dbUser}
+      />
 
-        <div class="flex items-center gap-3">
-          <a
-            href={getLocalizedPath('/orders', currentLang)}
-            class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs inline-flex items-center gap-1.5"
-          >
-            <span>📦 {t('account.orderCenter')}</span>
-          </a>
-          {sessionUser.isAdmin && (
-            <a
-              href="/admin/users"
-              class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs"
+      <!-- Main Layout: 2-Column Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left Column (2 Cols): Profile Form & Password Management -->
+        <div class="lg:col-span-2 space-y-6">
+
+          <!-- Section 1: Profile Maintenance -->
+          <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
+            <div>
+              <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionProfile')}</h2>
+              <p class="text-[11px] text-[#86868b] mt-0.5">
+                {t('account.sectionProfileDesc')}
+              </p>
+            </div>
+
+            <form
+              id="profile-form"
+              class="space-y-4 text-xs"
+              data-msg-saving={t('account.saving')}
+              data-msg-save={t('account.saveProfile')}
+              data-msg-success={t('account.profileUpdated')}
+              data-msg-failed={t('account.profileFailed')}
             >
-              {t('account.adminWorkspace')}
-            </a>
-          )}
-          <a
-            href="/api/auth/logout"
-            class="px-3.5 py-1.5 rounded-full text-xs font-medium text-[#86868b] hover:text-black hover:bg-black/5 transition-all"
-          >
-            {t('account.signOut')}
-          </a>
-        </div>
-      </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="profile-name" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.nameLabel')}</label>
+                  <input
+                    type="text"
+                    id="profile-name"
+                    name="name"
+                    value={dbUser?.name || sessionUser.name || ''}
+                    placeholder={t('account.namePlaceholder')}
+                    class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
+                  />
+                </div>
 
-      <!-- Identity Summary Badge -->
-      <div class="bg-white rounded-2xl border border-black/5 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
-        <div class="flex items-center gap-3.5">
-          <div class="w-11 h-11 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-sm uppercase shrink-0">
-            {(dbUser?.name || sessionUser.name || sessionUser.email)[0]}
+                <div>
+                  <label for="profile-email" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.emailLabel')}</label>
+                  <input
+                    type="email"
+                    id="profile-email"
+                    value={sessionUser.email}
+                    disabled
+                    class="w-full px-3.5 py-2 rounded-xl bg-black/5 border border-black/10 text-[#86868b] font-mono cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label for="profile-company" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.companyLabel')}</label>
+                  <input
+                    type="text"
+                    id="profile-company"
+                    name="company"
+                    value={dbUser?.company || ''}
+                    placeholder={t('account.companyPlaceholder')}
+                    class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label for="profile-country" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.countryLabel')}</label>
+                  <input
+                    type="text"
+                    id="profile-country"
+                    name="country"
+                    value={dbUser?.country || ''}
+                    placeholder={t('account.countryPlaceholder')}
+                    class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
+                  />
+                </div>
+
+                <div class="sm:col-span-2">
+                  <label for="profile-phone" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.phoneLabel')}</label>
+                  <input
+                    type="text"
+                    id="profile-phone"
+                    name="phone"
+                    value={dbUser?.phone || ''}
+                    placeholder="e.g. +33 6 12 34 56 78"
+                    class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
+                  />
+                </div>
+              </div>
+
+              <div id="profile-feedback" class="hidden p-3 rounded-xl text-xs font-medium"></div>
+
+              <div class="flex items-center justify-end pt-2">
+                <button
+                  type="submit"
+                  id="save-profile-btn"
+                  class="px-5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs active:scale-95 cursor-pointer"
+                >
+                  {t('account.saveProfile')}
+                </button>
+              </div>
+            </form>
           </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="font-semibold text-sm text-[#1d1d1f]">{dbUser?.name || sessionUser.name || t('account.clientRole')}</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
-                {dbUser?.tier || 'STANDARD'} {t('account.tier')}
+
+          <!-- Section 2: Security & Password Management -->
+          <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionSecurity')}</h2>
+                <p class="text-[11px] text-[#86868b] mt-0.5">
+                  {t('account.sectionSecurityDesc')}
+                </p>
+              </div>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shrink-0">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                {t('account.logtoActive')}
               </span>
             </div>
-            <span class="text-xs text-[#86868b] font-mono block mt-0.5">{sessionUser.email}</span>
-          </div>
-        </div>
 
-        <div class="text-left sm:text-right text-[11px] text-[#86868b]">
-          <span>{t('account.memberId')}: <strong class="font-mono text-[#1d1d1f]">{sessionUser.id.slice(0, 16)}...</strong></span>
-          <span class="block">{t('account.protectedBy')} <strong class="text-[#1d1d1f]">Logto OIDC Cloud</strong></span>
-        </div>
-      </div>
+            <div class="p-4 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div class="space-y-1">
+                <span class="font-semibold text-xs text-[#1d1d1f] block">{t('account.passwordCardTitle')}</span>
+                <p class="text-[11px] text-[#86868b] max-w-lg leading-relaxed">
+                  {t('account.passwordCardDesc')}
+                </p>
+              </div>
 
-      <!-- Section 1: Profile Maintenance -->
-      <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
-        <div>
-          <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionProfile')}</h2>
-          <p class="text-[11px] text-[#86868b] mt-0.5">
-            {t('account.sectionProfileDesc')}
-          </p>
-        </div>
-
-        <form
-          id="profile-form"
-          class="space-y-4 text-xs"
-          data-msg-saving={t('account.saving')}
-          data-msg-save={t('account.saveProfile')}
-          data-msg-success={t('account.profileUpdated')}
-          data-msg-failed={t('account.profileFailed')}
-        >
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label for="profile-name" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.nameLabel')}</label>
-              <input
-                type="text"
-                id="profile-name"
-                name="name"
-                value={dbUser?.name || sessionUser.name || ''}
-                placeholder={t('account.namePlaceholder')}
-                class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
-              />
-            </div>
-
-            <div>
-              <label for="profile-email" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.emailLabel')}</label>
-              <input
-                type="email"
-                id="profile-email"
-                value={sessionUser.email}
-                disabled
-                class="w-full px-3.5 py-2 rounded-xl bg-black/5 border border-black/10 text-[#86868b] font-mono cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <label for="profile-company" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.companyLabel')}</label>
-              <input
-                type="text"
-                id="profile-company"
-                name="company"
-                value={dbUser?.company || ''}
-                placeholder={t('account.companyPlaceholder')}
-                class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
-              />
-            </div>
-
-            <div>
-              <label for="profile-country" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.countryLabel')}</label>
-              <input
-                type="text"
-                id="profile-country"
-                name="country"
-                value={dbUser?.country || ''}
-                placeholder={t('account.countryPlaceholder')}
-                class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
-              />
-            </div>
-
-            <div class="sm:col-span-2">
-              <label for="profile-phone" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.phoneLabel')}</label>
-              <input
-                type="text"
-                id="profile-phone"
-                name="phone"
-                value={dbUser?.phone || ''}
-                placeholder="e.g. +33 6 12 34 56 78"
-                class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
-              />
+              <button
+                type="button"
+                id="btn-open-password-modal"
+                class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white transition-all shadow-2xs text-center shrink-0 inline-flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                <span>{t('account.changePasswordBtn')}</span>
+              </button>
             </div>
           </div>
 
-          <div id="profile-feedback" class="hidden p-3 rounded-xl text-xs font-medium"></div>
-
-          <div class="flex items-center justify-end pt-2">
-            <button
-              type="submit"
-              id="save-profile-btn"
-              class="px-5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs active:scale-95 cursor-pointer"
-            >
-              {t('account.saveProfile')}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Section 2: Security & Password Management -->
-      <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionSecurity')}</h2>
-            <p class="text-[11px] text-[#86868b] mt-0.5">
-              {t('account.sectionSecurityDesc')}
-            </p>
-          </div>
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shrink-0">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            {t('account.logtoActive')}
-          </span>
         </div>
 
-        <div class="p-4 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="space-y-1">
-            <span class="font-semibold text-xs text-[#1d1d1f] block">{t('account.passwordCardTitle')}</span>
-            <p class="text-[11px] text-[#86868b] max-w-lg leading-relaxed">
-              {t('account.passwordCardDesc')}
-            </p>
+        <!-- Right Column (1 Col): Tier Perks & Login Activity -->
+        <div class="lg:col-span-1 space-y-6">
+
+          <!-- B2B Tier Privileges Card -->
+          <div class="bg-white rounded-2xl border border-black/5 p-5 sm:p-6 shadow-2xs space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">B2B Membership</span>
+              <span class:list={[
+                'px-2.5 py-0.5 rounded-full text-[10px] font-bold border',
+                tier === 'VIP' ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                tier === 'PARTNER' ? 'bg-purple-100 text-purple-900 border-purple-300' :
+                'bg-zinc-100 text-zinc-700 border-zinc-200'
+              ]}>
+                {tier === 'VIP' ? 'VIP BUYER' : tier === 'PARTNER' ? 'ATELIER PARTNER' : 'STANDARD'}
+              </span>
+            </div>
+
+            <div class="space-y-3 pt-1">
+              <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
+                <span class="text-base shrink-0">📦</span>
+                <div>
+                  <span class="font-semibold block">Free Swatch Kits</span>
+                  <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">Physical swatches & seasonal color cards</p>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
+                <span class="text-base shrink-0">💳</span>
+                <div>
+                  <span class="font-semibold block">Flexible Terms</span>
+                  <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">Wire Transfer, Net 30, and Irrevocable L/C</p>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
+                <span class="text-base shrink-0">⚡</span>
+                <div>
+                  <span class="font-semibold block">Priority Production</span>
+                  <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">Fast-track sample weaving & dedicated lines</p>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
+                <span class="text-base shrink-0">💬</span>
+                <div>
+                  <span class="font-semibold block">Key Account Manager</span>
+                  <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">Direct 1-on-1 technical consultation via WhatsApp</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-black/5 flex items-center justify-between text-[11px] text-[#86868b]">
+              <span>Annual volume tiering</span>
+              <a href="https://wa.me/8613867512218" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">Upgrade Inquiry →</a>
+            </div>
           </div>
 
-          <button
-            type="button"
-            id="btn-open-password-modal"
-            class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white transition-all shadow-2xs text-center shrink-0 inline-flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-            <span>{t('account.changePasswordBtn')}</span>
-          </button>
-        </div>
-      </div>
+          <!-- Section 3: Login Security Activity -->
+          <div class="bg-white rounded-2xl border border-black/5 p-5 sm:p-6 shadow-2xs space-y-4">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionActivity')}</h2>
+                <p class="text-[11px] text-[#86868b] mt-0.5">{t('account.retention')}</p>
+              </div>
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Active"></span>
+            </div>
 
-      <!-- Section 3: Login History & Security Audit -->
-      <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionActivity')}</h2>
-            <p class="text-[11px] text-[#86868b] mt-0.5">
-              {t('account.sectionActivityDesc')}
-            </p>
-          </div>
-          <span class="text-[11px] text-[#86868b] font-mono">{t('account.retention')}</span>
-        </div>
-
-        {loginHistory.length === 0 ? (
-          <div class="p-6 rounded-xl bg-[#f5f5f7] text-center text-xs text-[#86868b]">
-            {t('account.noActivity')}
-          </div>
-        ) : (
-          <div class="overflow-x-auto rounded-xl border border-black/5">
-            <table class="w-full text-left text-xs">
-              <thead class="bg-[#f5f5f7] text-[#86868b] font-medium border-b border-black/5">
-                <tr>
-                  <th class="py-2.5 px-3.5">{t('account.thTime')}</th>
-                  <th class="py-2.5 px-3.5">{t('account.thIp')}</th>
-                  <th class="py-2.5 px-3.5">{t('account.thLocation')}</th>
-                  <th class="py-2.5 px-3.5">{t('account.thDevice')}</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-black/5 bg-white">
+            {loginHistory.length === 0 ? (
+              <div class="p-4 rounded-xl bg-[#f5f5f7] text-center text-xs text-[#86868b]">
+                {t('account.noActivity')}
+              </div>
+            ) : (
+              <div class="space-y-2.5 max-h-[460px] overflow-y-auto pr-0.5 scrollbar-thin">
                 {loginHistory.map((item, idx) => {
                   const isLatest = idx === 0;
-                  const dateStr = item.created_at || '';
                   const locationStr = [item.city, item.country].filter(Boolean).join(', ') || 'Global';
-                  
-                  // Clean simplified device summary
                   let deviceSummary = t('account.deviceDesktop');
                   if (/mobile|iphone|android/i.test(item.user_agent)) deviceSummary = t('account.deviceMobile');
                   else if (/macintosh|mac os/i.test(item.user_agent)) deviceSummary = t('account.deviceMac');
                   else if (/windows/i.test(item.user_agent)) deviceSummary = t('account.deviceWindows');
 
                   return (
-                    <tr class="hover:bg-[#fbfbfd] transition-colors">
-                      <td class="py-3 px-3.5 font-mono text-[11px]">
-                        <LocalTime datetime={item.created_at} class="text-[#1d1d1f] font-semibold" />
+                    <div class="p-3 rounded-xl bg-[#f5f5f7] border border-black/5 text-xs space-y-1">
+                      <div class="flex items-center justify-between">
+                        <span class="font-mono text-[11px] font-semibold text-[#1d1d1f]">
+                          <LocalTime datetime={item.created_at} />
+                        </span>
                         {isLatest && (
-                          <span class="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                          <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
                             {t('account.currentSession')}
                           </span>
                         )}
-                      </td>
-                      <td class="py-3 px-3.5 font-mono text-[#52525b] text-[11px]">
-                        {item.ip || '—'}
-                      </td>
-                      <td class="py-3 px-3.5 text-[#52525b]">
-                        {locationStr}
-                      </td>
-                      <td class="py-3 px-3.5 text-[#86868b] text-[11px] max-w-[200px] truncate" title={item.user_agent}>
-                        {deviceSummary}
-                      </td>
-                    </tr>
+                      </div>
+                      <div class="flex items-center justify-between text-[11px] text-[#86868b]">
+                        <span>{locationStr}</span>
+                        <span class="font-mono text-[#52525b]">{item.ip || '—'} · {deviceSummary}</span>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            )}
 
-        <div class="p-3 rounded-xl bg-[#f5f5f7] text-[11px] text-[#86868b] flex items-start gap-2">
-          <svg class="w-4 h-4 shrink-0 text-[#86868b] mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>
-            {t('account.securityNotice')}
-          </span>
+            <div class="pt-2 text-[10px] text-[#86868b] flex items-start gap-1.5">
+              <svg class="w-3.5 h-3.5 shrink-0 text-[#86868b] mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{t('account.securityNotice')}</span>
+            </div>
+          </div>
+
         </div>
+
       </div>
 
     </div>
@@ -425,6 +421,24 @@ const pageDesc = t('account.metaDesc');
 </Layout>
 
 <script>
+  // Pre-seed localStorage profile cache on account page load
+  try {
+    const emailVal = (document.getElementById('profile-email') as HTMLInputElement)?.value || '';
+    const nameVal = (document.getElementById('profile-name') as HTMLInputElement)?.value || '';
+    const companyVal = (document.getElementById('profile-company') as HTMLInputElement)?.value || '';
+    const countryVal = (document.getElementById('profile-country') as HTMLInputElement)?.value || '';
+    const phoneVal = (document.getElementById('profile-phone') as HTMLInputElement)?.value || '';
+    if (emailVal) {
+      localStorage.setItem('b2b_buyer_profile', JSON.stringify({
+        name: nameVal,
+        email: emailVal,
+        company: companyVal,
+        country: countryVal,
+        phone: phoneVal,
+      }));
+    }
+  } catch {}
+
   // Profile update handling
   const form = document.getElementById('profile-form') as HTMLFormElement | null;
   const saveBtn = document.getElementById('save-profile-btn') as HTMLButtonElement | null;
@@ -459,6 +473,17 @@ const pageDesc = t('account.metaDesc');
 
       const data = await res.json();
       if (res.ok) {
+        try {
+          const emailVal = (document.getElementById('profile-email') as HTMLInputElement)?.value || '';
+          localStorage.setItem('b2b_buyer_profile', JSON.stringify({
+            name: payload.name,
+            email: emailVal,
+            company: payload.company,
+            country: payload.country,
+            phone: payload.phone,
+          }));
+        } catch {}
+
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
           feedbackEl.textContent = profileMsgSuccess;

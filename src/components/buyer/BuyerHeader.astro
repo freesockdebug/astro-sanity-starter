@@ -1,0 +1,125 @@
+---
+// src/components/buyer/BuyerHeader.astro
+// Unified Buyer Portal Header for /orders and /account
+import { getLocalizedPath, getLangFromUrl, useTranslations } from '@i18n';
+
+interface Props {
+  currentTab: 'orders' | 'account';
+  sessionUser: {
+    id: string;
+    email: string;
+    name?: string;
+    company?: string;
+    isAdmin?: boolean;
+  };
+  dbUser?: {
+    tier?: string;
+    company?: string;
+    name?: string;
+  } | null;
+  totalOrdersCount?: number;
+}
+
+const {
+  currentTab,
+  sessionUser,
+  dbUser,
+  totalOrdersCount = 0,
+} = Astro.props;
+
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
+const displayName = dbUser?.name || sessionUser.name || sessionUser.email.split('@')[0];
+const displayCompany = dbUser?.company || sessionUser.company || '';
+const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
+
+const tierColors: Record<string, { bg: string; text: string; label: string }> = {
+  VIP: { bg: 'bg-amber-100 text-amber-900 border-amber-300', text: 'VIP Buyer', label: 'VIP Buyer' },
+  PARTNER: { bg: 'bg-purple-100 text-purple-900 border-purple-300', text: 'Atelier Partner', label: 'Partner' },
+  STANDARD: { bg: 'bg-zinc-100 text-zinc-700 border-zinc-200', text: 'Standard Buyer', label: 'Standard' },
+};
+
+const currentTierStyle = tierColors[tier] || tierColors.STANDARD;
+const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCase();
+---
+
+<header class="mb-6 space-y-4">
+  <!-- Top Profile & Actions Card -->
+  <div class="p-4 sm:p-5 rounded-2xl bg-white border border-black/5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex items-center gap-3.5">
+      <div class="w-11 h-11 rounded-2xl bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-base shadow-xs shrink-0 font-mono">
+        {initial}
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-base font-semibold text-[#1d1d1f] truncate">{displayName}</span>
+          <span class:list={['inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', currentTierStyle.bg]}>
+            {currentTierStyle.label}
+          </span>
+        </div>
+        <p class="text-xs text-[#86868b] truncate mt-0.5 font-mono">
+          {sessionUser.email}
+          {displayCompany && <span class="font-sans text-[#52525b]"> · {displayCompany}</span>}
+        </p>
+      </div>
+    </div>
+
+    <!-- Right Header Actions -->
+    <div class="flex items-center gap-2 self-start sm:self-auto shrink-0">
+      {sessionUser.isAdmin && (
+        <a
+          href="/admin/orders"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs inline-flex items-center gap-1.5"
+        >
+          <span>Admin Workspace</span>
+          <svg class="w-3.5 h-3.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      )}
+      <a
+        href="/api/auth/logout"
+        class="px-3 py-1.5 rounded-xl text-xs font-medium text-[#86868b] hover:text-rose-600 hover:bg-rose-50 transition-all border border-transparent hover:border-rose-100"
+      >
+        {t('account.signOut')}
+      </a>
+    </div>
+  </div>
+
+  <!-- Persistent 2-Tab Navigation Strip -->
+  <nav class="flex items-center gap-1.5 p-1 rounded-2xl bg-black/5 w-fit" aria-label="Buyer Center Tabs">
+    <a
+      href={getLocalizedPath('/orders', currentLang)}
+      class:list={[
+        'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all',
+        currentTab === 'orders'
+          ? 'bg-white text-[#1d1d1f] shadow-xs font-semibold'
+          : 'text-[#52525b] hover:text-black hover:bg-white/50'
+      ]}
+    >
+      <span>📦 My Orders & Inquiries</span>
+      {totalOrdersCount > 0 && (
+        <span class:list={[
+          'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
+          currentTab === 'orders' ? 'bg-[#f5f5f7] text-[#1d1d1f]' : 'bg-black/10 text-[#52525b]'
+        ]}>
+          {totalOrdersCount}
+        </span>
+      )}
+    </a>
+
+    <a
+      href={getLocalizedPath('/account', currentLang)}
+      class:list={[
+        'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all',
+        currentTab === 'account'
+          ? 'bg-white text-[#1d1d1f] shadow-xs font-semibold'
+          : 'text-[#52525b] hover:text-black hover:bg-white/50'
+      ]}
+    >
+      <span>👤 Company Profile & Security</span>
+    </a>
+  </nav>
+</header>
+

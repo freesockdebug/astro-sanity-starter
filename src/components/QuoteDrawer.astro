@@ -265,23 +265,38 @@ if (reqCountryCode) {
 
   async function checkDrawerAuth() {
     try {
+      // 1. Check local profile cache first
+      let cachedProfile: any = null;
+      try {
+        const rawCache = localStorage.getItem('b2b_buyer_profile');
+        if (rawCache) cachedProfile = JSON.parse(rawCache);
+      } catch {}
+
       const res = await fetch('/api/auth/me');
       const data = await res.json();
+      const profile = (data && data.authenticated && data.user) ? data.user : cachedProfile;
+
       if (data && data.authenticated && data.user) {
         currentAuthUser = data.user;
-        const emailInput = document.querySelector('#quote-drawer-root input[name="email"]') as HTMLInputElement | null;
-        const nameInput = document.querySelector('#quote-drawer-root input[name="buyer_name"]') as HTMLInputElement | null;
-        if (emailInput && !emailInput.value.trim()) {
-          emailInput.value = data.user.email;
-        }
-        if (nameInput && !nameInput.value.trim() && data.user.name) {
-          nameInput.value = data.user.name;
-        }
         const userStatusLabel = document.getElementById('quote-user-auth-status');
         if (userStatusLabel) {
           userStatusLabel.textContent = `✓ Signed in: ${data.user.email}`;
           userStatusLabel.classList.remove('hidden');
         }
+      }
+
+      if (profile) {
+        const emailInput = document.querySelector('#quote-drawer-root input[name="email"]') as HTMLInputElement | null;
+        const nameInput = document.querySelector('#quote-drawer-root input[name="buyer_name"]') as HTMLInputElement | null;
+        const companyInput = document.querySelector('#quote-drawer-root input[name="company"]') as HTMLInputElement | null;
+        const phoneInput = document.querySelector('#quote-drawer-root input[name="phone"]') as HTMLInputElement | null;
+        const destInput = document.querySelector('#quote-drawer-root input[name="destination"]') as HTMLInputElement | null;
+
+        if (emailInput && !emailInput.value.trim() && profile.email) emailInput.value = profile.email;
+        if (nameInput && !nameInput.value.trim() && profile.name) nameInput.value = profile.name;
+        if (companyInput && !companyInput.value.trim() && profile.company) companyInput.value = profile.company;
+        if (phoneInput && !phoneInput.value.trim() && (profile.phone || profile.whatsapp)) phoneInput.value = profile.phone || profile.whatsapp;
+        if (destInput && !destInput.value.trim() && (profile.country || profile.destination)) destInput.value = profile.country || profile.destination;
       }
     } catch {
       // non-blocking
