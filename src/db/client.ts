@@ -161,3 +161,4 @@ export async function getDbHandle(): Promise<{ isD1: boolean; db: any }> {
   const client = await getDb();
   return { isD1: client.isD1, db: client.raw };
 }
+

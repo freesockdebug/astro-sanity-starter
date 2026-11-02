@@ -284,3 +284,4 @@ export async function getUserDetailsWithOrders(userId: string): Promise<{
   ]);
   return { user, recentOrders: orders.slice(0, 5), recentLogins: logins };
 }
+
