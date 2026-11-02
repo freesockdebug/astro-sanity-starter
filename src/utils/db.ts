@@ -451,7 +451,7 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
            SET user_id = ?1,
                claimed_at = datetime('now'),
                updated_at = datetime('now')
-           WHERE (user_id IS NULL OR user_id != ?1)
+           WHERE (user_id IS NULL OR user_id = '')
              AND LOWER(buyer_email) = LOWER(?2)`
         )
         .bind(userId, normalizedEmail)
@@ -465,7 +465,7 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
          SET user_id = ?,
              claimed_at = datetime('now'),
              updated_at = datetime('now')
-         WHERE (user_id IS NULL OR user_id != ?)
+         WHERE (user_id IS NULL OR user_id = '')
            AND LOWER(buyer_email) = LOWER(?)`
       );
       const info = stmt.run(userId, normalizedEmail);
@@ -921,6 +921,27 @@ export async function upsertUserOnLogin(user: {
         .bind(user.id, normalizedEmail)
         .run();
 
+      // Synchronize past orders and login logs to the new user id
+      await db
+        .prepare(
+          `UPDATE orders
+           SET user_id = ?1, updated_at = datetime('now')
+           WHERE LOWER(buyer_email) = LOWER(?2)
+             AND user_id IS NOT NULL AND user_id != '' AND user_id != ?1`
+        )
+        .bind(user.id, normalizedEmail)
+        .run();
+
+      await db
+        .prepare(
+          `UPDATE user_logins
+           SET user_id = ?1
+           WHERE user_id != ?1
+             AND user_id IN (SELECT id FROM users WHERE LOWER(email) = LOWER(?2))`
+        )
+        .bind(user.id, normalizedEmail)
+        .run();
+
       await db
         .prepare(
           `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
@@ -956,6 +977,26 @@ export async function upsertUserOnLogin(user: {
       // 1. If user with same email exists under a different id (account recreated in Logto), migrate the id first
       const migrateStmt = db.prepare(`UPDATE users SET id = ? WHERE LOWER(email) = LOWER(?) AND id != ?`);
       migrateStmt.run(user.id, normalizedEmail, user.id);
+
+      try {
+        const migrateOrdersStmt = db.prepare(
+          `UPDATE orders
+           SET user_id = ?, updated_at = datetime('now')
+           WHERE LOWER(buyer_email) = LOWER(?)
+             AND user_id IS NOT NULL AND user_id != '' AND user_id != ?`
+        );
+        migrateOrdersStmt.run(user.id, normalizedEmail, user.id);
+
+        const migrateLoginsStmt = db.prepare(
+          `UPDATE user_logins
+           SET user_id = ?
+           WHERE user_id != ?
+             AND user_id IN (SELECT id FROM users WHERE LOWER(email) = LOWER(?))`
+        );
+        migrateLoginsStmt.run(user.id, user.id, normalizedEmail);
+      } catch {
+        // Non-blocking
+      }
 
       const upsertStmt = db.prepare(
         `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)

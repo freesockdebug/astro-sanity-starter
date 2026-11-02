@@ -124,7 +124,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 
     <form method="GET" action="/api/auth/callback">
       <input type="hidden" name="popup" value="${isPopup ? '1' : '0'}" />
-      <input type="hidden" name="returnUrl" value="${encodeURIComponent(returnUrl)}" />
+      <input type="hidden" name="returnUrl" value="${returnUrl.replace(/"/g, '&quot;')}" />
       <input type="email" name="mock_email" placeholder="name@yourcompany.com" required />
       <input type="text" name="mock_name" placeholder="Contact Name (Optional)" />
       <button type="submit" class="btn btn-secondary" style="margin-bottom:0;">Continue with Work Email</button>
