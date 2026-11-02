@@ -244,3 +244,104 @@ export function formatSessionCookie(token: string, maxAge = DEFAULT_TTL_SECONDS)
 export function formatClearSessionCookie(): string {
   return `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
 }
+
+/**
+ * Updates a user's password directly in Logto via Management API
+ */
+export async function updateLogtoUserPassword(
+  userId: string,
+  email: string,
+  newPassword: string,
+  customEnv?: any
+): Promise<{ success: boolean; error?: string }> {
+  const endpoint = getRuntimeEnv('LOGTO_ENDPOINT', customEnv)?.replace(/\/+$/, '') || 'https://auth.gwenvenni.com';
+  const m2mAppId = getRuntimeEnv('LOGTO_M2M_APP_ID', customEnv) || '1qn2bybiqi8rbisi75v0v';
+  const m2mAppSecret = getRuntimeEnv('LOGTO_M2M_APP_SECRET', customEnv) || 'wcOY9CVHdaKQ0N3YD9ncGrYZMSAcE7xF';
+  const resource = getRuntimeEnv('LOGTO_MANAGEMENT_RESOURCE', customEnv) || 'https://8tvr1q.logto.app/api';
+
+  if (!newPassword || newPassword.length < 8) {
+    return { success: false, error: 'Password must be at least 8 characters long.' };
+  }
+
+  try {
+    const basicAuth = typeof btoa !== 'undefined'
+      ? btoa(`${m2mAppId}:${m2mAppSecret}`)
+      : Buffer.from(`${m2mAppId}:${m2mAppSecret}`).toString('base64');
+
+    // 1. Fetch M2M Access Token
+    const tokenRes = await fetch(`${endpoint}/oidc/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${basicAuth}`,
+      },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        resource,
+        scope: 'all',
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      console.error('[Logto M2M] Failed to obtain token:', tokenRes.status, errText);
+      return { success: false, error: 'Authentication service temporarily unavailable.' };
+    }
+
+    const { access_token } = await tokenRes.json();
+    const headers = {
+      Authorization: `Bearer ${access_token}`,
+      'Content-Type': 'application/json',
+    };
+
+    // 2. Resolve target Logto User ID (verify user exists or resolve by email)
+    let targetUserId = userId;
+    let userExists = false;
+
+    if (targetUserId && !targetUserId.startsWith('usr_mock')) {
+      const checkRes = await fetch(`${endpoint}/api/users/${targetUserId}`, {
+        headers,
+        signal: AbortSignal.timeout(6000),
+      });
+      if (checkRes.ok) userExists = true;
+    }
+
+    if (!userExists && email) {
+      const searchRes = await fetch(`${endpoint}/api/users?search.primaryEmail=${encodeURIComponent(email)}`, {
+        headers,
+        signal: AbortSignal.timeout(6000),
+      });
+      if (searchRes.ok) {
+        const list = await searchRes.json();
+        if (Array.isArray(list) && list.length > 0) {
+          targetUserId = list[0].id;
+          userExists = true;
+        }
+      }
+    }
+
+    if (!userExists) {
+      return { success: false, error: 'User account not found in Logto authentication service.' };
+    }
+
+    // 3. Update password in Logto
+    const patchRes = await fetch(`${endpoint}/api/users/${targetUserId}/password`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ password: newPassword }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!patchRes.ok) {
+      const errJson = await patchRes.json().catch(() => null);
+      console.error('[Logto M2M] Password update error:', patchRes.status, errJson);
+      return { success: false, error: errJson?.message || 'Failed to update password in authentication provider.' };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('[Logto M2M] Exception during password update:', err);
+    return { success: false, error: err.message || 'Network error updating password.' };
+  }
+}

@@ -18,7 +18,10 @@
     "TURNSTILE_HOSTNAMES": "localhost,127.0.0.1,gwenvenni.com",
     "ADMIN_EMAILS": "forhaisome@gmail.com",
     "LOGTO_ENDPOINT": "https://auth.gwenvenni.com/",
-    "LOGTO_APP_ID": "btx7meodkblwjce23ulpc"
+    "LOGTO_APP_ID": "btx7meodkblwjce23ulpc",
+    "LOGTO_M2M_APP_ID": "1qn2bybiqi8rbisi75v0v",
+    "LOGTO_M2M_APP_SECRET": "wcOY9CVHdaKQ0N3YD9ncGrYZMSAcE7xF",
+    "LOGTO_MANAGEMENT_RESOURCE": "https://8tvr1q.logto.app/api"
   },
   "d1_databases": [
     {

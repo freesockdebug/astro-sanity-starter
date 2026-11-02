@@ -193,19 +193,20 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
           <div class="space-y-1">
             <span class="font-semibold text-xs text-[#1d1d1f] block">Account Password</span>
             <p class="text-[11px] text-[#86868b] max-w-lg leading-relaxed">
-              To protect your account against credential stuffing, password updates and two-factor resets are authenticated directly through Logto's security shield.
+              Update your account credentials securely. Your new password will be synced with Logto Identity Cloud immediately.
             </p>
           </div>
 
-          <a
-            href="/api/auth/reset-password?returnUrl=/account"
-            class="px-4 py-2 rounded-xl text-xs font-semibold bg-white border border-black/15 hover:border-black text-[#1d1d1f] hover:bg-[#fbfbfd] transition-all shadow-2xs text-center shrink-0 inline-flex items-center justify-center gap-1.5"
+          <button
+            type="button"
+            id="btn-open-password-modal"
+            class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white transition-all shadow-2xs text-center shrink-0 inline-flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <span>Change Password in Logto</span>
-            <svg class="w-3.5 h-3.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
-          </a>
+            <span>Change Password</span>
+          </button>
         </div>
       </div>
 
@@ -287,9 +288,119 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
 
     </div>
   </main>
+
+  <!-- Change Password Modal Dialog (修改密码弹窗) -->
+  <div
+    id="password-modal"
+    class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-title"
+  >
+    <div
+      id="password-modal-card"
+      class="bg-white rounded-2xl border border-black/10 shadow-2xl max-w-md w-full p-6 space-y-5 transform scale-95 transition-transform duration-200"
+    >
+      <div class="flex items-center justify-between border-b border-black/5 pb-3">
+        <div>
+          <h3 id="modal-title" class="text-sm font-semibold text-[#1d1d1f]">Update Account Password</h3>
+          <p class="text-[11px] text-[#86868b] mt-0.5">Set a new password for <span class="font-mono text-[#1d1d1f]">{user.email}</span></p>
+        </div>
+        <button
+          type="button"
+          id="btn-close-password-modal"
+          class="text-[#86868b] hover:text-[#1d1d1f] p-1.5 rounded-lg hover:bg-[#f5f5f7] transition-colors cursor-pointer"
+          aria-label="Close modal"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form id="form-change-password" class="space-y-4">
+        <div id="password-alert" class="hidden p-3 rounded-xl text-xs leading-relaxed"></div>
+
+        <div class="space-y-1.5">
+          <label for="input-new-password" class="block text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wider">
+            New Password <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative">
+            <input
+              type="password"
+              id="input-new-password"
+              name="password"
+              required
+              minlength="8"
+              placeholder="At least 8 characters"
+              class="w-full text-xs px-3.5 py-2.5 rounded-xl border border-black/15 bg-white text-[#1d1d1f] focus:outline-none focus:border-black focus:ring-1 focus:ring-black pr-10"
+            />
+            <button
+              type="button"
+              class="btn-toggle-pwd absolute right-2.5 top-1/2 -translate-y-1/2 text-[#86868b] hover:text-[#1d1d1f] p-1 cursor-pointer"
+              data-target="input-new-password"
+              title="Toggle visibility"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
+          <span class="text-[10px] text-[#86868b] block">Must be at least 8 characters long</span>
+        </div>
+
+        <div class="space-y-1.5">
+          <label for="input-confirm-password" class="block text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wider">
+            Confirm New Password <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative">
+            <input
+              type="password"
+              id="input-confirm-password"
+              name="confirmPassword"
+              required
+              minlength="8"
+              placeholder="Re-enter your new password"
+              class="w-full text-xs px-3.5 py-2.5 rounded-xl border border-black/15 bg-white text-[#1d1d1f] focus:outline-none focus:border-black focus:ring-1 focus:ring-black pr-10"
+            />
+            <button
+              type="button"
+              class="btn-toggle-pwd absolute right-2.5 top-1/2 -translate-y-1/2 text-[#86868b] hover:text-[#1d1d1f] p-1 cursor-pointer"
+              data-target="input-confirm-password"
+              title="Toggle visibility"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-black/5">
+          <button
+            type="button"
+            id="btn-cancel-password"
+            class="px-4 py-2 rounded-xl text-xs font-medium text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            id="btn-submit-password"
+            class="px-5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <span id="btn-submit-password-text">Save New Password</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 </Layout>
 
 <script>
+  // Profile update handling
   const form = document.getElementById('profile-form') as HTMLFormElement | null;
   const saveBtn = document.getElementById('save-profile-btn') as HTMLButtonElement | null;
   const feedbackEl = document.getElementById('profile-feedback');
@@ -339,6 +450,113 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
     } finally {
       saveBtn.disabled = false;
       saveBtn.textContent = 'Save Profile Changes';
+    }
+  });
+
+  // Password change modal handling
+  const modal = document.getElementById('password-modal');
+  const modalCard = document.getElementById('password-modal-card');
+  const btnOpenModal = document.getElementById('btn-open-password-modal');
+  const btnCloseModal = document.getElementById('btn-close-password-modal');
+  const btnCancelModal = document.getElementById('btn-cancel-password');
+  const formPassword = document.getElementById('form-change-password') as HTMLFormElement | null;
+  const alertEl = document.getElementById('password-alert');
+  const submitBtn = document.getElementById('btn-submit-password') as HTMLButtonElement | null;
+  const submitBtnText = document.getElementById('btn-submit-password-text');
+
+  function openPasswordModal() {
+    if (!modal || !modalCard) return;
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    modalCard.classList.remove('scale-95');
+    modalCard.classList.add('scale-100');
+    if (alertEl) alertEl.className = 'hidden';
+    const firstInput = document.getElementById('input-new-password') as HTMLInputElement | null;
+    firstInput?.focus();
+  }
+
+  function closePasswordModal() {
+    if (!modal || !modalCard) return;
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    modalCard.classList.remove('scale-100');
+    modalCard.classList.add('scale-95');
+    formPassword?.reset();
+    if (alertEl) alertEl.className = 'hidden';
+  }
+
+  btnOpenModal?.addEventListener('click', openPasswordModal);
+  btnCloseModal?.addEventListener('click', closePasswordModal);
+  btnCancelModal?.addEventListener('click', closePasswordModal);
+
+  // Close on backdrop click
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closePasswordModal();
+  });
+
+  // Close on Escape key
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal && !modal.classList.contains('pointer-events-none')) {
+      closePasswordModal();
+    }
+  });
+
+  // Toggle password visibility buttons
+  document.querySelectorAll('.btn-toggle-pwd').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = (btn as HTMLElement).dataset.target;
+      if (!targetId) return;
+      const input = document.getElementById(targetId) as HTMLInputElement | null;
+      if (!input) return;
+      input.type = input.type === 'password' ? 'text' : 'password';
+    });
+  });
+
+  // Password submission handler
+  formPassword?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!submitBtn || !submitBtnText || !alertEl) return;
+
+    const inputPwd = (document.getElementById('input-new-password') as HTMLInputElement)?.value || '';
+    const inputConfirm = (document.getElementById('input-confirm-password') as HTMLInputElement)?.value || '';
+
+    if (inputPwd.length < 8) {
+      alertEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+      alertEl.textContent = 'Password must be at least 8 characters long.';
+      return;
+    }
+
+    if (inputPwd !== inputConfirm) {
+      alertEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+      alertEl.textContent = 'Passwords do not match. Please verify and re-type.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtnText.textContent = 'Updating...';
+
+    try {
+      const res = await fetch('/api/user/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: inputPwd, confirmPassword: inputConfirm }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alertEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
+        alertEl.textContent = '✓ ' + (data.message || 'Password updated successfully!');
+        setTimeout(() => {
+          closePasswordModal();
+        }, 1500);
+      } else {
+        alertEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+        alertEl.textContent = data.error || 'Failed to update password.';
+      }
+    } catch (err: any) {
+      alertEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
+      alertEl.textContent = err.message || 'Network communication error.';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtnText.textContent = 'Save New Password';
     }
   });
 </script>

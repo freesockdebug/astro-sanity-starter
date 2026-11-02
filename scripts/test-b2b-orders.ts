@@ -246,6 +246,13 @@ async function runSelfCheck() {
   assert.ok(allLogins.length >= 1);
   console.log('✔ [PASS] Admin view of all login sessions verified');
 
+  // 17. User Password Update Validation Guard
+  const { updateLogtoUserPassword } = await import('../src/utils/auth');
+  const shortPwdRes = await updateLogtoUserPassword('test-user', 'test@test.com', 'short');
+  assert.strictEqual(shortPwdRes.success, false);
+  assert.strictEqual(shortPwdRes.error, 'Password must be at least 8 characters long.');
+  console.log('✔ [PASS] Password update length validation guard verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 
