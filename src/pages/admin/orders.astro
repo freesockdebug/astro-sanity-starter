@@ -1,6 +1,7 @@
 ---
 // src/pages/admin/orders.astro
 import Layout from '@layouts/Layout.astro';
+import LocalTime from '@components/LocalTime.astro';
 import AdminNav from '@components/admin/AdminNav.astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { listAdminOrders } from '@utils/db';
@@ -239,7 +240,7 @@ const getItemProductUrl = (item: any) => {
                           {order.order_no}
                         </span>
                         <span class="text-[10px] text-[#86868b] font-mono block mt-0.5">
-                          {order.created_at.slice(0, 16)}
+                          <LocalTime datetime={order.created_at} />
                         </span>
                       </div>
 
@@ -482,7 +483,7 @@ const getItemProductUrl = (item: any) => {
                       <!-- Order No & Date -->
                       <td class="py-3.5 px-4 font-mono">
                         <span class="font-semibold text-[#1d1d1f] block">{order.order_no}</span>
-                        <span class="text-[11px] text-[#86868b]">{order.created_at.slice(0, 16)}</span>
+                        <LocalTime datetime={order.created_at} class="text-[11px] text-[#86868b] block" />
                       </td>
 
                       <!-- Buyer & Company -->
@@ -632,9 +633,9 @@ const getItemProductUrl = (item: any) => {
                               </span>
                             </div>
                             <div class="text-[11px] text-[#86868b] flex items-center gap-3">
-                              <span>Submitted: <strong class="text-[#1d1d1f] font-mono">{order.created_at}</strong></span>
+                              <span>Submitted: <LocalTime datetime={order.created_at} class="text-[#1d1d1f] font-mono font-semibold" /></span>
                               {order.claimed_at && (
-                                <span>· Claimed: <strong class="text-emerald-700 font-mono">{order.claimed_at.slice(0, 16)}</strong></span>
+                                <span>· Claimed: <LocalTime datetime={order.claimed_at} class="text-emerald-700 font-mono font-semibold" /></span>
                               )}
                             </div>
                           </div>

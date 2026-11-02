@@ -253,6 +253,14 @@ async function runSelfCheck() {
   assert.strictEqual(shortPwdRes.error, 'Password must be at least 8 characters long.');
   console.log('✔ [PASS] Password update length validation guard verified');
 
+  // 18. Multi-Timezone Date Utilities Verification
+  const { toIsoUtcString, formatUtcFallback } = await import('../src/utils/date');
+  assert.strictEqual(toIsoUtcString('2026-11-02 02:18:09'), '2026-11-02T02:18:09Z');
+  assert.strictEqual(toIsoUtcString('2026-11-02T02:18:09Z'), '2026-11-02T02:18:09Z');
+  assert.strictEqual(formatUtcFallback('2026-11-02 02:18:09'), '2026-11-02 02:18 UTC');
+  assert.strictEqual(formatUtcFallback(null), '—');
+  console.log('✔ [PASS] Multi-timezone date utilities verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 

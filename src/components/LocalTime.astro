@@ -1,0 +1,66 @@
+---
+// src/components/LocalTime.astro
+import { toIsoUtcString, formatUtcFallback } from '@utils/date';
+
+interface Props {
+  datetime?: string | number | Date | null;
+  class?: string;
+  showSeconds?: boolean;
+}
+
+const { datetime, class: className = '', showSeconds = false } = Astro.props;
+const iso = toIsoUtcString(datetime);
+const fallback = formatUtcFallback(datetime);
+---
+
+<time
+  datetime={iso}
+  class={`local-time ${className}`.trim()}
+  title={iso ? `UTC: ${iso.replace('T', ' ').replace('Z', '')}` : undefined}
+  data-seconds={showSeconds ? '1' : '0'}
+>{fallback}</time>
+
+<script>
+  function updateAllLocalTimes() {
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    document.querySelectorAll<HTMLElement>('time.local-time[datetime]').forEach((el) => {
+      const iso = el.getAttribute('datetime');
+      if (!iso) return;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return;
+
+      const year = d.getFullYear();
+      const month = pad(d.getMonth() + 1);
+      const day = pad(d.getDate());
+      const hours = pad(d.getHours());
+      const minutes = pad(d.getMinutes());
+      const showSeconds = el.dataset.seconds === '1';
+      const seconds = showSeconds ? `:${pad(d.getSeconds())}` : '';
+
+      let tzStr = '';
+      try {
+        const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(d);
+        const tzPart = parts.find((p) => p.type === 'timeZoneName');
+        if (tzPart?.value) tzStr = ` (${tzPart.value})`;
+      } catch {
+        const offsetMin = -d.getTimezoneOffset();
+        const sign = offsetMin >= 0 ? '+' : '-';
+        const offH = pad(Math.floor(Math.abs(offsetMin) / 60));
+        const offM = pad(Math.abs(offsetMin) % 60);
+        tzStr = ` (UTC${sign}${offH}:${offM})`;
+      }
+
+      el.textContent = `${year}-${month}-${day} ${hours}:${minutes}${seconds}${tzStr}`;
+    });
+  }
+
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', updateAllLocalTimes);
+    } else {
+      updateAllLocalTimes();
+    }
+    document.addEventListener('astro:page-load', updateAllLocalTimes);
+  }
+</script>

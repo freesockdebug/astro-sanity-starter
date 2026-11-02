@@ -19,6 +19,7 @@ import AppleProductGridSkeleton from './AppleProductGridSkeleton.astro';
 import AppleProductDetailSkeleton from './AppleProductDetailSkeleton.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
 import MarkdownRenderer from './MarkdownRenderer.astro';
+import LocalTime from './LocalTime.astro';
 
 export {
   SockHero,
@@ -38,6 +39,7 @@ export {
   AppleProductDetailSkeleton,
   Breadcrumbs,
   MarkdownRenderer,
+  LocalTime,
 };
 
 /**

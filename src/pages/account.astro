@@ -1,6 +1,7 @@
 ---
 // src/pages/account.astro
 import Layout from '@layouts/Layout.astro';
+import LocalTime from '@components/LocalTime.astro';
 import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
 import { getUserByIdOrEmail, getUserLoginHistory } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
@@ -257,7 +258,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
                   return (
                     <tr class="hover:bg-[#fbfbfd] transition-colors">
                       <td class="py-3 px-3.5 font-mono text-[11px]">
-                        <span class="text-[#1d1d1f] font-semibold">{dateStr}</span>
+                        <LocalTime datetime={item.created_at} class="text-[#1d1d1f] font-semibold" />
                         {isLatest && (
                           <span class="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
                             Current

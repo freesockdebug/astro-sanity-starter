@@ -1,6 +1,7 @@
 ---
 // src/pages/orders/index.astro
 import Layout from '@layouts/Layout.astro';
+import LocalTime from '@components/LocalTime.astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, getUserByIdOrEmail, type OrderRecord } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
@@ -390,7 +391,7 @@ const getItemProductUrl = (item: any) => {
                       </button>
                     </div>
                     <p class="text-[#86868b] text-[11px] font-mono mt-0.5">
-                      Submitted: {order.created_at}
+                      Submitted: <LocalTime datetime={order.created_at} />
                     </p>
                   </div>
 
