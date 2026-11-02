@@ -20,12 +20,26 @@ if (!sessionUser || !sessionUser.isAdmin) {
   return Astro.redirect(`/api/auth/login?returnUrl=/admin/logins`);
 }
 
+const currentSearch = Astro.url.searchParams.get('search')?.trim() || '';
+
 const [logins, ordersSummary] = await Promise.all([
   listAllLoginHistory(150),
   listAdminOrders({ limit: 1 }).catch(() => ({ stats: { pending: 0 } })),
 ]);
 
-// Summary metrics
+// Search filter
+const searchLower = currentSearch.toLowerCase();
+const displayLogins = searchLower
+  ? logins.filter((l) =>
+      (l.email || '').toLowerCase().includes(searchLower) ||
+      (l.user_id || '').toLowerCase().includes(searchLower) ||
+      (l.ip || '').toLowerCase().includes(searchLower) ||
+      (l.city || '').toLowerCase().includes(searchLower) ||
+      (l.country || '').toLowerCase().includes(searchLower)
+    )
+  : logins;
+
+// Summary metrics (calculated on raw dataset)
 const uniqueUsers = new Set(logins.map((l) => l.email.toLowerCase())).size;
 const uniqueIps = new Set(logins.map((l) => l.ip).filter(Boolean)).size;
 const countries = Array.from(new Set(logins.map((l) => l.country).filter(Boolean)));
@@ -40,7 +54,7 @@ const pageTitle = 'Login Audit Logs | GwenVenni Atelier Admin';
   pendingOrdersCount={ordersSummary?.stats?.pending || 0}
 >
   <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-6 border-b border-black/5 gap-3">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
     <div>
       <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Login & Security Audit</h1>
       <p class="text-xs text-[#86868b] mt-0.5">Real-time audit log of authenticated user sessions and IP locations (90-day retention)</p>
@@ -88,69 +102,122 @@ const pageTitle = 'Login Audit Logs | GwenVenni Atelier Admin';
     </div>
   </div>
 
-  <!-- Audit Table Card -->
-  <div class="bg-white rounded-2xl border border-black/5 shadow-xs overflow-hidden">
-    <div class="p-4 sm:p-5 border-b border-black/5 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <span class="font-semibold text-xs text-[#1d1d1f]">Session Log Stream</span>
-        <span class="text-[11px] text-[#86868b]">({logins.length} events loaded)</span>
-      </div>
+  <!-- Sticky Toolbar: Filters & Search Form -->
+  <div class="sticky top-14 lg:top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    <div class="flex items-center gap-2 text-xs">
+      <span class="font-semibold text-[#1d1d1f]">Session Log Stream</span>
+      <span class="text-[#86868b]">({displayLogins.length} of {logins.length} events)</span>
     </div>
 
-    {logins.length === 0 ? (
+    <!-- Search Form -->
+    <form method="GET" action="/admin/logins" class="relative flex items-center w-full sm:w-80">
+      <input
+        type="text"
+        name="search"
+        value={currentSearch}
+        placeholder="Search email, user ID, IP, city..."
+        class="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] shadow-2xs"
+      />
+      <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      {currentSearch && (
+        <a href="/admin/logins" class="absolute right-2.5 text-xs text-[#86868b] hover:text-black">
+          ✕
+        </a>
+      )}
+    </form>
+  </div>
+
+  <!-- Audit Logs Container: Mobile Cards (< md) + Desktop Table (>= md) -->
+  <div class="bg-white rounded-2xl border border-black/5 shadow-xs overflow-hidden">
+    {displayLogins.length === 0 ? (
       <div class="py-16 text-center text-xs text-[#86868b]">
-        No login activity recorded yet. Logs will populate automatically upon user authentication.
+        {currentSearch ? `No login events matching "${currentSearch}".` : 'No login activity recorded yet.'}
       </div>
     ) : (
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="bg-[#fafafa] border-b border-black/5 text-[#86868b] font-medium text-[11px]">
-              <th class="py-3 px-4">User Email & ID</th>
-              <th class="py-3 px-4">IP Address</th>
-              <th class="py-3 px-4">Location</th>
-              <th class="py-3 px-4">Client User-Agent</th>
-              <th class="py-3 px-4 text-right">Login Timestamp</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-black/5">
-            {logins.map((entry) => {
-              const locationStr = [entry.city, entry.country].filter(Boolean).join(', ') || 'Global / Edge';
-              return (
-                <tr class="hover:bg-[#f5f5f7]/60 transition-colors">
-                  <td class="py-3 px-4">
-                    <div class="font-medium text-[#1d1d1f]">{entry.email}</div>
-                    <div class="text-[10px] font-mono text-[#86868b] truncate max-w-[200px]" title={entry.user_id}>
-                      {entry.user_id}
-                    </div>
-                  </td>
-                  <td class="py-3 px-4 font-mono text-[11px] text-[#1d1d1f]">
-                    {entry.ip ? (
-                      <span class="px-2 py-0.5 rounded bg-[#f5f5f7] border border-black/5">
-                        {entry.ip}
+      <>
+        <!-- 1. Mobile Cards Layout (< md): 100% full width, zero horizontal scrolling -->
+        <div class="block md:hidden divide-y divide-black/5">
+          {displayLogins.map((entry) => {
+            const locationStr = [entry.city, entry.country].filter(Boolean).join(', ') || 'Global';
+            return (
+              <div class="p-3.5 space-y-2 bg-white text-xs">
+                <!-- Row 1: Email & Local Time -->
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0 flex-1">
+                    <span class="font-semibold text-[#1d1d1f] truncate block">{entry.email}</span>
+                    <span class="font-mono text-[10px] text-[#86868b] truncate block" title={entry.user_id}>{entry.user_id}</span>
+                  </div>
+                  <span class="text-[11px] text-[#86868b] shrink-0 font-mono">
+                    <LocalTime datetime={entry.created_at} showSeconds={true} />
+                  </span>
+                </div>
+                <!-- Row 2: IP, Location & Device info in light grey box -->
+                <div class="p-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 space-y-1">
+                  <div class="flex items-center justify-between text-[11px]">
+                    <span class="font-mono font-medium text-[#1d1d1f]">{entry.ip || '—'}</span>
+                    <span class="text-[#52525b]">📍 {locationStr}</span>
+                  </div>
+                  <p class="text-[10px] text-[#86868b] truncate" title={entry.user_agent}>
+                    {entry.user_agent || 'Unknown Device'}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <!-- 2. Desktop High-Density Table (>= md) -->
+        <div class="hidden md:block overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-[#fafafa] border-b border-black/5 text-[#86868b] font-medium text-[11px]">
+                <th class="py-3 px-4">User Email & ID</th>
+                <th class="py-3 px-4">IP Address</th>
+                <th class="py-3 px-4">Location</th>
+                <th class="py-3 px-4">Client User-Agent</th>
+                <th class="py-3 px-4 text-right">Login Timestamp</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-black/5">
+              {displayLogins.map((entry) => {
+                const locationStr = [entry.city, entry.country].filter(Boolean).join(', ') || 'Global / Edge';
+                return (
+                  <tr class="hover:bg-[#f5f5f7]/60 transition-colors">
+                    <td class="py-3 px-4">
+                      <div class="font-medium text-[#1d1d1f]">{entry.email}</div>
+                      <div class="text-[10px] font-mono text-[#86868b] truncate max-w-[200px]" title={entry.user_id}>
+                        {entry.user_id}
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 font-mono text-[11px] text-[#1d1d1f]">
+                      {entry.ip ? (
+                        <span class="px-2 py-0.5 rounded bg-[#f5f5f7] border border-black/5">
+                          {entry.ip}
+                        </span>
+                      ) : (
+                        <span class="text-[#86868b]">—</span>
+                      )}
+                    </td>
+                    <td class="py-3 px-4">
+                      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-zinc-100 text-[#1d1d1f] border border-black/5">
+                        📍 {locationStr}
                       </span>
-                    ) : (
-                      <span class="text-[#86868b]">—</span>
-                    )}
-                  </td>
-                  <td class="py-3 px-4">
-                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-zinc-100 text-[#1d1d1f] border border-black/5">
-                      📍 {locationStr}
-                    </span>
-                  </td>
-                  <td class="py-3 px-4 text-[11px] text-[#52525b] max-w-xs truncate" title={entry.user_agent}>
-                    {entry.user_agent || 'Unknown Client'}
-                  </td>
-                  <td class="py-3 px-4 text-right whitespace-nowrap">
-                    <LocalTime date={entry.created_at} format="datetime" />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </td>
+                    <td class="py-3 px-4 text-[11px] text-[#52525b] max-w-xs truncate" title={entry.user_agent}>
+                      {entry.user_agent || 'Unknown Client'}
+                    </td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap font-mono text-[11px]">
+                      <LocalTime datetime={entry.created_at} showSeconds={true} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>
     )}
   </div>
 </AdminLayout>
-
