@@ -936,8 +936,8 @@ export async function upsertUserOnLogin(user: {
         .prepare(
           `UPDATE user_logins
            SET user_id = ?1
-           WHERE user_id != ?1
-             AND user_id IN (SELECT id FROM users WHERE LOWER(email) = LOWER(?2))`
+           WHERE LOWER(email) = LOWER(?2)
+             AND user_id != ?1`
         )
         .bind(user.id, normalizedEmail)
         .run();
@@ -990,10 +990,10 @@ export async function upsertUserOnLogin(user: {
         const migrateLoginsStmt = db.prepare(
           `UPDATE user_logins
            SET user_id = ?
-           WHERE user_id != ?
-             AND user_id IN (SELECT id FROM users WHERE LOWER(email) = LOWER(?))`
+           WHERE LOWER(email) = LOWER(?)
+             AND user_id != ?`
         );
-        migrateLoginsStmt.run(user.id, user.id, normalizedEmail);
+        migrateLoginsStmt.run(user.id, normalizedEmail, user.id);
       } catch {
         // Non-blocking
       }
