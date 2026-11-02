@@ -53,37 +53,37 @@ const pageTitle = 'Login Audit Logs | GwenVenni Atelier Admin';
     </div>
   </div>
 
-  <!-- KPI Metric Cards -->
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Recent Sessions</span>
-      <div class="flex items-baseline gap-2">
-        <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-[#1d1d1f]">{logins.length}</span>
-        <span class="text-xs text-[#86868b]">Events</span>
+  <!-- KPI Metric Cards (Compact 4-grid on mobile, expanded on desktop) -->
+  <div class="grid grid-cols-4 gap-1.5 sm:gap-4 mb-4 sm:mb-6">
+    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Sessions</span>
+      <div class="flex items-baseline gap-1 sm:gap-2">
+        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-[#1d1d1f]">{logins.length}</span>
+        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Events</span>
       </div>
     </div>
 
-    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Active Accounts</span>
-      <div class="flex items-baseline gap-2">
-        <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-[#1d1d1f]">{uniqueUsers}</span>
-        <span class="text-xs text-[#86868b]">Unique Emails</span>
+    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Accounts</span>
+      <div class="flex items-baseline gap-1 sm:gap-2">
+        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-[#1d1d1f]">{uniqueUsers}</span>
+        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Emails</span>
       </div>
     </div>
 
-    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Origin IPs</span>
-      <div class="flex items-baseline gap-2">
-        <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-blue-700">{uniqueIps}</span>
-        <span class="text-xs text-[#86868b]">Distinct IPs</span>
+    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Origin IPs</span>
+      <div class="flex items-baseline gap-1 sm:gap-2">
+        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-blue-700">{uniqueIps}</span>
+        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">IPs</span>
       </div>
     </div>
 
-    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Geographic Span</span>
-      <div class="flex items-baseline gap-2">
-        <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-purple-700">{countries.length || 1}</span>
-        <span class="text-xs text-[#86868b]">Countries</span>
+    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Span</span>
+      <div class="flex items-baseline gap-1 sm:gap-2">
+        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-purple-700">{countries.length || 1}</span>
+        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Countries</span>
       </div>
     </div>
   </div>
@@ -153,3 +153,4 @@ const pageTitle = 'Login Audit Logs | GwenVenni Atelier Admin';
     )}
   </div>
 </AdminLayout>
+

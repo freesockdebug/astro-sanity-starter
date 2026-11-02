@@ -1,6 +1,6 @@
 ---
 // src/layouts/AdminLayout.astro
-// Fully Decoupled B2B Admin Shell: Zero-Sanity-Overhead, Grouped Vertical Sidebar, Widescreen Canvas
+// Fully Decoupled B2B Admin Shell: Zero-Sanity-Overhead, Grouped Vertical Sidebar, Mobile Bottom Bar
 import Layout from './Layout.astro';
 import AdminSidebar from '@components/admin/AdminSidebar.astro';
 
@@ -34,8 +34,8 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
   nofollow={true}
   bodyClass="bg-[#f5f5f7] text-[#1d1d1f] font-sans antialiased selection:bg-zinc-900 selection:text-white min-h-screen"
 >
-  <div class="min-h-screen flex flex-col md:flex-row">
-    <!-- 1. Left Grouped Vertical Sidebar (Fixed on Mobile, Sticky on Desktop) -->
+  <div class="min-h-screen flex flex-col lg:flex-row">
+    <!-- 1. Left Grouped Vertical Sidebar (Fixed on Mobile/Tablet, Sticky on Desktop >= lg) -->
     <AdminSidebar
       currentTab={currentTab}
       sessionEmail={sessionEmail}
@@ -44,9 +44,9 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
 
     <!-- 2. Right Main Canvas Area -->
     <div class="flex-1 flex flex-col min-w-0">
-      <!-- Mobile Top Navigation Header (< md) -->
-      <header class="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-black/10 sticky top-0 z-30 shadow-2xs">
-        <div class="flex items-center gap-2.5">
+      <!-- Mobile Top Sticky Bar (< lg): 56px (h-14) Compact Header -->
+      <header class="lg:hidden h-14 flex items-center justify-between px-3.5 bg-white/95 backdrop-blur-md border-b border-black/10 sticky top-0 z-30 shadow-2xs">
+        <div class="flex items-center gap-2">
           <button
             id="admin-open-sidebar-btn"
             type="button"
@@ -57,19 +57,37 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span class="text-sm font-semibold text-[#1d1d1f]">{currentTabTitle}</span>
+          <span class="text-sm font-bold tracking-tight text-[#1d1d1f]">GV Admin</span>
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            D1
+          </span>
         </div>
 
         <div class="flex items-center gap-2">
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Live D1
-          </span>
+          {pendingOrdersCount > 0 && (
+            <a
+              href="/admin/orders?status=PENDING_APPROVAL"
+              class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-mono text-[11px] font-bold"
+              title="Pending approvals"
+            >
+              <span>📦</span>
+              <span>{pendingOrdersCount}</span>
+            </a>
+          )}
+          <a
+            href="/orders"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-black text-xs font-medium"
+          >
+            Buyer ↗
+          </a>
         </div>
       </header>
 
-      <!-- Desktop Top Context Breadcrumb Bar (>= md) -->
-      <header class="hidden md:flex items-center justify-between px-6 lg:px-8 py-3.5 bg-white border-b border-black/5 shrink-0">
+      <!-- Desktop Top Context Breadcrumb Bar (>= lg) -->
+      <header class="hidden lg:flex items-center justify-between px-8 py-3.5 bg-white border-b border-black/5 shrink-0">
         <div class="flex items-center gap-2 text-xs">
           <span class="text-[#86868b]">Workspace</span>
           <span class="text-[#86868b]">/</span>
@@ -84,12 +102,61 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
         </div>
       </header>
 
-      <!-- Main Dynamic Content Canvas (max-w-[1600px] Widescreen) -->
-      <div class="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
+      <!-- Main Dynamic Content Canvas: Bottom padded pb-20 on mobile to clear Bottom Tab Bar -->
+      <div class="flex-1 p-3.5 sm:p-6 lg:p-8 pb-20 lg:pb-8 max-w-[1600px] w-full mx-auto">
         <slot />
       </div>
     </div>
   </div>
+
+  <!-- Mobile High-Frequency Bottom Tab Bar (< lg) -->
+  <nav
+    class="fixed bottom-0 inset-x-0 h-14 bg-white/95 backdrop-blur-md border-t border-black/10 z-30 lg:hidden flex items-center justify-around px-2 pb-[max(0px,env(safe-area-inset-bottom))] shadow-lg"
+    aria-label="Mobile Quick Bottom Navigation"
+  >
+    <!-- Tab 1: Orders -->
+    <a
+      href="/admin/orders"
+      class:list={[
+        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
+        currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+      ]}
+    >
+      <div class="relative">
+        <span class="text-base">📦</span>
+        {pendingOrdersCount > 0 && (
+          <span class="absolute -top-1 -right-2 bg-amber-500 text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
+            {pendingOrdersCount}
+          </span>
+        )}
+      </div>
+      <span>Orders</span>
+    </a>
+
+    <!-- Tab 2: Customers -->
+    <a
+      href="/admin/users"
+      class:list={[
+        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+        currentTab === 'users' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+      ]}
+    >
+      <span class="text-base">👥</span>
+      <span>Customers</span>
+    </a>
+
+    <!-- Tab 3: Security Logins -->
+    <a
+      href="/admin/logins"
+      class:list={[
+        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+        currentTab === 'logins' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+      ]}
+    >
+      <span class="text-base">🛡️</span>
+      <span>Audit</span>
+    </a>
+  </nav>
 
   <!-- Modals & Slide-over Drawers Slots -->
   <slot name="drawers" />

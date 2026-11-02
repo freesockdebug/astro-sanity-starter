@@ -94,132 +94,128 @@ const getItemProductUrl = (item: any) => {
     </div>
   </div>
 
-  <!-- Mobile Filter Strip (< sm): Compact single-row segmented pills with zero overflow -->
-      <div class="flex sm:hidden items-center gap-1.5 overflow-x-auto pb-1 mt-4 scrollbar-none">
-        {[
-          { key: 'ALL', label: 'All', count: stats.all, active: 'bg-[#1d1d1f] text-white border-black' },
-          { key: 'PENDING_APPROVAL', label: 'Pending', count: stats.pending, active: 'bg-amber-600 text-white border-amber-700' },
-          { key: 'APPROVED', label: 'Approved', count: stats.approved, active: 'bg-blue-600 text-white border-blue-700' },
-          { key: 'SHIPPED', label: 'Shipped', count: stats.shipped, active: 'bg-emerald-600 text-white border-emerald-700' },
-          { key: 'REJECTED', label: 'Rejected', count: stats.rejected, active: 'bg-zinc-700 text-white border-zinc-800' },
-        ].map((tab) => {
-          const isActive = currentStatus === tab.key;
-          return (
-            <a
-              href={tab.key === 'ALL' ? '/admin/orders' : `/admin/orders?status=${tab.key}`}
-              class={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${
-                isActive
-                  ? tab.active + ' shadow-2xs font-semibold'
-                  : 'bg-white text-[#52525b] border-black/5 hover:border-black/20'
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span class={`font-mono text-[10px] px-1.5 py-0.5 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-[#f5f5f7] text-[#1d1d1f]'}`}>
-                {tab.count}
-              </span>
-            </a>
-          );
-        })}
-      </div>
+  <!-- Desktop Stats Summary Cards (>= sm) -->
+  <div class="hidden sm:grid sm:grid-cols-5 gap-3 mb-4">
+    <a
+      href="/admin/orders"
+      class={`p-3.5 rounded-xl border text-xs transition-all ${
+        currentStatus === 'ALL'
+          ? 'bg-[#1d1d1f] text-white border-black shadow-xs'
+          : 'bg-white text-[#1d1d1f] border-black/5 hover:border-black/20'
+      }`}
+    >
+      <span class="text-[11px] block opacity-75">All Orders</span>
+      <span class="text-lg font-bold font-mono tabular-nums">{stats.all}</span>
+    </a>
 
-      <!-- Desktop Stats Summary Cards (>= sm) -->
-      <div class="hidden sm:grid sm:grid-cols-5 gap-3 mt-6">
-        <a
-          href="/admin/orders"
-          class={`p-3.5 rounded-xl border text-xs transition-all ${
-            currentStatus === 'ALL'
-              ? 'bg-[#1d1d1f] text-white border-black shadow-xs'
-              : 'bg-white text-[#1d1d1f] border-black/5 hover:border-black/20'
-          }`}
-        >
-          <span class="text-[11px] block opacity-75">All Orders</span>
-          <span class="text-lg font-bold font-mono tabular-nums">{stats.all}</span>
-        </a>
+    <a
+      href="/admin/orders?status=PENDING_APPROVAL"
+      class={`p-3.5 rounded-xl border text-xs transition-all ${
+        currentStatus === 'PENDING_APPROVAL'
+          ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+          : 'bg-white text-amber-900 border-black/5 hover:border-amber-300'
+      }`}
+    >
+      <span class="text-[11px] block opacity-75">Pending Approval</span>
+      <span class={`text-lg font-bold font-mono tabular-nums text-amber-600 ${currentStatus === 'PENDING_APPROVAL' ? '!text-white' : ''}`}>
+        {stats.pending}
+      </span>
+    </a>
 
-        <a
-          href="/admin/orders?status=PENDING_APPROVAL"
-          class={`p-3.5 rounded-xl border text-xs transition-all ${
-            currentStatus === 'PENDING_APPROVAL'
-              ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
-              : 'bg-white text-amber-900 border-black/5 hover:border-amber-300'
-          }`}
-        >
-          <span class="text-[11px] block opacity-75">Pending Approval</span>
-          <span class={`text-lg font-bold font-mono tabular-nums text-amber-600 ${currentStatus === 'PENDING_APPROVAL' ? '!text-white' : ''}`}>
-            {stats.pending}
-          </span>
-        </a>
+    <a
+      href="/admin/orders?status=APPROVED"
+      class={`p-3.5 rounded-xl border text-xs transition-all ${
+        currentStatus === 'APPROVED'
+          ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
+          : 'bg-white text-blue-900 border-black/5 hover:border-blue-300'
+      }`}
+    >
+      <span class="text-[11px] block opacity-75">Approved (To Ship)</span>
+      <span class={`text-lg font-bold font-mono tabular-nums text-blue-600 ${currentStatus === 'APPROVED' ? '!text-white' : ''}`}>
+        {stats.approved}
+      </span>
+    </a>
 
-        <a
-          href="/admin/orders?status=APPROVED"
-          class={`p-3.5 rounded-xl border text-xs transition-all ${
-            currentStatus === 'APPROVED'
-              ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
-              : 'bg-white text-blue-900 border-black/5 hover:border-blue-300'
-          }`}
-        >
-          <span class="text-[11px] block opacity-75">Approved (To Ship)</span>
-          <span class={`text-lg font-bold font-mono tabular-nums text-blue-600 ${currentStatus === 'APPROVED' ? '!text-white' : ''}`}>
-            {stats.approved}
-          </span>
-        </a>
+    <a
+      href="/admin/orders?status=SHIPPED"
+      class={`p-3.5 rounded-xl border text-xs transition-all ${
+        currentStatus === 'SHIPPED'
+          ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+          : 'bg-white text-emerald-900 border-black/5 hover:border-emerald-300'
+      }`}
+    >
+      <span class="text-[11px] block opacity-75">Shipped</span>
+      <span class={`text-lg font-bold font-mono tabular-nums text-emerald-600 ${currentStatus === 'SHIPPED' ? '!text-white' : ''}`}>
+        {stats.shipped}
+      </span>
+    </a>
 
-        <a
-          href="/admin/orders?status=SHIPPED"
-          class={`p-3.5 rounded-xl border text-xs transition-all ${
-            currentStatus === 'SHIPPED'
-              ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-              : 'bg-white text-emerald-900 border-black/5 hover:border-emerald-300'
-          }`}
-        >
-          <span class="text-[11px] block opacity-75">Shipped</span>
-          <span class={`text-lg font-bold font-mono tabular-nums text-emerald-600 ${currentStatus === 'SHIPPED' ? '!text-white' : ''}`}>
-            {stats.shipped}
-          </span>
-        </a>
+    <a
+      href="/admin/orders?status=REJECTED"
+      class={`p-3.5 rounded-xl border text-xs transition-all ${
+        currentStatus === 'REJECTED'
+          ? 'bg-zinc-700 text-white border-zinc-800 shadow-xs'
+          : 'bg-white text-zinc-700 border-black/5 hover:border-zinc-300'
+      }`}
+    >
+      <span class="text-[11px] block opacity-75">Rejected</span>
+      <span class="text-lg font-bold font-mono tabular-nums">{stats.rejected}</span>
+    </a>
+  </div>
 
-        <a
-          href="/admin/orders?status=REJECTED"
-          class={`p-3.5 rounded-xl border text-xs transition-all ${
-            currentStatus === 'REJECTED'
-              ? 'bg-zinc-700 text-white border-zinc-800 shadow-xs'
-              : 'bg-white text-zinc-700 border-black/5 hover:border-zinc-300'
-          }`}
-        >
-          <span class="text-[11px] block opacity-75">Rejected</span>
-          <span class="text-lg font-bold font-mono tabular-nums">{stats.rejected}</span>
-        </a>
-      </div>
-
-      <!-- Search & Filter Bar -->
-      <div class="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
-        <form method="GET" action="/admin/orders" class="flex-1 flex gap-2">
-          {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
-          <div class="relative flex-1 min-w-0">
-            <input
-              type="text"
-              name="search"
-              value={currentSearch}
-              placeholder="Search Order No, email, company..."
-              class="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
-            />
-            {currentSearch && (
-              <a
-                href={currentStatus !== 'ALL' ? `/admin/orders?status=${currentStatus}` : '/admin/orders'}
-                class="absolute right-3 top-2 text-xs text-[#86868b] hover:text-black"
-              >
-                ✕
-              </a>
-            )}
-          </div>
-          <button
-            type="submit"
-            class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer shrink-0"
+  <!-- Sticky Toolbar (Filters & Search): Sticks right below 56px top bar -->
+  <div class="sticky top-14 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    <!-- Status Segmented Pills (Horizontal scroll on mobile) -->
+    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      {[
+        { key: 'ALL', label: 'All', count: stats.all, active: 'bg-[#1d1d1f] text-white border-black' },
+        { key: 'PENDING_APPROVAL', label: 'Pending', count: stats.pending, active: 'bg-amber-600 text-white border-amber-700' },
+        { key: 'APPROVED', label: 'Approved', count: stats.approved, active: 'bg-blue-600 text-white border-blue-700' },
+        { key: 'SHIPPED', label: 'Shipped', count: stats.shipped, active: 'bg-emerald-600 text-white border-emerald-700' },
+        { key: 'REJECTED', label: 'Rejected', count: stats.rejected, active: 'bg-zinc-700 text-white border-zinc-800' },
+      ].map((tab) => {
+        const isActive = currentStatus === tab.key;
+        return (
+          <a
+            href={tab.key === 'ALL' ? '/admin/orders' : `/admin/orders?status=${tab.key}`}
+            class={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${
+              isActive
+                ? tab.active + ' shadow-2xs font-semibold'
+                : 'bg-white text-[#52525b] border-black/5 hover:border-black/20'
+            }`}
           >
-            Filter
-          </button>
-        </form>
-      </div>
+            <span>{tab.label}</span>
+            <span class={`font-mono text-[10px] px-1.5 py-0.5 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-[#f5f5f7] text-[#1d1d1f]'}`}>
+              {tab.count}
+            </span>
+          </a>
+        );
+      })}
+    </div>
+
+    <!-- Search Form -->
+    <form method="GET" action="/admin/orders" class="relative flex items-center w-full sm:w-72">
+      {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
+      <input
+        type="text"
+        name="search"
+        value={currentSearch}
+        placeholder="Search Order No, email, company..."
+        class="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] shadow-2xs"
+      />
+      <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      {currentSearch && (
+        <a
+          href={currentStatus !== 'ALL' ? `/admin/orders?status=${currentStatus}` : '/admin/orders'}
+          class="absolute right-2.5 text-xs text-[#86868b] hover:text-black"
+        >
+          ✕
+        </a>
+      )}
+    </form>
+  </div>
 
       <!-- Orders Table Container -->
       <div class="mt-4 sm:mt-6 bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">

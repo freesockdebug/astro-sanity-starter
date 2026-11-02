@@ -15,14 +15,14 @@ const emailInitial = safeEmail ? safeEmail.slice(0, 1).toUpperCase() : 'A';
 <!-- Mobile Drawer Backdrop Overlay -->
 <div
   id="admin-sidebar-backdrop"
-  class="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 hidden opacity-0 transition-opacity duration-300 md:hidden"
+  class="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 hidden opacity-0 transition-opacity duration-300 lg:hidden"
   aria-hidden="true"
 ></div>
 
 <!-- Vertical Sidebar Shell: Fixed on Mobile (Slide-over), Sticky on Desktop -->
 <aside
   id="admin-sidebar"
-  class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-black/10 flex flex-col justify-between transform -translate-x-full md:translate-x-0 md:static md:h-screen md:sticky md:top-0 transition-transform duration-300 ease-in-out shrink-0 selection:bg-zinc-900 selection:text-white"
+  class="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-black/10 flex flex-col justify-between transform -translate-x-full lg:translate-x-0 lg:static lg:h-screen lg:sticky lg:top-0 transition-transform duration-300 ease-in-out shrink-0 selection:bg-zinc-900 selection:text-white"
   aria-label="Admin Navigation Sidebar"
 >
   <!-- Top Brand & Status Section -->
@@ -47,7 +47,7 @@ const emailInitial = safeEmail ? safeEmail.slice(0, 1).toUpperCase() : 'A';
     <button
       id="admin-close-sidebar-btn"
       type="button"
-      class="p-1.5 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] md:hidden transition-all text-sm"
+      class="p-1.5 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] lg:hidden transition-all text-sm"
       aria-label="Close sidebar"
     >
       ✕

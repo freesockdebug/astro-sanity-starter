@@ -79,53 +79,53 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
     </div>
   </div>
 
-  <!-- Metric Cards Header -->
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
-          <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Total Registered</span>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight">{stats.all}</span>
-            <span class="text-xs text-[#86868b]">Buyers</span>
-          </div>
-        </div>
-
-        <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
-          <span class="text-[11px] text-amber-800 uppercase tracking-wider font-semibold block mb-1">VIP & Partners</span>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-amber-700">
-              {stats.vip + stats.partner}
-            </span>
-            <span class="text-xs text-[#86868b]">High-value</span>
-          </div>
-        </div>
-
-        <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
-          <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Guest Leads</span>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight">{stats.unclaimedGuestOrders}</span>
-            <a href="/admin/orders" class="text-xs text-blue-600 hover:underline">Unclaimed →</a>
-          </div>
-        </div>
-
-        <a
-          href={buildUsersUrl({ status: currentStatus === 'BLOCKED' ? 'ALL' : 'BLOCKED', tier: 'ALL', page: 1 })}
-          class={`p-4 rounded-2xl border shadow-2xs transition-all block ${
-            currentStatus === 'BLOCKED'
-              ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500/20'
-              : 'bg-white border-black/5 hover:border-rose-200'
-          }`}
-        >
-          <span class="text-[11px] text-rose-800 uppercase tracking-wider font-semibold block mb-1">Suspended</span>
-          <div class="flex items-baseline gap-2">
-            <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-rose-700">{stats.blocked}</span>
-            <span class="text-xs text-[#86868b]">{currentStatus === 'BLOCKED' ? 'Filtering ✕' : 'Blocked →'}</span>
-          </div>
-        </a>
+  <!-- Metric Cards Header (Compact 4-grid on mobile, expanded on desktop) -->
+  <div class="grid grid-cols-4 gap-1.5 sm:gap-4 mb-4 sm:mb-6">
+    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Total</span>
+      <div class="flex items-baseline gap-1 sm:gap-2">
+        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight">{stats.all}</span>
+        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Buyers</span>
       </div>
+    </div>
 
-      <!-- Filter Tabs & Search Bar -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[9px] sm:text-[11px] text-amber-800 uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">VIPs</span>
+      <div class="flex items-baseline gap-1 sm:gap-2">
+        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-amber-700">
+          {stats.vip + stats.partner}
+        </span>
+        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">High-val</span>
+      </div>
+    </div>
+
+    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Guest</span>
+      <div class="flex items-baseline gap-1 sm:gap-2">
+        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight">{stats.unclaimedGuestOrders}</span>
+        <a href="/admin/orders" class="text-[9px] sm:text-xs text-blue-600 hover:underline hidden xs:inline">Orders →</a>
+      </div>
+    </div>
+
+    <a
+      href={buildUsersUrl({ status: currentStatus === 'BLOCKED' ? 'ALL' : 'BLOCKED', tier: 'ALL', page: 1 })}
+      class={`p-2 sm:p-4 rounded-xl sm:rounded-2xl border shadow-2xs transition-all block ${
+        currentStatus === 'BLOCKED'
+          ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500/20'
+          : 'bg-white border-black/5 hover:border-rose-200'
+      }`}
+    >
+      <span class="text-[9px] sm:text-[11px] text-rose-800 uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Blocked</span>
+      <div class="flex items-baseline gap-1 sm:gap-2">
+        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-rose-700">{stats.blocked}</span>
+        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">{currentStatus === 'BLOCKED' ? '✕' : 'Filter'}</span>
+      </div>
+    </a>
+  </div>
+
+  <!-- Sticky Toolbar (Filters & Search): Sticks right below 56px top bar -->
+  <div class="sticky top-14 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           {[
             { key: 'ALL', label: 'All Buyers', count: stats.all, isBlocked: false },
             { key: 'VIP', label: 'VIP', count: stats.vip, isBlocked: false },
@@ -433,21 +433,26 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
         </div>
       )}
 
-  <!-- Slide-over Customer Detail & Tier Drawer -->
+  <!-- Slide-over Customer Detail Drawer (Desktop Right Drawer / Mobile Bottom Sheet) -->
   <Fragment slot="modals">
     <div id="drawer-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden transition-opacity opacity-0"></div>
     <aside
       id="user-drawer"
-      class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white border-l border-black/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col"
+      class="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:right-0 sm:left-auto z-50 w-full sm:max-w-md max-h-[90vh] sm:max-h-screen rounded-t-3xl sm:rounded-none sm:rounded-l-2xl bg-white border-t sm:border-t-0 sm:border-l border-black/10 shadow-2xl transform translate-y-full sm:translate-y-0 sm:translate-x-full transition-transform duration-300 ease-in-out flex flex-col"
       aria-label="Customer Profile Drawer"
     >
-    <div class="p-5 border-b border-black/5 flex items-center justify-between">
-      <div>
-        <h3 class="text-sm font-semibold text-[#1d1d1f]">Customer Profile & Access</h3>
-        <p class="text-[11px] text-[#86868b] mt-0.5">Tiering, internal remarks, and security flags</p>
+      <!-- Mobile Pull / Drag Indicator Bar -->
+      <div class="pt-2.5 sm:hidden flex justify-center shrink-0">
+        <div class="w-10 h-1 bg-black/15 rounded-full"></div>
       </div>
-      <button id="close-drawer-btn" type="button" class="p-1 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] transition-all text-base">✕</button>
-    </div>
+
+      <div class="px-5 py-3.5 sm:py-4 border-b border-black/5 flex items-center justify-between shrink-0">
+        <div>
+          <h3 class="text-sm font-semibold text-[#1d1d1f]">Customer Profile & Access</h3>
+          <p class="text-[11px] text-[#86868b] mt-0.5">Tiering, internal remarks, and security flags</p>
+        </div>
+        <button id="close-drawer-btn" type="button" class="p-1 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] transition-all text-base">✕</button>
+      </div>
 
     <form id="drawer-form" class="p-5 overflow-y-auto flex-1 space-y-5 text-xs text-[#1d1d1f]">
       <input type="hidden" id="drawer-user-id" />
@@ -543,7 +548,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
       <div id="drawer-feedback" class="hidden p-3 rounded-xl text-xs font-medium leading-relaxed"></div>
     </form>
 
-    <div class="p-4 border-t border-black/5 flex items-center justify-end gap-2 bg-white">
+    <div class="p-4 border-t border-black/5 flex items-center justify-end gap-2 bg-white shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <button
         type="button"
         id="cancel-drawer-btn"
@@ -726,11 +731,15 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
   const showDrawer = () => {
     backdrop?.classList.remove('hidden');
     setTimeout(() => backdrop?.classList.remove('opacity-0'), 10);
-    drawer?.classList.remove('translate-x-full');
+    drawer?.classList.remove('translate-x-full', 'translate-y-full');
   };
 
   const hideDrawer = () => {
-    drawer?.classList.add('translate-x-full');
+    if (window.innerWidth < 640) {
+      drawer?.classList.add('translate-y-full');
+    } else {
+      drawer?.classList.add('translate-x-full');
+    }
     backdrop?.classList.add('opacity-0');
     setTimeout(() => backdrop?.classList.add('hidden'), 300);
     if (feedbackEl) {
