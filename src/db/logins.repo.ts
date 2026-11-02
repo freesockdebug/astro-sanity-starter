@@ -25,8 +25,8 @@ export async function recordUserLogin(input: {
   const safeUA = input.userAgent?.slice(0, 500) || '';
   const normalizedEmail = input.email.toLowerCase().trim();
 
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
+  try {
+    return await executeWithAutoSchema(async (db: DbClient) => {
       await db.execute(
         `INSERT INTO user_logins (user_id, email, ip, country, city, user_agent, created_at)
          VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
@@ -36,11 +36,11 @@ export async function recordUserLogin(input: {
       // 90-day retention automatic cleanup
       await db.execute(`DELETE FROM user_logins WHERE created_at < datetime('now', '-90 days')`);
       return true;
-    } catch (e) {
-      console.warn('[DB] recordUserLogin non-fatal warning:', e);
-      return false;
-    }
-  });
+    });
+  } catch (e) {
+    console.warn('[DB] recordUserLogin non-fatal warning:', e);
+    return false;
+  }
 }
 
 /**
@@ -49,8 +49,8 @@ export async function recordUserLogin(input: {
 export async function getUserLoginHistory(userId: string, limit: number = 20): Promise<LoginRecord[]> {
   if (!userId) return [];
 
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
+  try {
+    return await executeWithAutoSchema(async (db: DbClient) => {
       return await db.query<LoginRecord>(
         `SELECT * FROM user_logins
          WHERE user_id = ?
@@ -58,27 +58,27 @@ export async function getUserLoginHistory(userId: string, limit: number = 20): P
          LIMIT ?`,
         [userId, limit]
       );
-    } catch {
-      return [];
-    }
-  });
+    });
+  } catch {
+    return [];
+  }
 }
 
 /**
  * Retrieves all recent login records across all users (Admin audit view)
  */
 export async function listAllLoginHistory(limit: number = 50): Promise<LoginRecord[]> {
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
+  try {
+    return await executeWithAutoSchema(async (db: DbClient) => {
       return await db.query<LoginRecord>(
         `SELECT * FROM user_logins
          ORDER BY created_at DESC
          LIMIT ?`,
         [limit]
       );
-    } catch {
-      return [];
-    }
-  });
+    });
+  } catch {
+    return [];
+  }
 }
 

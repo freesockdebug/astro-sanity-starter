@@ -144,6 +144,7 @@ export interface ListAdminUsersResult {
     partner: number;
     standard: number;
     blocked: number;
+    admins: number;
     unclaimedGuestOrders: number;
   };
 }

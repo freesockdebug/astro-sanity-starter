@@ -102,6 +102,7 @@ class D1ClientAdapter implements DbClient {
   }
 
   async batch(operations: { sql: string; params?: any[] }[]): Promise<void> {
+    if (!this.raw || !operations || operations.length === 0) return;
     const d1Stmts = operations.map((op) => {
       const stmt = this.raw.prepare(op.sql);
       return op.params && op.params.length > 0 ? stmt.bind(...op.params) : stmt;
@@ -139,10 +140,21 @@ class SQLiteClientAdapter implements DbClient {
   }
 
   async batch(operations: { sql: string; params?: any[] }[]): Promise<void> {
-    if (!this.raw) return;
-    for (const op of operations) {
-      const stmt = this.raw.prepare(op.sql);
-      stmt.run(...(op.params || []));
+    if (!this.raw || !operations || operations.length === 0) return;
+    this.raw.exec('BEGIN');
+    try {
+      for (const op of operations) {
+        const stmt = this.raw.prepare(op.sql);
+        stmt.run(...(op.params || []));
+      }
+      this.raw.exec('COMMIT');
+    } catch (err) {
+      try {
+        this.raw.exec('ROLLBACK');
+      } catch {
+        // ignore rollback error on disconnected db
+      }
+      throw err;
     }
   }
 }

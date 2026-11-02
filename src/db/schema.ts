@@ -89,6 +89,7 @@ export async function ensureSchema(rawOrClient?: any) {
   } else if (target.raw) {
     target = target.raw;
   }
+  if (!target) return;
 
   for (const sql of DDL_STATEMENTS) {
     try {
