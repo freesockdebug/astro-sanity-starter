@@ -1,0 +1,155 @@
+---
+// src/pages/admin/logins.astro
+// Admin Security Audit: 90-Day Login History & IP/Device Tracker
+import AdminLayout from '@layouts/AdminLayout.astro';
+import LocalTime from '@components/LocalTime.astro';
+import { getSessionFromRequest } from '@utils/auth';
+import { listAllLoginHistory, listAdminOrders } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+Astro.response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+Astro.response.headers.set('CDN-Cache-Control', 'no-store');
+Astro.response.headers.set('Pragma', 'no-cache');
+Astro.response.headers.set('Expires', '0');
+
+const sessionUser = await getSessionFromRequest(Astro, cfEnv);
+if (!sessionUser || !sessionUser.isAdmin) {
+  return Astro.redirect(`/api/auth/login?returnUrl=/admin/logins`);
+}
+
+const [logins, ordersSummary] = await Promise.all([
+  listAllLoginHistory(150),
+  listAdminOrders({ limit: 1 }).catch(() => ({ stats: { pending: 0 } })),
+]);
+
+// Summary metrics
+const uniqueUsers = new Set(logins.map((l) => l.email.toLowerCase())).size;
+const uniqueIps = new Set(logins.map((l) => l.ip).filter(Boolean)).size;
+const countries = Array.from(new Set(logins.map((l) => l.country).filter(Boolean)));
+
+const pageTitle = 'Login Audit Logs | GwenVenni Atelier Admin';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="logins"
+  sessionEmail={sessionUser.email}
+  pendingOrdersCount={ordersSummary?.stats?.pending || 0}
+>
+  <!-- Page Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-6 border-b border-black/5 gap-3">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Login & Security Audit</h1>
+      <p class="text-xs text-[#86868b] mt-0.5">Real-time audit log of authenticated user sessions and IP locations (90-day retention)</p>
+    </div>
+    <div class="flex items-center gap-2 self-start sm:self-auto">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        Active Retention: 90 Days
+      </span>
+    </div>
+  </div>
+
+  <!-- KPI Metric Cards -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Recent Sessions</span>
+      <div class="flex items-baseline gap-2">
+        <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-[#1d1d1f]">{logins.length}</span>
+        <span class="text-xs text-[#86868b]">Events</span>
+      </div>
+    </div>
+
+    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Active Accounts</span>
+      <div class="flex items-baseline gap-2">
+        <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-[#1d1d1f]">{uniqueUsers}</span>
+        <span class="text-xs text-[#86868b]">Unique Emails</span>
+      </div>
+    </div>
+
+    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Origin IPs</span>
+      <div class="flex items-baseline gap-2">
+        <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-blue-700">{uniqueIps}</span>
+        <span class="text-xs text-[#86868b]">Distinct IPs</span>
+      </div>
+    </div>
+
+    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
+      <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Geographic Span</span>
+      <div class="flex items-baseline gap-2">
+        <span class="text-2xl sm:text-3xl font-semibold font-mono tracking-tight text-purple-700">{countries.length || 1}</span>
+        <span class="text-xs text-[#86868b]">Countries</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audit Table Card -->
+  <div class="bg-white rounded-2xl border border-black/5 shadow-xs overflow-hidden">
+    <div class="p-4 sm:p-5 border-b border-black/5 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="font-semibold text-xs text-[#1d1d1f]">Session Log Stream</span>
+        <span class="text-[11px] text-[#86868b]">({logins.length} events loaded)</span>
+      </div>
+    </div>
+
+    {logins.length === 0 ? (
+      <div class="py-16 text-center text-xs text-[#86868b]">
+        No login activity recorded yet. Logs will populate automatically upon user authentication.
+      </div>
+    ) : (
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-[#fafafa] border-b border-black/5 text-[#86868b] font-medium text-[11px]">
+              <th class="py-3 px-4">User Email & ID</th>
+              <th class="py-3 px-4">IP Address</th>
+              <th class="py-3 px-4">Location</th>
+              <th class="py-3 px-4">Client User-Agent</th>
+              <th class="py-3 px-4 text-right">Login Timestamp</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-black/5">
+            {logins.map((entry) => {
+              const locationStr = [entry.city, entry.country].filter(Boolean).join(', ') || 'Global / Edge';
+              return (
+                <tr class="hover:bg-[#f5f5f7]/60 transition-colors">
+                  <td class="py-3 px-4">
+                    <div class="font-medium text-[#1d1d1f]">{entry.email}</div>
+                    <div class="text-[10px] font-mono text-[#86868b] truncate max-w-[200px]" title={entry.user_id}>
+                      {entry.user_id}
+                    </div>
+                  </td>
+                  <td class="py-3 px-4 font-mono text-[11px] text-[#1d1d1f]">
+                    {entry.ip ? (
+                      <span class="px-2 py-0.5 rounded bg-[#f5f5f7] border border-black/5">
+                        {entry.ip}
+                      </span>
+                    ) : (
+                      <span class="text-[#86868b]">—</span>
+                    )}
+                  </td>
+                  <td class="py-3 px-4">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-zinc-100 text-[#1d1d1f] border border-black/5">
+                      📍 {locationStr}
+                    </span>
+                  </td>
+                  <td class="py-3 px-4 text-[11px] text-[#52525b] max-w-xs truncate" title={entry.user_agent}>
+                    {entry.user_agent || 'Unknown Client'}
+                  </td>
+                  <td class="py-3 px-4 text-right whitespace-nowrap">
+                    <LocalTime date={entry.created_at} format="datetime" />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>

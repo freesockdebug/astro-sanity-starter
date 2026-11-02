@@ -23,6 +23,7 @@ interface Props {
     bodyClass?: string;
     mainClass?: string;
     preloadHeroImage?: boolean | { src: string; srcset?: string; sizes?: string };
+    bare?: boolean;
 }
 
 const {
@@ -40,13 +41,16 @@ const {
     bodyClass,
     mainClass,
     preloadHeroImage,
+    bare = false,
 } = Astro.props;
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 const hreflangAlternates = getHreflangAlternates(Astro.url, Astro.site);
-const configData: SiteConfig = (await fetchData()) || {};
-SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
+const configData: SiteConfig = bare ? ({} as SiteConfig) : ((await fetchData()) || {});
+if (!bare) {
+    SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
+}
 
 const rawImage = image ?? page?.socialImage;
 const rawImageSrc = typeof rawImage === 'string' ? rawImage : rawImage?.src;
@@ -73,8 +77,8 @@ const resolvedImage = imageSrc
             canonicalUrl={canonicalUrl}
             type={type}
             twitterCard={twitterCard}
-            noindex={noindex}
-            nofollow={nofollow}
+            noindex={noindex || bare}
+            nofollow={nofollow || bare}
             page={page}
             siteConfig={configData}
             structuredData={structuredData}
@@ -109,15 +113,15 @@ const resolvedImage = imageSrc
         <link rel="sitemap" href="/sitemap-index.xml" />
     </head>
     <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
-        <AppleNav config={configData} />
+        {!bare && <AppleNav config={configData} />}
         <main class={mainClass}>
             <slot />
         </main>
-        <AppleFooter config={configData} />
-        <QuoteDrawer />
+        {!bare && <AppleFooter config={configData} />}
+        {!bare && <QuoteDrawer />}
 
         <!-- 1. WhatsApp Instant Live Chat Widget (Controlled from Sanity Studio) -->
-        {configData?.enableWhatsApp && configData?.whatsAppNumber && (
+        {!bare && configData?.enableWhatsApp && configData?.whatsAppNumber && (
             <WhatsAppWidget
                 phoneNumber={configData.whatsAppNumber}
                 prefillText={getLocalizedValue(configData.whatsAppPrefillText, currentLang, t('whatsapp.prefill'))}

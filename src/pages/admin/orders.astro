@@ -81,8 +81,20 @@ const getItemProductUrl = (item: any) => {
   sessionEmail={sessionUser.email}
   pendingOrdersCount={stats.pending}
 >
+  <!-- Page Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-2 border-b border-black/5 gap-3">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Orders & Fulfillment</h1>
+      <p class="text-xs text-[#86868b] mt-0.5">Review, approve, and track B2B purchase and sample orders</p>
+    </div>
+    <div class="flex items-center gap-2 self-start sm:self-auto">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
+        Total: <strong class="text-[#1d1d1f] font-semibold">{total}</strong> orders
+      </span>
+    </div>
+  </div>
 
-      <!-- Mobile Filter Strip (< sm): Compact single-row segmented pills with zero overflow -->
+  <!-- Mobile Filter Strip (< sm): Compact single-row segmented pills with zero overflow -->
       <div class="flex sm:hidden items-center gap-1.5 overflow-x-auto pb-1 mt-4 scrollbar-none">
         {[
           { key: 'ALL', label: 'All', count: stats.all, active: 'bg-[#1d1d1f] text-white border-black' },

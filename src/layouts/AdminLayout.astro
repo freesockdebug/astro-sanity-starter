@@ -1,36 +1,139 @@
 ---
 // src/layouts/AdminLayout.astro
-// Unified Admin Workspace Shell for GwenVenni B2B Backoffice
+// Fully Decoupled B2B Admin Shell: Zero-Sanity-Overhead, Grouped Vertical Sidebar, Widescreen Canvas
 import Layout from './Layout.astro';
-import AdminNav from '@components/admin/AdminNav.astro';
+import AdminSidebar from '@components/admin/AdminSidebar.astro';
 
 interface Props {
   title: string;
-  description?: string;
-  currentTab: 'orders' | 'users';
+  currentTab: 'orders' | 'users' | 'logins';
   sessionEmail: string;
   pendingOrdersCount?: number;
 }
 
 const {
   title,
-  description = 'GwenVenni B2B Admin Management Workspace',
   currentTab,
   sessionEmail,
   pendingOrdersCount = 0,
 } = Astro.props;
+
+const tabNames: Record<string, string> = {
+  orders: 'Orders & Fulfillment',
+  users: 'Customers & Access',
+  logins: 'Login Audit Logs',
+};
+
+const currentTabTitle = tabNames[currentTab] || 'Workspace';
 ---
 
-<Layout title={title} description={description}>
-  <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6">
-      <AdminNav
-        currentTab={currentTab}
-        sessionEmail={sessionEmail}
-        pendingOrdersCount={pendingOrdersCount}
-      />
-      <slot />
+<Layout
+  title={`${title} | GwenVenni Admin`}
+  bare={true}
+  noindex={true}
+  nofollow={true}
+  bodyClass="bg-[#f5f5f7] text-[#1d1d1f] font-sans antialiased selection:bg-zinc-900 selection:text-white min-h-screen"
+>
+  <div class="min-h-screen flex flex-col md:flex-row">
+    <!-- 1. Left Grouped Vertical Sidebar (Fixed on Mobile, Sticky on Desktop) -->
+    <AdminSidebar
+      currentTab={currentTab}
+      sessionEmail={sessionEmail}
+      pendingOrdersCount={pendingOrdersCount}
+    />
+
+    <!-- 2. Right Main Canvas Area -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <!-- Mobile Top Navigation Header (< md) -->
+      <header class="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-black/10 sticky top-0 z-30 shadow-2xs">
+        <div class="flex items-center gap-2.5">
+          <button
+            id="admin-open-sidebar-btn"
+            type="button"
+            class="p-2 -ml-1 rounded-xl text-[#1d1d1f] hover:bg-[#f5f5f7] active:scale-95 transition-all"
+            aria-label="Open Navigation Menu"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <span class="text-sm font-semibold text-[#1d1d1f]">{currentTabTitle}</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Live D1
+          </span>
+        </div>
+      </header>
+
+      <!-- Desktop Top Context Breadcrumb Bar (>= md) -->
+      <header class="hidden md:flex items-center justify-between px-6 lg:px-8 py-3.5 bg-white border-b border-black/5 shrink-0">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="text-[#86868b]">Workspace</span>
+          <span class="text-[#86868b]">/</span>
+          <span class="font-semibold text-[#1d1d1f]">{currentTabTitle}</span>
+        </div>
+
+        <div class="flex items-center gap-4 text-xs text-[#86868b]">
+          <span class="flex items-center gap-1.5 font-mono">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Cloudflare D1 Edge
+          </span>
+        </div>
+      </header>
+
+      <!-- Main Dynamic Content Canvas (max-w-[1600px] Widescreen) -->
+      <div class="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
+        <slot />
+      </div>
     </div>
-  </main>
+  </div>
+
+  <!-- Modals & Slide-over Drawers Slots -->
+  <slot name="drawers" />
   <slot name="modals" />
+
+  <!-- Pure Vanilla JS for Mobile Sidebar Drawer Toggle (Zero TS syntax) -->
+  <script is:inline>
+    (function() {
+      var openBtn = document.getElementById('admin-open-sidebar-btn');
+      var closeBtn = document.getElementById('admin-close-sidebar-btn');
+      var backdrop = document.getElementById('admin-sidebar-backdrop');
+      var sidebar = document.getElementById('admin-sidebar');
+
+      function openSidebar() {
+        if (!sidebar || !backdrop) return;
+        backdrop.classList.remove('hidden');
+        requestAnimationFrame(function() {
+          backdrop.classList.remove('opacity-0');
+          backdrop.classList.add('opacity-100');
+          sidebar.classList.remove('-translate-x-full');
+        });
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSidebar() {
+        if (!sidebar || !backdrop) return;
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.remove('opacity-100');
+        backdrop.classList.add('opacity-0');
+        setTimeout(function() {
+          backdrop.classList.add('hidden');
+          document.body.style.overflow = '';
+        }, 300);
+      }
+
+      if (openBtn) openBtn.addEventListener('click', openSidebar);
+      if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+      if (backdrop) backdrop.addEventListener('click', closeSidebar);
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && sidebar && !sidebar.classList.contains('-translate-x-full')) {
+          closeSidebar();
+        }
+      });
+    })();
+  </script>
 </Layout>

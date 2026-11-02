@@ -66,9 +66,21 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
   sessionEmail={sessionUser.email}
   pendingOrdersCount={ordersSummary?.stats?.pending || 0}
 >
+  <!-- Page Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-6 border-b border-black/5 gap-3">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Customers & Access</h1>
+      <p class="text-xs text-[#86868b] mt-0.5">Manage customer tiering, enterprise profiles, and security flags</p>
+    </div>
+    <div class="flex items-center gap-2 self-start sm:self-auto">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
+        Total: <strong class="text-[#1d1d1f] font-semibold">{total}</strong> buyers
+      </span>
+    </div>
+  </div>
 
-      <!-- Metric Cards Header -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+  <!-- Metric Cards Header -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs">
           <span class="text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-1">Total Registered</span>
           <div class="flex items-baseline gap-2">
