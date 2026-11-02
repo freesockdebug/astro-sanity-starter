@@ -1,0 +1,36 @@
+---
+// src/layouts/AdminLayout.astro
+// Unified Admin Workspace Shell for GwenVenni B2B Backoffice
+import Layout from './Layout.astro';
+import AdminNav from '@components/admin/AdminNav.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  currentTab: 'orders' | 'users';
+  sessionEmail: string;
+  pendingOrdersCount?: number;
+}
+
+const {
+  title,
+  description = 'GwenVenni B2B Admin Management Workspace',
+  currentTab,
+  sessionEmail,
+  pendingOrdersCount = 0,
+} = Astro.props;
+---
+
+<Layout title={title} description={description}>
+  <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <AdminNav
+        currentTab={currentTab}
+        sessionEmail={sessionEmail}
+        pendingOrdersCount={pendingOrdersCount}
+      />
+      <slot />
+    </div>
+  </main>
+  <slot name="modals" />
+</Layout>

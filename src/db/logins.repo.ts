@@ -1,0 +1,83 @@
+// src/db/logins.repo.ts
+// Login Audit Domain Repository: Recording, 90-day retention, History Query
+
+import { type DbClient } from './client';
+import { executeWithAutoSchema } from './schema';
+import type { LoginRecord } from './types';
+
+/**
+ * Records a successful user login with IP, Geo location, and Device information.
+ * Automatically retains logs for 90 days by purging records older than 90 days.
+ */
+export async function recordUserLogin(input: {
+  userId: string;
+  email: string;
+  ip?: string;
+  country?: string;
+  city?: string;
+  userAgent?: string;
+}): Promise<boolean> {
+  if (!input.userId || !input.email) return false;
+
+  const safeIp = input.ip?.trim() || '';
+  const safeCountry = input.country?.trim() || '';
+  const safeCity = input.city?.trim() || '';
+  const safeUA = input.userAgent?.slice(0, 500) || '';
+  const normalizedEmail = input.email.toLowerCase().trim();
+
+  return executeWithAutoSchema(async (db: DbClient) => {
+    try {
+      await db.execute(
+        `INSERT INTO user_logins (user_id, email, ip, country, city, user_agent, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+        [input.userId, normalizedEmail, safeIp, safeCountry, safeCity, safeUA]
+      );
+
+      // 90-day retention automatic cleanup
+      await db.execute(`DELETE FROM user_logins WHERE created_at < datetime('now', '-90 days')`);
+      return true;
+    } catch (e) {
+      console.warn('[DB] recordUserLogin non-fatal warning:', e);
+      return false;
+    }
+  });
+}
+
+/**
+ * Retrieves login history for a specific user (User self-service view)
+ */
+export async function getUserLoginHistory(userId: string, limit: number = 20): Promise<LoginRecord[]> {
+  if (!userId) return [];
+
+  return executeWithAutoSchema(async (db: DbClient) => {
+    try {
+      return await db.query<LoginRecord>(
+        `SELECT * FROM user_logins
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+         LIMIT ?`,
+        [userId, limit]
+      );
+    } catch {
+      return [];
+    }
+  });
+}
+
+/**
+ * Retrieves all recent login records across all users (Admin audit view)
+ */
+export async function listAllLoginHistory(limit: number = 50): Promise<LoginRecord[]> {
+  return executeWithAutoSchema(async (db: DbClient) => {
+    try {
+      return await db.query<LoginRecord>(
+        `SELECT * FROM user_logins
+         ORDER BY created_at DESC
+         LIMIT ?`,
+        [limit]
+      );
+    } catch {
+      return [];
+    }
+  });
+}

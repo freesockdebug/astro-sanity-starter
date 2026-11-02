@@ -1,8 +1,7 @@
 ---
 // src/pages/admin/users.astro
-import Layout from '@layouts/Layout.astro';
+import AdminLayout from '@layouts/AdminLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
-import AdminNav from '@components/admin/AdminNav.astro';
 import { getSessionFromRequest, checkIsAdmin } from '@utils/auth';
 import { listAdminUsers, listAdminOrders } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
@@ -61,16 +60,12 @@ const buildUsersUrl = (overrides: { page?: number; tier?: string; status?: strin
 const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
 ---
 
-<Layout title={pageTitle}>
-  <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6">
-
-      <!-- Unified Shared Workspace Nav -->
-      <AdminNav
-        currentTab="users"
-        sessionEmail={sessionUser.email}
-        pendingOrdersCount={ordersSummary?.stats?.pending || 0}
-      />
+<AdminLayout
+  title={pageTitle}
+  currentTab="users"
+  sessionEmail={sessionUser.email}
+  pendingOrdersCount={ordersSummary?.stats?.pending || 0}
+>
 
       <!-- Metric Cards Header -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -426,16 +421,14 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
         </div>
       )}
 
-    </div>
-  </main>
-
   <!-- Slide-over Customer Detail & Tier Drawer -->
-  <div id="drawer-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden transition-opacity opacity-0"></div>
-  <aside
-    id="user-drawer"
-    class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white border-l border-black/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col"
-    aria-label="Customer Profile Drawer"
-  >
+  <Fragment slot="modals">
+    <div id="drawer-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden transition-opacity opacity-0"></div>
+    <aside
+      id="user-drawer"
+      class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white border-l border-black/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col"
+      aria-label="Customer Profile Drawer"
+    >
     <div class="p-5 border-b border-black/5 flex items-center justify-between">
       <div>
         <h3 class="text-sm font-semibold text-[#1d1d1f]">Customer Profile & Access</h3>
@@ -555,7 +548,8 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
       </button>
     </div>
   </aside>
-</Layout>
+  </Fragment>
+</AdminLayout>
 
 <script>
   function escapeHtml(str: any): string {
