@@ -11,30 +11,49 @@ export const GET: APIRoute = async ({ request, url }) => {
   const appId = getRuntimeEnv('LOGTO_APP_ID', cfEnv);
   const returnUrl = url.searchParams.get('returnUrl') || '/account';
 
-  const user = await getSessionFromRequest(request, cfEnv);
+  const reqUrl = new URL(request.url);
+  const protocol = reqUrl.protocol;
+  const host = reqUrl.host;
+  const callbackUrl = `${protocol}//${host}/api/auth/callback`;
 
-  // If Logto OIDC is active, redirect to Logto official hosted password reset flow
+  const user = await getSessionFromRequest(request, cfEnv);
+  const emailHint = user?.email || url.searchParams.get('email') || '';
+
+  // 1. Production / Live Logto OIDC Flow
+  // Directs to Logto's hosted reset password experience with an active OIDC session
   if (endpoint && appId) {
-    const forgotPasswordUrl = new URL(`${endpoint}/forgot-password`);
-    forgotPasswordUrl.searchParams.set('client_id', appId);
-    if (user?.email) {
-      forgotPasswordUrl.searchParams.set('identifier', user.email);
+    const state = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+    const authUrl = new URL(`${endpoint}/oidc/auth`);
+    authUrl.searchParams.set('client_id', appId);
+    authUrl.searchParams.set('redirect_uri', callbackUrl);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', 'openid profile email roles');
+    authUrl.searchParams.set('first_screen', 'reset_password');
+    authUrl.searchParams.set('state', state);
+
+    if (emailHint) {
+      authUrl.searchParams.set('login_hint', emailHint);
     }
+
+    const stateCookiePayload = JSON.stringify({ state, returnUrl, isPopup: false });
+    const stateCookie = `logto_oauth_state=${encodeURIComponent(stateCookiePayload)}; Path=/; Max-Age=600; HttpOnly; SameSite=Lax`;
+
     return new Response(null, {
       status: 302,
       headers: {
-        Location: forgotPasswordUrl.toString(),
+        Location: authUrl.toString(),
+        'Set-Cookie': stateCookie,
       },
     });
   }
 
-  // Developer / Local Preview Fallback
+  // 2. Local Development & Demo Interactive Login Screen (Zero friction fallback)
   return new Response(
     JSON.stringify({
       message: 'Password reset is managed securely by Logto Identity Cloud.',
       howToConfigure: 'Set LOGTO_ENDPOINT and LOGTO_APP_ID in your environment variables.',
       endpoint: endpoint || 'Not configured',
-      currentEmail: user?.email || 'Anonymous',
+      currentEmail: emailHint || 'Anonymous',
     }),
     {
       status: 200,
