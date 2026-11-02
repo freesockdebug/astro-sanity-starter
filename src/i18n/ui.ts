@@ -1,10 +1,10 @@
 // src/i18n/ui.ts
 
 export const LANGUAGES = {
-  en: { code: 'en', label: 'English', short: 'EN', flag: '🇬🇧' },
-  de: { code: 'de', label: 'Deutsch', short: 'DE', flag: '🇩🇪' },
-  fr: { code: 'fr', label: 'Français', short: 'FR', flag: '🇫🇷' },
-  es: { code: 'es', label: 'Español', short: 'ES', flag: '🇪🇸' },
+  en: { code: 'en', label: 'English', short: 'EN' },
+  de: { code: 'de', label: 'Deutsch', short: 'DE' },
+  fr: { code: 'fr', label: 'Français', short: 'FR' },
+  es: { code: 'es', label: 'Español', short: 'ES' },
 } as const;
 
 export type SupportedLocale = keyof typeof LANGUAGES;
