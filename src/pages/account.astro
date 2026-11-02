@@ -4,7 +4,7 @@ import Layout from '@layouts/Layout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
 import { getUserByIdOrEmail, getUserLoginHistory } from '@utils/db';
-import { getLangFromUrl, getLocalizedPath } from '@i18n';
+import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -16,6 +16,7 @@ Astro.response.headers.set('Pragma', 'no-cache');
 Astro.response.headers.set('Expires', '0');
 
 const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
 const sessionUser = await getSessionFromRequest(Astro, cfEnv);
 
 if (!sessionUser) {
@@ -27,8 +28,8 @@ const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
 const loginHistory = await getUserLoginHistory(sessionUser.id, 20);
 
 const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);
-const pageTitle = 'Account & Security Settings | GwenVenni Atelier';
-const pageDesc = 'Manage your B2B atelier profile, authentication credentials, and inspect security login sessions.';
+const pageTitle = t('account.metaTitle');
+const pageDesc = t('account.metaDesc');
 ---
 
 <Layout title={pageTitle} description={pageDesc}>
@@ -39,12 +40,12 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
       <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
         <div>
           <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
-            <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">Home</a>
+            <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">{t('nav.home')}</a>
             <span>/</span>
-            <span class="text-[#1d1d1f] font-medium">Account & Security</span>
+            <span class="text-[#1d1d1f] font-medium">{t('account.breadcrumb')}</span>
           </nav>
           <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
-            Client Profile & Security
+            {t('account.title')}
           </h1>
         </div>
 
@@ -53,21 +54,21 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
             href={getLocalizedPath('/orders', currentLang)}
             class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all shadow-2xs inline-flex items-center gap-1.5"
           >
-            <span>📦 Order Center</span>
+            <span>📦 {t('account.orderCenter')}</span>
           </a>
           {sessionUser.isAdmin && (
             <a
               href="/admin/users"
               class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs"
             >
-              Admin Workspace
+              {t('account.adminWorkspace')}
             </a>
           )}
           <a
             href="/api/auth/logout"
             class="px-3.5 py-1.5 rounded-full text-xs font-medium text-[#86868b] hover:text-black hover:bg-black/5 transition-all"
           >
-            Sign Out
+            {t('account.signOut')}
           </a>
         </div>
       </div>
@@ -80,9 +81,9 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <span class="font-semibold text-sm text-[#1d1d1f]">{dbUser?.name || sessionUser.name || 'B2B Client'}</span>
+              <span class="font-semibold text-sm text-[#1d1d1f]">{dbUser?.name || sessionUser.name || t('account.clientRole')}</span>
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
-                {dbUser?.tier || 'STANDARD'} TIER
+                {dbUser?.tier || 'STANDARD'} {t('account.tier')}
               </span>
             </div>
             <span class="text-xs text-[#86868b] font-mono block mt-0.5">{sessionUser.email}</span>
@@ -90,36 +91,43 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
         </div>
 
         <div class="text-left sm:text-right text-[11px] text-[#86868b]">
-          <span>Member ID: <strong class="font-mono text-[#1d1d1f]">{sessionUser.id.slice(0, 16)}...</strong></span>
-          <span class="block">Identity Protected by <strong class="text-[#1d1d1f]">Logto OIDC Cloud</strong></span>
+          <span>{t('account.memberId')}: <strong class="font-mono text-[#1d1d1f]">{sessionUser.id.slice(0, 16)}...</strong></span>
+          <span class="block">{t('account.protectedBy')} <strong class="text-[#1d1d1f]">Logto OIDC Cloud</strong></span>
         </div>
       </div>
 
       <!-- Section 1: Profile Maintenance -->
       <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
         <div>
-          <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">B2B Client Information</h2>
+          <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionProfile')}</h2>
           <p class="text-[11px] text-[#86868b] mt-0.5">
-            Keep your couture house, delivery destination, and contact details up to date for faster quote verification.
+            {t('account.sectionProfileDesc')}
           </p>
         </div>
 
-        <form id="profile-form" class="space-y-4 text-xs">
+        <form
+          id="profile-form"
+          class="space-y-4 text-xs"
+          data-msg-saving={t('account.saving')}
+          data-msg-save={t('account.saveProfile')}
+          data-msg-success={t('account.profileUpdated')}
+          data-msg-failed={t('account.profileFailed')}
+        >
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="profile-name" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Contact Name</label>
+              <label for="profile-name" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.nameLabel')}</label>
               <input
                 type="text"
                 id="profile-name"
                 name="name"
                 value={dbUser?.name || sessionUser.name || ''}
-                placeholder="e.g. Eleanor Vance"
+                placeholder={t('account.namePlaceholder')}
                 class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
               />
             </div>
 
             <div>
-              <label for="profile-email" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Work Email (Read-only)</label>
+              <label for="profile-email" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.emailLabel')}</label>
               <input
                 type="email"
                 id="profile-email"
@@ -130,31 +138,31 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
             </div>
 
             <div>
-              <label for="profile-company" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Company / Atelier Name</label>
+              <label for="profile-company" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.companyLabel')}</label>
               <input
                 type="text"
                 id="profile-company"
                 name="company"
                 value={dbUser?.company || ''}
-                placeholder="e.g. Maison de Haute Couture Paris"
+                placeholder={t('account.companyPlaceholder')}
                 class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
               />
             </div>
 
             <div>
-              <label for="profile-country" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Destination Country / Region</label>
+              <label for="profile-country" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.countryLabel')}</label>
               <input
                 type="text"
                 id="profile-country"
                 name="country"
                 value={dbUser?.country || ''}
-                placeholder="e.g. France, Germany, United States"
+                placeholder={t('account.countryPlaceholder')}
                 class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
               />
             </div>
 
             <div class="sm:col-span-2">
-              <label for="profile-phone" class="block font-semibold mb-1 text-[11px] text-[#52525b]">Phone / WhatsApp (For Expedited Delivery Updates)</label>
+              <label for="profile-phone" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.phoneLabel')}</label>
               <input
                 type="text"
                 id="profile-phone"
@@ -174,7 +182,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
               id="save-profile-btn"
               class="px-5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs active:scale-95 cursor-pointer"
             >
-              Save Profile Changes
+              {t('account.saveProfile')}
             </button>
           </div>
         </form>
@@ -184,22 +192,22 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
       <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">Password & Security Credentials</h2>
+            <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionSecurity')}</h2>
             <p class="text-[11px] text-[#86868b] mt-0.5">
-              Your authentication credentials are encrypted and governed by Logto OpenID Connect protocols.
+              {t('account.sectionSecurityDesc')}
             </p>
           </div>
           <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shrink-0">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            Logto Cloud Active
+            {t('account.logtoActive')}
           </span>
         </div>
 
         <div class="p-4 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div class="space-y-1">
-            <span class="font-semibold text-xs text-[#1d1d1f] block">Account Password</span>
+            <span class="font-semibold text-xs text-[#1d1d1f] block">{t('account.passwordCardTitle')}</span>
             <p class="text-[11px] text-[#86868b] max-w-lg leading-relaxed">
-              Update your account credentials securely. Your new password will be synced with Logto Identity Cloud immediately.
+              {t('account.passwordCardDesc')}
             </p>
           </div>
 
@@ -211,7 +219,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
-            <span>Change Password</span>
+            <span>{t('account.changePasswordBtn')}</span>
           </button>
         </div>
       </div>
@@ -220,27 +228,27 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
       <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">Login Activity & Security Sessions</h2>
+            <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionActivity')}</h2>
             <p class="text-[11px] text-[#86868b] mt-0.5">
-              Review recent sign-ins to ensure your atelier account has not been accessed without authorization.
+              {t('account.sectionActivityDesc')}
             </p>
           </div>
-          <span class="text-[11px] text-[#86868b] font-mono">Retention: 90 Days</span>
+          <span class="text-[11px] text-[#86868b] font-mono">{t('account.retention')}</span>
         </div>
 
         {loginHistory.length === 0 ? (
           <div class="p-6 rounded-xl bg-[#f5f5f7] text-center text-xs text-[#86868b]">
-            No historical login sessions recorded yet. New sessions will appear here automatically.
+            {t('account.noActivity')}
           </div>
         ) : (
           <div class="overflow-x-auto rounded-xl border border-black/5">
             <table class="w-full text-left text-xs">
               <thead class="bg-[#f5f5f7] text-[#86868b] font-medium border-b border-black/5">
                 <tr>
-                  <th class="py-2.5 px-3.5">Sign-in Date & Time</th>
-                  <th class="py-2.5 px-3.5">IP Address</th>
-                  <th class="py-2.5 px-3.5">Location</th>
-                  <th class="py-2.5 px-3.5">Device & Browser</th>
+                  <th class="py-2.5 px-3.5">{t('account.thTime')}</th>
+                  <th class="py-2.5 px-3.5">{t('account.thIp')}</th>
+                  <th class="py-2.5 px-3.5">{t('account.thLocation')}</th>
+                  <th class="py-2.5 px-3.5">{t('account.thDevice')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-black/5 bg-white">
@@ -250,10 +258,10 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
                   const locationStr = [item.city, item.country].filter(Boolean).join(', ') || 'Global';
                   
                   // Clean simplified device summary
-                  let deviceSummary = 'Desktop Web';
-                  if (/mobile|iphone|android/i.test(item.user_agent)) deviceSummary = 'Mobile Device';
-                  else if (/macintosh|mac os/i.test(item.user_agent)) deviceSummary = 'macOS Browser';
-                  else if (/windows/i.test(item.user_agent)) deviceSummary = 'Windows PC';
+                  let deviceSummary = t('account.deviceDesktop');
+                  if (/mobile|iphone|android/i.test(item.user_agent)) deviceSummary = t('account.deviceMobile');
+                  else if (/macintosh|mac os/i.test(item.user_agent)) deviceSummary = t('account.deviceMac');
+                  else if (/windows/i.test(item.user_agent)) deviceSummary = t('account.deviceWindows');
 
                   return (
                     <tr class="hover:bg-[#fbfbfd] transition-colors">
@@ -261,7 +269,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
                         <LocalTime datetime={item.created_at} class="text-[#1d1d1f] font-semibold" />
                         {isLatest && (
                           <span class="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
-                            Current
+                            {t('account.currentSession')}
                           </span>
                         )}
                       </td>
@@ -287,7 +295,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span>
-            Notice any unfamiliar IP or location? We recommend immediately changing your password in Logto to revoke all external active sessions.
+            {t('account.securityNotice')}
           </span>
         </div>
       </div>
@@ -302,6 +310,11 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
     role="dialog"
     aria-modal="true"
     aria-labelledby="modal-title"
+    data-msg-mismatch={t('account.passwordMismatch')}
+    data-msg-short={t('account.passwordTooShort')}
+    data-msg-saving={t('account.savingPassword')}
+    data-msg-save={t('account.savePasswordBtn')}
+    data-msg-success={t('account.passwordSuccess')}
   >
     <div
       id="password-modal-card"
@@ -309,8 +322,8 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
     >
       <div class="flex items-center justify-between border-b border-black/5 pb-3">
         <div>
-          <h3 id="modal-title" class="text-sm font-semibold text-[#1d1d1f]">Update Account Password</h3>
-          <p class="text-[11px] text-[#86868b] mt-0.5">Set a new password for <span class="font-mono text-[#1d1d1f]">{sessionUser.email}</span></p>
+          <h3 id="modal-title" class="text-sm font-semibold text-[#1d1d1f]">{t('account.modalTitle')}</h3>
+          <p class="text-[11px] text-[#86868b] mt-0.5">{t('account.modalDesc')} <span class="font-mono text-[#1d1d1f]">{sessionUser.email}</span></p>
         </div>
         <button
           type="button"
@@ -329,7 +342,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
 
         <div class="space-y-1.5">
           <label for="input-new-password" class="block text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wider">
-            New Password <span class="text-rose-500">*</span>
+            {t('account.newPasswordLabel')} <span class="text-rose-500">*</span>
           </label>
           <div class="relative">
             <input
@@ -338,7 +351,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
               name="password"
               required
               minlength="8"
-              placeholder="At least 8 characters"
+              placeholder={t('account.newPasswordPlaceholder')}
               class="w-full text-xs px-3.5 py-2.5 rounded-xl border border-black/15 bg-white text-[#1d1d1f] focus:outline-none focus:border-black focus:ring-1 focus:ring-black pr-10"
             />
             <button
@@ -353,12 +366,12 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
               </svg>
             </button>
           </div>
-          <span class="text-[10px] text-[#86868b] block">Must be at least 8 characters long</span>
+          <span class="text-[10px] text-[#86868b] block">{t('account.passwordHint')}</span>
         </div>
 
         <div class="space-y-1.5">
           <label for="input-confirm-password" class="block text-[11px] font-semibold text-[#1d1d1f] uppercase tracking-wider">
-            Confirm New Password <span class="text-rose-500">*</span>
+            {t('account.confirmPasswordLabel')} <span class="text-rose-500">*</span>
           </label>
           <div class="relative">
             <input
@@ -367,7 +380,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
               name="confirmPassword"
               required
               minlength="8"
-              placeholder="Re-enter your new password"
+              placeholder={t('account.confirmPasswordPlaceholder')}
               class="w-full text-xs px-3.5 py-2.5 rounded-xl border border-black/15 bg-white text-[#1d1d1f] focus:outline-none focus:border-black focus:ring-1 focus:ring-black pr-10"
             />
             <button
@@ -390,14 +403,14 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
             id="btn-cancel-password"
             class="px-4 py-2 rounded-xl text-xs font-medium text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors cursor-pointer"
           >
-            Cancel
+            {t('account.cancelBtn')}
           </button>
           <button
             type="submit"
             id="btn-submit-password"
             class="px-5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
-            <span id="btn-submit-password-text">Save New Password</span>
+            <span id="btn-submit-password-text">{t('account.savePasswordBtn')}</span>
           </button>
         </div>
       </form>
@@ -411,12 +424,17 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
   const saveBtn = document.getElementById('save-profile-btn') as HTMLButtonElement | null;
   const feedbackEl = document.getElementById('profile-feedback');
 
+  const profileMsgSaving = form?.dataset.msgSaving || 'Saving...';
+  const profileMsgSave = form?.dataset.msgSave || 'Save Profile Changes';
+  const profileMsgSuccess = form?.dataset.msgSuccess || '✓ Profile details updated successfully.';
+  const profileMsgFailed = form?.dataset.msgFailed || 'Failed to update profile';
+
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!saveBtn) return;
 
     saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
+    saveBtn.textContent = profileMsgSaving;
 
     const formData = new FormData(form);
     const payload = {
@@ -437,7 +455,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
       if (res.ok) {
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
-          feedbackEl.textContent = '✓ Profile details updated successfully.';
+          feedbackEl.textContent = profileMsgSuccess;
         }
         setTimeout(() => {
           if (feedbackEl) feedbackEl.className = 'hidden';
@@ -445,17 +463,17 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
       } else {
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
-          feedbackEl.textContent = data.error || 'Failed to update profile';
+          feedbackEl.textContent = data.error || profileMsgFailed;
         }
       }
     } catch (err: any) {
       if (feedbackEl) {
         feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
-        feedbackEl.textContent = err.message || 'Network error';
+        feedbackEl.textContent = err.message || profileMsgFailed;
       }
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Profile Changes';
+      saveBtn.textContent = profileMsgSave;
     }
   });
 
@@ -469,6 +487,12 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
   const alertEl = document.getElementById('password-alert');
   const submitBtn = document.getElementById('btn-submit-password') as HTMLButtonElement | null;
   const submitBtnText = document.getElementById('btn-submit-password-text');
+
+  const pwdMsgMismatch = modal?.dataset.msgMismatch || 'Passwords do not match';
+  const pwdMsgShort = modal?.dataset.msgShort || 'Password must be at least 8 characters long';
+  const pwdMsgSaving = modal?.dataset.msgSaving || 'Updating...';
+  const pwdMsgSave = modal?.dataset.msgSave || 'Save New Password';
+  const pwdMsgSuccess = modal?.dataset.msgSuccess || '✓ Password updated successfully!';
 
   function openPasswordModal() {
     if (!modal || !modalCard) return;
@@ -526,18 +550,18 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
 
     if (inputPwd.length < 8) {
       alertEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
-      alertEl.textContent = 'Password must be at least 8 characters long.';
+      alertEl.textContent = pwdMsgShort;
       return;
     }
 
     if (inputPwd !== inputConfirm) {
       alertEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
-      alertEl.textContent = 'Passwords do not match. Please verify and re-type.';
+      alertEl.textContent = pwdMsgMismatch;
       return;
     }
 
     submitBtn.disabled = true;
-    submitBtnText.textContent = 'Updating...';
+    submitBtnText.textContent = pwdMsgSaving;
 
     try {
       const res = await fetch('/api/user/password', {
@@ -549,7 +573,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
       const data = await res.json();
       if (res.ok && data.success) {
         alertEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
-        alertEl.textContent = '✓ ' + (data.message || 'Password updated successfully!');
+        alertEl.textContent = pwdMsgSuccess;
         setTimeout(() => {
           closePasswordModal();
         }, 1500);
@@ -562,7 +586,7 @@ const pageDesc = 'Manage your B2B atelier profile, authentication credentials, a
       alertEl.textContent = err.message || 'Network communication error.';
     } finally {
       submitBtn.disabled = false;
-      submitBtnText.textContent = 'Save New Password';
+      submitBtnText.textContent = pwdMsgSave;
     }
   });
 </script>
