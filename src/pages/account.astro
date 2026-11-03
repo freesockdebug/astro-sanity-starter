@@ -42,7 +42,7 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
 
 <Layout title={pageTitle} description={pageDesc}>
   <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
+    <div class="max-w-[90rem] mx-auto px-[clamp(1rem,0.4rem+2.5vw,3rem)] space-y-6">
 
       <!-- Unified Buyer Header -->
       <BuyerHeader
@@ -51,14 +51,14 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
         dbUser={dbUser}
       />
 
-      <!-- Main Layout: 2-Column Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Main Layout: 2-Column Asymmetric Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-[clamp(1rem,0.5rem+1vw,1.75rem)] items-start">
 
-        <!-- Left Column (2 Cols): Profile Form & Password Management -->
-        <div class="lg:col-span-2 space-y-6">
+        <!-- Left Column (8/12 Cols): Profile Form & Password Management -->
+        <div class="lg:col-span-7 xl:col-span-8 space-y-6">
 
           <!-- Section 1: Profile Maintenance -->
-          <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
+          <div class="bg-white rounded-2xl border border-black/5 p-[clamp(1.125rem,0.8rem+0.8vw,1.75rem)] shadow-2xs space-y-4">
             <div>
               <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionProfile')}</h2>
               <p class="text-[11px] text-[#86868b] mt-0.5">
@@ -150,7 +150,7 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
           </div>
 
           <!-- Section 2: Security & Password Management -->
-          <div class="bg-white rounded-2xl border border-black/5 p-6 shadow-2xs space-y-4">
+          <div class="bg-white rounded-2xl border border-black/5 p-[clamp(1.125rem,0.8rem+0.8vw,1.75rem)] shadow-2xs space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionSecurity')}</h2>
@@ -187,11 +187,11 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
 
         </div>
 
-        <!-- Right Column (1 Col): Tier Perks & Login Activity -->
-        <div class="lg:col-span-1 space-y-6">
+        <!-- Right Column (4/12 Cols): Tier Perks & Login Activity -->
+        <div class="lg:col-span-5 xl:col-span-4 space-y-6">
 
           <!-- B2B Tier Privileges Card -->
-          <div class="bg-white rounded-2xl border border-black/5 p-5 sm:p-6 shadow-2xs space-y-4">
+          <div class="bg-white rounded-2xl border border-black/5 p-[clamp(1.125rem,0.8rem+0.8vw,1.75rem)] shadow-2xs space-y-4">
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">B2B Membership</span>
               <span class:list={[
@@ -278,7 +278,7 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
           </div>
 
           <!-- Section 3: Login Security Activity -->
-          <div class="bg-white rounded-2xl border border-black/5 p-5 sm:p-6 shadow-2xs space-y-4">
+          <div class="bg-white rounded-2xl border border-black/5 p-[clamp(1.125rem,0.8rem+0.8vw,1.75rem)] shadow-2xs space-y-4">
             <div class="flex items-center justify-between gap-2">
               <div>
                 <h2 class="text-sm font-semibold tracking-tight text-[#1d1d1f]">{t('account.sectionActivity')}</h2>
