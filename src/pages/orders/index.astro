@@ -1,8 +1,8 @@
 ---
 // src/pages/orders/index.astro
 import Layout from '@layouts/Layout.astro';
+import BuyerLayout from '@layouts/BuyerLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
-import BuyerHeader from '@components/buyer/BuyerHeader.astro';
 import { getSessionFromRequest } from '@utils/auth';
 import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, getUserByIdOrEmail, type OrderRecord } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
@@ -125,66 +125,16 @@ const getItemProductUrl = (item: any) => {
 };
 ---
 
-<Layout title={pageTitle} description={pageDesc}>
-  <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
-    <div class="max-w-[90rem] mx-auto px-[clamp(1rem,0.4rem+2.5vw,3rem)]">
-      
-      <!-- Session User: Unified Buyer Header -->
-      {sessionUser ? (
-        <BuyerHeader
-          currentTab="orders"
-          sessionUser={sessionUser}
-          dbUser={dbUser}
-          totalOrdersCount={rawActiveOrders.length}
-        />
-      ) : (
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
-          <div>
-            <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
-              <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">{t('nav.home')}</a>
-              <span>/</span>
-              <span class="text-[#1d1d1f] font-medium">{t('orders.breadcrumb')}</span>
-            </nav>
-            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
-              {t('orders.title')}
-            </h1>
-          </div>
-        </div>
-      )}
-
-      <!-- State 1: Unauthenticated Buyer -->
-      {!sessionUser && (
-        <div class="mt-12 bg-white rounded-2xl border border-black/5 p-8 sm:p-12 text-center max-w-xl mx-auto shadow-sm">
-          <div class="w-16 h-16 mx-auto rounded-full bg-[#f5f5f7] flex items-center justify-center text-[#1d1d1f] mb-4">
-            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-          </div>
-          <h2 class="text-xl font-semibold mb-2">{t('orders.unauthHeading')}</h2>
-          <p class="text-sm text-[#86868b] max-w-md mx-auto mb-6 leading-relaxed">
-            {t('orders.unauthDesc')}
-          </p>
-          <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href={`/api/auth/login?returnUrl=${encodeURIComponent(Astro.url.pathname)}`}
-              id="orders-signin-btn"
-              class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm cursor-pointer text-center inline-flex items-center justify-center gap-1.5"
-            >
-              {t('orders.signInBtn')}
-            </a>
-            <a
-              href={getLocalizedPath('/#collection', currentLang)}
-              class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-black/10 transition-all text-center"
-            >
-              {t('orders.browseCollections')}
-            </a>
-          </div>
-        </div>
-      )}
-
-      <!-- State 2: Authenticated Buyer -->
-      {sessionUser && (
-        <div class="space-y-6">
+{sessionUser ? (
+  <BuyerLayout
+    title={pageTitle}
+    description={pageDesc}
+    currentTab="orders"
+    sessionUser={sessionUser}
+    dbUser={dbUser}
+    totalOrdersCount={rawActiveOrders.length}
+  >
+    <div class="space-y-6">
           
           <!-- Admin View Mode Switcher & Auto Claim Banner -->
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -672,11 +622,55 @@ const getItemProductUrl = (item: any) => {
           </div>
 
         </div>
-      )}
+    </BuyerLayout>
+  ) : (
+    <Layout title={pageTitle} description={pageDesc}>
+      <main class="min-h-screen bg-[#f5f5f7] pt-24 pb-20 text-[#1d1d1f]">
+        <div class="max-w-[90rem] mx-auto px-[clamp(1rem,0.4rem+2.5vw,3rem)]">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/5 gap-4">
+            <div>
+              <nav class="flex items-center gap-2 text-xs text-[#86868b] mb-1">
+                <a href={getLocalizedPath('/', currentLang)} class="hover:text-black transition-colors">{t('nav.home')}</a>
+                <span>/</span>
+                <span class="text-[#1d1d1f] font-medium">{t('orders.breadcrumb')}</span>
+              </nav>
+              <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">
+                {t('orders.title')}
+              </h1>
+            </div>
+          </div>
 
-    </div>
-  </main>
-</Layout>
+          <div class="mt-12 bg-white rounded-2xl border border-black/5 p-8 sm:p-12 text-center max-w-xl mx-auto shadow-sm">
+            <div class="w-16 h-16 mx-auto rounded-full bg-[#f5f5f7] flex items-center justify-center text-[#1d1d1f] mb-4">
+              <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+            </div>
+            <h2 class="text-xl font-semibold mb-2">{t('orders.unauthHeading')}</h2>
+            <p class="text-sm text-[#86868b] max-w-md mx-auto mb-6 leading-relaxed">
+              {t('orders.unauthDesc')}
+            </p>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <a
+                href={`/api/auth/login?returnUrl=${encodeURIComponent(Astro.url.pathname)}`}
+                id="orders-signin-btn"
+                class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm cursor-pointer text-center inline-flex items-center justify-center gap-1.5"
+              >
+                {t('orders.signInBtn')}
+              </a>
+              <a
+                href={getLocalizedPath('/#collection', currentLang)}
+                class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-black/10 transition-all text-center"
+              >
+                {t('orders.browseCollections')}
+              </a>
+            </div>
+          </div>
+        </div>
+      </main>
+    </Layout>
+  )
+}
 
 <style>
   @media print {

@@ -1,0 +1,261 @@
+---
+// src/components/buyer/BuyerSidebar.astro
+// Unified Fluid B2B Vertical Sidebar for GwenVenni Atelier Buyer Portal
+import { getLocalizedPath, useTranslations } from '@i18n';
+
+interface Props {
+  currentTab: 'orders' | 'account';
+  sessionUser: {
+    id: string;
+    email: string;
+    name?: string;
+    company?: string;
+    isAdmin?: boolean;
+  };
+  dbUser?: {
+    tier?: string;
+    company?: string;
+    name?: string;
+    country?: string;
+    phone?: string;
+  } | null;
+  totalOrdersCount?: number;
+  currentLang: 'en' | 'de' | 'fr' | 'es';
+}
+
+const {
+  currentTab,
+  sessionUser,
+  dbUser,
+  totalOrdersCount = 0,
+  currentLang,
+} = Astro.props;
+
+const t = useTranslations(currentLang);
+
+const displayName = dbUser?.name || sessionUser.name || sessionUser.email.split('@')[0];
+const displayCompany = dbUser?.company || sessionUser.company || '';
+const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
+
+const tierColors: Record<string, { bg: string; label: string }> = {
+  VIP: { bg: 'bg-amber-100 text-amber-900 border-amber-300', label: 'VIP Buyer' },
+  PARTNER: { bg: 'bg-purple-100 text-purple-900 border-purple-300', label: 'Partner' },
+  STANDARD: { bg: 'bg-zinc-100 text-zinc-700 border-zinc-200', label: 'Standard' },
+};
+
+const currentTierStyle = tierColors[tier] || tierColors.STANDARD;
+const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCase();
+---
+
+<!-- Mobile Drawer Backdrop Overlay -->
+<div
+  id="buyer-sidebar-backdrop"
+  class="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 hidden opacity-0 transition-opacity duration-300 lg:hidden print:hidden"
+  aria-hidden="true"
+></div>
+
+<!-- Vertical Sidebar Shell: Slide-over on Mobile (< lg), Sticky on Desktop (>= lg) -->
+<aside
+  id="buyer-sidebar"
+  class="fixed inset-y-0 left-0 z-50 w-[clamp(14rem,11rem+4vw,17.5rem)] bg-white border-r border-black/10 flex flex-col justify-between transform -translate-x-full lg:translate-x-0 lg:static lg:h-screen lg:sticky lg:top-0 transition-transform duration-300 ease-in-out shrink-0 selection:bg-zinc-900 selection:text-white print:hidden"
+  aria-label="Buyer Navigation Sidebar"
+  data-profile-name={displayName}
+  data-profile-email={sessionUser.email}
+  data-profile-company={displayCompany}
+  data-profile-country={dbUser?.country || ''}
+  data-profile-phone={dbUser?.phone || ''}
+>
+  <!-- Top Brand & Status Section -->
+  <div class="p-5 border-b border-black/5 flex items-center justify-between">
+    <a href={getLocalizedPath('/', currentLang)} class="flex items-center gap-3 group">
+      <div class="w-9 h-9 rounded-xl bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-xs shrink-0 font-mono group-hover:scale-105 transition-transform">
+        GV
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold tracking-tight text-[#1d1d1f] truncate">GwenVenni</span>
+          <span class:list={['inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold border shrink-0', currentTierStyle.bg]}>
+            {currentTierStyle.label}
+          </span>
+        </div>
+        <p class="text-[10px] text-[#86868b] uppercase tracking-wider font-medium truncate mt-0.5">{t('buyer.portal')}</p>
+      </div>
+    </a>
+
+    <!-- Mobile Close Drawer Button -->
+    <button
+      id="buyer-close-sidebar-btn"
+      type="button"
+      class="p-1.5 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] lg:hidden transition-all text-sm cursor-pointer"
+      aria-label="Close sidebar"
+    >
+      ✕
+    </button>
+  </div>
+
+  <!-- Navigation Groups -->
+  <nav class="flex-1 overflow-y-auto px-3.5 py-5 space-y-6 text-xs" aria-label="Buyer Portal Sections">
+    <!-- Group 1: My Workspace -->
+    <div class="space-y-1">
+      <p class="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+        {t('buyer.workspace')}
+      </p>
+
+      <a
+        href={getLocalizedPath('/orders', currentLang)}
+        class:list={[
+          'flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all',
+          currentTab === 'orders'
+            ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+            : 'text-[#52525b] hover:text-black hover:bg-[#f5f5f7]'
+        ]}
+      >
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">📦</span>
+          <span>{t('orders.tabOrdersTitle')}</span>
+        </div>
+        {totalOrdersCount > 0 && (
+          <span class:list={[
+            'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
+            currentTab === 'orders' ? 'bg-white/20 text-white' : 'bg-black/5 text-[#52525b]'
+          ]}>
+            {totalOrdersCount}
+          </span>
+        )}
+      </a>
+
+      <a
+        href={getLocalizedPath('/account', currentLang)}
+        class:list={[
+          'flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all',
+          currentTab === 'account'
+            ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+            : 'text-[#52525b] hover:text-black hover:bg-[#f5f5f7]'
+        ]}
+      >
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">👤</span>
+          <span>{t('orders.tabAccountTitle')}</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Group 2: Sourcing & Catalog -->
+    <div class="space-y-1">
+      <p class="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+        {t('buyer.sourcing')}
+      </p>
+
+      <a
+        href={getLocalizedPath('/#collection', currentLang)}
+        class="flex items-center justify-between px-3 py-2 rounded-xl font-medium text-[#52525b] hover:text-black hover:bg-[#f5f5f7] transition-all"
+      >
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">✨</span>
+          <span>{t('buyer.browseCatalog')}</span>
+        </div>
+        <span class="text-[11px] text-[#86868b]">↗</span>
+      </a>
+
+      <button
+        type="button"
+        id="sidebar-open-quote-btn"
+        onclick="window.openQuoteDrawer && window.openQuoteDrawer()"
+        class="w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium text-[#52525b] hover:text-black hover:bg-[#f5f5f7] transition-all cursor-pointer text-left"
+      >
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">🛒</span>
+          <span>{t('buyer.openQuoteBag')}</span>
+        </div>
+        <span class="nav-quote-badge hidden font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold bg-[#1d1d1f] text-white">
+          0
+        </span>
+      </button>
+
+      <a
+        href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${displayName} from ${displayCompany || 'our atelier'} (${sessionUser.email}). I would like to consult on sock manufacturing.`)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center justify-between px-3 py-2 rounded-xl font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 transition-all"
+      >
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">💬</span>
+          <span>{t('buyer.concierge')}</span>
+        </div>
+        <span class="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1 rounded">1v1</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Bottom Admin / Sign Out & Profile Section -->
+  <div class="p-3.5 border-t border-black/5 bg-[#fafafa] space-y-2.5">
+    <!-- Buyer Profile Mini-Card -->
+    <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-xl bg-white border border-black/5">
+      <div class="w-7 h-7 rounded-lg bg-[#1d1d1f] text-white flex items-center justify-center font-mono font-semibold text-[11px] shrink-0">
+        {initial}
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="text-[11px] font-semibold text-[#1d1d1f] truncate">
+          {displayName}
+        </p>
+        <p class="text-[9px] text-[#86868b] font-mono truncate" title={sessionUser.email}>
+          {sessionUser.email}
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Action Links -->
+    <div class:list={['grid gap-1.5 pt-0.5 text-[11px]', sessionUser.isAdmin ? 'grid-cols-2' : 'grid-cols-1']}>
+      {sessionUser.isAdmin && (
+        <a
+          href="/admin/orders"
+          class="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all font-medium shadow-2xs hover:bg-[#f5f5f7]"
+          title="Switch to Admin Workspace"
+        >
+          <span>Admin ↗</span>
+        </a>
+      )}
+
+      <a
+        href="/api/auth/logout"
+        class="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all font-medium"
+      >
+        <span>{t('orders.signOut')}</span>
+      </a>
+    </div>
+  </div>
+</aside>
+
+<script>
+  // Sync profile cache into localStorage on any page using BuyerSidebar
+  try {
+    const sidebar = document.getElementById('buyer-sidebar');
+    if (sidebar) {
+      const email = sidebar.dataset.profileEmail;
+      if (email) {
+        const existing = localStorage.getItem('b2b_buyer_profile');
+        let profile = {
+          name: sidebar.dataset.profileName || '',
+          email: email,
+          company: sidebar.dataset.profileCompany || '',
+          country: sidebar.dataset.profileCountry || '',
+          phone: sidebar.dataset.profilePhone || '',
+        };
+        if (existing) {
+          try {
+            const parsed = JSON.parse(existing);
+            profile = {
+              name: profile.name || parsed.name || '',
+              email: profile.email || parsed.email || '',
+              company: profile.company || parsed.company || '',
+              country: profile.country || parsed.country || '',
+              phone: profile.phone || parsed.phone || '',
+            };
+          } catch {}
+        }
+        localStorage.setItem('b2b_buyer_profile', JSON.stringify(profile));
+      }
+    }
+  } catch {}
+</script>
+

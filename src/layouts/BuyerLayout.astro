@@ -1,0 +1,264 @@
+---
+// src/layouts/BuyerLayout.astro
+// Unified B2B Buyer Shell: Fluid Vertical Sidebar, Desktop Breadcrumb, Mobile Sticky Bars, and Embedded QuoteDrawer
+import Layout from './Layout.astro';
+import BuyerSidebar from '@components/buyer/BuyerSidebar.astro';
+import QuoteDrawer from '@components/QuoteDrawer.astro';
+import { getLocalizedPath, getLangFromUrl, useTranslations } from '@i18n';
+
+interface Props {
+  title: string;
+  description?: string;
+  currentTab: 'orders' | 'account';
+  sessionUser: {
+    id: string;
+    email: string;
+    name?: string;
+    company?: string;
+    isAdmin?: boolean;
+  };
+  dbUser?: {
+    tier?: string;
+    company?: string;
+    name?: string;
+    country?: string;
+    phone?: string;
+  } | null;
+  totalOrdersCount?: number;
+}
+
+const {
+  title,
+  description,
+  currentTab,
+  sessionUser,
+  dbUser,
+  totalOrdersCount = 0,
+} = Astro.props;
+
+const currentLang = getLangFromUrl(Astro.url);
+const t = useTranslations(currentLang);
+
+const tabNames: Record<string, string> = {
+  orders: t('orders.tabOrdersTitle'),
+  account: t('orders.tabAccountTitle'),
+};
+
+const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
+const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
+
+const tierColors: Record<string, { bg: string; label: string }> = {
+  VIP: { bg: 'bg-amber-100 text-amber-900 border-amber-300', label: 'VIP' },
+  PARTNER: { bg: 'bg-purple-100 text-purple-900 border-purple-300', label: 'PARTNER' },
+  STANDARD: { bg: 'bg-zinc-100 text-zinc-700 border-zinc-200', label: 'STANDARD' },
+};
+const currentTierStyle = tierColors[tier] || tierColors.STANDARD;
+---
+
+<Layout
+  title={`${title} | GwenVenni Atelier`}
+  description={description}
+  bare={true}
+  bodyClass="bg-[#f5f5f7] text-[#1d1d1f] font-sans antialiased selection:bg-zinc-900 selection:text-white min-h-screen"
+>
+  <div class="min-h-screen flex flex-col lg:flex-row">
+    <!-- 1. Left Grouped Vertical Sidebar (Slide-over on Mobile, Sticky on Desktop >= lg) -->
+    <BuyerSidebar
+      currentTab={currentTab}
+      sessionUser={sessionUser}
+      dbUser={dbUser}
+      totalOrdersCount={totalOrdersCount}
+      currentLang={currentLang}
+    />
+
+    <!-- 2. Right Main Canvas Area -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <!-- Mobile Top Sticky Bar (< lg): 56px (h-14) Compact Header -->
+      <header class="lg:hidden h-14 flex items-center justify-between px-3.5 bg-white/95 backdrop-blur-md border-b border-black/10 sticky top-0 z-30 shadow-2xs print:hidden">
+        <div class="flex items-center gap-2">
+          <button
+            id="buyer-open-sidebar-btn"
+            type="button"
+            class="p-2 -ml-1 rounded-xl text-[#1d1d1f] hover:bg-[#f5f5f7] active:scale-95 transition-all cursor-pointer"
+            aria-label="Open Navigation Menu"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <span class="text-sm font-bold tracking-tight text-[#1d1d1f]">GV Portal</span>
+          <span class:list={['inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold border', currentTierStyle.bg]}>
+            {currentTierStyle.label}
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            id="mobile-header-quote-btn"
+            onclick="window.openQuoteDrawer && window.openQuoteDrawer()"
+            class="relative p-2 rounded-xl text-[#1d1d1f] hover:bg-[#f5f5f7] transition-all cursor-pointer"
+            aria-label="Open Quote Basket"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+            <span class="nav-quote-badge hidden absolute -top-0.5 -right-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[#1d1d1f] text-white min-w-[14px] text-center shadow-xs">
+              0
+            </span>
+          </button>
+
+          <a
+            href={getLocalizedPath('/#collection', currentLang)}
+            class="px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-black text-xs font-medium"
+          >
+            {t('buyer.browseCatalog')} ↗
+          </a>
+        </div>
+      </header>
+
+      <!-- Desktop Top Context Breadcrumb Bar (>= lg) -->
+      <header class="hidden lg:flex items-center justify-between px-8 py-3.5 bg-white border-b border-black/5 shrink-0 print:hidden">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="text-[#86868b]">{t('buyer.portal')}</span>
+          <span class="text-[#86868b]">/</span>
+          <span class="font-semibold text-[#1d1d1f]">{currentTabTitle}</span>
+        </div>
+
+        <div class="flex items-center gap-4 text-xs">
+          <a
+            href={getLocalizedPath('/#collection', currentLang)}
+            class="text-[#52525b] hover:text-[#1d1d1f] transition-colors font-medium flex items-center gap-1"
+          >
+            <span>← {t('buyer.backToCatalog')}</span>
+          </a>
+
+          <button
+            type="button"
+            id="desktop-header-quote-btn"
+            onclick="window.openQuoteDrawer && window.openQuoteDrawer()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1d1d1f] hover:bg-black text-white transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+          >
+            <span>🛒 {t('buyer.openQuoteBag')}</span>
+            <span class="nav-quote-badge hidden px-1.5 py-0.2 rounded-md text-[10px] font-bold bg-white text-[#1d1d1f]">
+              0
+            </span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Dynamic Content Canvas: Bottom padded pb-24 on mobile to clear Bottom Tab Bar -->
+      <div class="flex-1 p-[clamp(1rem,0.4rem+2vw,2.25rem)] pb-24 lg:pb-8 w-full max-w-[1700px] mx-auto">
+        <slot />
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile High-Frequency Bottom Tab Bar (< lg) -->
+  <nav
+    class="fixed bottom-0 inset-x-0 h-14 bg-white/95 backdrop-blur-md border-t border-black/10 z-30 lg:hidden flex items-center justify-around px-2 pb-[max(0px,env(safe-area-inset-bottom))] shadow-lg print:hidden"
+    aria-label="Mobile Quick Bottom Navigation"
+  >
+    <!-- Tab 1: Orders -->
+    <a
+      href={getLocalizedPath('/orders', currentLang)}
+      class:list={[
+        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
+        currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+      ]}
+    >
+      <div class="relative">
+        <span class="text-base">📦</span>
+        {totalOrdersCount > 0 && (
+          <span class="absolute -top-1 -right-2 bg-amber-500 text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
+            {totalOrdersCount}
+          </span>
+        )}
+      </div>
+      <span>Orders</span>
+    </a>
+
+    <!-- Tab 2: Account -->
+    <a
+      href={getLocalizedPath('/account', currentLang)}
+      class:list={[
+        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+        currentTab === 'account' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+      ]}
+    >
+      <span class="text-base">👤</span>
+      <span>Account</span>
+    </a>
+
+    <!-- Tab 3: Quote Bag Drawer -->
+    <button
+      type="button"
+      id="mobile-bottom-quote-btn"
+      onclick="window.openQuoteDrawer && window.openQuoteDrawer()"
+      class="flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors text-[#86868b] hover:text-black cursor-pointer"
+    >
+      <div class="relative">
+        <span class="text-base">🛒</span>
+        <span class="nav-quote-badge hidden absolute -top-1 -right-2 bg-[#1d1d1f] text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
+          0
+        </span>
+      </div>
+      <span>Quote Bag</span>
+    </button>
+
+    <!-- Tab 4: Catalog -->
+    <a
+      href={getLocalizedPath('/#collection', currentLang)}
+      class="flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors text-[#86868b] hover:text-black"
+    >
+      <span class="text-base">✨</span>
+      <span>Catalog</span>
+    </a>
+  </nav>
+
+  <!-- Mount Quote Drawer (Required for RFQ and Reordering) -->
+  <QuoteDrawer />
+
+  <!-- Pure Vanilla JS for Mobile Sidebar Drawer Toggle -->
+  <script is:inline>
+    (function() {
+      var openBtn = document.getElementById('buyer-open-sidebar-btn');
+      var closeBtn = document.getElementById('buyer-close-sidebar-btn');
+      var backdrop = document.getElementById('buyer-sidebar-backdrop');
+      var sidebar = document.getElementById('buyer-sidebar');
+
+      function openSidebar() {
+        if (!sidebar || !backdrop) return;
+        backdrop.classList.remove('hidden');
+        requestAnimationFrame(function() {
+          backdrop.classList.remove('opacity-0');
+          backdrop.classList.add('opacity-100');
+          sidebar.classList.remove('-translate-x-full');
+        });
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSidebar() {
+        if (!sidebar || !backdrop) return;
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.remove('opacity-100');
+        backdrop.classList.add('opacity-0');
+        setTimeout(function() {
+          backdrop.classList.add('hidden');
+          document.body.style.overflow = '';
+        }, 300);
+      }
+
+      if (openBtn) openBtn.addEventListener('click', openSidebar);
+      if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+      if (backdrop) backdrop.addEventListener('click', closeSidebar);
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && sidebar && !sidebar.classList.contains('-translate-x-full')) {
+          closeSidebar();
+        }
+      });
+    })();
+  </script>
+</Layout>
+

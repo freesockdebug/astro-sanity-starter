@@ -221,6 +221,13 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'orders.actionTrack': 'Track Parcel',
     'orders.tabOrdersTitle': 'My Orders & Inquiries',
     'orders.tabAccountTitle': 'Company Profile & Security',
+    'buyer.portal': 'Buyer Portal',
+    'buyer.workspace': 'My Workspace',
+    'buyer.sourcing': 'Sourcing & Catalog',
+    'buyer.browseCatalog': 'Browse Catalog',
+    'buyer.openQuoteBag': 'Quote Basket',
+    'buyer.concierge': 'VIP Concierge',
+    'buyer.backToCatalog': 'Back to Catalog',
 
     // Account & Security
     'account.title': 'Client Profile & Security',
@@ -488,6 +495,13 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'orders.actionTrack': 'Sendung verfolgen',
     'orders.tabOrdersTitle': 'Meine Bestellungen & Anfragen',
     'orders.tabAccountTitle': 'Unternehmensprofil & Sicherheit',
+    'buyer.portal': 'Käuferportal',
+    'buyer.workspace': 'Mein Arbeitsbereich',
+    'buyer.sourcing': 'Beschaffung & Katalog',
+    'buyer.browseCatalog': 'Katalog durchstöbern',
+    'buyer.openQuoteBag': 'Anfragekorb',
+    'buyer.concierge': 'VIP-Concierge',
+    'buyer.backToCatalog': 'Zurück zum Katalog',
 
     // Account & Security
     'account.title': 'Kundenprofil & Sicherheit',
@@ -755,6 +769,13 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'orders.actionTrack': 'Suivre le colis',
     'orders.tabOrdersTitle': 'Mes commandes & devis',
     'orders.tabAccountTitle': 'Profil entreprise & sécurité',
+    'buyer.portal': 'Portail Acheteur',
+    'buyer.workspace': 'Mon espace de travail',
+    'buyer.sourcing': 'Sourcing & Catalogue',
+    'buyer.browseCatalog': 'Parcourir le catalogue',
+    'buyer.openQuoteBag': 'Panier de devis',
+    'buyer.concierge': 'Concierge VIP',
+    'buyer.backToCatalog': 'Retour au catalogue',
 
     // Account & Security
     'account.title': 'Profil Client & Sécurité',
@@ -1022,6 +1043,13 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
     'orders.actionTrack': 'Seguir paquete',
     'orders.tabOrdersTitle': 'Mis pedidos y cotizaciones',
     'orders.tabAccountTitle': 'Perfil de empresa y seguridad',
+    'buyer.portal': 'Portal Comprador',
+    'buyer.workspace': 'Mi espacio de trabajo',
+    'buyer.sourcing': 'Abastecimiento y catálogo',
+    'buyer.browseCatalog': 'Explorar catálogo',
+    'buyer.openQuoteBag': 'Cesta de cotización',
+    'buyer.concierge': 'Conserje VIP',
+    'buyer.backToCatalog': 'Volver al catálogo',
 
     // Account & Security
     'account.title': 'Perfil de Cliente y Seguridad',
