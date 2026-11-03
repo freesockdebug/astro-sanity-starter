@@ -468,7 +468,7 @@ if (reqCountryCode) {
 
     // Update Badges across page
     if (badgeCount) badgeCount.textContent = totalCount.toString();
-    const navBadges = document.querySelectorAll('.nav-quote-badge');
+    const navBadges = document.querySelectorAll('.nav-quote-badge, .quote-badge');
     navBadges.forEach((el) => {
       el.textContent = totalCount.toString();
       if (totalCount > 0) {

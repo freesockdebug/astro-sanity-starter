@@ -147,7 +147,7 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
       </p>
 
       <a
-        href={getLocalizedPath('/#collection', currentLang)}
+        href={getLocalizedPath('/products', currentLang)}
         class="flex items-center justify-between px-3 py-2 rounded-xl font-medium text-[#52525b] hover:text-black hover:bg-[#f5f5f7] transition-all"
       >
         <div class="flex items-center gap-2.5">
@@ -157,20 +157,19 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
         <span class="text-[11px] text-[#86868b]">↗</span>
       </a>
 
-      <button
-        type="button"
+      <label
+        for="quote-drawer-toggle"
         id="sidebar-open-quote-btn"
-        onclick="window.openQuoteDrawer && window.openQuoteDrawer()"
         class="w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium text-[#52525b] hover:text-black hover:bg-[#f5f5f7] transition-all cursor-pointer text-left"
       >
         <div class="flex items-center gap-2.5">
           <span class="text-sm">🛒</span>
           <span>{t('buyer.openQuoteBag')}</span>
         </div>
-        <span class="nav-quote-badge hidden font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold bg-[#1d1d1f] text-white">
+        <span class="nav-quote-badge quote-badge hidden font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold bg-[#1d1d1f] text-white">
           0
         </span>
-      </button>
+      </label>
 
       <a
         href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${displayName} from ${displayCompany || 'our atelier'} (${sessionUser.email}). I would like to consult on sock manufacturing.`)}`}

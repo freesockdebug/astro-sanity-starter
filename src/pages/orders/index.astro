@@ -120,7 +120,7 @@ const getItemProductUrl = (item: any) => {
   const pid = item?.product_id ? String(item.product_id).trim() : '';
   if (!pid) return null;
   if (pid.startsWith('spec-')) return getLocalizedPath(`/products/${pid.replace(/^spec-/, '')}`, currentLang);
-  if (pid === 'swatch-kit-sample' || pid.startsWith('swatch-')) return getLocalizedPath('/#collection', currentLang);
+  if (pid === 'swatch-kit-sample' || pid.startsWith('swatch-')) return getLocalizedPath('/products', currentLang);
   return getLocalizedPath(`/products/${pid}`, currentLang);
 };
 ---
@@ -180,8 +180,8 @@ const getItemProductUrl = (item: any) => {
             </div>
           )}
 
-          <!-- Filter & Search Bar -->
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <!-- Filter & Search Bar: Sticky under mobile 56px topbar (top-14) and desktop top (lg:top-0) -->
+          <div class="sticky top-14 lg:top-0 z-20 py-2.5 -my-2.5 bg-[#f5f5f7]/95 backdrop-blur-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <!-- Status Tabs -->
             <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
               {[
@@ -264,7 +264,7 @@ const getItemProductUrl = (item: any) => {
                 </a>
               ) : (
                 <a
-                  href={getLocalizedPath('/#collection', currentLang)}
+                  href={getLocalizedPath('/products', currentLang)}
                   class="inline-flex items-center px-5 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all"
                 >
                   {t('orders.exploreStyles')}
@@ -659,7 +659,7 @@ const getItemProductUrl = (item: any) => {
                 {t('orders.signInBtn')}
               </a>
               <a
-                href={getLocalizedPath('/#collection', currentLang)}
+                href={getLocalizedPath('/products', currentLang)}
                 class="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-black/10 transition-all text-center"
               >
                 {t('orders.browseCollections')}

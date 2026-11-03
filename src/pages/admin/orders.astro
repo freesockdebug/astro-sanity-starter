@@ -70,7 +70,7 @@ const getItemProductUrl = (item: any) => {
   const pid = item?.product_id ? String(item.product_id).trim() : '';
   if (!pid) return null;
   if (pid.startsWith('spec-')) return getLocalizedPath(`/products/${pid.replace(/^spec-/, '')}`, currentLang);
-  if (pid === 'swatch-kit-sample' || pid.startsWith('swatch-')) return getLocalizedPath('/#collection', currentLang);
+  if (pid === 'swatch-kit-sample' || pid.startsWith('swatch-')) return getLocalizedPath('/products', currentLang);
   return getLocalizedPath(`/products/${pid}`, currentLang);
 };
 ---
