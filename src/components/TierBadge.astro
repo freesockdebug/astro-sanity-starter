@@ -1,0 +1,28 @@
+---
+// src/components/TierBadge.astro
+// Single Source of Truth for B2B Buyer Tier Badges
+import { getTierConfig } from '@utils/tier';
+
+interface Props {
+  tier?: string | null;
+  class?: string;
+  size?: 'sm' | 'md';
+  variant?: 'full' | 'short' | 'custom';
+}
+
+const {
+  tier,
+  class: customClass = '',
+  size = 'md',
+  variant = 'full',
+} = Astro.props;
+
+const config = getTierConfig(tier);
+const sizeClass = size === 'sm' ? 'px-1.5 py-0.2 text-[9px]' : 'px-2.5 py-0.5 text-[10px]';
+const labelText = variant === 'short' ? config.shortLabel : config.label;
+---
+
+<span class:list={['inline-flex items-center rounded-full font-bold border shrink-0', config.bg, sizeClass, customClass]}>
+  <slot>{labelText}</slot>
+</span>
+

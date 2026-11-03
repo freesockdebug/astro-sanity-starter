@@ -2,25 +2,18 @@
 // src/pages/admin/users.astro
 import AdminLayout from '@layouts/AdminLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
-import { getSessionFromRequest, checkIsAdmin } from '@utils/auth';
-import { listAdminUsers, listAdminOrders } from '@utils/db';
+import TierBadge from '@components/TierBadge.astro';
+import { requireAdminContext } from '@utils/auth';
+import { listAdminUsers } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
-Astro.response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
-Astro.response.headers.set('CDN-Cache-Control', 'no-store');
-Astro.response.headers.set('Pragma', 'no-cache');
-Astro.response.headers.set('Expires', '0');
 
 const currentLang = getLangFromUrl(Astro.url);
-const sessionUser = await getSessionFromRequest(Astro, cfEnv);
-
-if (!sessionUser || !sessionUser.isAdmin) {
-  return Astro.redirect(`/api/auth/login?returnUrl=/admin/users`);
-}
+const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/users');
+if (redirectResponse) return redirectResponse;
 
 const currentSearch = Astro.url.searchParams.get('search') || '';
 const currentTier = Astro.url.searchParams.get('tier') || 'ALL';
@@ -28,16 +21,13 @@ const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
 const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 const pageSize = 30;
 
-const [{ users, total, stats }, ordersSummary] = await Promise.all([
-  listAdminUsers({
-    search: currentSearch,
-    tier: currentTier,
-    status: currentStatus,
-    page: currentPage,
-    limit: pageSize,
-  }),
-  listAdminOrders({ limit: 1 }), // for pending orders count badge
-]);
+const { users, total, stats } = await listAdminUsers({
+  search: currentSearch,
+  tier: currentTier,
+  status: currentStatus,
+  page: currentPage,
+  limit: pageSize,
+});
 
 const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -64,7 +54,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
   title={pageTitle}
   currentTab="users"
   sessionEmail={sessionUser.email}
-  pendingOrdersCount={ordersSummary?.stats?.pending || 0}
+  pendingOrdersCount={pendingOrdersCount}
 >
   <!-- Page Header -->
   <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-6 border-b border-black/5 gap-3">
@@ -249,14 +239,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
 
                         <td class="py-3.5 px-4">
                           <div class="flex items-center gap-1.5">
-                            <span class:list={[
-                              'px-2 py-0.5 rounded-md text-[10px] font-semibold border',
-                              u.tier === 'VIP' ? 'bg-amber-50 text-amber-800 border-amber-200' :
-                              u.tier === 'PARTNER' ? 'bg-purple-50 text-purple-800 border-purple-200' :
-                              'bg-zinc-100 text-zinc-700 border-zinc-200'
-                            ]}>
-                              {u.tier}
-                            </span>
+                            <TierBadge tier={u.tier} size="sm">{u.tier}</TierBadge>
                             {u.status === 'BLOCKED' ? (
                               <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                                 BLOCKED
@@ -349,14 +332,7 @@ const pageTitle = 'Customer & Access Management | GwenVenni Atelier Admin';
                       </div>
 
                       <div class="flex items-center gap-1">
-                        <span class:list={[
-                          'px-2 py-0.5 rounded-md text-[10px] font-semibold border',
-                          u.tier === 'VIP' ? 'bg-amber-50 text-amber-800 border-amber-200' :
-                          u.tier === 'PARTNER' ? 'bg-purple-50 text-purple-800 border-purple-200' :
-                          'bg-zinc-100 text-zinc-700 border-zinc-200'
-                        ]}>
-                          {u.tier}
-                        </span>
+                        <TierBadge tier={u.tier} size="sm">{u.tier}</TierBadge>
                         {u.status === 'BLOCKED' && (
                           <span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                             BLOCKED

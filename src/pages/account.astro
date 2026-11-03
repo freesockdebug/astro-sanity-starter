@@ -2,41 +2,26 @@
 // src/pages/account.astro
 import BuyerLayout from '@layouts/BuyerLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
-import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
-import { getUserByIdOrEmail, getUserLoginHistory } from '@utils/db';
-import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
+import TierBadge from '@components/TierBadge.astro';
+import { getBuyerContext, getRuntimeEnv } from '@utils/auth';
+import { getUserLoginHistory } from '@utils/db';
+import { getLangFromUrl, useTranslations } from '@i18n';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
-Astro.response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
-Astro.response.headers.set('CDN-Cache-Control', 'no-store');
-Astro.response.headers.set('Pragma', 'no-cache');
-Astro.response.headers.set('Expires', '0');
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
-const sessionUser = await getSessionFromRequest(Astro, cfEnv);
 
-if (!sessionUser) {
-  return Astro.redirect(`/api/auth/login?returnUrl=${encodeURIComponent(Astro.url.pathname)}`);
-}
+const { sessionUser, dbUser, redirectResponse } = await getBuyerContext(Astro, cfEnv, { requireLogin: true });
+if (redirectResponse) return redirectResponse;
 
-const user = sessionUser;
-const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
-
-if (dbUser && dbUser.status === 'BLOCKED') {
-  Astro.cookies.delete('gwenvenni_session', { path: '/' });
-  return Astro.redirect('/api/auth/login?error=account_suspended');
-}
-
-const loginHistory = await getUserLoginHistory(sessionUser.id, 20);
-
+const loginHistory = await getUserLoginHistory(sessionUser!.id, 20);
 const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);
 const pageTitle = t('account.metaTitle');
 const pageDesc = t('account.metaDesc');
-const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
+const tier = dbUser?.tier || 'STANDARD';
 ---
 
 <BuyerLayout
@@ -189,14 +174,7 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
           <div class="bg-white rounded-2xl border border-black/5 p-[clamp(1.125rem,0.8rem+0.8vw,1.75rem)] shadow-2xs space-y-4">
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">B2B Membership</span>
-              <span class:list={[
-                'px-2.5 py-0.5 rounded-full text-[10px] font-bold border',
-                tier === 'VIP' ? 'bg-amber-100 text-amber-900 border-amber-300' :
-                tier === 'PARTNER' ? 'bg-purple-100 text-purple-900 border-purple-300' :
-                'bg-zinc-100 text-zinc-700 border-zinc-200'
-              ]}>
-                {tier === 'VIP' ? 'VIP BUYER' : tier === 'PARTNER' ? 'ATELIER PARTNER' : 'STANDARD'}
-              </span>
+              <TierBadge tier={tier} />
             </div>
 
             <div class="space-y-3 pt-1">
@@ -255,7 +233,7 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
             </div>
             <div class="pt-2 flex items-center gap-2">
               <a
-                href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${dbUser?.name || sessionUser.name || 'a B2B client'} from ${dbUser?.company || 'our company'} (${sessionUser.email}). I would like to consult on custom sock manufacturing.`)}`}
+                href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${dbUser?.name || sessionUser.name || 'a B2B client'} from ${dbUser?.company || 'our company'} (${sessionUser.email}). I would like to consult on custom manufacturing & wholesale orders.`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="flex-1 py-2 px-3 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all text-center inline-flex items-center justify-center gap-1.5 shadow-sm"
@@ -446,24 +424,6 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
 </BuyerLayout>
 
 <script>
-  // Pre-seed localStorage profile cache on account page load
-  try {
-    const emailVal = (document.getElementById('profile-email') as HTMLInputElement)?.value || '';
-    const nameVal = (document.getElementById('profile-name') as HTMLInputElement)?.value || '';
-    const companyVal = (document.getElementById('profile-company') as HTMLInputElement)?.value || '';
-    const countryVal = (document.getElementById('profile-country') as HTMLInputElement)?.value || '';
-    const phoneVal = (document.getElementById('profile-phone') as HTMLInputElement)?.value || '';
-    if (emailVal) {
-      localStorage.setItem('b2b_buyer_profile', JSON.stringify({
-        name: nameVal,
-        email: emailVal,
-        company: companyVal,
-        country: countryVal,
-        phone: phoneVal,
-      }));
-    }
-  } catch {}
-
   // Profile update handling
   const form = document.getElementById('profile-form') as HTMLFormElement | null;
   const saveBtn = document.getElementById('save-profile-btn') as HTMLButtonElement | null;

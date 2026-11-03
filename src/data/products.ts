@@ -2,6 +2,7 @@ import { client } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
 import { createSwrCache } from '@utils/cache';
 import { DEFAULT_CATALOG } from './defaults';
+import { getLocalizedPath } from '@i18n';
 import type { Product } from 'types';
 
 export const PRODUCT_FIELDS = `{
@@ -441,4 +442,42 @@ export const fetchCategories = fetchAllCategories;
 export const fetchCatalogCategories = (products: NormalizedProduct[], allLabel?: string) => ProductService.getCatalogCategories(products, allLabel);
 export const fetchCatalogSettings = (forceRefresh?: boolean) => ProductService.getCatalogSettings(forceRefresh);
 export const fetchProductBySlug = (slug: string) => ProductService.getBySlug(slug);
+
+// Order item helpers (Single Source of Truth for Orders & Inquiries)
+export type ProductMap = Map<string, { image: string; slug: string }>;
+
+export function buildProductMap(products: NormalizedProduct[] | any[]): ProductMap {
+  const map: ProductMap = new Map();
+  (products || []).forEach((p) => {
+    if (p?.id) map.set(p.id, { image: p.image, slug: p.id });
+  });
+  return map;
+}
+
+export function resolveOrderItemImage(item: any, productMap?: ProductMap): string {
+  if (item?.image_url && item.image_url.trim()) {
+    return item.image_url.replace('https://cdn.sanity.io', '/cdn-image');
+  }
+  const pid = item?.product_id ? String(item.product_id).trim() : '';
+  if (pid && productMap?.has(pid)) {
+    return productMap.get(pid)!.image;
+  }
+  const str = `${item?.title || ''} ${item?.sku || ''} ${pid}`.toLowerCase();
+  if (str.includes('spec') || str.includes('pdf') || str.includes('dossier')) {
+    return '/images/spec-light.webp';
+  }
+  if (str.includes('ruffle') || str.includes('gv-ru') || str.includes('lace')) {
+    return '/images/products/gv-ruffle-detail.webp';
+  }
+  return '/images/hero-light.webp';
+}
+
+export function getOrderItemProductUrl(item: any, currentLang: string = 'en'): string | null {
+  const pid = item?.product_id ? String(item.product_id).trim() : '';
+  if (!pid) return null;
+  if (pid.startsWith('spec-')) return getLocalizedPath(`/products/${pid.replace(/^spec-/, '')}`, currentLang as any);
+  if (pid === 'swatch-kit-sample' || pid.startsWith('swatch-')) return getLocalizedPath('/products', currentLang as any);
+  return getLocalizedPath(`/products/${pid}`, currentLang as any);
+}
+
 

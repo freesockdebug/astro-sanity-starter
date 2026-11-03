@@ -349,3 +349,7 @@ export async function updateLogtoUserPassword(
     return { success: false, error: err.message || 'Network error updating password.' };
   }
 }
+
+// Re-export contextual guards
+export * from './authGuards';
+

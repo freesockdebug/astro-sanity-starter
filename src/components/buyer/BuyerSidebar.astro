@@ -2,6 +2,7 @@
 // src/components/buyer/BuyerSidebar.astro
 // Unified Fluid B2B Vertical Sidebar for GwenVenni Atelier Buyer Portal
 import { getLocalizedPath, useTranslations } from '@i18n';
+import TierBadge from '@components/TierBadge.astro';
 
 interface Props {
   currentTab: 'orders' | 'account';
@@ -35,15 +36,7 @@ const t = useTranslations(currentLang);
 
 const displayName = dbUser?.name || sessionUser.name || sessionUser.email.split('@')[0];
 const displayCompany = dbUser?.company || sessionUser.company || '';
-const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
-
-const tierColors: Record<string, { bg: string; label: string }> = {
-  VIP: { bg: 'bg-amber-100 text-amber-900 border-amber-300', label: 'VIP Buyer' },
-  PARTNER: { bg: 'bg-purple-100 text-purple-900 border-purple-300', label: 'Partner' },
-  STANDARD: { bg: 'bg-zinc-100 text-zinc-700 border-zinc-200', label: 'Standard' },
-};
-
-const currentTierStyle = tierColors[tier] || tierColors.STANDARD;
+const tier = dbUser?.tier || 'STANDARD';
 const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCase();
 ---
 
@@ -74,9 +67,7 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
       <div class="min-w-0">
         <div class="flex items-center gap-2">
           <span class="text-sm font-semibold tracking-tight text-[#1d1d1f] truncate">GwenVenni</span>
-          <span class:list={['inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold border shrink-0', currentTierStyle.bg]}>
-            {currentTierStyle.label}
-          </span>
+          <TierBadge tier={tier} size="sm" variant="short" />
         </div>
         <p class="text-[10px] text-[#86868b] uppercase tracking-wider font-medium truncate mt-0.5">{t('buyer.portal')}</p>
       </div>
@@ -172,7 +163,7 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
       </label>
 
       <a
-        href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${displayName} from ${displayCompany || 'our atelier'} (${sessionUser.email}). I would like to consult on sock manufacturing.`)}`}
+        href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${displayName} from ${displayCompany || 'our atelier'} (${sessionUser.email}). I would like to consult on custom manufacturing & wholesale orders.`)}`}
         target="_blank"
         rel="noopener noreferrer"
         class="flex items-center justify-between px-3 py-2 rounded-xl font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 transition-all"

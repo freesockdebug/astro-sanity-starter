@@ -1,0 +1,102 @@
+---
+// src/components/orders/OrderStepper.astro
+// Unified 4-Step Fulfillment Progress Stepper & Rejected Banner
+import { useTranslations, type SupportedLocale } from '@i18n';
+
+interface Props {
+  status: string;
+  adminRemark?: string | null;
+  currentLang?: string;
+  class?: string;
+}
+
+const {
+  status,
+  adminRemark,
+  currentLang = 'en',
+  class: customClass = '',
+} = Astro.props;
+
+const t = useTranslations(currentLang as SupportedLocale);
+
+const isApproved = status === 'APPROVED';
+const isShipped = status === 'SHIPPED';
+const isRejected = status === 'REJECTED';
+---
+
+{!isRejected ? (
+  <div class:list={['py-2.5 px-3 bg-[#fbfbfd] rounded-xl border border-black/5', customClass]}>
+    <div class="relative flex items-center justify-between">
+      <!-- Background Track & Progress Fill -->
+      <div class="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-0.5 bg-black/10 -z-0">
+        <div
+          class="h-full bg-emerald-500 transition-all duration-300"
+          style={`width: ${isShipped ? '66.67%' : isApproved ? '33.33%' : '0%'}`}
+        ></div>
+      </div>
+
+      <!-- Step 1: Submitted -->
+      <div class="relative z-10 flex flex-col items-center">
+        <div class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow-2xs">
+          ✓
+        </div>
+        <span class="text-[10px] font-medium text-[#1d1d1f] mt-1.5 whitespace-nowrap">{t('orders.stepSubmitted')}</span>
+      </div>
+
+      <!-- Step 2: Under Review / Approved -->
+      <div class="relative z-10 flex flex-col items-center">
+        <div class:list={[
+          'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shadow-2xs transition-all',
+          (isApproved || isShipped)
+            ? 'bg-emerald-500 text-white'
+            : 'bg-amber-400 text-white ring-4 ring-amber-100 animate-pulse'
+        ]}>
+          {(isApproved || isShipped) ? '✓' : '2'}
+        </div>
+        <span class:list={[
+          'text-[10px] mt-1.5 whitespace-nowrap',
+          (isApproved || isShipped) ? 'font-medium text-[#1d1d1f]' : 'font-semibold text-amber-700'
+        ]}>
+          {(isApproved || isShipped) ? t('orders.stepApproved') : t('orders.stepInReview')}
+        </span>
+      </div>
+
+      <!-- Step 3: Dispatched -->
+      <div class="relative z-10 flex flex-col items-center">
+        <div class:list={[
+          'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shadow-2xs transition-all',
+          isShipped
+            ? 'bg-emerald-500 text-white ring-4 ring-emerald-100'
+            : 'bg-white border-2 border-black/20 text-[#86868b]'
+        ]}>
+          {isShipped ? '✓' : '3'}
+        </div>
+        <span class:list={[
+          'text-[10px] mt-1.5 whitespace-nowrap',
+          isShipped ? 'font-semibold text-emerald-700' : 'text-[#86868b]'
+        ]}>
+          {t('orders.stepDispatched')}
+        </span>
+      </div>
+
+      <!-- Step 4: Delivered -->
+      <div class="relative z-10 flex flex-col items-center">
+        <div class="w-6 h-6 rounded-full bg-white border-2 border-black/20 text-[#86868b] flex items-center justify-center text-[10px] font-bold shadow-2xs">
+          4
+        </div>
+        <span class="text-[10px] text-[#86868b] mt-1.5 whitespace-nowrap">{t('orders.stepDelivered')}</span>
+      </div>
+    </div>
+  </div>
+) : (
+  <div class:list={['bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-center gap-2.5 text-xs text-rose-800', customClass]}>
+    <svg class="w-4 h-4 shrink-0 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+    <div>
+      <span class="font-semibold">Order Inquiry Closed</span>
+      {adminRemark && <span class="ml-1 text-rose-700">· {adminRemark}</span>}
+    </div>
+  </div>
+)}
+

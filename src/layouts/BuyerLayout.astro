@@ -3,6 +3,7 @@
 // Unified B2B Buyer Shell: Fluid Vertical Sidebar, Desktop Breadcrumb, Mobile Sticky Bars, and Embedded QuoteDrawer
 import Layout from './Layout.astro';
 import BuyerSidebar from '@components/buyer/BuyerSidebar.astro';
+import TierBadge from '@components/TierBadge.astro';
 import QuoteDrawer from '@components/QuoteDrawer.astro';
 import { getLocalizedPath, getLangFromUrl, useTranslations } from '@i18n';
 
@@ -45,14 +46,6 @@ const tabNames: Record<string, string> = {
 };
 
 const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
-const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
-
-const tierColors: Record<string, { bg: string; label: string }> = {
-  VIP: { bg: 'bg-amber-100 text-amber-900 border-amber-300', label: 'VIP' },
-  PARTNER: { bg: 'bg-purple-100 text-purple-900 border-purple-300', label: 'PARTNER' },
-  STANDARD: { bg: 'bg-zinc-100 text-zinc-700 border-zinc-200', label: 'STANDARD' },
-};
-const currentTierStyle = tierColors[tier] || tierColors.STANDARD;
 ---
 
 <Layout
@@ -87,9 +80,7 @@ const currentTierStyle = tierColors[tier] || tierColors.STANDARD;
             </svg>
           </button>
           <span class="text-sm font-bold tracking-tight text-[#1d1d1f]">GV Portal</span>
-          <span class:list={['inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold border', currentTierStyle.bg]}>
-            {currentTierStyle.label}
-          </span>
+          <TierBadge tier={dbUser?.tier} size="sm" variant="short" />
         </div>
 
         <div class="flex items-center gap-2">

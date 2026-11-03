@@ -3,29 +3,18 @@
 // Admin Security Audit: 90-Day Login History & IP/Device Tracker
 import AdminLayout from '@layouts/AdminLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
-import { getSessionFromRequest } from '@utils/auth';
-import { listAllLoginHistory, listAdminOrders } from '@utils/db';
+import { requireAdminContext } from '@utils/auth';
+import { listAllLoginHistory } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
-Astro.response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
-Astro.response.headers.set('CDN-Cache-Control', 'no-store');
-Astro.response.headers.set('Pragma', 'no-cache');
-Astro.response.headers.set('Expires', '0');
 
-const sessionUser = await getSessionFromRequest(Astro, cfEnv);
-if (!sessionUser || !sessionUser.isAdmin) {
-  return Astro.redirect(`/api/auth/login?returnUrl=/admin/logins`);
-}
+const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/logins');
+if (redirectResponse) return redirectResponse;
 
 const currentSearch = Astro.url.searchParams.get('search')?.trim() || '';
-
-const [logins, ordersSummary] = await Promise.all([
-  listAllLoginHistory(150),
-  listAdminOrders({ limit: 1 }).catch(() => ({ stats: { pending: 0 } })),
-]);
+const logins = await listAllLoginHistory(150);
 
 // Search filter
 const searchLower = currentSearch.toLowerCase();
@@ -51,7 +40,7 @@ const pageTitle = 'Login Audit Logs | GwenVenni Atelier Admin';
   title={pageTitle}
   currentTab="logins"
   sessionEmail={sessionUser.email}
-  pendingOrdersCount={ordersSummary?.stats?.pending || 0}
+  pendingOrdersCount={pendingOrdersCount}
 >
   <!-- Page Header -->
   <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
