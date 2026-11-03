@@ -17,7 +17,8 @@ export const GET: APIRoute = async (context) => {
     });
   }
 
-  // Session invalidation guard: verify account is not BLOCKED
+  // Session invalidation guard & profile enrichment
+  let enrichedUser = { ...user };
   try {
     const dbUser = await getUserByIdOrEmail(user.id, user.email);
     if (dbUser && dbUser.status === 'BLOCKED') {
@@ -34,6 +35,16 @@ export const GET: APIRoute = async (context) => {
         }
       );
     }
+    if (dbUser) {
+      enrichedUser = {
+        ...user,
+        name: dbUser.name || user.name || '',
+        company: dbUser.company || '',
+        country: dbUser.country || '',
+        phone: dbUser.phone || '',
+        tier: dbUser.tier || 'STANDARD',
+      };
+    }
   } catch {
     // Non-blocking
   }
@@ -41,7 +52,7 @@ export const GET: APIRoute = async (context) => {
   return new Response(
     JSON.stringify({
       authenticated: true,
-      user,
+      user: enrichedUser,
     }),
     {
       status: 200,

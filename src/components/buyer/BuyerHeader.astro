@@ -16,6 +16,8 @@ interface Props {
     tier?: string;
     company?: string;
     name?: string;
+    country?: string;
+    phone?: string;
   } | null;
   totalOrdersCount?: number;
 }
@@ -44,7 +46,15 @@ const currentTierStyle = tierColors[tier] || tierColors.STANDARD;
 const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCase();
 ---
 
-<header class="mb-6 space-y-4">
+<header
+  class="mb-6 space-y-4"
+  id="buyer-header-root"
+  data-profile-name={displayName}
+  data-profile-email={sessionUser.email}
+  data-profile-company={displayCompany}
+  data-profile-country={dbUser?.country || ''}
+  data-profile-phone={dbUser?.phone || ''}
+>
   <!-- Top Profile & Actions Card -->
   <div class="p-4 sm:p-5 rounded-2xl bg-white border border-black/5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div class="flex items-center gap-3.5">
@@ -98,7 +108,7 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
           : 'text-[#52525b] hover:text-black hover:bg-white/50'
       ]}
     >
-      <span>📦 My Orders & Inquiries</span>
+      <span>📦 {t('orders.tabOrdersTitle')}</span>
       {totalOrdersCount > 0 && (
         <span class:list={[
           'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
@@ -118,8 +128,40 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
           : 'text-[#52525b] hover:text-black hover:bg-white/50'
       ]}
     >
-      <span>👤 Company Profile & Security</span>
+      <span>👤 {t('orders.tabAccountTitle')}</span>
     </a>
   </nav>
 </header>
+
+<script>
+  try {
+    const root = document.getElementById('buyer-header-root');
+    if (root) {
+      const email = root.dataset.profileEmail;
+      if (email) {
+        const existing = localStorage.getItem('b2b_buyer_profile');
+        let profile = {
+          name: root.dataset.profileName || '',
+          email: email,
+          company: root.dataset.profileCompany || '',
+          country: root.dataset.profileCountry || '',
+          phone: root.dataset.profilePhone || '',
+        };
+        if (existing) {
+          try {
+            const parsed = JSON.parse(existing);
+            profile = {
+              name: profile.name || parsed.name || '',
+              email: profile.email || parsed.email || '',
+              company: profile.company || parsed.company || '',
+              country: profile.country || parsed.country || '',
+              phone: profile.phone || parsed.phone || '',
+            };
+          } catch {}
+        }
+        localStorage.setItem('b2b_buyer_profile', JSON.stringify(profile));
+      }
+    }
+  } catch {}
+</script>
 

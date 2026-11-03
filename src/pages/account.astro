@@ -244,6 +244,39 @@ const tier = (dbUser?.tier || 'STANDARD').toUpperCase();
             </div>
           </div>
 
+          <!-- Dedicated Atelier Concierge Card -->
+          <div class="bg-gradient-to-br from-[#1d1d1f] to-[#2c2c2e] text-white rounded-2xl p-5 sm:p-6 shadow-md space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-white/60">Dedicated Concierge</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-emerald-400 border border-emerald-400/20">
+                Online Direct
+              </span>
+            </div>
+            <div>
+              <h3 class="text-sm font-semibold">Atelier Key Account Manager</h3>
+              <p class="text-[11px] text-zinc-300 mt-1 leading-relaxed">
+                Direct access for yarn customization, bulk pricing & priority sample dispatch.
+              </p>
+            </div>
+            <div class="pt-2 flex items-center gap-2">
+              <a
+                href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${dbUser?.name || sessionUser.name || 'a B2B client'} from ${dbUser?.company || 'our company'} (${sessionUser.email}). I would like to consult on custom sock manufacturing.`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex-1 py-2 px-3 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all text-center inline-flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <span>WhatsApp 1-on-1</span>
+              </a>
+              <a
+                href={`mailto:b2b@gwenvenni.com?subject=${encodeURIComponent(`[B2B Inquiry] ${dbUser?.company || sessionUser.email}`)}`}
+                class="py-2 px-3 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition-all border border-white/15 text-center shrink-0"
+                title="Send inquiry email"
+              >
+                ✉️ Email
+              </a>
+            </div>
+          </div>
+
           <!-- Section 3: Login Security Activity -->
           <div class="bg-white rounded-2xl border border-black/5 p-5 sm:p-6 shadow-2xs space-y-4">
             <div class="flex items-center justify-between gap-2">
