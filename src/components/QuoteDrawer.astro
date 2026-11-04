@@ -289,22 +289,42 @@ if (reqCountryCode) {
         const emailInput = document.querySelector('#quote-drawer-root input[name="email"]') as HTMLInputElement | null;
         const nameInput = document.querySelector('#quote-drawer-root input[name="buyer_name"]') as HTMLInputElement | null;
         const companyInput = document.querySelector('#quote-drawer-root input[name="company"]') as HTMLInputElement | null;
-        const phoneInput = document.querySelector('#quote-drawer-root input[name="phone"]') as HTMLInputElement | null;
+        const phoneInput = document.querySelector('#quote-drawer-root input[name="whatsapp"], #quote-drawer-root input[name="phone"]') as HTMLInputElement | null;
         const destInput = document.querySelector('#quote-drawer-root input[name="destination"]') as HTMLInputElement | null;
 
         if (emailInput && !emailInput.value.trim() && profile.email) emailInput.value = profile.email;
         if (nameInput && !nameInput.value.trim() && profile.name) nameInput.value = profile.name;
         if (companyInput && !companyInput.value.trim() && profile.company) companyInput.value = profile.company;
         if (phoneInput && !phoneInput.value.trim() && (profile.phone || profile.whatsapp)) phoneInput.value = profile.phone || profile.whatsapp;
-        if (destInput && !destInput.value.trim() && (profile.country || profile.destination)) destInput.value = profile.country || profile.destination;
+        
+        const userCountry = (profile.country || profile.destination || '').trim();
+        const root = document.getElementById('quote-drawer-root');
+        const ssrCountry = (root?.getAttribute('data-visitor-country') || '').trim();
+        if (destInput && userCountry) {
+          if (!destInput.value.trim() || destInput.value.trim() === ssrCountry) {
+            destInput.value = userCountry;
+          }
+        }
       }
     } catch {
       // non-blocking
     }
   }
 
+  function resetDrawerSubmissionState() {
+    const alertBox = document.getElementById('rfq-alert');
+    if (alertBox && (quoteCart.get() || []).length > 0) {
+      alertBox.className = 'hidden';
+      alertBox.innerHTML = '';
+      const rfqForm = document.getElementById('rfq-form') as HTMLFormElement | null;
+      const turnstileContainer = rfqForm?.querySelector('.cf-turnstile') as HTMLElement | null;
+      if (turnstileContainer) turnstileContainer.style.display = '';
+    }
+  }
+
   // Expose global drawer opener
   (window as any).openQuoteDrawer = () => {
+    resetDrawerSubmissionState();
     ensureTurnstileLoaded();
     autoFillVisitorCountry();
     checkDrawerAuth();
@@ -314,10 +334,12 @@ if (reqCountryCode) {
 
   // Expose global quote dispatchers for inline page scripts
   (window as any).addToQuote = (item: any) => {
+    resetDrawerSubmissionState();
     addToQuote(item);
   };
 
   (window as any).addToQuoteAndOpen = (item: any) => {
+    resetDrawerSubmissionState();
     addToQuote(item);
     (window as any).openQuoteDrawer();
   };
@@ -335,6 +357,7 @@ if (reqCountryCode) {
   if (drawerToggle) {
     drawerToggle.addEventListener('change', () => {
       if (drawerToggle.checked) {
+        resetDrawerSubmissionState();
         ensureTurnstileLoaded();
         autoFillVisitorCountry();
         checkDrawerAuth();

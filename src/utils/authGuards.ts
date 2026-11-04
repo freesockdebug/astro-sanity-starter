@@ -64,7 +64,8 @@ export interface AdminContextResult {
 export async function requireAdminContext(
   astro: any,
   cfEnv?: any,
-  returnPath: string = '/admin/orders'
+  returnPath: string = '/admin/orders',
+  options: { skipPendingCount?: boolean } = {}
 ): Promise<AdminContextResult> {
   const sessionUser = await getSessionFromRequest(astro, cfEnv);
 
@@ -77,11 +78,13 @@ export async function requireAdminContext(
   }
 
   let pendingOrdersCount = 0;
-  try {
-    const res = await listAdminOrders({ limit: 1 });
-    pendingOrdersCount = res.stats?.pending ?? 0;
-  } catch {
-    // Non-blocking fail-safe
+  if (!options.skipPendingCount) {
+    try {
+      const res = await listAdminOrders({ limit: 1 });
+      pendingOrdersCount = res.stats?.pending ?? 0;
+    } catch {
+      // Non-blocking fail-safe
+    }
   }
 
   return { sessionUser, pendingOrdersCount };

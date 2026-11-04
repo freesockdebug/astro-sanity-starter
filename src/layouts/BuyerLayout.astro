@@ -164,7 +164,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
           </span>
         )}
       </div>
-      <span>Orders</span>
+      <span class="truncate max-w-[22vw]">{t('orders.breadcrumb')}</span>
     </a>
 
     <!-- Tab 2: Account -->
@@ -176,7 +176,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
       ]}
     >
       <span class="text-base">👤</span>
-      <span>Account</span>
+      <span class="truncate max-w-[22vw]">{t('orders.tabAccountTitle')}</span>
     </a>
 
     <!-- Tab 3: Quote Bag Drawer -->
@@ -191,7 +191,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
           0
         </span>
       </div>
-      <span>Quote Bag</span>
+      <span class="truncate max-w-[22vw]">{t('buyer.openQuoteBag')}</span>
     </label>
 
     <!-- Tab 4: Catalog -->
@@ -200,7 +200,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
       class="flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors text-[#86868b] hover:text-black"
     >
       <span class="text-base">✨</span>
-      <span>Catalog</span>
+      <span class="truncate max-w-[22vw]">{t('buyer.browseCatalog')}</span>
     </a>
   </nav>
 
@@ -249,6 +249,13 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
       if (openBtn) openBtn.addEventListener('click', openSidebar);
       if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
       if (backdrop) backdrop.addEventListener('click', closeSidebar);
+
+      var sidebarQuoteBtn = document.getElementById('sidebar-open-quote-btn');
+      if (sidebarQuoteBtn) {
+        sidebarQuoteBtn.addEventListener('click', function() {
+          closeSidebar();
+        });
+      }
 
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && sidebar && !sidebar.classList.contains('-translate-x-full')) {

@@ -21,6 +21,9 @@ export const prerender = false;
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
+// Initiate product catalog fetch concurrently with D1 auth/queries
+const productsPromise = fetchNormalizedProducts().catch(() => []);
+
 const { sessionUser, dbUser, redirectResponse } = await getBuyerContext(Astro, cfEnv);
 if (redirectResponse) return redirectResponse;
 
@@ -38,12 +41,13 @@ if (sessionUser) {
   } catch (e) {
     // Non-blocking
   }
-  myOrders = await getOrdersByUserId(sessionUser.id, sessionUser.email);
 
-  if (sessionUser.isAdmin) {
-    const adminRes = await listAdminOrders({ limit: 100 });
-    allOrders = adminRes.orders;
-  }
+  const [orders, adminRes] = await Promise.all([
+    getOrdersByUserId(sessionUser.id, sessionUser.email),
+    sessionUser.isAdmin ? listAdminOrders({ limit: 100 }) : Promise.resolve({ orders: [] }),
+  ]);
+  myOrders = orders;
+  allOrders = adminRes.orders;
 }
 
 // Active dataset based on viewMode
@@ -80,7 +84,7 @@ if (currentSearch) {
   });
 }
 
-const products = await fetchNormalizedProducts().catch(() => []);
+const products = await productsPromise;
 const productMap = buildProductMap(products);
 
 const resolveItemImage = (item: any) => resolveOrderItemImage(item, productMap);
@@ -381,13 +385,6 @@ const pageDesc = t('orders.metaDesc');
                         {t('orders.note')}: {order.admin_remark}
                       </p>
                     )}
-                  </div>
-                )}
-
-                <!-- Rejection Note (If Rejected) -->
-                {isRejected && order.admin_remark && (
-                  <div class="bg-rose-50 rounded-xl p-3 border border-rose-200 text-xs text-rose-800">
-                    <strong>{t('orders.rejectionReason')}:</strong> {order.admin_remark}
                   </div>
                 )}
 

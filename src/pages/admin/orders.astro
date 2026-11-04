@@ -17,7 +17,7 @@ import { env as cfEnv } from 'cloudflare:workers';
 export const prerender = false;
 
 const currentLang = getLangFromUrl(Astro.url);
-const { sessionUser, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/orders');
+const { sessionUser, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/orders', { skipPendingCount: true });
 if (redirectResponse) return redirectResponse;
 
 const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
@@ -64,7 +64,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace | GwenVenni Atelier';
   </div>
 
   <!-- Desktop Stats Summary Cards (>= sm) -->
-  <div class="hidden sm:grid sm:grid-cols-5 gap-3 mb-4">
+  <div class="hidden sm:grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-3 mb-4">
     <a
       href="/admin/orders"
       class={`p-3.5 rounded-xl border text-xs transition-all ${

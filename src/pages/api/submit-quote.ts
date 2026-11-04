@@ -4,7 +4,7 @@ import { SecurityService } from '@utils/security';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { getSessionFromRequest } from '@utils/auth';
-import { createOrder, generateOrderNo, getUserByIdOrEmail } from '@utils/db';
+import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -325,9 +325,10 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const sessionUser = await getSessionFromRequest(request, cfEnv);
     const userId = sessionUser ? sessionUser.id : null;
 
+    let existingBuyer: any = null;
     // Security check: reject if buyer or user is BLOCKED in D1
     try {
-      const existingBuyer = await getUserByIdOrEmail(userId, buyerInfo.email);
+      existingBuyer = await getUserByIdOrEmail(userId, buyerInfo.email);
       if (existingBuyer && existingBuyer.status === 'BLOCKED') {
         return new Response(
           JSON.stringify({ error: 'Your account is suspended from submitting quotation requests. Please contact concierge@gwenvenni.com.', success: false }),
@@ -364,6 +365,18 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           })),
         });
         orderId = result.orderId;
+
+        // Backfill empty profile fields for registered buyers
+        if (existingBuyer && existingBuyer.id) {
+          const profileUpdates: { company?: string; country?: string; phone?: string; name?: string } = {};
+          if (!existingBuyer.company && buyerInfo.company) profileUpdates.company = buyerInfo.company;
+          if (!existingBuyer.country && resolvedDestination) profileUpdates.country = resolvedDestination;
+          if (!existingBuyer.phone && buyerInfo.whatsapp) profileUpdates.phone = buyerInfo.whatsapp;
+          if (!existingBuyer.name && buyerInfo.name) profileUpdates.name = buyerInfo.name;
+          if (Object.keys(profileUpdates).length > 0) {
+            updateUserProfile(existingBuyer.id, profileUpdates).catch(() => {});
+          }
+        }
       } catch (err: any) {
         console.error('Could not write order to D1:', err);
         d1WriteError = err?.message || 'D1 create failed';
