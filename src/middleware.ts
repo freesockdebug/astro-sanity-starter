@@ -16,7 +16,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // Fast canonical redirect for root admin path to primary orders console
   if (pathname === '/admin' || pathname === '/admin/') {
-    return Response.redirect(new URL('/admin/orders', url.origin), 302);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': '/admin/orders',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    });
   }
 
   // 1. Self-Healing Stale Asset Redirection & Fallback Guard
