@@ -21,6 +21,11 @@ if (currentLang && currentLang !== 'en') {
   rawSlug = rawSlug.replace(new RegExp(`^${currentLang}(/|$)`), '');
 }
 
+// Fast redirect for admin paths to prevent CMS fallback
+if (rawSlug === 'admin' || rawSlug === '/admin' || rawSlug.startsWith('admin/') || rawSlug.startsWith('/admin/')) {
+  return Astro.redirect('/admin/orders');
+}
+
 // Fast 404 for static asset extensions to prevent unnecessary CMS roundtrips or MIME confusion
 if (rawSlug && /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml|json)$/i.test(rawSlug)) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
