@@ -12,15 +12,15 @@
     "directory": "dist/client"
   },
   "vars": {
-    "SANITY_PROJECT_ID": "",
+    "SANITY_PROJECT_ID": "xvhhd8u0",
     "SANITY_DATASET": "production",
-    "PUBLIC_TURNSTILE_SITE_KEY": "",
-    "TURNSTILE_HOSTNAMES": "",
+    "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFXbqPn5Jkh6bMhV",
+    "TURNSTILE_HOSTNAMES": "localhost,127.0.0.1,gwenvenni.com",
     "ADMIN_EMAILS": "forhaisome@gmail.com",
-    "LOGTO_ENDPOINT": "",
-    "LOGTO_APP_ID": "",
-    "LOGTO_M2M_APP_ID": "",
-    "LOGTO_MANAGEMENT_RESOURCE": ""
+    "LOGTO_ENDPOINT": "https://auth.gwenvenni.com/",
+    "LOGTO_APP_ID": "btx7meodkblwjce23ulpc",
+    "LOGTO_M2M_APP_ID": "1qn2bybiqi8rbisi75v0v",
+    "LOGTO_MANAGEMENT_RESOURCE": "https://8tvr1q.logto.app/api"
   },
   "d1_databases": [
     {
