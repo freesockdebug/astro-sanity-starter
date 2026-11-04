@@ -48,13 +48,11 @@ export async function getBuyerContext(
     // Non-blocking fail-safe
   }
 
-  // Dynamically resolve admin status against runtime ADMIN_EMAILS & D1 co-admins
-  if (sessionUser && !sessionUser.isAdmin) {
+  // Dynamically recompute admin status against runtime ADMIN_EMAILS & D1 co-admins
+  if (sessionUser) {
     try {
-      const settings = await getSystemSettings(cfEnv);
-      if (checkIsAdmin(sessionUser.email, sessionUser.roles, cfEnv, settings.co_admin_emails)) {
-        sessionUser.isAdmin = true;
-      }
+      const settings = await getSystemSettings(cfEnv).catch(() => null);
+      sessionUser.isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv, settings?.co_admin_emails);
     } catch {
       // Non-blocking fail-safe
     }
@@ -71,7 +69,7 @@ export interface AdminContextResult {
 
 /**
  * Enforces admin authorization and provides pending orders count for navigation badges.
- * If unauthenticated or not an admin, returns redirectResponse to login.
+ * If unauthenticated, not an admin, or blocked, redirects safely.
  */
 export async function requireAdminContext(
   astro: any,
@@ -81,22 +79,43 @@ export async function requireAdminContext(
 ): Promise<AdminContextResult> {
   const sessionUser = await getSessionFromRequest(astro, cfEnv);
 
-  let isAdmin = sessionUser?.isAdmin || false;
-  if (sessionUser && !isAdmin) {
-    try {
-      const settings = await getSystemSettings(cfEnv);
-      if (checkIsAdmin(sessionUser.email, sessionUser.roles, cfEnv, settings.co_admin_emails)) {
-        isAdmin = true;
-        sessionUser.isAdmin = true;
-      }
-    } catch {
-      // Non-blocking
-    }
-  }
-
-  if (!sessionUser || !isAdmin) {
+  if (!sessionUser) {
     return {
       sessionUser: sessionUser as any,
+      pendingOrdersCount: 0,
+      redirectResponse: astro.redirect(`/api/auth/login?returnUrl=${encodeURIComponent(returnPath)}`),
+    };
+  }
+
+  // 1. Check if user is blocked in D1
+  try {
+    const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
+    if (dbUser && dbUser.status === 'BLOCKED') {
+      astro.cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+      return {
+        sessionUser,
+        pendingOrdersCount: 0,
+        redirectResponse: astro.redirect('/api/auth/login?error=account_suspended'),
+      };
+    }
+  } catch {
+    // Non-blocking fail-safe
+  }
+
+  // 2. Dynamically recompute admin status against D1 co_admin_emails & ADMIN_EMAILS
+  let isAdmin = false;
+  try {
+    const settings = await getSystemSettings(cfEnv).catch(() => null);
+    isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv, settings?.co_admin_emails);
+    sessionUser.isAdmin = isAdmin;
+  } catch {
+    isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv);
+    sessionUser.isAdmin = isAdmin;
+  }
+
+  if (!isAdmin) {
+    return {
+      sessionUser,
       pendingOrdersCount: 0,
       redirectResponse: astro.redirect(`/api/auth/login?returnUrl=${encodeURIComponent(returnPath)}`),
     };
@@ -117,26 +136,31 @@ export async function requireAdminContext(
 
 /**
  * Validates request session for admin API endpoints.
- * Resolves static admin claims as well as dynamic D1 co_admin_emails.
+ * Enforces active status (not blocked) and dynamically resolves D1 co_admin_emails.
  */
 export async function verifyAdminAuth(request: Request, cfEnv?: any): Promise<AuthUser | null> {
   const sessionUser = await getSessionFromRequest(request, cfEnv);
   if (!sessionUser) return null;
 
-  let isAdmin = sessionUser.isAdmin;
-  if (!isAdmin) {
-    try {
-      const settings = await getSystemSettings(cfEnv);
-      if (checkIsAdmin(sessionUser.email, sessionUser.roles, cfEnv, settings.co_admin_emails)) {
-        isAdmin = true;
-        sessionUser.isAdmin = true;
-      }
-    } catch {
-      // Non-blocking fail-safe
+  // 1. Check if user is blocked in D1
+  try {
+    const dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
+    if (dbUser && dbUser.status === 'BLOCKED') {
+      return null;
     }
+  } catch {
+    // Non-blocking fail-safe
   }
 
-  return isAdmin ? sessionUser : null;
+  // 2. Dynamically recompute admin status against D1 co_admin_emails & ADMIN_EMAILS
+  try {
+    const settings = await getSystemSettings(cfEnv).catch(() => null);
+    sessionUser.isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv, settings?.co_admin_emails);
+  } catch {
+    sessionUser.isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv);
+  }
+
+  return sessionUser.isAdmin ? sessionUser : null;
 }
 
 

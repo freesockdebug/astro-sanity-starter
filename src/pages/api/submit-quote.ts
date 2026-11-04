@@ -137,6 +137,7 @@ function validateQuotePayload(body: any): ValidationResult {
  */
 function buildRfqEmailHtml(params: {
   orderNo?: string;
+  brandName?: string;
   safeCompany: string;
   safeName: string;
   safeEmail: string;
@@ -148,7 +149,8 @@ function buildRfqEmailHtml(params: {
   safeMessage: string;
   items: ValidatedItem[];
 }): string {
-  const { orderNo, safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeVisitorIp, safeDetectedCountry, safeInquiryType, safeMessage, items } = params;
+  const { orderNo, brandName, safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeVisitorIp, safeDetectedCountry, safeInquiryType, safeMessage, items } = params;
+  const brand = brandName || DEFAULT_BRAND_TITLE;
 
   const itemsRows = items
     .map(
@@ -163,7 +165,7 @@ function buildRfqEmailHtml(params: {
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e5e5; border-radius: 12px;">
       <h2 style="margin-top: 0; color: #171717;">New Request for Quotation (RFQ)</h2>
-      <p style="color: #525252; font-size: 14px;">A new B2B buyer has submitted a quotation request on ${DEFAULT_BRAND_TITLE}.</p>
+      <p style="color: #525252; font-size: 14px;">A new B2B buyer has submitted a quotation request on ${brand}.</p>
       <div style="background-color: #f5f5f7; border-radius: 8px; padding: 16px; margin: 20px 0;">
         ${orderNo ? `<p style="margin: 4px 0;"><strong>Order / RFQ No:</strong> <span style="font-family: monospace; font-weight: bold; color: #171717;">${orderNo}</span></p>` : ''}
         <p style="margin: 4px 0;"><strong>Company:</strong> ${safeCompany}</p>
@@ -190,7 +192,7 @@ function buildRfqEmailHtml(params: {
         <tbody>${itemsRows}</tbody>
       </table>
       <p style="font-size: 12px; color: #a3a3a3; margin-top: 32px; border-top: 1px solid #e5e5e5; padding-top: 16px;">
-        Submitted at: ${new Date().toUTCString()} | ${DEFAULT_BRAND_TITLE} B2B Atelier
+        Submitted at: ${new Date().toUTCString()} | ${brand} B2B Atelier
       </p>
     </div>`;
 }
@@ -458,6 +460,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
         const emailHtml = buildRfqEmailHtml({
           orderNo,
+          brandName: effectiveBrand,
           safeCompany,
           safeName,
           safeEmail,

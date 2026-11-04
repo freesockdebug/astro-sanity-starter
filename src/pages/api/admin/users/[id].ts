@@ -1,6 +1,6 @@
 // src/pages/api/admin/users/[id].ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth } from '@utils/auth';
+import { verifyAdminAuth, getRuntimeEnv } from '@utils/auth';
 import {
   getUserDetailsWithOrders,
   updateUserAdminMeta,
@@ -90,6 +90,24 @@ export const POST: APIRoute = async ({ request, params }) => {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // Super-admin protection: Cannot block accounts listed in ADMIN_EMAILS
+  if (status === 'BLOCKED') {
+    const targetData = await getUserDetailsWithOrders(userId);
+    const targetEmail = targetData.user?.email?.toLowerCase().trim();
+    if (targetEmail) {
+      const rootWhitelist = (getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '')
+        .split(',')
+        .map((e: string) => e.trim().toLowerCase())
+        .filter(Boolean);
+      if (rootWhitelist.includes(targetEmail)) {
+        return new Response(JSON.stringify({ error: 'Super administrators cannot be blocked.' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
   }
 
   if (tier && !VALID_TIERS.has(tier)) {

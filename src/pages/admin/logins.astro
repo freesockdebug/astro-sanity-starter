@@ -4,7 +4,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import { requireAdminContext } from '@utils/auth';
-import { listAllLoginHistory } from '@utils/db';
+import { listAllLoginHistory, getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -14,7 +14,11 @@ const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdmin
 if (redirectResponse) return redirectResponse;
 
 const currentSearch = Astro.url.searchParams.get('search')?.trim() || '';
-const logins = await listAllLoginHistory(150);
+const [logins, systemSettings] = await Promise.all([
+  listAllLoginHistory(150),
+  getSystemSettings(cfEnv).catch(() => null),
+]);
+const retentionDays = systemSettings?.login_retention_days || 90;
 
 // Search filter
 const searchLower = currentSearch.toLowerCase();
@@ -46,12 +50,12 @@ const pageTitle = 'Login Audit Logs';
   <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
     <div>
       <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Login & Security Audit</h1>
-      <p class="text-xs text-[#86868b] mt-0.5">Real-time audit log of authenticated user sessions and IP locations (90-day retention)</p>
+      <p class="text-xs text-[#86868b] mt-0.5">Real-time audit log of authenticated user sessions and IP locations ({retentionDays}-day retention)</p>
     </div>
     <div class="flex items-center gap-2 self-start sm:self-auto">
       <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        Active Retention: 90 Days
+        Active Retention: {retentionDays} Days
       </span>
     </div>
   </div>

@@ -91,10 +91,14 @@ export async function getSystemSettings(customEnv?: any): Promise<SystemSettings
   }
 
   // Resolve setting by checking DB -> Env -> Default
-  const resolveStr = (key: keyof SystemSettings, envKey: string, fallback: string): string => {
-    const valFromDb = dbMap.get(key);
-    if (typeof valFromDb === 'string' && valFromDb.trim().length > 0) {
-      return valFromDb.trim();
+  // If a key has been configured in DB (dbMap.has), respect the DB value (even if cleared to "")
+  // unless allowEmpty is false (e.g. required identifiers like brand_name or order_no_prefix).
+  const resolveStr = (key: keyof SystemSettings, envKey: string, fallback: string, allowEmpty: boolean = true): string => {
+    if (dbMap.has(key)) {
+      const valFromDb = (dbMap.get(key) ?? '').trim();
+      if (valFromDb.length > 0 || allowEmpty) {
+        return valFromDb;
+      }
     }
     const valFromEnv = getRuntimeEnv(envKey, customEnv);
     if (typeof valFromEnv === 'string' && valFromEnv.trim().length > 0) {
@@ -104,9 +108,9 @@ export async function getSystemSettings(customEnv?: any): Promise<SystemSettings
   };
 
   const resolveBool = (key: keyof SystemSettings, envKey: string, fallback: boolean): boolean => {
-    const valFromDb = dbMap.get(key);
-    if (typeof valFromDb === 'string' && valFromDb.trim().length > 0) {
-      return valFromDb.trim().toLowerCase() === 'true' || valFromDb.trim() === '1';
+    if (dbMap.has(key)) {
+      const val = (dbMap.get(key) ?? '').trim().toLowerCase();
+      return val === 'true' || val === '1';
     }
     const valFromEnv = getRuntimeEnv(envKey, customEnv);
     if (typeof valFromEnv === 'string' && valFromEnv.trim().length > 0) {
@@ -116,21 +120,20 @@ export async function getSystemSettings(customEnv?: any): Promise<SystemSettings
   };
 
   const resolveNum = (key: keyof SystemSettings, envKey: string, fallback: number): number => {
-    const valFromDb = dbMap.get(key);
-    if (typeof valFromDb === 'string' && valFromDb.trim().length > 0) {
-      const parsed = parseInt(valFromDb.trim(), 10);
-      if (!isNaN(parsed)) return parsed;
+    if (dbMap.has(key)) {
+      const parsed = parseInt((dbMap.get(key) ?? '').trim(), 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
     }
     const valFromEnv = getRuntimeEnv(envKey, customEnv);
     if (typeof valFromEnv === 'string' && valFromEnv.trim().length > 0) {
       const parsed = parseInt(valFromEnv.trim(), 10);
-      if (!isNaN(parsed)) return parsed;
+      if (!isNaN(parsed) && parsed > 0) return parsed;
     }
     return fallback;
   };
 
   const settings: SystemSettings = {
-    brand_name: resolveStr('brand_name', 'PUBLIC_BRAND_NAME', DEFAULT_SYSTEM_SETTINGS.brand_name),
+    brand_name: resolveStr('brand_name', 'PUBLIC_BRAND_NAME', DEFAULT_SYSTEM_SETTINGS.brand_name, false),
     contact_email: resolveStr('contact_email', 'PUBLIC_CONTACT_EMAIL', DEFAULT_SYSTEM_SETTINGS.contact_email),
     whatsapp_number: resolveStr('whatsapp_number', 'PUBLIC_WHATSAPP_NUMBER', DEFAULT_SYSTEM_SETTINGS.whatsapp_number),
     whatsapp_prefill: resolveStr('whatsapp_prefill', 'PUBLIC_WHATSAPP_PREFILL', DEFAULT_SYSTEM_SETTINGS.whatsapp_prefill),
@@ -142,7 +145,7 @@ export async function getSystemSettings(customEnv?: any): Promise<SystemSettings
     enable_webhook_notify: resolveBool('enable_webhook_notify', 'ENABLE_WEBHOOK_NOTIFY', DEFAULT_SYSTEM_SETTINGS.enable_webhook_notify),
     notification_webhook_url: resolveStr('notification_webhook_url', 'NOTIFICATION_WEBHOOK_URL', DEFAULT_SYSTEM_SETTINGS.notification_webhook_url),
 
-    order_no_prefix: resolveStr('order_no_prefix', 'ORDER_NO_PREFIX', DEFAULT_SYSTEM_SETTINGS.order_no_prefix),
+    order_no_prefix: resolveStr('order_no_prefix', 'ORDER_NO_PREFIX', DEFAULT_SYSTEM_SETTINGS.order_no_prefix, false),
     shipping_carriers: resolveStr('shipping_carriers', 'SHIPPING_CARRIERS', DEFAULT_SYSTEM_SETTINGS.shipping_carriers),
     print_sheet_title: resolveStr('print_sheet_title', 'PRINT_SHEET_TITLE', DEFAULT_SYSTEM_SETTINGS.print_sheet_title),
     print_sheet_footer: resolveStr('print_sheet_footer', 'PRINT_SHEET_FOOTER', DEFAULT_SYSTEM_SETTINGS.print_sheet_footer),

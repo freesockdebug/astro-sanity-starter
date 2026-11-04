@@ -49,16 +49,12 @@ export const GET: APIRoute = async (context) => {
     // Non-blocking
   }
 
-  // Dynamically elevate isAdmin if email is whitelisted in D1 or environment
-  if (!enrichedUser.isAdmin) {
-    try {
-      const settings = await getSystemSettings(cfEnv);
-      if (checkIsAdmin(user.email, user.roles, cfEnv, settings.co_admin_emails)) {
-        enrichedUser.isAdmin = true;
-      }
-    } catch {
-      // Non-blocking
-    }
+  // Dynamically recompute isAdmin against D1 co_admin_emails & environment whitelists
+  try {
+    const settings = await getSystemSettings(cfEnv).catch(() => null);
+    enrichedUser.isAdmin = checkIsAdmin(user.email, user.roles || [], cfEnv, settings?.co_admin_emails);
+  } catch {
+    enrichedUser.isAdmin = checkIsAdmin(user.email, user.roles || [], cfEnv);
   }
 
   return new Response(

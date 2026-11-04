@@ -552,7 +552,7 @@ const pageTitle = 'Customer & Access Management';
       <div class="pt-3 border-t border-black/5 space-y-2">
         <div class="flex items-center justify-between">
           <label class="block font-semibold text-[11px] text-[#52525b]">Login Security Footprint (Recent Sessions)</label>
-          <span class="text-[10px] text-[#86868b]">90-day Retention</span>
+          <span class="text-[10px] text-[#86868b]">{systemSettings?.login_retention_days || 90}-day Retention</span>
         </div>
         <div id="drawer-recent-logins-list" class="space-y-1.5 text-xs">
           <!-- Rendered via JS -->

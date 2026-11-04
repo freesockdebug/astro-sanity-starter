@@ -282,8 +282,19 @@ async function runSelfCheck() {
   assert.strictEqual(updatedSettings.order_no_prefix, testPrefix);
   assert.strictEqual(updatedSettings.co_admin_emails, 'coadmin@test.com, manager@test.com');
 
-  // Test Merged Admin Emails
-  const mergedAdmins = getMergedAdminEmails(updatedSettings, { ADMIN_EMAILS: 'root@test.com, manager@test.com' });
+  // Test clearing an optional setting: must stay empty "" and not fall back to environment
+  await updateSystemSettings({ co_admin_emails: '' }, 'admin@test.com');
+  const clearedSettings = await getSystemSettings();
+  assert.strictEqual(clearedSettings.co_admin_emails, '');
+
+  // Test Merged Admin Emails after clearing
+  const mergedAdminsAfterClear = getMergedAdminEmails(clearedSettings, { ADMIN_EMAILS: 'root@test.com' });
+  assert.deepStrictEqual(mergedAdminsAfterClear, ['root@test.com']);
+
+  // Restore co-admin emails for merged test
+  await updateSystemSettings({ co_admin_emails: 'coadmin@test.com, manager@test.com' }, 'admin@test.com');
+  const restoredSettings = await getSystemSettings();
+  const mergedAdmins = getMergedAdminEmails(restoredSettings, { ADMIN_EMAILS: 'root@test.com, manager@test.com' });
   assert.deepStrictEqual(mergedAdmins.sort(), ['coadmin@test.com', 'manager@test.com', 'root@test.com'].sort());
 
   // Test Custom Prefix in generateOrderNo
