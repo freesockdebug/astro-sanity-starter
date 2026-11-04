@@ -3,6 +3,9 @@
 // Unified Fluid B2B Vertical Sidebar for Buyer Portal
 import { getLocalizedPath, useTranslations } from '@i18n';
 import TierBadge from '@components/TierBadge.astro';
+import { getSystemSettings } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 interface Props {
   currentTab: 'orders' | 'account';
@@ -38,7 +41,9 @@ const displayName = dbUser?.name || sessionUser.name || sessionUser.email.split(
 const displayCompany = dbUser?.company || sessionUser.company || '';
 const tier = dbUser?.tier || 'STANDARD';
 const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCase();
-const whatsappNumber = import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
+const systemSettings = (Astro.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
+const whatsappNumber = systemSettings?.whatsapp_number || import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
+const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to consult on custom manufacturing & wholesale orders.';
 ---
 
 <!-- Mobile Drawer Backdrop Overlay -->
@@ -165,7 +170,7 @@ const whatsappNumber = import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
 
       {whatsappNumber && (
         <a
-          href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, this is ${displayName} from ${displayCompany || 'our company'} (${sessionUser.email}). I would like to consult on custom manufacturing & wholesale orders.`)}`}
+          href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, this is ${displayName} from ${displayCompany || 'our company'} (${sessionUser.email}). ${whatsappPrefillBase}`)}`}
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center justify-between px-3 py-2 rounded-xl font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 transition-all"

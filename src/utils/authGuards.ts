@@ -115,3 +115,28 @@ export async function requireAdminContext(
   return { sessionUser, pendingOrdersCount };
 }
 
+/**
+ * Validates request session for admin API endpoints.
+ * Resolves static admin claims as well as dynamic D1 co_admin_emails.
+ */
+export async function verifyAdminAuth(request: Request, cfEnv?: any): Promise<AuthUser | null> {
+  const sessionUser = await getSessionFromRequest(request, cfEnv);
+  if (!sessionUser) return null;
+
+  let isAdmin = sessionUser.isAdmin;
+  if (!isAdmin) {
+    try {
+      const settings = await getSystemSettings(cfEnv);
+      if (checkIsAdmin(sessionUser.email, sessionUser.roles, cfEnv, settings.co_admin_emails)) {
+        isAdmin = true;
+        sessionUser.isAdmin = true;
+      }
+    } catch {
+      // Non-blocking fail-safe
+    }
+  }
+
+  return isAdmin ? sessionUser : null;
+}
+
+

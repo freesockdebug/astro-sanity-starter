@@ -1,6 +1,6 @@
 // src/pages/api/admin/logins.ts
 import type { APIRoute } from 'astro';
-import { getSessionFromRequest } from '@utils/auth';
+import { verifyAdminAuth } from '@utils/auth';
 import { listAllLoginHistory } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -17,8 +17,8 @@ const NO_CACHE_HEADERS = {
 };
 
 export const GET: APIRoute = async ({ request, url }) => {
-  const sessionUser = await getSessionFromRequest(request, cfEnv);
-  if (!sessionUser || !sessionUser.isAdmin) {
+  const sessionUser = await verifyAdminAuth(request, cfEnv);
+  if (!sessionUser) {
     return new Response(JSON.stringify({ error: 'Forbidden. Admin access required.' }), {
       status: 403,
       headers: NO_CACHE_HEADERS,

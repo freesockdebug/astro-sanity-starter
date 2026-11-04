@@ -4,7 +4,7 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import TierBadge from '@components/TierBadge.astro';
 import { requireAdminContext, checkIsAdmin } from '@utils/auth';
-import { listAdminUsers } from '@utils/db';
+import { listAdminUsers, getSystemSettings } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -23,7 +23,9 @@ let currentSearch = '';
 let currentTier = 'ALL';
 let currentStatus = 'ALL';
 let currentPage = 1;
+const pageSize = 30;
 let totalPages = 1;
+let systemSettings: any = null;
 
 try {
   currentLang = getLangFromUrl(Astro.url);
@@ -37,15 +39,18 @@ try {
     currentTier = Astro.url.searchParams.get('tier') || 'ALL';
     currentStatus = Astro.url.searchParams.get('status') || 'ALL';
     currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
-    const pageSize = 30;
 
-    const data = await listAdminUsers({
-      search: currentSearch,
-      tier: currentTier,
-      status: currentStatus,
-      page: currentPage,
-      limit: pageSize,
-    });
+    const [data, settings] = await Promise.all([
+      listAdminUsers({
+        search: currentSearch,
+        tier: currentTier,
+        status: currentStatus,
+        page: currentPage,
+        limit: pageSize,
+      }),
+      getSystemSettings(cfEnv).catch(() => null),
+    ]);
+    systemSettings = settings;
     users = data.users || [];
     total = data.total || 0;
     stats = data.stats || stats;
@@ -241,7 +246,7 @@ const pageTitle = 'Customer & Access Management';
                     const roles: string[] = (() => {
                       try { return JSON.parse(u.logto_roles || '[]'); } catch { return []; }
                     })();
-                    const isUserAdmin = checkIsAdmin(u.email, roles, cfEnv);
+                    const isUserAdmin = checkIsAdmin(u.email, roles, cfEnv, systemSettings?.co_admin_emails);
                     const hasPending = (u.pending_orders || 0) > 0;
 
                     return (
@@ -341,7 +346,7 @@ const pageTitle = 'Customer & Access Management';
                 const roles: string[] = (() => {
                   try { return JSON.parse(u.logto_roles || '[]'); } catch { return []; }
                 })();
-                const isUserAdmin = checkIsAdmin(u.email, roles, cfEnv);
+                const isUserAdmin = checkIsAdmin(u.email, roles, cfEnv, systemSettings?.co_admin_emails);
                 const hasPending = (u.pending_orders || 0) > 0;
 
                 return (

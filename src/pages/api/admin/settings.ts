@@ -1,6 +1,6 @@
 // src/pages/api/admin/settings.ts
 import type { APIRoute } from 'astro';
-import { getSessionFromRequest, checkIsAdmin, getRuntimeEnv } from '@utils/auth';
+import { verifyAdminAuth, getRuntimeEnv } from '@utils/auth';
 import { getSystemSettings, updateSystemSettings } from '@utils/db';
 import { SecurityService } from '@utils/security';
 // @ts-ignore
@@ -17,27 +17,8 @@ const NO_CACHE_HEADERS = {
   'Expires': '0',
 };
 
-async function verifyAdminAuth(request: Request) {
-  const sessionUser = await getSessionFromRequest(request, cfEnv);
-  if (!sessionUser) return null;
-
-  let isAdmin = sessionUser.isAdmin;
-  if (!isAdmin) {
-    try {
-      const settings = await getSystemSettings(cfEnv);
-      if (checkIsAdmin(sessionUser.email, sessionUser.roles, cfEnv, settings.co_admin_emails)) {
-        isAdmin = true;
-      }
-    } catch {
-      // Non-blocking
-    }
-  }
-
-  return isAdmin ? sessionUser : null;
-}
-
 export const GET: APIRoute = async ({ request }) => {
-  const admin = await verifyAdminAuth(request);
+  const admin = await verifyAdminAuth(request, cfEnv);
   if (!admin) {
     return new Response(JSON.stringify({ error: 'Forbidden. Administrator access required.' }), {
       status: 403,
@@ -58,9 +39,9 @@ export const GET: APIRoute = async ({ request }) => {
     d1: d1Healthy,
     logtoOidc: !!(getRuntimeEnv('LOGTO_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_ENDPOINT', cfEnv)),
     logtoM2m: !!(getRuntimeEnv('LOGTO_M2M_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_M2M_APP_SECRET', cfEnv)),
-    turnstile: !!getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv),
+    turnstile: !!(getRuntimeEnv('TURNSTILE_SECRET_KEY', cfEnv) || getRuntimeEnv('PUBLIC_TURNSTILE_SITE_KEY', cfEnv) || getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv)),
     resend: !!getRuntimeEnv('RESEND_API_KEY', cfEnv),
-    sanity: !!(getRuntimeEnv('SANITY_API_TOKEN', cfEnv) && getRuntimeEnv('SANITY_PROJECT_ID', cfEnv)),
+    sanity: !!((getRuntimeEnv('SANITY_TOKEN', cfEnv) || getRuntimeEnv('SANITY_API_TOKEN', cfEnv)) && getRuntimeEnv('SANITY_PROJECT_ID', cfEnv)),
     rootAdminEmails: getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '',
   };
 
@@ -71,7 +52,7 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
-  const admin = await verifyAdminAuth(request);
+  const admin = await verifyAdminAuth(request, cfEnv);
   if (!admin) {
     return new Response(JSON.stringify({ error: 'Forbidden. Administrator access required.' }), {
       status: 403,
@@ -116,15 +97,34 @@ export const POST: APIRoute = async ({ request }) => {
 
     try {
       const currentSettings = await getSystemSettings(cfEnv);
-      const testPayload = {
-        msgtype: 'markdown',
-        markdown: {
-          content: `### 🔔 [${currentSettings.brand_name}] Webhook Connection Verified\n\n- **Triggered By**: ${admin.email}\n- **Timestamp**: ${new Date().toISOString()}\n- **Environment**: Cloudflare Edge Workers\n- **Status**: Live Delivery OK`,
-        },
-        text: {
-          content: `🔔 [${currentSettings.brand_name}] Webhook connection test successful from ${admin.email}`,
-        },
-      };
+      const plainText = `🔔 【${currentSettings.brand_name}】Webhook 连接测试成功\n- 触发者：${admin.email}\n- 时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- 运行环境：Cloudflare Workers\n- 状态：测试消息发送正常`;
+
+      let testPayload: any;
+      if (targetUrl.includes('qyapi.weixin.qq.com')) {
+        testPayload = {
+          msgtype: 'markdown',
+          markdown: { content: plainText },
+        };
+      } else if (targetUrl.includes('dingtalk.com')) {
+        testPayload = {
+          msgtype: 'markdown',
+          markdown: {
+            title: `【${currentSettings.brand_name}】Webhook 验证测试`,
+            text: `### 🔔 [${currentSettings.brand_name}] Webhook 验证成功\n\n- **触发者**：${admin.email}\n- **时间**：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- **运行环境**：Cloudflare Workers\n- **状态**：Live Delivery OK`,
+          },
+        };
+      } else if (targetUrl.includes('feishu.cn') || targetUrl.includes('larksuite.com')) {
+        testPayload = {
+          msg_type: 'text',
+          content: { text: plainText },
+        };
+      } else {
+        testPayload = {
+          msgtype: 'text',
+          text: { content: plainText },
+          content: plainText,
+        };
+      }
 
       const res = await fetch(targetUrl, {
         method: 'POST',

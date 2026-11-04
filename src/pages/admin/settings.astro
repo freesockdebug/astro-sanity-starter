@@ -21,9 +21,9 @@ const settings = await getSystemSettings(cfEnv);
 const rootAdminEmails = getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '';
 const hasLogtoOidc = !!(getRuntimeEnv('LOGTO_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_ENDPOINT', cfEnv));
 const hasLogtoM2m = !!(getRuntimeEnv('LOGTO_M2M_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_M2M_APP_SECRET', cfEnv));
-const hasTurnstile = !!getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv);
+const hasTurnstile = !!(getRuntimeEnv('TURNSTILE_SECRET_KEY', cfEnv) || getRuntimeEnv('PUBLIC_TURNSTILE_SITE_KEY', cfEnv) || getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv));
 const hasResend = !!getRuntimeEnv('RESEND_API_KEY', cfEnv);
-const hasSanity = !!(getRuntimeEnv('SANITY_API_TOKEN', cfEnv) && getRuntimeEnv('SANITY_PROJECT_ID', cfEnv));
+const hasSanity = !!((getRuntimeEnv('SANITY_TOKEN', cfEnv) || getRuntimeEnv('SANITY_API_TOKEN', cfEnv)) && getRuntimeEnv('SANITY_PROJECT_ID', cfEnv));
 
 const pageTitle = 'Workspace Settings';
 ---

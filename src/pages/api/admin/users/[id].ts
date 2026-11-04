@@ -1,6 +1,6 @@
 // src/pages/api/admin/users/[id].ts
 import type { APIRoute } from 'astro';
-import { getSessionFromRequest } from '@utils/auth';
+import { verifyAdminAuth } from '@utils/auth';
 import {
   getUserDetailsWithOrders,
   updateUserAdminMeta,
@@ -25,8 +25,8 @@ const VALID_TIERS = new Set<CustomerTier>(['STANDARD', 'VIP', 'PARTNER']);
 const VALID_STATUSES = new Set<UserStatus>(['ACTIVE', 'BLOCKED']);
 
 export const GET: APIRoute = async ({ request, params }) => {
-  const user = await getSessionFromRequest(request, cfEnv);
-  if (!user || !user.isAdmin) {
+  const user = await verifyAdminAuth(request, cfEnv);
+  if (!user) {
     return new Response(JSON.stringify({ error: 'Forbidden. Admin access required.' }), {
       status: 403,
       headers: NO_CACHE_HEADERS,
@@ -56,8 +56,8 @@ export const GET: APIRoute = async ({ request, params }) => {
 };
 
 export const POST: APIRoute = async ({ request, params }) => {
-  const user = await getSessionFromRequest(request, cfEnv);
-  if (!user || !user.isAdmin) {
+  const user = await verifyAdminAuth(request, cfEnv);
+  if (!user) {
     return new Response(JSON.stringify({ error: 'Forbidden. Admin access required.' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },
