@@ -11,25 +11,58 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const currentLang = getLangFromUrl(Astro.url);
-const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/users');
+let errorOccurred: string | null = null;
+let sessionUser: any = null;
+let pendingOrdersCount = 0;
+let redirectResponse: any = null;
+let users: any[] = [];
+let total = 0;
+let stats: any = { all: 0, vip: 0, partner: 0, standard: 0, blocked: 0, admins: 0, unclaimedGuestOrders: 0 };
+let currentLang = 'en';
+let currentSearch = '';
+let currentTier = 'ALL';
+let currentStatus = 'ALL';
+let currentPage = 1;
+let totalPages = 1;
+
+try {
+  currentLang = getLangFromUrl(Astro.url);
+  const authRes = await requireAdminContext(Astro, cfEnv, '/admin/users');
+  sessionUser = authRes.sessionUser;
+  pendingOrdersCount = authRes.pendingOrdersCount;
+  redirectResponse = authRes.redirectResponse;
+
+  if (!redirectResponse) {
+    currentSearch = Astro.url.searchParams.get('search') || '';
+    currentTier = Astro.url.searchParams.get('tier') || 'ALL';
+    currentStatus = Astro.url.searchParams.get('status') || 'ALL';
+    currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
+    const pageSize = 30;
+
+    const data = await listAdminUsers({
+      search: currentSearch,
+      tier: currentTier,
+      status: currentStatus,
+      page: currentPage,
+      limit: pageSize,
+    });
+    users = data.users || [];
+    total = data.total || 0;
+    stats = data.stats || stats;
+    totalPages = Math.max(1, Math.ceil(total / pageSize));
+  }
+} catch (err: any) {
+  console.error('[admin/users.astro Error]:', err);
+  errorOccurred = err?.stack || err?.message || String(err);
+}
+
 if (redirectResponse) return redirectResponse;
-
-const currentSearch = Astro.url.searchParams.get('search') || '';
-const currentTier = Astro.url.searchParams.get('tier') || 'ALL';
-const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
-const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
-const pageSize = 30;
-
-const { users, total, stats } = await listAdminUsers({
-  search: currentSearch,
-  tier: currentTier,
-  status: currentStatus,
-  page: currentPage,
-  limit: pageSize,
-});
-
-const totalPages = Math.max(1, Math.ceil(total / pageSize));
+if (errorOccurred) {
+  return new Response(`Admin Users Render Error:\n${errorOccurred}`, {
+    status: 500,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
+}
 
 const buildUsersUrl = (overrides: { page?: number; tier?: string; status?: string; search?: string } = {}) => {
   const p = new URLSearchParams();
