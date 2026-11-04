@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "astro-sanity-starter",
+  "name": "b2b-commerce-starter",
   "main": "@astrojs/cloudflare/entrypoints/server",
   "compatibility_date": "2026-10-06",
   "compatibility_flags": [
@@ -12,21 +12,21 @@
     "directory": "dist/client"
   },
   "vars": {
-    "SANITY_PROJECT_ID": "xvhhd8u0",
+    "SANITY_PROJECT_ID": "",
     "SANITY_DATASET": "production",
-    "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFXbqPn5Jkh6bMhV",
-    "TURNSTILE_HOSTNAMES": "localhost,127.0.0.1,gwenvenni.com",
-    "ADMIN_EMAILS": "forhaisome@gmail.com",
-    "LOGTO_ENDPOINT": "https://auth.gwenvenni.com/",
-    "LOGTO_APP_ID": "btx7meodkblwjce23ulpc",
-    "LOGTO_M2M_APP_ID": "1qn2bybiqi8rbisi75v0v",
-    "LOGTO_MANAGEMENT_RESOURCE": "https://8tvr1q.logto.app/api"
+    "PUBLIC_TURNSTILE_SITE_KEY": "",
+    "TURNSTILE_HOSTNAMES": "",
+    "ADMIN_EMAILS": "",
+    "LOGTO_ENDPOINT": "",
+    "LOGTO_APP_ID": "",
+    "LOGTO_M2M_APP_ID": "",
+    "LOGTO_MANAGEMENT_RESOURCE": ""
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "b2b",
-      "database_id": "ee9bf95f-2f23-4df7-aea4-cb81346473dd"
+      "database_id": ""
     }
   ],
   "observability": {

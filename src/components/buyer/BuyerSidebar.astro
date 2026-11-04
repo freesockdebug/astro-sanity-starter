@@ -38,6 +38,7 @@ const displayName = dbUser?.name || sessionUser.name || sessionUser.email.split(
 const displayCompany = dbUser?.company || sessionUser.company || '';
 const tier = dbUser?.tier || 'STANDARD';
 const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCase();
+const whatsappNumber = import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
 ---
 
 <!-- Mobile Drawer Backdrop Overlay -->
@@ -62,11 +63,11 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
   <div class="p-5 border-b border-black/5 flex items-center justify-between">
     <a href={getLocalizedPath('/', currentLang)} class="flex items-center gap-3 group">
       <div class="w-9 h-9 rounded-xl bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-xs shrink-0 font-mono group-hover:scale-105 transition-transform">
-        GV
+        B2B
       </div>
       <div class="min-w-0">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold tracking-tight text-[#1d1d1f] truncate">GwenVenni</span>
+          <span class="text-sm font-semibold tracking-tight text-[#1d1d1f] truncate">Buyer Center</span>
           <TierBadge tier={tier} size="sm" variant="short" />
         </div>
         <p class="text-[10px] text-[#86868b] uppercase tracking-wider font-medium truncate mt-0.5">{t('buyer.portal')}</p>
@@ -162,18 +163,20 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
         </span>
       </label>
 
-      <a
-        href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${displayName} from ${displayCompany || 'our atelier'} (${sessionUser.email}). I would like to consult on custom manufacturing & wholesale orders.`)}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="flex items-center justify-between px-3 py-2 rounded-xl font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 transition-all"
-      >
-        <div class="flex items-center gap-2.5">
-          <span class="text-sm">💬</span>
-          <span>{t('buyer.concierge')}</span>
-        </div>
-        <span class="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1 rounded">1v1</span>
-      </a>
+      {whatsappNumber && (
+        <a
+          href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, this is ${displayName} from ${displayCompany || 'our company'} (${sessionUser.email}). I would like to consult on custom manufacturing & wholesale orders.`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center justify-between px-3 py-2 rounded-xl font-medium text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 transition-all"
+        >
+          <div class="flex items-center gap-2.5">
+            <span class="text-sm">💬</span>
+            <span>{t('buyer.concierge')}</span>
+          </div>
+          <span class="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1 rounded">1v1</span>
+        </a>
+      )}
     </div>
   </nav>
 

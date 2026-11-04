@@ -37,10 +37,8 @@ export function createPurgeCacheAction(): DocumentActionComponent {
 
     const viteEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env || {} : {}
     const procEnv = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
-    const isGwenDomain = typeof window !== 'undefined' && window.location.hostname.endsWith('gwenvenni.com')
-    const defaultOrigin = isGwenDomain ? 'https://gwenvenni.com' : (typeof window !== 'undefined' ? window.location.origin : 'https://gwenvenni.com')
-    const siteUrl = (viteEnv.SANITY_STUDIO_SITE_URL || procEnv.SANITY_STUDIO_SITE_URL || defaultOrigin).replace(/\/$/, '')
-    const secret = viteEnv.SANITY_STUDIO_REVALIDATE_SECRET || procEnv.SANITY_STUDIO_REVALIDATE_SECRET || 'itsasecret'
+    const siteUrl = (viteEnv.SANITY_STUDIO_SITE_URL || procEnv.SANITY_STUDIO_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '')
+    const secret = viteEnv.SANITY_STUDIO_REVALIDATE_SECRET || procEnv.SANITY_STUDIO_REVALIDATE_SECRET || ''
 
     return {
       label: isPurging ? '正在清除缓存...' : '⚡ 清除此页 CDN 缓存',
@@ -48,6 +46,14 @@ export function createPurgeCacheAction(): DocumentActionComponent {
       icon: BoltIcon,
       disabled: isPurging,
       onHandle: async () => {
+        if (!siteUrl || !secret) {
+          toast.push({
+            status: 'error',
+            title: '缺少缓存清除配置',
+            description: '请配置 SANITY_STUDIO_SITE_URL 与 SANITY_STUDIO_REVALIDATE_SECRET 环境变量。',
+          })
+          return
+        }
         setIsPurging(true)
         try {
           const endpoint = `${siteUrl}/api/revalidate?path=${encodeURIComponent(targetPath)}&secret=${encodeURIComponent(secret)}`

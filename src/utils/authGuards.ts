@@ -1,6 +1,6 @@
 // src/utils/authGuards.ts
 // Contextual authentication guards for Buyer Workspace and Admin Portal
-import { getSessionFromRequest, type AuthUser } from './auth';
+import { getSessionFromRequest, SESSION_COOKIE_NAME, type AuthUser } from './auth';
 import { getUserByIdOrEmail, listAdminOrders, type UserRecord } from './db';
 
 export interface BuyerContextResult {
@@ -37,7 +37,7 @@ export async function getBuyerContext(
   try {
     dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
     if (dbUser && dbUser.status === 'BLOCKED') {
-      astro.cookies.delete('gwenvenni_session', { path: '/' });
+      astro.cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
       return {
         sessionUser,
         dbUser,

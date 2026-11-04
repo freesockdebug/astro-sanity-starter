@@ -2,6 +2,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { env as cfEnv } from 'cloudflare:workers';
 import { SiteConfigService } from '@data/siteConfig';
+import { SESSION_COOKIE_NAME } from './utils/auth';
 
 /**
  * Cloudflare Edge Cache Middleware for HTML Pages
@@ -56,7 +57,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isAccountPath = pathname === '/account' || pathname.startsWith('/account/') || pathname.includes('/account');
   const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.includes('/admin');
   const cookieHeader = request.headers.get('cookie') || '';
-  const hasUserSession = cookieHeader.includes('gwenvenni_session');
+  const hasUserSession = cookieHeader.includes(SESSION_COOKIE_NAME);
 
   if (
     isOrdersPath ||

@@ -45,7 +45,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign In - GwenVenni B2B Atelier</title>
+  <title>Sign In - B2B Portal</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -109,11 +109,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 </head>
 <body>
   <div class="card">
-    <h2>GwenVenni B2B Sign In</h2>
+    <h2>B2B Portal Sign In</h2>
     <p>Sign in with your work email to track RFQs and claim historical orders automatically.</p>
 
-    <a href="/api/auth/callback?mock_email=forhaisome@gmail.com&mock_name=Administrator&mock_admin=1&popup=${isPopup ? '1' : '0'}&returnUrl=${encodeURIComponent(returnUrl)}" class="btn btn-primary">
-      Sign in as Administrator <span class="badge">forhaisome@gmail.com</span>
+    <a href="/api/auth/callback?mock_email=admin@example.com&mock_name=Administrator&mock_admin=1&popup=${isPopup ? '1' : '0'}&returnUrl=${encodeURIComponent(returnUrl)}" class="btn btn-primary">
+      Sign in as Administrator <span class="badge">admin@example.com</span>
     </a>
 
     <a href="/api/auth/callback?mock_email=buyer@client.com&mock_name=B2B+Buyer&popup=${isPopup ? '1' : '0'}&returnUrl=${encodeURIComponent(returnUrl)}" class="btn btn-secondary">

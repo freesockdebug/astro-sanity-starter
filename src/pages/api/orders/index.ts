@@ -30,7 +30,7 @@ export const GET: APIRoute = async ({ request }) => {
     const dbUser = await getUserByIdOrEmail(user.id, user.email);
     if (dbUser && dbUser.status === 'BLOCKED') {
       return new Response(
-        JSON.stringify({ error: 'Your account is suspended. Please contact concierge@gwenvenni.com.' }),
+        JSON.stringify({ error: 'Your account is suspended. Please contact our B2B support team.' }),
         { status: 403, headers: NO_CACHE_HEADERS }
       );
     }

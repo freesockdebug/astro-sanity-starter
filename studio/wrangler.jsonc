@@ -1,16 +1,10 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "astro-sanity-starter-studio",
+  "name": "b2b-commerce-starter-studio",
   "main": "./worker.ts",
   "compatibility_date": "2026-10-06",
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
-  },
-  "routes": [
-    {
-      "pattern": "admin.gwenvenni.com",
-      "custom_domain": true
-    }
-  ]
+  }
 }

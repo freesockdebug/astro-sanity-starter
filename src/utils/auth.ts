@@ -14,7 +14,7 @@ export interface SessionData {
   exp: number;
 }
 
-const SESSION_COOKIE_NAME = 'gwenvenni_session';
+export const SESSION_COOKIE_NAME = 'b2b_session';
 const DEFAULT_TTL_SECONDS = 7 * 24 * 3600; // 7 days
 
 /**
@@ -37,7 +37,7 @@ export function checkIsAdmin(email: string, roles: string[] = [], customEnv?: an
     return true;
   }
 
-  const rawWhitelist = getRuntimeEnv('ADMIN_EMAILS', customEnv) || 'forhaisome@gmail.com';
+  const rawWhitelist = getRuntimeEnv('ADMIN_EMAILS', customEnv) || '';
   const whitelist = rawWhitelist
     .split(',')
     .map((e) => e.trim().toLowerCase())
@@ -96,8 +96,7 @@ function getCandidateSecrets(customEnv?: any): string[] {
     return Array.from(new Set(configured));
   }
 
-  // Only use development fallback key when no production secrets are provided
-  return ['gwenvenni-b2b-secure-session-key-2026'];
+  throw new Error('Missing required environment variable: SESSION_SECRET or LOGTO_APP_SECRET');
 }
 
 /**
@@ -254,17 +253,20 @@ export async function updateLogtoUserPassword(
   newPassword: string,
   customEnv?: any
 ): Promise<{ success: boolean; error?: string }> {
-  const endpoint = getRuntimeEnv('LOGTO_ENDPOINT', customEnv)?.replace(/\/+$/, '') || 'https://auth.gwenvenni.com';
-  const m2mAppId = getRuntimeEnv('LOGTO_M2M_APP_ID', customEnv);
-  const m2mAppSecret = getRuntimeEnv('LOGTO_M2M_APP_SECRET', customEnv);
-  const resource = getRuntimeEnv('LOGTO_MANAGEMENT_RESOURCE', customEnv) || 'https://8tvr1q.logto.app/api';
-
-  if (!m2mAppId || !m2mAppSecret) {
-    return { success: false, error: 'Server authentication configuration missing (LOGTO_M2M credentials).' };
-  }
-
   if (!newPassword || newPassword.length < 8) {
     return { success: false, error: 'Password must be at least 8 characters long.' };
+  }
+
+  const endpoint = getRuntimeEnv('LOGTO_ENDPOINT', customEnv)?.replace(/\/+$/, '');
+  const m2mAppId = getRuntimeEnv('LOGTO_M2M_APP_ID', customEnv);
+  const m2mAppSecret = getRuntimeEnv('LOGTO_M2M_APP_SECRET', customEnv);
+  const resource = getRuntimeEnv('LOGTO_MANAGEMENT_RESOURCE', customEnv);
+
+  if (!endpoint || !m2mAppId || !m2mAppSecret || !resource) {
+    return {
+      success: false,
+      error: 'Missing Logto M2M configuration (LOGTO_ENDPOINT, LOGTO_M2M_APP_ID, LOGTO_M2M_APP_SECRET, LOGTO_MANAGEMENT_RESOURCE).'
+    };
   }
 
   try {

@@ -1,6 +1,6 @@
 // src/pages/api/auth/me.ts
 import type { APIRoute } from 'astro';
-import { getSessionFromRequest } from '@utils/auth';
+import { getSessionFromRequest, SESSION_COOKIE_NAME } from '@utils/auth';
 import { getUserByIdOrEmail } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -22,7 +22,7 @@ export const GET: APIRoute = async (context) => {
   try {
     const dbUser = await getUserByIdOrEmail(user.id, user.email);
     if (dbUser && dbUser.status === 'BLOCKED') {
-      context.cookies.delete('gwenvenni_session', { path: '/' });
+      context.cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
       return new Response(
         JSON.stringify({ authenticated: false, error: 'account_suspended' }),
         {
@@ -30,7 +30,7 @@ export const GET: APIRoute = async (context) => {
           headers: {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store, max-age=0',
-            'Set-Cookie': 'gwenvenni_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+            'Set-Cookie': `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
           },
         }
       );

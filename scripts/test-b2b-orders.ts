@@ -24,10 +24,11 @@ import {
 } from '../src/utils/auth';
 
 async function runSelfCheck() {
+  process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-mock-session-secret-key-32chars';
   console.log('🧪 Starting B2B Order & Claiming Self-Check...\n');
 
   // 1. Auth & Admin checks
-  assert.strictEqual(checkIsAdmin('forhaisome@gmail.com'), true, 'Default admin email should be admin');
+  assert.strictEqual(checkIsAdmin('admin@example.com', [], { ADMIN_EMAILS: 'admin@example.com' }), true, 'Configured admin email should be admin');
   assert.strictEqual(checkIsAdmin('random@client.com'), false, 'Non-admin email should not be admin');
   assert.strictEqual(checkIsAdmin('buyer@test.com', ['admin']), true, 'Role admin should be admin');
 
@@ -107,7 +108,7 @@ async function runSelfCheck() {
     carrier: 'DHL Express',
     trackingNumber: 'DHL-9876543210',
     adminRemark: 'Dispatched in 3 cartons via air priority.',
-    adminUser: 'forhaisome@gmail.com',
+    adminUser: 'admin@example.com',
   });
   assert.strictEqual(shipOk, true);
 

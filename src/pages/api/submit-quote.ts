@@ -254,8 +254,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
     // 2. Cloudflare Turnstile Bot Verification
     const reqUrl = new URL(request.url);
-    const isProdHostname = reqUrl.hostname.endsWith('gwenvenni.com');
-    const isDummyTestToken = !isProdHostname && turnstileToken.includes('DUMMY.TOKEN');
+    const isDev = Boolean(import.meta.env?.DEV);
+    const isDummyTestToken = isDev && turnstileToken.includes('DUMMY.TOKEN');
     const turnstileSecret = isDummyTestToken
       ? '1x0000000000000000000000000000000AA'
       : getVal('TURNSTILE_SECRET_KEY') ||
@@ -271,7 +271,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }
 
       const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '';
-      const rawHostnames = getVal('TURNSTILE_HOSTNAMES') || 'localhost,127.0.0.1,gwenvenni.com';
+      const rawHostnames = getVal('TURNSTILE_HOSTNAMES') || (isDev ? 'localhost,127.0.0.1' : reqUrl.hostname);
       const expectedHostnames = new Set(
         rawHostnames
           .split(',')
@@ -331,7 +331,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       existingBuyer = await getUserByIdOrEmail(userId, buyerInfo.email);
       if (existingBuyer && existingBuyer.status === 'BLOCKED') {
         return new Response(
-          JSON.stringify({ error: 'Your account is suspended from submitting quotation requests. Please contact concierge@gwenvenni.com.', success: false }),
+          JSON.stringify({ error: 'Your account is suspended from submitting quotation requests. Please contact our B2B support team.', success: false }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
         );
       }
@@ -467,7 +467,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         });
 
         // Configurable Resend sender, recipients, and subject prefix
-        const defaultDomain = DEFAULT_CONTACT_EMAIL.split('@')[1] || 'gwenvenni.com';
+        const defaultDomain = DEFAULT_CONTACT_EMAIL ? (DEFAULT_CONTACT_EMAIL.split('@')[1] || '') : reqUrl.hostname;
         const fromEmail = getVal('RESEND_FROM_EMAIL')?.trim() || `${DEFAULT_BRAND_TITLE} RFQ System <rfq@${defaultDomain}>`;
         const rawToEmail = siteConfig?.notificationRecipientEmail?.trim() || getVal('RESEND_TO_EMAIL')?.trim() || DEFAULT_CONTACT_EMAIL;
         const toEmails = rawToEmail

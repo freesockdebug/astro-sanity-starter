@@ -168,7 +168,7 @@ export class SecurityService {
         if (originHost === 'localhost' || originHost === '127.0.0.1' || originHost.endsWith('.local')) {
           isAllowedOrigin = true;
         } else if (rootDomain && (originHost === rootDomain || originHost.endsWith(`.${rootDomain}`))) {
-          // Allow apex domain and any of its own subdomains (e.g. admin.gwenvenni.com)
+          // Allow apex domain and any of its own subdomains (e.g. admin.yourdomain.com)
           isAllowedOrigin = true;
         } else {
           // Explicit full-host match only for external configurations

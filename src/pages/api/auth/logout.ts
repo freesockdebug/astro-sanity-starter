@@ -1,6 +1,6 @@
 // src/pages/api/auth/logout.ts
 import type { APIRoute } from 'astro';
-import { formatClearSessionCookie, getRuntimeEnv } from '@utils/auth';
+import { formatClearSessionCookie, getRuntimeEnv, SESSION_COOKIE_NAME } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -11,7 +11,7 @@ export const ALL: APIRoute = async ({ request, url, cookies }) => {
   const clearCookie = formatClearSessionCookie();
 
   try {
-    cookies.delete('gwenvenni_session', { path: '/' });
+    cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
     cookies.delete('logto_oauth_state', { path: '/' });
   } catch {
     // ignore
@@ -25,7 +25,7 @@ export const ALL: APIRoute = async ({ request, url, cookies }) => {
     const postLogoutUrl = new URL(`${endpoint}/oidc/session/end`);
     postLogoutUrl.searchParams.set('client_id', appId);
 
-    // Resolve base origin (e.g. https://gwenvenni.com or http://localhost:4321)
+    // Resolve base origin (e.g. current host or http://localhost:4321)
     const host = request.headers.get('host') || url.host;
     const proto = request.headers.get('x-forwarded-proto') || url.protocol.replace(':', '') || 'https';
     const origin = url.origin && url.origin !== 'null' ? url.origin : `${proto}://${host}`;

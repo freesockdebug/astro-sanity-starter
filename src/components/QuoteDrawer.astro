@@ -29,10 +29,9 @@ const swatchKitDesc = getLocalizedValue(rfqSettings?.swatchKitDesc, currentLang,
 const swatchKitImageUrl = rfqSettings?.swatchKitImage?.asset?.url || rfqSettings?.swatchKitImageUrl || DEFAULT_RFQ.swatchKitImageUrl;
 const swatchKitMoq = rfqSettings?.swatchKitMoq || DEFAULT_RFQ.swatchKitMoq;
 
-const isProdHostname = Astro.url.hostname.endsWith('gwenvenni.com');
 const turnstileSiteKey =
   import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ||
-  (isProdHostname ? '0x4AAAAAAFXbqPn5Jkh6bMhV' : '1x00000000000000000000AA');
+  (import.meta.env.DEV ? '1x00000000000000000000AA' : '');
 
 const reqCountryCode = SecurityService.resolveCountry(Astro.request);
 let visitorCountry = '';

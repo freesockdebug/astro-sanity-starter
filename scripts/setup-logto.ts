@@ -7,7 +7,7 @@ async function setupLogto() {
   const endpoint = process.env.LOGTO_ENDPOINT?.replace(/\/+$/, '');
   const m2mAppId = process.env.LOGTO_M2M_APP_ID;
   const m2mAppSecret = process.env.LOGTO_M2M_APP_SECRET;
-  const adminEmails = (process.env.ADMIN_EMAILS || 'forhaisome@gmail.com')
+  const adminEmails = (process.env.ADMIN_EMAILS || '')
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
@@ -67,10 +67,11 @@ async function setupLogto() {
       signal: AbortSignal.timeout(6000),
     });
     const apps = await appsRes.json();
-    let targetApp = Array.isArray(apps) ? apps.find((a: any) => a.name === 'GwenVenni B2B Web') : null;
+    let targetApp = Array.isArray(apps) ? apps.find((a: any) => a.name === 'B2B Web App') : null;
 
+    const baseAppUrl = process.env.APP_URL?.replace(/\/+$/, '');
     const redirectUris = [
-      'https://gwenvenni.com/api/auth/callback',
+      ...(baseAppUrl ? [`${baseAppUrl}/api/auth/callback`] : []),
       'http://localhost:3000/api/auth/callback',
       'http://localhost:4321/api/auth/callback',
       'http://127.0.0.1:3000/api/auth/callback',
@@ -78,7 +79,7 @@ async function setupLogto() {
     ];
 
     const postLogoutUris = [
-      'https://gwenvenni.com/',
+      ...(baseAppUrl ? [`${baseAppUrl}/`] : []),
       'http://localhost:3000/',
       'http://localhost:4321/',
     ];

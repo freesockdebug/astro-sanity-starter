@@ -135,7 +135,7 @@ export function resolveSiteOrigin(astroUrl?: URL | string, astroSite?: URL | str
     } catch {}
   }
 
-  return 'https://gwenvenni.com';
+  throw new Error('Cannot resolve site origin: provide astroUrl, Astro.site, or APP_URL environment variable');
 }
 
 /**
@@ -144,7 +144,7 @@ export function resolveSiteOrigin(astroUrl?: URL | string, astroSite?: URL | str
  * - Strips trailing slashes except for the root path "/"
  */
 export function normalizeCanonicalUrl(rawUrl: string | URL, baseOrigin?: string | URL): string {
-  const origin = baseOrigin ? String(baseOrigin) : 'https://gwenvenni.com';
+  const origin = baseOrigin ? String(baseOrigin) : resolveSiteOrigin();
   const parsed = new URL(rawUrl.toString(), origin);
   parsed.search = '';
   parsed.hash = '';

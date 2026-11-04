@@ -229,11 +229,6 @@ export const POST: APIRoute = async (context) => {
     }
 
     const targetOrigins = new Set<string>([origin]);
-    if (origin.includes('gwenvenni.com')) {
-      targetOrigins.add('https://gwenvenni.com');
-      targetOrigins.add('https://www.gwenvenni.com');
-      targetOrigins.add('https://admin.gwenvenni.com');
-    }
 
     const urlsToPurge: string[] = [];
     const urlSet = new Set<string>();

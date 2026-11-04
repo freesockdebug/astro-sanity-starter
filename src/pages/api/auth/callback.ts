@@ -6,6 +6,7 @@ import {
   createSessionToken,
   formatSessionCookie,
   getCookieValue,
+  SESSION_COOKIE_NAME,
   type AuthUser,
 } from '@utils/auth';
 import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin } from '@utils/db';
@@ -152,7 +153,7 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
     const existing = await getUserByIdOrEmail(authUser.id, authUser.email);
     if (existing && existing.status === 'BLOCKED') {
       return new Response(
-        'Your account has been suspended by administration. If you believe this is an error, please contact concierge@gwenvenni.com.',
+        'Your account has been suspended by administration. If you believe this is an error, please contact our B2B support team.',
         { status: 403 }
       );
     }
@@ -205,7 +206,7 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
 
   // Set natively through Astro Cookies API
   try {
-    cookies.set('gwenvenni_session', sessionToken, {
+    cookies.set(SESSION_COOKIE_NAME, sessionToken, {
       path: '/',
       maxAge: 7 * 24 * 3600,
       httpOnly: true,

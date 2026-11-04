@@ -7,20 +7,21 @@
 // =============================================================================
 // 1. Brand & SEO Meta Defaults
 // =============================================================================
-export const DEFAULT_BRAND_TITLE = 'GWENVENNI';
-export const DEFAULT_META_TITLE = 'Gwenvenni Luxury Atelier | 200-Needle Luxury B2B Wholesale';
+const envBrandName = (typeof process !== 'undefined' && process.env?.PUBLIC_BRAND_NAME) || (import.meta.env && import.meta.env.PUBLIC_BRAND_NAME);
+export const DEFAULT_BRAND_TITLE = envBrandName || 'B2B ATELIER';
+export const DEFAULT_META_TITLE = 'B2B Manufacturing & Wholesale Portal';
 export const DEFAULT_META_DESCRIPTION =
-  'Specialized manufacturer of 200-needle luxury apparel, fine silks, cashmere, and seamless essentials. Low MOQ, rapid 48h swatch dispatch, and full OEM/ODM customization.';
-export const DEFAULT_CONTACT_EMAIL = 'contact@gwenvenni.com';
+  'Specialized B2B manufacturing, luxury fabrics, fine apparel, and seamless essentials. Low MOQ, rapid sample dispatch, and full OEM/ODM customization.';
+export const DEFAULT_CONTACT_EMAIL = (typeof process !== 'undefined' && process.env?.PUBLIC_CONTACT_EMAIL) || (import.meta.env && import.meta.env.PUBLIC_CONTACT_EMAIL) || '';
 export const DEFAULT_FALLBACK_IMAGE = '/images/hero-light.webp';
 
 // =============================================================================
 // 2. Global Footer Defaults
 // =============================================================================
 export const DEFAULT_FOOTER_BIO =
-  "Specialized manufacturer of 200-needle luxury apparel, fine silks, cashmere, and seamless second-skin essentials for global fashion labels.";
+  "Specialized manufacturer of luxury apparel, fine textiles, and seamless essentials for global brands.";
 export const DEFAULT_STATUS_BADGE = 'Sample Room: 48h Global Dispatch Active';
-export const DEFAULT_COPYRIGHT_TEXT = '© 2026 Gwenvenni Co., Ltd. All rights reserved.';
+export const DEFAULT_COPYRIGHT_TEXT = `© ${new Date().getFullYear()} ${DEFAULT_BRAND_TITLE}. All rights reserved.`;
 
 export const DEFAULT_FOOTER_COLUMNS = [
   {

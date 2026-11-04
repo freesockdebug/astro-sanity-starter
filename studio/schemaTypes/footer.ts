@@ -180,7 +180,7 @@ export default defineType({
             {_key: 'l51', label: {en: 'Order Swatch Kit', de: 'Musterbuch bestellen', fr: 'Commander un Nuancier', es: 'Pedir Muestrario'}, url: '#inquiry'},
             {_key: 'l52', label: {en: 'Request OEM Quote', de: 'OEM-Angebot anfordern', fr: 'Demande de Devis OEM', es: 'Solicitar Presupuesto OEM'}, url: '#inquiry'},
             {_key: 'l53', label: {en: 'Factory Audit Tour', de: 'Werksbesichtigung', fr: 'Visite d\'Audit Usine', es: 'Visita de Auditoría a Fábrica'}, url: '#manufacturing'},
-            {_key: 'l54', label: {en: 'contact@gwenvenni.com', de: 'contact@gwenvenni.com', fr: 'contact@gwenvenni.com', es: 'contact@gwenvenni.com'}, url: 'mailto:contact@gwenvenni.com'},
+            {_key: 'l54', label: {en: 'Contact Atelier', de: 'Atelier kontaktieren', fr: 'Contacter l\'Atelier', es: 'Contactar Atelier'}, url: '#inquiry'},
           ],
         },
       ],

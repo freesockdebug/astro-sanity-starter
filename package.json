@@ -1,5 +1,5 @@
 {
-  "name": "gwenvenni-web",
+  "name": "b2b-commerce-starter",
   "version": "0.0.1",
   "scripts": {
     "dev": "node ./astro-cli.mjs dev --host 0.0.0.0 --port 3000",

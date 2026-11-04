@@ -4,7 +4,10 @@ const getEnv = (key: string): string | undefined => {
     return (import.meta.env && import.meta.env[key]) || (typeof process !== 'undefined' && process.env && process.env[key]);
 };
 
-const SANITY_PROJECT_ID = getEnv('SANITY_PROJECT_ID') || 'xvhhd8u0';
+const SANITY_PROJECT_ID = getEnv('SANITY_PROJECT_ID');
+if (!SANITY_PROJECT_ID) {
+    throw new Error('Missing required environment variable: SANITY_PROJECT_ID');
+}
 const SANITY_DATASET = getEnv('SANITY_DATASET') || 'production';
 const SANITY_TOKEN = getEnv('SANITY_TOKEN');
 const STACKBIT_PREVIEW = getEnv('STACKBIT_PREVIEW');

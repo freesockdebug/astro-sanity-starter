@@ -156,14 +156,14 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
 
     // WhatsApp & General
     'whatsapp.tooltip': 'Chat with B2B Specialist',
-    'whatsapp.prefill': "Hello Gwenvenni, I'm interested in your private-label knitwear collection.",
+    'whatsapp.prefill': "Hello, I'm interested in your private-label collection.",
     'common.backToTop': 'TOP',
     'common.contactUs': 'Contact Workshop',
     'common.rights': 'All rights reserved.',
 
     // Orders Center
     'orders.title': 'Order Center',
-    'orders.metaTitle': 'My Orders & RFQs | GwenVenni B2B Atelier',
+    'orders.metaTitle': 'My Orders & RFQs | B2B Atelier',
     'orders.metaDesc': 'Track and manage your B2B quotation requests, production approvals, and global shipments.',
     'orders.breadcrumb': 'Orders',
     'orders.accountBtn': 'Account & Security',
@@ -231,7 +231,7 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
 
     // Account & Security
     'account.title': 'Client Profile & Security',
-    'account.metaTitle': 'Account & Security Settings | GwenVenni Atelier',
+    'account.metaTitle': 'Account & Security Settings | B2B Atelier',
     'account.metaDesc': 'Manage your B2B atelier profile, authentication credentials, and inspect security login sessions.',
     'account.breadcrumb': 'Account & Security',
     'account.orderCenter': 'Order Center',
@@ -430,14 +430,14 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
 
     // WhatsApp & General
     'whatsapp.tooltip': 'Chat mit B2B-Spezialist',
-    'whatsapp.prefill': 'Hallo Gwenvenni, ich interessiere mich für Ihre Private-Label-Strickkollektion.',
+    'whatsapp.prefill': 'Hallo, ich interessiere mich für Ihre Private-Label-Kollektion.',
     'common.backToTop': 'NACH OBEN',
     'common.contactUs': 'Werkstatt kontaktieren',
     'common.rights': 'Alle Rechte vorbehalten.',
 
     // Orders Center
     'orders.title': 'Bestellübersicht',
-    'orders.metaTitle': 'Meine Bestellungen & Anfragen | GwenVenni B2B Atelier',
+    'orders.metaTitle': 'Meine Bestellungen & Anfragen | B2B Atelier',
     'orders.metaDesc': 'Verfolgen und verwalten Sie Ihre B2B-Angebotsanfragen, Produktionsfreigaben und weltweiten Lieferungen.',
     'orders.breadcrumb': 'Bestellungen',
     'orders.accountBtn': 'Konto & Sicherheit',
@@ -505,7 +505,7 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
 
     // Account & Security
     'account.title': 'Kundenprofil & Sicherheit',
-    'account.metaTitle': 'Konto- & Sicherheitseinstellungen | GwenVenni Atelier',
+    'account.metaTitle': 'Konto- & Sicherheitseinstellungen | B2B Atelier',
     'account.metaDesc': 'Verwalten Sie Ihr B2B-Atelier-Profil, Zugangsdaten und Sicherheitssitzungen.',
     'account.breadcrumb': 'Konto & Sicherheit',
     'account.orderCenter': 'Bestellübersicht',
@@ -704,14 +704,14 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
 
     // WhatsApp & General
     'whatsapp.tooltip': 'Discuter avec un spécialiste B2B',
-    'whatsapp.prefill': 'Bonjour Gwenvenni, je suis intéressé(e) par votre collection de maille en marque blanche.',
+    'whatsapp.prefill': 'Bonjour, je suis intéressé(e) par votre collection en marque blanche.',
     'common.backToTop': 'HAUT',
     'common.contactUs': 'Contacter l’atelier',
     'common.rights': 'Tous droits réservés.',
 
     // Orders Center
     'orders.title': 'Centre de Commandes',
-    'orders.metaTitle': 'Mes Commandes & Demandes de Devis | Atelier B2B GwenVenni',
+    'orders.metaTitle': 'Mes Commandes & Demandes de Devis | Atelier B2B',
     'orders.metaDesc': 'Suivez et gérez vos demandes de devis B2B, approbations de production et expéditions internationales.',
     'orders.breadcrumb': 'Commandes',
     'orders.accountBtn': 'Compte & Sécurité',
@@ -779,7 +779,7 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
 
     // Account & Security
     'account.title': 'Profil Client & Sécurité',
-    'account.metaTitle': 'Paramètres de Compte & Sécurité | Atelier GwenVenni',
+    'account.metaTitle': 'Paramètres de Compte & Sécurité | Atelier B2B',
     'account.metaDesc': 'Gérez votre profil d\'atelier B2B, vos identifiants d\'authentification et inspectez vos sessions de sécurité.',
     'account.breadcrumb': 'Compte & Sécurité',
     'account.orderCenter': 'Centre de Commandes',
@@ -978,14 +978,14 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
 
     // WhatsApp & General
     'whatsapp.tooltip': 'Chatear con especialista B2B',
-    'whatsapp.prefill': 'Hola Gwenvenni, estoy interesado en su colección de punto de marca blanca.',
+    'whatsapp.prefill': 'Hola, estoy interesado en su colección de marca blanca.',
     'common.backToTop': 'ARRIBA',
     'common.contactUs': 'Contactar taller',
     'common.rights': 'Todos los derechos reservados.',
 
     // Orders Center
     'orders.title': 'Centro de Pedidos',
-    'orders.metaTitle': 'Mis Pedidos y Solicitudes | GwenVenni Atelier B2B',
+    'orders.metaTitle': 'Mis Pedidos y Solicitudes | Atelier B2B',
     'orders.metaDesc': 'Siga y gestione sus solicitudes de cotización B2B, aprobaciones de producción y envíos internacionales.',
     'orders.breadcrumb': 'Pedidos',
     'orders.accountBtn': 'Cuenta y Seguridad',
@@ -1053,7 +1053,7 @@ export const UI_STRINGS: Record<SupportedLocale, Record<string, string>> = {
 
     // Account & Security
     'account.title': 'Perfil de Cliente y Seguridad',
-    'account.metaTitle': 'Configuración de Cuenta y Seguridad | GwenVenni Atelier',
+    'account.metaTitle': 'Configuración de Cuenta y Seguridad | Atelier B2B',
     'account.metaDesc': 'Gestione su perfil de atelier B2B, credenciales de autenticación y revise sus sesiones de seguridad.',
     'account.breadcrumb': 'Cuenta y Seguridad',
     'account.orderCenter': 'Centro de Pedidos',

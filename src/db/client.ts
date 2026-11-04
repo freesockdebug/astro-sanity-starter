@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { getRuntimeEnv } from '../utils/auth';
 
 export function getAdminEmailList(): string[] {
-  const raw = getRuntimeEnv('ADMIN_EMAILS') || 'forhaisome@gmail.com';
+  const raw = getRuntimeEnv('ADMIN_EMAILS') || '';
   return raw.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
 }
 

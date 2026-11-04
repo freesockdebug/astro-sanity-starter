@@ -19,6 +19,8 @@ if (redirectResponse) return redirectResponse;
 
 const loginHistory = await getUserLoginHistory(sessionUser!.id, 20);
 const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);
+const whatsappNumber = getRuntimeEnv('PUBLIC_WHATSAPP_NUMBER', cfEnv) || import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
+const contactEmail = getRuntimeEnv('PUBLIC_CONTACT_EMAIL', cfEnv) || import.meta.env.PUBLIC_CONTACT_EMAIL || '';
 const pageTitle = t('account.metaTitle');
 const pageDesc = t('account.metaDesc');
 const tier = dbUser?.tier || 'STANDARD';
@@ -211,10 +213,12 @@ const tier = dbUser?.tier || 'STANDARD';
               </div>
             </div>
 
-            <div class="pt-3 border-t border-black/5 flex items-center justify-between text-[11px] text-[#86868b]">
-              <span>Annual volume tiering</span>
-              <a href="https://wa.me/8613867512218" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">Upgrade Inquiry →</a>
-            </div>
+            {whatsappNumber && (
+              <div class="pt-3 border-t border-black/5 flex items-center justify-between text-[11px] text-[#86868b]">
+                <span>Annual volume tiering</span>
+                <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">Upgrade Inquiry →</a>
+              </div>
+            )}
           </div>
 
           <!-- Dedicated Atelier Concierge Card -->
@@ -232,21 +236,25 @@ const tier = dbUser?.tier || 'STANDARD';
               </p>
             </div>
             <div class="pt-2 flex items-center gap-2">
-              <a
-                href={`https://wa.me/8613867512218?text=${encodeURIComponent(`Hello GwenVenni Atelier, this is ${dbUser?.name || sessionUser.name || 'a B2B client'} from ${dbUser?.company || 'our company'} (${sessionUser.email}). I would like to consult on custom manufacturing & wholesale orders.`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="flex-1 py-2 px-3 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all text-center inline-flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <span>WhatsApp 1-on-1</span>
-              </a>
-              <a
-                href={`mailto:b2b@gwenvenni.com?subject=${encodeURIComponent(`[B2B Inquiry] ${dbUser?.company || sessionUser.email}`)}`}
-                class="py-2 px-3 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition-all border border-white/15 text-center shrink-0"
-                title="Send inquiry email"
-              >
-                ✉️ Email
-              </a>
+              {whatsappNumber && (
+                <a
+                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, this is ${dbUser?.name || sessionUser.name || 'a B2B client'} from ${dbUser?.company || 'our company'} (${sessionUser.email}). I would like to consult on custom manufacturing & wholesale orders.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex-1 py-2 px-3 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all text-center inline-flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <span>WhatsApp 1-on-1</span>
+                </a>
+              )}
+              {contactEmail && (
+                <a
+                  href={`mailto:${contactEmail}?subject=${encodeURIComponent(`[B2B Inquiry] ${dbUser?.company || sessionUser.email}`)}`}
+                  class="py-2 px-3 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition-all border border-white/15 text-center shrink-0"
+                  title="Send inquiry email"
+                >
+                  ✉️ Email
+                </a>
+              )}
             </div>
           </div>
 

@@ -33,7 +33,7 @@ const uniqueUsers = new Set(logins.map((l) => l.email.toLowerCase())).size;
 const uniqueIps = new Set(logins.map((l) => l.ip).filter(Boolean)).size;
 const countries = Array.from(new Set(logins.map((l) => l.country).filter(Boolean)));
 
-const pageTitle = 'Login Audit Logs | GwenVenni Atelier Admin';
+const pageTitle = 'Login Audit Logs';
 ---
 
 <AdminLayout

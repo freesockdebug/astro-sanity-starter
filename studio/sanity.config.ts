@@ -9,11 +9,16 @@ import { createPurgeCacheAction } from './actions/purgeCacheAction'
 const env = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
 const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env ? (import.meta as any).env : {}) as Record<string, string | undefined>
 
+const projectId = (env.SANITY_STUDIO_PROJECT_ID || env.SANITY_PROJECT_ID || metaEnv.PUBLIC_SANITY_PROJECT_ID) as string
+if (!projectId) {
+  throw new Error('Missing required environment variable: SANITY_STUDIO_PROJECT_ID or SANITY_PROJECT_ID')
+}
+
 export default defineConfig({
   name: 'default',
   title: "Content Studio",
 
-  projectId: (env.SANITY_STUDIO_PROJECT_ID || env.SANITY_PROJECT_ID || metaEnv.PUBLIC_SANITY_PROJECT_ID || 'xvhhd8u0') as string,
+  projectId,
   dataset: (env.SANITY_STUDIO_DATASET || env.SANITY_DATASET || metaEnv.PUBLIC_SANITY_DATASET || 'production') as string,
 
   plugins: [

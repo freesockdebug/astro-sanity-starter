@@ -2,17 +2,19 @@ interface Env {
   ASSETS: {
     fetch: (request: Request) => Promise<Response>;
   };
+  SITE_ORIGIN?: string;
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Forward API requests to the production Astro SSR site
+    // Forward API requests to the Astro SSR site
     if (url.pathname.startsWith('/api/')) {
-      const targetUrl = new URL(url.pathname + url.search, 'https://gwenvenni.com');
+      const siteOrigin = env.SITE_ORIGIN || url.origin;
+      const targetUrl = new URL(url.pathname + url.search, siteOrigin);
       const headers = new Headers(request.headers);
-      headers.set('host', 'gwenvenni.com');
+      headers.set('host', targetUrl.host);
       headers.set('x-forwarded-host', url.host);
 
       const init: RequestInit = {
