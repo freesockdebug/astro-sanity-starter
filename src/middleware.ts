@@ -161,7 +161,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  if (cache && !isAuthorizedPurge) {
+  const requestCacheControl = request.headers.get('cache-control') || '';
+  const isNoCache = requestCacheControl.includes('no-cache') || request.headers.get('pragma') === 'no-cache';
+
+  if (cache && !isAuthorizedPurge && !isNoCache) {
     try {
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
@@ -178,9 +181,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // 5. Cache MISS: execute SSR page render
   const response = await next();
 
-  // 6. Only cache successful HTML responses (status 200)
+  // 6. Only cache successful HTML responses (status 200) without module-level errors
   const contentType = response.headers.get('content-type') || '';
-  if (cache && response.status === 200 && contentType.includes('text/html')) {
+  if (cache && response.status === 200 && !response.headers.has('X-Section-Error') && contentType.includes('text/html')) {
     try {
       const siteConfig = await SiteConfigService.getConfig();
       const edgeTtl = typeof siteConfig?.edgeCacheTtl === 'number' && siteConfig.edgeCacheTtl >= 0

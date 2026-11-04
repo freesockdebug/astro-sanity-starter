@@ -21,7 +21,7 @@ if (slug?.startsWith('admin')) {
   return Astro.redirect(`/${slug}`);
 }
 
-if (!(lang in LANGUAGES) || lang === 'en') {
+if (lang === 'en') {
   return Astro.redirect(`/${slug || ''}`);
 }
 ---

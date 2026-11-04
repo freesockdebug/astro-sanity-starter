@@ -15,24 +15,86 @@ const currentLang = getLangFromUrl(Astro.url);
 const homeUrl = getLocalizedPath('/', currentLang);
 const errMessage = error instanceof Error ? error.message : 'Unexpected server runtime error';
 console.error('[SSR:500] Unhandled page render exception:', errMessage, error);
+
+const COPY: Record<string, {
+  badge: string;
+  title: string;
+  desc: string;
+  retry: string;
+  home: string;
+}> = {
+  de: {
+    badge: 'HTTP 500 · VORÜBERGEHENDE UNTERBRECHUNG',
+    title: 'Wir aktualisieren diese Showroom-Ansicht',
+    desc: 'Auf unserem Edge-Server ist beim Laden dieser Seite ein vorübergehendes Problem aufgetreten. Ihre Sitzung und Anfrage-Merkliste bleiben geschützt.',
+    retry: 'Seite neu laden',
+    home: 'Zur Startseite',
+  },
+  fr: {
+    badge: 'HTTP 500 · INTERRUPTION TEMPORAIRE',
+    title: 'Actualisation de cet espace d’exposition',
+    desc: 'Notre serveur périphérique a rencontré un incident passager lors du chargement de cette page. Votre sélection de devis reste intacte.',
+    retry: 'Recharger la page',
+    home: 'Retour à l’accueil',
+  },
+  es: {
+    badge: 'HTTP 500 · INTERRUPCIÓN TEMPORAL',
+    title: 'Estamos actualizando esta vista del catálogo',
+    desc: 'Nuestro servidor perimetral experimentó un problema temporal al cargar esta página. Su cesta de cotización permanece segura.',
+    retry: 'Reintentar página',
+    home: 'Volver al inicio',
+  },
+  en: {
+    badge: 'HTTP 500 · TEMPORARY INTERRUPTION',
+    title: 'We’re refreshing this showroom view',
+    desc: 'Our edge server encountered a temporary hiccup while loading this page. Your session and inquiry basket remain preserved.',
+    retry: 'Retry Page',
+    home: 'Back to Showroom',
+  },
+};
+
+const t = COPY[currentLang] || COPY.en;
 ---
 
 <Layout title="Service Temporarily Unavailable" noindex={true}>
-  <section class="min-h-[65vh] flex items-center justify-center px-4 py-16">
-    <div class="max-w-md w-full bg-white rounded-2xl p-8 border border-black/8 shadow-xs text-center space-y-4">
-      <span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-amber-50 text-amber-800 border border-amber-200">
-        HTTP 500 · TEMPORARY INTERRUPTION
-      </span>
-      <h1 class="text-xl font-bold text-[#1d1d1f]">We’re refreshing this showroom view</h1>
-      <p class="text-xs text-[#86868b] leading-relaxed">
-        Our edge server encountered a temporary hiccup while loading this page. Your inquiry basket is preserved.
-      </p>
-      <div class="flex items-center justify-center gap-3 pt-2">
-        <a href={Astro.url.pathname} class="px-4 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-colors">
-          Retry Page
+  <section class="min-h-[72vh] w-full flex items-center justify-center px-4 py-16 bg-white">
+    <div class="max-w-lg w-full rounded-3xl bg-[#f5f5f7]/70 border border-black/6 p-6 sm:p-10 text-center space-y-5 shadow-2xs">
+      <!-- Centered Apple-Style Warning / Refresh Icon -->
+      <div class="w-14 h-14 rounded-2xl bg-white border border-black/8 shadow-xs flex items-center justify-center mx-auto text-[#1d1d1f]">
+        <svg class="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+
+      <!-- Status Capsule -->
+      <div class="space-y-2">
+        <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-white text-[#52525b] border border-black/8 shadow-2xs">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          <span>{t.badge}</span>
+        </span>
+
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f] pt-1">
+          {t.title}
+        </h1>
+
+        <p class="text-xs sm:text-[13px] text-[#86868b] leading-relaxed max-w-md mx-auto">
+          {t.desc}
+        </p>
+      </div>
+
+      <!-- Primary & Secondary Apple Pill Buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+        <a
+          href={Astro.url.pathname}
+          class="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-xs"
+        >
+          {t.retry}
         </a>
-        <a href={homeUrl} class="px-4 py-2 rounded-full text-xs font-medium bg-[#f5f5f7] text-[#1d1d1f] border border-black/10 hover:bg-[#e8e8ed] transition-colors">
-          Back to Home
+        <a
+          href={homeUrl}
+          class="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-medium bg-white text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/10 active:scale-95 transition-all"
+        >
+          {t.home}
         </a>
       </div>
     </div>

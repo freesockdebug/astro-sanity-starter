@@ -14,7 +14,7 @@ export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
 const currentLang = getLangFromUrl(Astro.url);
-let rawSlug = Astro.params.slug || Astro.params.lang || Astro.url.pathname.replace(/^\//, '');
+let rawSlug = Astro.url.pathname.replace(/^\/+|\/+$/g, '');
 
 // Strip language prefix if present (e.g. "de/about" -> "about", "de" -> "") so Sanity query matches standard page slug
 if (currentLang && currentLang !== 'en') {

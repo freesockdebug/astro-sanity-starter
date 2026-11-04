@@ -16,6 +16,8 @@ try {
   renderedHtml = await Astro.slots.render('default');
 } catch (err: any) {
   renderError = err instanceof Error ? err : new Error(String(err));
+  Astro.response.headers.set('X-Section-Error', '1');
+  Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
   console.error(`[SectionBoundary] Failed to render section "${sectionName}":`, err);
 }
 
