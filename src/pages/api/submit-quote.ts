@@ -5,7 +5,7 @@ import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { getSessionFromRequest } from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
-import { kvGet, kvPut } from '@utils/kv';
+import { kvGet, kvPut, kvDelete } from '@utils/kv';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -199,6 +199,7 @@ function buildRfqEmailHtml(params: {
 }
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
+  let idempKey = '';
   try {
     let rawBody: any;
     try {
@@ -335,7 +336,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       .sort()
       .join('|');
     const idempRaw = `${normalizedEmail}:${itemSig}:${buyerInfo.message || ''}`;
-    let idempKey = '';
+    idempKey = '';
     try {
       const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(idempRaw));
       const hashHex = Array.from(new Uint8Array(hashBuf))
@@ -378,9 +379,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     }
 
     const orderNo = generateOrderNo(systemSettings?.order_no_prefix || 'ORD');
-    if (idempKey) {
-      kvPut(idempKey, { orderNo, email: normalizedEmail }, { expirationTtl: 60 }, cfEnv).catch(() => {});
-    }
     let orderId = '';
     let d1WriteError: string | null = null;
 
@@ -594,6 +592,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     await Promise.allSettled([d1WriteTask, sanityWriteTask, emailTask, webhookTask]);
 
     if (!orderId) {
+      if (idempKey) {
+        await kvDelete(idempKey, cfEnv).catch(() => {});
+      }
       console.error('Order could not be saved to primary database (D1):', d1WriteError, sanityWriteError);
       return new Response(
         JSON.stringify({
@@ -602,6 +603,10 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    if (idempKey) {
+      await kvPut(idempKey, { orderNo, email: normalizedEmail }, { expirationTtl: 60 }, cfEnv).catch(() => {});
     }
 
     return new Response(
@@ -615,6 +620,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
+    if (idempKey) {
+      await kvDelete(idempKey, cfEnv).catch(() => {});
+    }
     console.error('Error handling submit-quote:', error);
     return new Response(
       JSON.stringify({ error: error?.message || 'Internal Server Error' }),

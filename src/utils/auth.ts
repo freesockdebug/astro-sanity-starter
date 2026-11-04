@@ -1,7 +1,7 @@
 // src/utils/auth.ts
 // Logto OIDC session management & role verification via Web Crypto HMAC-SHA256
 
-import { kvGet, kvPut } from './kv';
+import { kvGet, kvPut, kvDelete } from './kv';
 
 export interface AuthUser {
   id: string;
@@ -287,11 +287,16 @@ export async function updateLogtoUserPassword(
       ? btoa(`${m2mAppId}:${m2mAppSecret}`)
       : Buffer.from(`${m2mAppId}:${m2mAppSecret}`).toString('base64');
 
-    // 1. Fetch or reuse cached M2M Access Token from Cloudflare KV
+    // 1. Helper to fetch fresh or cached M2M Access Token from Cloudflare KV
     const kvTokenKey = 'auth:logto_m2m_token';
-    let accessToken = await kvGet<string>(kvTokenKey, customEnv);
+    const getM2MToken = async (forceRefresh = false): Promise<string> => {
+      if (!forceRefresh) {
+        const cached = await kvGet<string>(kvTokenKey, customEnv);
+        if (cached) return cached;
+      } else {
+        await kvDelete(kvTokenKey, customEnv).catch(() => {});
+      }
 
-    if (!accessToken) {
       const tokenRes = await fetch(`${endpoint}/oidc/token`, {
         method: 'POST',
         headers: {
@@ -309,26 +314,45 @@ export async function updateLogtoUserPassword(
       if (!tokenRes.ok) {
         const errText = await tokenRes.text();
         console.error('[Logto M2M] Failed to obtain token:', tokenRes.status, errText);
-        return { success: false, error: 'Authentication service temporarily unavailable.' };
+        return '';
       }
 
       const tokenData = (await tokenRes.json()) as { access_token?: string; expires_in?: number };
-      accessToken = tokenData.access_token || '';
+      const token = tokenData.access_token || '';
       const expiresIn = tokenData.expires_in || 3600;
-      if (accessToken) {
-        // Cache token in KV, expiring 2 minutes before actual expiry
+      if (token) {
         const ttl = Math.max(60, expiresIn - 120);
-        await kvPut(kvTokenKey, accessToken, { expirationTtl: ttl }, customEnv).catch(() => {});
+        await kvPut(kvTokenKey, token, { expirationTtl: ttl }, customEnv).catch(() => {});
       }
-    }
+      return token;
+    };
 
+    let accessToken = await getM2MToken();
     if (!accessToken) {
-      return { success: false, error: 'Failed to acquire access token from authentication service.' };
+      return { success: false, error: 'Authentication service temporarily unavailable.' };
     }
 
-    const headers = {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
+    // Wrapped fetch that automatically handles token expiration / 401 with one-shot refresh
+    const m2mFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+      const exec = (token: string) =>
+        fetch(url, {
+          signal: options.signal || AbortSignal.timeout(6000),
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+      let res = await exec(accessToken);
+      if (res.status === 401) {
+        accessToken = await getM2MToken(true);
+        if (accessToken) {
+          res = await exec(accessToken);
+        }
+      }
+      return res;
     };
 
     // 2. Resolve target Logto User ID (verify user exists or resolve by email)
@@ -336,16 +360,14 @@ export async function updateLogtoUserPassword(
     let userExists = false;
 
     if (targetUserId && !targetUserId.startsWith('usr_mock')) {
-      const checkRes = await fetch(`${endpoint}/api/users/${targetUserId}`, {
-        headers,
+      const checkRes = await m2mFetch(`${endpoint}/api/users/${targetUserId}`, {
         signal: AbortSignal.timeout(6000),
       });
       if (checkRes.ok) userExists = true;
     }
 
     if (!userExists && email) {
-      const searchRes = await fetch(`${endpoint}/api/users?search.primaryEmail=${encodeURIComponent(email)}`, {
-        headers,
+      const searchRes = await m2mFetch(`${endpoint}/api/users?search.primaryEmail=${encodeURIComponent(email)}`, {
         signal: AbortSignal.timeout(6000),
       });
       if (searchRes.ok) {
@@ -362,9 +384,8 @@ export async function updateLogtoUserPassword(
     }
 
     // 3. Update password in Logto
-    const patchRes = await fetch(`${endpoint}/api/users/${targetUserId}/password`, {
+    const patchRes = await m2mFetch(`${endpoint}/api/users/${targetUserId}/password`, {
       method: 'PATCH',
-      headers,
       body: JSON.stringify({ password: newPassword }),
       signal: AbortSignal.timeout(8000),
     });

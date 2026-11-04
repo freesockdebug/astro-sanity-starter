@@ -89,12 +89,14 @@ export async function getSystemSettings(customEnv?: any): Promise<SystemSettings
   }
 
   let dbRecords: { key: string; value: string }[] = [];
+  let d1QuerySucceeded = false;
   try {
     dbRecords = await executeWithAutoSchema(async (db: DbClient) => {
       return db.query<{ key: string; value: string }>(
         'SELECT key, value FROM system_settings'
       );
     });
+    d1QuerySucceeded = true;
   } catch (err) {
     console.warn('[SettingsRepo] D1 settings query warning, falling back to env/defaults:', err);
   }
@@ -174,8 +176,10 @@ export async function getSystemSettings(customEnv?: any): Promise<SystemSettings
   cachedSettings = settings;
   cacheExpiry = now + CACHE_TTL_MS;
 
-  // L2: Asynchronously populate KV cache
-  kvPut(KV_SETTINGS_KEY, settings, { expirationTtl: 86400 }, customEnv).catch(() => {});
+  // L2: Asynchronously populate KV cache if D1 query succeeded
+  if (d1QuerySucceeded) {
+    await kvPut(KV_SETTINGS_KEY, settings, { expirationTtl: 86400 }, customEnv).catch(() => {});
+  }
 
   return settings;
 }
@@ -216,8 +220,7 @@ export async function updateSystemSettings(
 
     await invalidateSettingsCache(customEnv);
     // Fetch and populate fresh settings into KV immediately
-    const fresh = await getSystemSettings(customEnv);
-    await kvPut(KV_SETTINGS_KEY, fresh, { expirationTtl: 86400 }, customEnv).catch(() => {});
+    await getSystemSettings(customEnv);
     return { success: true };
   } catch (err: any) {
     console.error('[SettingsRepo] Failed to update settings:', err);

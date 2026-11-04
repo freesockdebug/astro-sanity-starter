@@ -1,4 +1,4 @@
-import { kvGet, kvPut, kvDelete } from './kv';
+import { kvGet, kvPut } from './kv';
 
 /**
  * Lightweight multi-tier SWR (Stale-While-Revalidate) & Single-Flight Cache
@@ -33,19 +33,16 @@ export function createSwrCache<T>(
 
   return {
     seed(val?: T | null) {
+      // Pure in-memory context seeding for the active request isolate.
+      // Must NOT write to KV to avoid 1 write/sec per key rate-limits and quota depletion.
       value = val !== undefined && val !== null ? val : fallback;
       timestamp = Date.now();
       if (onUpdate && value) onUpdate(value);
-      if (kvKey && value) {
-        kvPut(kvKey, value, { expirationTtl: kvTtl }).catch(() => {});
-      }
     },
     invalidate() {
+      // Resets local isolate memory state. Edge KV deletions are centrally handled & awaited in /api/revalidate.
       value = null;
       timestamp = 0;
-      if (kvKey) {
-        kvDelete(kvKey).catch(() => {});
-      }
     },
     peek() {
       return value;
@@ -79,13 +76,14 @@ export function createSwrCache<T>(
 
           // 3. L3 Upstream CMS Fetch
           const res = await fetcher();
-          value = res !== undefined && res !== null ? res : fallback;
+          const hasValidData = res !== undefined && res !== null;
+          value = hasValidData ? res : fallback;
           timestamp = Date.now();
           if (onUpdate && value) onUpdate(value);
 
-          // Populate L2 KV Cache
-          if (kvKey && value) {
-            kvPut(kvKey, value, { expirationTtl: kvTtl }).catch(() => {});
+          // Populate L2 KV Cache ONLY when upstream fetch succeeded with valid data
+          if (kvKey && hasValidData) {
+            await kvPut(kvKey, value, { expirationTtl: kvTtl }).catch(() => {});
           }
 
           return value;

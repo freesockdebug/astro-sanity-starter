@@ -51,10 +51,16 @@ export async function kvPut(
   options?: { expirationTtl?: number },
   customEnv?: any
 ): Promise<boolean> {
+  if (value === undefined || value === null) {
+    return false;
+  }
+
   try {
     const kv = await getKvNamespace(customEnv);
     if (!kv) return false;
-    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+
+    // Use JSON.stringify across all types so type fidelity (string vs number vs boolean vs object) is preserved on kvGet
+    const serialized = JSON.stringify(value);
     const putOptions: Record<string, any> = {};
     if (options?.expirationTtl && options.expirationTtl > 0) {
       putOptions.expirationTtl = Math.max(60, Math.floor(options.expirationTtl));
@@ -81,3 +87,4 @@ export async function kvDelete(key: string, customEnv?: any): Promise<boolean> {
     return false;
   }
 }
+
