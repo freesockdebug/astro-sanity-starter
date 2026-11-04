@@ -14,6 +14,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const pathname = url.pathname;
 
+  // Fast canonical redirect for root admin path to primary orders console
+  if (pathname === '/admin' || pathname === '/admin/') {
+    return Response.redirect(new URL('/admin/orders', url.origin), 302);
+  }
+
   // 1. Self-Healing Stale Asset Redirection & Fallback Guard
   // When a client holds a cached/stale HTML requesting an older hashed CSS/JS bundle
   // (e.g. /_astro/Layout.old.css), prevent styling catastrophic 404s by redirecting to current active bundle.
