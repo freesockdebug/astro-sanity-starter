@@ -1,0 +1,109 @@
+---
+// src/components/NotFoundView.astro
+import { getLangFromUrl, getLocalizedPath } from '@i18n';
+
+interface Props {
+  requestedPath?: string;
+}
+
+const currentLang = getLangFromUrl(Astro.url);
+const { requestedPath = Astro.url.pathname } = Astro.props;
+
+const homeUrl = getLocalizedPath('/', currentLang);
+const catalogUrl = getLocalizedPath('/products', currentLang);
+
+const COPY: Record<string, {
+  badge: string;
+  title: string;
+  desc: string;
+  primaryCta: string;
+  secondaryCta: string;
+  quickLinksLabel: string;
+}> = {
+  de: {
+    badge: '404 · SEITE NICHT GEFUNDEN',
+    title: 'Diese Seite existiert leider nicht.',
+    desc: 'Der angeforderte Link ist möglicherweise veraltet oder wurde verschoben. Entdecken Sie stattdessen unseren aktuellen B2B-Strumpfkatalog.',
+    primaryCta: 'Zum Produktkatalog',
+    secondaryCta: 'Zur Startseite',
+    quickLinksLabel: 'Angefragter Pfad',
+  },
+  fr: {
+    badge: '404 · PAGE INTROUVABLE',
+    title: 'La page que vous recherchez est introuvable.',
+    desc: 'Le lien demandé a peut-être été déplacé ou n’existe plus. Explorez notre catalogue B2B ou retournez à l’accueil.',
+    primaryCta: 'Voir le catalogue',
+    secondaryCta: 'Retour à l’accueil',
+    quickLinksLabel: 'Chemin demandé',
+  },
+  es: {
+    badge: '404 · PÁGINA NO ENCONTRADA',
+    title: 'No encontramos la página que busca.',
+    desc: 'Es posible que el enlace haya cambiado o ya no esté disponible. Explore nuestro catálogo mayorista B2B o vuelva al inicio.',
+    primaryCta: 'Explorar catálogo',
+    secondaryCta: 'Volver al inicio',
+    quickLinksLabel: 'Ruta solicitada',
+  },
+  en: {
+    badge: '404 · PAGE NOT FOUND',
+    title: 'The page you’re looking for can’t be found.',
+    desc: 'The link you followed may be broken, or the page may have been moved. Explore our B2B wholesale catalog or return to the showroom.',
+    primaryCta: 'Explore Product Catalog',
+    secondaryCta: 'Back to Showroom',
+    quickLinksLabel: 'Requested path',
+  },
+};
+
+const t = COPY[currentLang] || COPY.en;
+---
+
+<section class="min-h-[72vh] w-full flex items-center justify-center px-4 py-16 bg-white">
+  <div class="max-w-lg w-full rounded-3xl bg-[#f5f5f7]/70 border border-black/6 p-6 sm:p-10 text-center space-y-5 shadow-2xs">
+    <!-- Centered Apple-Style Minimalist Compass / Search Icon -->
+    <div class="w-14 h-14 rounded-2xl bg-white border border-black/8 shadow-xs flex items-center justify-center mx-auto text-[#1d1d1f]">
+      <svg class="w-6 h-6 text-[#52525b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+      </svg>
+    </div>
+
+    <!-- Status Capsule -->
+    <div class="space-y-2">
+      <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-white text-[#52525b] border border-black/8 shadow-2xs">
+        <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+        <span>{t.badge}</span>
+      </span>
+
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f] pt-1">
+        {t.title}
+      </h1>
+
+      <p class="text-xs sm:text-[13px] text-[#86868b] leading-relaxed max-w-md mx-auto">
+        {t.desc}
+      </p>
+    </div>
+
+    <!-- Requested Path Pill -->
+    {requestedPath && (
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/80 border border-black/5 text-[11px] font-mono text-[#71717a] max-w-full">
+        <span class="text-[#a1a1aa] shrink-0">{t.quickLinksLabel}:</span>
+        <span class="truncate text-[#1d1d1f]">{requestedPath}</span>
+      </div>
+    )}
+
+    <!-- Primary & Secondary Apple Pill Buttons -->
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+      <a
+        href={catalogUrl}
+        class="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-xs"
+      >
+        {t.primaryCta}
+      </a>
+      <a
+        href={homeUrl}
+        class="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-medium bg-white text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/10 active:scale-95 transition-all"
+      >
+        {t.secondaryCta}
+      </a>
+    </div>
+  </div>
+</section>

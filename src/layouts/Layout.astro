@@ -160,19 +160,39 @@ const resolvedImage = imageSrc
             win.__unobserveAppleShimmer = (el?: any) => shimmerController.unobserve(el);
         </script>
 
-        <!-- 3. Client-side Global Runtime Resilience Boundary -->
-        <div id="global-runtime-fallback" role="alert" class="fixed bottom-4 right-4 z-50 hidden max-w-sm bg-white border border-black/10 rounded-2xl shadow-lg p-4 text-xs">
-          <div class="flex items-start justify-between gap-3">
-            <div class="space-y-1 min-w-0 flex-1">
-              <p class="font-semibold text-[#1d1d1f]">Interactive script encountered an error</p>
-              <p id="global-runtime-msg" class="text-[11px] text-[#86868b] line-clamp-2 break-all"></p>
+        <!-- 3. Client-side Global Runtime Resilience Boundary (Centered Apple Aesthetic) -->
+        <div
+          id="global-runtime-fallback"
+          role="alert"
+          aria-live="assertive"
+          class="fixed inset-x-0 bottom-6 z-50 hidden px-4 pointer-events-none flex justify-center"
+        >
+          <div class="pointer-events-auto max-w-md w-full bg-white/95 backdrop-blur-xl border border-black/10 rounded-2xl shadow-xl p-5 text-center space-y-3">
+            <div class="w-9 h-9 rounded-full bg-[#f5f5f7] border border-black/8 text-[#1d1d1f] flex items-center justify-center mx-auto">
+              <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
             </div>
-            <div class="flex items-center gap-1.5 shrink-0">
-              <button type="button" onclick="location.reload()" class="px-2.5 py-1 rounded-full bg-[#1d1d1f] text-white text-[11px] font-medium hover:bg-black transition-colors cursor-pointer">
-                Reload
+            <div class="space-y-1">
+              <p class="text-xs sm:text-sm font-semibold tracking-tight text-[#1d1d1f]">
+                Something went wrong in this view
+              </p>
+              <p id="global-runtime-msg" class="text-[11px] text-[#86868b] line-clamp-2 break-all max-w-xs mx-auto"></p>
+            </div>
+            <div class="flex items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                id="global-runtime-retry-btn"
+                class="px-4 py-1.5 rounded-full bg-[#1d1d1f] text-white text-xs font-semibold hover:bg-black active:scale-95 transition-all cursor-pointer"
+              >
+                Try Again
               </button>
-              <button type="button" aria-label="Dismiss" onclick="document.getElementById('global-runtime-fallback')?.classList.add('hidden')" class="w-6 h-6 rounded-full bg-[#f5f5f7] text-[#52525b] hover:text-black flex items-center justify-center cursor-pointer">
-                ✕
+              <button
+                type="button"
+                id="global-runtime-dismiss-btn"
+                class="px-3.5 py-1.5 rounded-full bg-[#f5f5f7] text-[#52525b] hover:text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/5 text-xs font-medium transition-all cursor-pointer"
+              >
+                Dismiss
               </button>
             </div>
           </div>
@@ -180,13 +200,39 @@ const resolvedImage = imageSrc
 
         <script is:inline>
           (function () {
+            var hasActiveError = false;
+            var box = document.getElementById('global-runtime-fallback');
+            var textEl = document.getElementById('global-runtime-msg');
+            var retryBtn = document.getElementById('global-runtime-retry-btn');
+            var dismissBtn = document.getElementById('global-runtime-dismiss-btn');
+
+            function resetErrorBoundary() {
+              hasActiveError = false;
+              if (textEl) textEl.textContent = '';
+              if (box) box.classList.add('hidden');
+            }
+
+            if (dismissBtn) {
+              dismissBtn.addEventListener('click', resetErrorBoundary);
+            }
+
+            if (retryBtn) {
+              retryBtn.addEventListener('click', function () {
+                resetErrorBoundary();
+                // Re-initialize interactive shimmer & observers or reload if needed
+                if (window.__observeAppleShimmer) {
+                  try { window.__observeAppleShimmer(document); } catch (e) {}
+                }
+              });
+            }
+
             function handleRuntimeError(message, source) {
+              if (hasActiveError) return;
               var msgStr = String(message || '');
               if (!msgStr || msgStr.includes('ResizeObserver') || msgStr === 'Script error.') return;
               if (source && !String(source).startsWith(location.origin) && !String(source).startsWith('/')) return;
+              hasActiveError = true;
               console.warn('[ClientBoundary] Caught runtime exception:', msgStr, source);
-              var box = document.getElementById('global-runtime-fallback');
-              var textEl = document.getElementById('global-runtime-msg');
               if (textEl) textEl.textContent = msgStr;
               if (box) box.classList.remove('hidden');
             }

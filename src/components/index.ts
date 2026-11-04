@@ -21,6 +21,7 @@ import AppleProductDetailSkeleton from './AppleProductDetailSkeleton.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
 import MarkdownRenderer from './MarkdownRenderer.astro';
 import LocalTime from './LocalTime.astro';
+import NotFoundView from './NotFoundView.astro';
 
 export {
   SectionBoundary,
@@ -42,6 +43,7 @@ export {
   Breadcrumbs,
   MarkdownRenderer,
   LocalTime,
+  NotFoundView,
 };
 
 /**

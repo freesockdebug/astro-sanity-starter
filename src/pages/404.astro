@@ -1,0 +1,13 @@
+---
+// src/pages/404.astro
+import Layout from '@layouts/Layout.astro';
+import NotFoundView from '@components/NotFoundView.astro';
+
+export const prerender = false;
+Astro.response.status = 404;
+Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+---
+
+<Layout title="404 - Page Not Found" noindex={true}>
+  <NotFoundView />
+</Layout>

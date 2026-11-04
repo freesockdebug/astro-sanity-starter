@@ -2,7 +2,7 @@
 // src/pages/[...slug].astro
 import type { Page } from 'types';
 import Layout from '@layouts/Layout.astro';
-import { componentMap, SectionBoundary } from '@components';
+import { componentMap, SectionBoundary, NotFoundView } from '@components';
 import { client } from '@utils/sanity-client';
 import { PAGE_QUERY_OBJ } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
@@ -50,38 +50,41 @@ const [page] = await Promise.all([
 ]);
 
 if (!page) {
-    return new Response("404 Not Found", { status: 404, statusText: "Not Found" });
+  Astro.response.status = 404;
+  Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
 }
 
-const { title, sections: rawSections, metaTitle, addTitleSuffix, metaDescription, socialImage } = page;
-const sections = normalizeSections(rawSections, currentLang);
+const { title, sections: rawSections, metaTitle, addTitleSuffix, metaDescription, socialImage } = page || ({} as Page);
+const sections = normalizeSections(rawSections || [], currentLang);
 const heroPreload = extractHeroPreload(sections);
 const localizedTitle = (title && typeof title === 'object' ? getLocalizedValue(title, currentLang) : '') || title;
 const localizedMetaTitle = (metaTitle && typeof metaTitle === 'object' ? getLocalizedValue(metaTitle, currentLang) : '') || metaTitle;
 const localizedMetaDescription = (metaDescription && typeof metaDescription === 'object' ? getLocalizedValue(metaDescription, currentLang) : '') || metaDescription;
 ---
 
-{
-    page && (
-        <Layout
-            title={localizedMetaTitle || localizedTitle}
-            addTitleSuffix={addTitleSuffix}
-            description={localizedMetaDescription}
-            image={socialImage}
-            page={page}
-            preloadHeroImage={heroPreload}
-        >
-            <Fragment>
-                {sections?.length &&
-                    sections.map((section: any) => {
-                        const Component = componentMap[section._type];
-                        return Component ? (
-                            <SectionBoundary sectionName={section._type} sectionId={section.elementId || section.sectionAnchor}>
-                                <Component {...section} />
-                            </SectionBoundary>
-                        ) : null;
-                    })}
-            </Fragment>
-        </Layout>
-    )
-}
+{page ? (
+    <Layout
+        title={localizedMetaTitle || localizedTitle}
+        addTitleSuffix={addTitleSuffix}
+        description={localizedMetaDescription}
+        image={socialImage}
+        page={page}
+        preloadHeroImage={heroPreload}
+    >
+        <Fragment>
+            {sections?.length &&
+                sections.map((section: any) => {
+                    const Component = componentMap[section._type];
+                    return Component ? (
+                        <SectionBoundary sectionName={section._type} sectionId={section.elementId || section.sectionAnchor}>
+                            <Component {...section} />
+                        </SectionBoundary>
+                    ) : null;
+                })}
+        </Fragment>
+    </Layout>
+) : (
+    <Layout title="404 - Page Not Found" noindex={true}>
+        <NotFoundView requestedPath={Astro.url.pathname} />
+    </Layout>
+)}

@@ -1,10 +1,13 @@
 ---
 // src/components/SectionBoundary.astro
+import { getLangFromUrl } from '@i18n';
+
 interface Props {
   sectionName?: string;
   sectionId?: string;
 }
 const { sectionName = 'Section', sectionId } = Astro.props;
+const currentLang = getLangFromUrl(Astro.url);
 
 let renderedHtml = '';
 let renderError: Error | null = null;
@@ -15,13 +18,86 @@ try {
   renderError = err instanceof Error ? err : new Error(String(err));
   console.error(`[SectionBoundary] Failed to render section "${sectionName}":`, err);
 }
+
+const COPY: Record<string, { badge: string; title: string; desc: string; retry: string }> = {
+  de: {
+    badge: 'MODUL-UNTERBRECHUNG',
+    title: 'Dieser Bereich wird gerade aktualisiert',
+    desc: 'Beim Laden dieses Abschnitts ist ein vorübergehender Fehler aufgetreten. Ihre Sitzung und Anfrage-Merkliste sind geschützt.',
+    retry: 'Erneut versuchen',
+  },
+  fr: {
+    badge: 'INTERRUPTION DU MODULE',
+    title: 'Cette section est en cours d’actualisation',
+    desc: 'Une erreur temporaire est survenue lors du chargement de ce module. Votre sélection de devis reste intacte.',
+    retry: 'Réessayer',
+  },
+  es: {
+    badge: 'INTERRUPCIÓN DEL MÓDULO',
+    title: 'Estamos actualizando esta sección',
+    desc: 'Se produjo un problema temporal al cargar este módulo. Su cesta de cotización permanece segura.',
+    retry: 'Intentar de nuevo',
+  },
+  en: {
+    badge: 'MODULE INTERRUPTION',
+    title: 'Unable to display this section right now',
+    desc: 'An unexpected runtime issue occurred while loading this module. Your session and quote basket remain safe.',
+    retry: 'Try Again',
+  },
+};
+
+const t = COPY[currentLang] || COPY.en;
 ---
+
 {renderError ? (
-  <div id={sectionId} class="apple-rail-bento my-4">
-    <div class="p-4 rounded-2xl bg-[#f5f5f7] border border-black/5 text-center text-xs text-[#86868b]">
-      This module ({sectionName}) is temporarily unavailable.
+  <section
+    id={sectionId}
+    role="alert"
+    aria-live="polite"
+    class="apple-rail-bento my-6 sm:my-8"
+    data-boundary-section={sectionName}
+  >
+    <div class="w-full rounded-2xl sm:rounded-3xl bg-[#f5f5f7]/80 border border-black/6 px-6 py-10 sm:py-12 flex flex-col items-center justify-center text-center">
+      <div class="max-w-md w-full bg-white rounded-2xl p-6 sm:p-8 border border-black/8 shadow-xs flex flex-col items-center text-center space-y-3.5">
+        <!-- Apple-Style Centered Circular Icon -->
+        <div class="w-11 h-11 rounded-full bg-[#f5f5f7] border border-black/8 text-[#1d1d1f] flex items-center justify-center shadow-2xs">
+          <svg class="w-5 h-5 text-[#52525b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </div>
+
+        <!-- Status Badge -->
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-zinc-100 text-[#52525b] border border-black/5">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          <span>{t.badge} · {sectionName}</span>
+        </span>
+
+        <!-- Title & Description -->
+        <div class="space-y-1">
+          <h3 class="text-base sm:text-lg font-semibold tracking-tight text-[#1d1d1f]">
+            {t.title}
+          </h3>
+          <p class="text-xs text-[#86868b] leading-relaxed max-w-sm mx-auto">
+            {t.desc}
+          </p>
+        </div>
+
+        <!-- Try Again Button (Resets Error State via Partial HTML Fetch or Clean Reload) -->
+        <div class="pt-1.5">
+          <button
+            type="button"
+            onclick="(function(btn){var sec=btn.closest('[data-boundary-section]');btn.disabled=true;btn.style.opacity='0.6';fetch(location.href,{headers:{'Cache-Control':'no-cache'}}).then(function(r){return r.text()}).then(function(html){var doc=new DOMParser().parseFromString(html,'text/html');var name=sec&&sec.getAttribute('data-boundary-section');var fresh=name?doc.querySelector('[data-boundary-section=\x22'+name+'\x22]'):null;if(fresh&&sec){sec.replaceWith(fresh)}else{location.reload()}}).catch(function(){location.reload()})})(this)"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-2xs cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>{t.retry}</span>
+          </button>
+        </div>
+      </div>
     </div>
-  </div>
+  </section>
 ) : (
   <Fragment set:html={renderedHtml} />
 )}
