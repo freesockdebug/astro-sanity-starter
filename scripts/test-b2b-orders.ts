@@ -2,6 +2,7 @@
 // Runnable self-check for B2B Orders & Idempotent Claiming logic
 
 import assert from 'node:assert';
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-mock-session-secret-key-32chars';
 import {
   createOrder,
   claimOrdersByEmail,
@@ -24,7 +25,6 @@ import {
 } from '../src/utils/auth';
 
 async function runSelfCheck() {
-  process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-mock-session-secret-key-32chars';
   console.log('🧪 Starting B2B Order & Claiming Self-Check...\n');
 
   // 1. Auth & Admin checks

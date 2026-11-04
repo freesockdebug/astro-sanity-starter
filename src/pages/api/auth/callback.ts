@@ -20,11 +20,6 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
   const code = url.searchParams.get('code');
   const returnedState = url.searchParams.get('state');
 
-  // Simulated login parameters for local development fallback
-  const mockEmail = url.searchParams.get('mock_email');
-  const mockName = url.searchParams.get('mock_name');
-  const mockAdmin = url.searchParams.get('mock_admin');
-
   const rawParamReturnUrl = url.searchParams.get('returnUrl');
   let returnUrl = rawParamReturnUrl || '/orders';
   let isPopup = url.searchParams.get('popup') === '1';
@@ -49,11 +44,12 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
   }
 
   // CSRF validation: when returning with an authorization code, state must match
-  if (code) {
-    if (!returnedState || !parsedState?.state || returnedState !== parsedState.state) {
-      console.warn('[Auth Callback] State mismatch or missing CSRF token');
-      return new Response('Invalid OAuth state parameter. Potential CSRF or expired session.', { status: 403 });
-    }
+  if (!code) {
+    return new Response('Missing authorization code in OAuth callback.', { status: 400 });
+  }
+  if (!returnedState || !parsedState?.state || returnedState !== parsedState.state) {
+    console.warn('[Auth Callback] State mismatch or missing CSRF token');
+    return new Response('Invalid OAuth state parameter. Potential CSRF or expired session.', { status: 403 });
   }
 
   let authUser: AuthUser | null = null;
@@ -63,19 +59,22 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
   const appId = getRuntimeEnv('LOGTO_APP_ID', cfEnv);
   const appSecret = getRuntimeEnv('LOGTO_APP_SECRET', cfEnv);
 
-  // Local development mock login is strictly forbidden when production Logto is configured or in non-DEV builds
-  const isDevFallbackAllowed = import.meta.env.DEV && (!endpoint || !appId || !appSecret);
+  if (!endpoint || !appId || !appSecret) {
+    return new Response(
+      'Missing required environment variables: LOGTO_ENDPOINT, LOGTO_APP_ID, and LOGTO_APP_SECRET',
+      { status: 500 }
+    );
+  }
 
-  if (code && endpoint && appId && appSecret) {
-    try {
-      const callbackUrl = `${reqUrl.protocol}//${reqUrl.host}/api/auth/callback`;
-      const tokenBody = new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: appId,
-        client_secret: appSecret,
-        code,
-        redirect_uri: callbackUrl,
-      });
+  try {
+    const callbackUrl = `${reqUrl.protocol}//${reqUrl.host}/api/auth/callback`;
+    const tokenBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: appId,
+      client_secret: appSecret,
+      code,
+      redirect_uri: callbackUrl,
+    });
 
       const tokenRes = await fetch(`${endpoint}/oidc/token`, {
         method: 'POST',
@@ -119,29 +118,6 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       console.error('[Auth Callback] Logto exchange error:', err);
       return new Response(`Authentication Error: ${err.message}`, { status: 500 });
     }
-  } else if (code && (!endpoint || !appId || !appSecret)) {
-    console.error('[Auth Callback] Missing Logto config:', { endpoint: !!endpoint, appId: !!appId, appSecret: !!appSecret });
-    return new Response(
-      `Configuration Error: Server is missing Logto credentials (endpoint=${Boolean(endpoint)}, appId=${Boolean(appId)}, appSecret=${Boolean(appSecret)}).`,
-      { status: 500 }
-    );
-  } else if (mockEmail && isDevFallbackAllowed) {
-    // 2. Simulated Local Development Login Fallback (Strictly blocked in production)
-    const email = mockEmail.trim().toLowerCase();
-    const name = mockName?.trim() || email.split('@')[0];
-    const roles: string[] = mockAdmin === '1' ? ['admin'] : [];
-    const isAdmin = mockAdmin === '1' || checkIsAdmin(email, roles, cfEnv);
-    const userId = `usr_${Math.abs(
-      email.split('').reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)
-    ).toString(16)}`;
-
-    authUser = {
-      id: userId,
-      email,
-      name,
-      isAdmin,
-      roles,
-    };
   }
 
   if (!authUser) {
