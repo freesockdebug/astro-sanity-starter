@@ -318,7 +318,12 @@ if (reqCountryCode) {
       alertBox.innerHTML = '';
       const rfqForm = document.getElementById('rfq-form') as HTMLFormElement | null;
       const turnstileContainer = rfqForm?.querySelector('.cf-turnstile') as HTMLElement | null;
-      if (turnstileContainer) turnstileContainer.style.display = '';
+      if (turnstileContainer) {
+        turnstileContainer.style.display = '';
+        if (typeof (window as any).turnstile !== 'undefined') {
+          try { (window as any).turnstile.reset(); } catch {}
+        }
+      }
     }
   }
 
@@ -334,13 +339,13 @@ if (reqCountryCode) {
 
   // Expose global quote dispatchers for inline page scripts
   (window as any).addToQuote = (item: any) => {
-    resetDrawerSubmissionState();
     addToQuote(item);
+    resetDrawerSubmissionState();
   };
 
   (window as any).addToQuoteAndOpen = (item: any) => {
-    resetDrawerSubmissionState();
     addToQuote(item);
+    resetDrawerSubmissionState();
     (window as any).openQuoteDrawer();
   };
 
