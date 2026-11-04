@@ -3,7 +3,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import TierBadge from '@components/TierBadge.astro';
-import { requireAdminContext } from '@utils/auth';
+import { requireAdminContext, checkIsAdmin } from '@utils/auth';
 import { listAdminUsers } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
 // @ts-ignore
@@ -86,7 +86,7 @@ const pageTitle = 'Customer & Access Management';
 <AdminLayout
   title={pageTitle}
   currentTab="users"
-  sessionEmail={sessionUser.email}
+  sessionEmail={sessionUser?.email || ''}
   pendingOrdersCount={pendingOrdersCount}
 >
   <!-- Page Header -->
