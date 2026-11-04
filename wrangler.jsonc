@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "b2b-commerce-starter",
+  "name": "astro-sanity-starter",
   "main": "@astrojs/cloudflare/entrypoints/server",
   "compatibility_date": "2026-10-06",
   "compatibility_flags": [
@@ -26,7 +26,7 @@
     {
       "binding": "DB",
       "database_name": "b2b",
-      "database_id": ""
+      "database_id": "ee9bf95f-2f23-4df7-aea4-cb81346473dd"
     }
   ],
   "observability": {
