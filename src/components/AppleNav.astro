@@ -139,6 +139,9 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     <a href={getLocalizedPath('/orders', currentLang)} class="block py-1 text-zinc-700 hover:text-black font-medium">
       My Orders & RFQs
     </a>
+    <a id="nav-mobile-admin-link" href="/admin/orders" class="hidden block py-1 text-amber-700 hover:text-amber-900 font-semibold">
+      ⚙️ Admin Workspace
+    </a>
     {showNavActionButton && actionButton && (
       <a
         href={actionBtnUrl}
@@ -176,6 +179,10 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
         if (dot) dot.classList.remove('hidden');
         const btn = document.getElementById('nav-user-account-btn');
         if (btn) btn.setAttribute('title', `Signed in as ${data.user?.email || 'User'}`);
+        if (data.user?.isAdmin) {
+          const mobileAdminLink = document.getElementById('nav-mobile-admin-link');
+          if (mobileAdminLink) mobileAdminLink.classList.remove('hidden');
+        }
       }
     })
     .catch(() => {});

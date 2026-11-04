@@ -215,3 +215,4 @@ export function getMergedAdminEmails(settings: SystemSettings, customEnv?: any):
 
   return Array.from(new Set([...rootAdmins, ...coAdmins]));
 }
+

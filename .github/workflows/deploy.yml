@@ -68,7 +68,7 @@ jobs:
           else
             echo "::notice::CLOUDFLARE_ACCOUNT_ID secret not set; Wrangler will auto-resolve if the API token is scoped to a single account."
           fi
-          npx wrangler deploy --keep-vars
+          npx wrangler deploy --keep-vars --var ADMIN_EMAILS:"${{ secrets.ADMIN_EMAILS || 'forhaisome@gmail.com' }}"
 
       - name: Purge Cloudflare Edge Cache
         env:

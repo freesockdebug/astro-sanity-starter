@@ -72,6 +72,10 @@ CREATE TABLE IF NOT EXISTS system_settings (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Seed initial super administrator
+INSERT OR IGNORE INTO system_settings (key, value, updated_by)
+VALUES ('co_admin_emails', 'forhaisome@gmail.com', 'system_init');
+
 -- Indexes for performance & idempotent claiming
 CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);

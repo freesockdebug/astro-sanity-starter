@@ -98,6 +98,15 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
             </span>
           </label>
 
+          {sessionUser?.isAdmin && (
+            <a
+              href="/admin/orders"
+              class="px-2 py-1 rounded-lg bg-[#1d1d1f] text-white text-[11px] font-semibold shadow-2xs hover:bg-black transition-all"
+            >
+              Admin ↗
+            </a>
+          )}
+
           <a
             href={getLocalizedPath('/products', currentLang)}
             class="px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-black text-xs font-medium"
@@ -116,6 +125,15 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
         </div>
 
         <div class="flex items-center gap-4 text-xs">
+          {sessionUser?.isAdmin && (
+            <a
+              href="/admin/orders"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-all font-semibold text-xs shadow-2xs"
+            >
+              <span>⚙️ Admin Workspace ↗</span>
+            </a>
+          )}
+
           <a
             href={getLocalizedPath('/products', currentLang)}
             class="text-[#52525b] hover:text-[#1d1d1f] transition-colors font-medium flex items-center gap-1"

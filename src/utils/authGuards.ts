@@ -48,6 +48,18 @@ export async function getBuyerContext(
     // Non-blocking fail-safe
   }
 
+  // Dynamically resolve admin status against runtime ADMIN_EMAILS & D1 co-admins
+  if (sessionUser && !sessionUser.isAdmin) {
+    try {
+      const settings = await getSystemSettings(cfEnv);
+      if (checkIsAdmin(sessionUser.email, sessionUser.roles, cfEnv, settings.co_admin_emails)) {
+        sessionUser.isAdmin = true;
+      }
+    } catch {
+      // Non-blocking fail-safe
+    }
+  }
+
   return { sessionUser, dbUser };
 }
 
@@ -75,6 +87,7 @@ export async function requireAdminContext(
       const settings = await getSystemSettings(cfEnv);
       if (checkIsAdmin(sessionUser.email, sessionUser.roles, cfEnv, settings.co_admin_emails)) {
         isAdmin = true;
+        sessionUser.isAdmin = true;
       }
     } catch {
       // Non-blocking

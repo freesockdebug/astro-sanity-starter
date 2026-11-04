@@ -1,0 +1,6 @@
+---
+// src/pages/admin/index.astro
+// Default canonical redirect for /admin and /admin/ to primary Fulfillment Orders console
+export const prerender = false;
+return Astro.redirect('/admin/orders');
+---

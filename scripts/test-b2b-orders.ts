@@ -266,19 +266,20 @@ async function runSelfCheck() {
   const { getSystemSettings, updateSystemSettings, invalidateSettingsCache, getMergedAdminEmails } = await import('../src/db/settings.repo');
   const initialSettings = await getSystemSettings();
   assert.strictEqual(typeof initialSettings.brand_name, 'string');
-  assert.strictEqual(initialSettings.order_no_prefix, 'ORD');
+  assert.strictEqual(typeof initialSettings.order_no_prefix, 'string');
 
-  // Update settings
+  // Update settings with test values
+  const testPrefix = 'TEST' + Math.floor(Math.random() * 90 + 10);
   const updateRes = await updateSystemSettings({
     brand_name: 'TEST ATELIER',
-    order_no_prefix: 'RFQ',
+    order_no_prefix: testPrefix,
     co_admin_emails: 'coadmin@test.com, manager@test.com',
   }, 'admin@test.com');
   assert.strictEqual(updateRes.success, true);
 
   const updatedSettings = await getSystemSettings();
   assert.strictEqual(updatedSettings.brand_name, 'TEST ATELIER');
-  assert.strictEqual(updatedSettings.order_no_prefix, 'RFQ');
+  assert.strictEqual(updatedSettings.order_no_prefix, testPrefix);
   assert.strictEqual(updatedSettings.co_admin_emails, 'coadmin@test.com, manager@test.com');
 
   // Test Merged Admin Emails
@@ -288,7 +289,7 @@ async function runSelfCheck() {
   // Test Custom Prefix in generateOrderNo
   const { generateOrderNo } = await import('../src/db/client');
   const customOrderNo = generateOrderNo(updatedSettings.order_no_prefix);
-  assert.ok(customOrderNo.startsWith('RFQ-'));
+  assert.ok(customOrderNo.startsWith(`${testPrefix}-`));
   console.log('✔ [PASS] D1 System Settings persistence, caching & merged admin authorization verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');

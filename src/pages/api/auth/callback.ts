@@ -9,7 +9,7 @@ import {
   SESSION_COOKIE_NAME,
   type AuthUser,
 } from '@utils/auth';
-import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin } from '@utils/db';
+import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin, getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -105,7 +105,8 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       const userInfo = (await meRes.json()) as any;
       const email = userInfo.email || `${userInfo.sub}@logto.user`;
       const roles: string[] = Array.isArray(userInfo.roles) ? userInfo.roles : [];
-      const isAdmin = checkIsAdmin(email, roles, cfEnv);
+      const settings = await getSystemSettings(cfEnv).catch(() => null);
+      const isAdmin = checkIsAdmin(email, roles, cfEnv, settings?.co_admin_emails);
 
       authUser = {
         id: userInfo.sub,

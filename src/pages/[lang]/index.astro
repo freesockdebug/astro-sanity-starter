@@ -12,6 +12,11 @@ if (!lang || lang.startsWith('_') || lang.includes('.')) {
   return new Response(null, { status: 404, statusText: 'Not Found' });
 }
 
+// Explicit route protection for admin portal
+if (lang === 'admin') {
+  return Astro.redirect('/admin/orders');
+}
+
 // English prefix redirects to canonical root /
 if (lang === 'en') {
   return Astro.redirect('/');
