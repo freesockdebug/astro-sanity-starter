@@ -18,7 +18,7 @@ export const GET: APIRoute = async (context) => {
   }
 
   // Session invalidation guard & profile enrichment
-  let enrichedUser = { ...user };
+  let enrichedUser: any = { ...user };
   try {
     const dbUser = await getUserByIdOrEmail(user.id, user.email);
     if (dbUser && dbUser.status === 'BLOCKED') {

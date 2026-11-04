@@ -6,7 +6,7 @@ import AdminSidebar from '@components/admin/AdminSidebar.astro';
 
 interface Props {
   title: string;
-  currentTab: 'orders' | 'users' | 'logins';
+  currentTab: 'orders' | 'users' | 'logins' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
 }
@@ -22,6 +22,7 @@ const tabNames: Record<string, string> = {
   orders: 'Orders & Fulfillment',
   users: 'Customers & Access',
   logins: 'Login Audit Logs',
+  settings: 'Workspace Settings',
 };
 
 const currentTabTitle = tabNames[currentTab] || 'Workspace';
@@ -155,6 +156,18 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
     >
       <span class="text-base">🛡️</span>
       <span>Audit</span>
+    </a>
+
+    <!-- Tab 4: Workspace Settings -->
+    <a
+      href="/admin/settings"
+      class:list={[
+        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+        currentTab === 'settings' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+      ]}
+    >
+      <span class="text-base">⚙️</span>
+      <span>Settings</span>
     </a>
   </nav>
 

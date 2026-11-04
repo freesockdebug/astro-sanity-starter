@@ -5,7 +5,7 @@ import BuyerLayout from '@layouts/BuyerLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import OrderStepper from '@components/orders/OrderStepper.astro';
 import { getBuyerContext } from '@utils/auth';
-import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, type OrderRecord } from '@utils/db';
+import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, getSystemSettings, type OrderRecord } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
 import {
   fetchNormalizedProducts,
@@ -23,6 +23,7 @@ const t = useTranslations(currentLang);
 
 // Initiate product catalog fetch concurrently with D1 auth/queries
 const productsPromise = fetchNormalizedProducts().catch(() => []);
+const systemSettingsPromise = getSystemSettings(cfEnv).catch(() => null);
 
 const { sessionUser, dbUser, redirectResponse } = await getBuyerContext(Astro, cfEnv);
 if (redirectResponse) return redirectResponse;
@@ -84,8 +85,11 @@ if (currentSearch) {
   });
 }
 
-const products = await productsPromise;
+const [products, systemSettings] = await Promise.all([productsPromise, systemSettingsPromise]);
 const productMap = buildProductMap(products);
+
+const printSheetTitle = systemSettings?.print_sheet_title || 'OFFICIAL B2B PROCUREMENT REQUISITION';
+const printSheetFooter = systemSettings?.print_sheet_footer || 'B2B Sample & Procurement Requisition Sheet';
 
 const resolveItemImage = (item: any) => resolveOrderItemImage(item, productMap);
 const getItemProductUrl = (item: any) => getOrderItemProductUrl(item, currentLang);
@@ -257,8 +261,8 @@ const pageDesc = t('orders.metaDesc');
                 <div class="hidden print:block border-b border-black/20 pb-4 mb-4">
                   <div class="flex items-center justify-between">
                     <div>
-                      <h2 class="text-xl font-bold font-mono tracking-tight text-[#1d1d1f]">OFFICIAL B2B PROCUREMENT REQUISITION</h2>
-                      <p class="text-[10px] text-zinc-500 font-sans">B2B Sample & Procurement Requisition Sheet · {Astro.url.hostname}</p>
+                      <h2 class="text-xl font-bold font-mono tracking-tight text-[#1d1d1f]">{printSheetTitle}</h2>
+                      <p class="text-[10px] text-zinc-500 font-sans">{printSheetFooter} · {Astro.url.hostname}</p>
                     </div>
                     <div class="text-right text-[11px] font-mono text-zinc-600">
                       <p class="font-bold text-[#1d1d1f]">{order.order_no}</p>

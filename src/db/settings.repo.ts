@@ -1,0 +1,217 @@
+// src/db/settings.repo.ts
+// System Settings Repository: Unified Dynamic Configuration Engine with In-Memory Caching
+
+import { getDb, type DbClient } from './client';
+import { executeWithAutoSchema } from './schema';
+import { getRuntimeEnv } from '../utils/auth';
+
+export interface SystemSettings {
+  // 1. Brand & Buyer Concierge
+  brand_name: string;
+  contact_email: string;
+  whatsapp_number: string;
+  whatsapp_prefill: string;
+
+  // 2. RFQ Notifications & Webhook
+  enable_email_notify: boolean;
+  resend_from_email: string;
+  resend_to_emails: string;
+  resend_subject_prefix: string;
+  enable_webhook_notify: boolean;
+  notification_webhook_url: string;
+
+  // 3. Orders & Fulfillment Rules
+  order_no_prefix: string;
+  shipping_carriers: string;
+  print_sheet_title: string;
+  print_sheet_footer: string;
+
+  // 4. Access Control & Security
+  co_admin_emails: string;
+  turnstile_hostnames: string;
+  login_retention_days: number;
+}
+
+export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  brand_name: 'B2B ATELIER',
+  contact_email: '',
+  whatsapp_number: '',
+  whatsapp_prefill: 'Hello, I would like to consult on custom manufacturing & wholesale orders.',
+  enable_email_notify: true,
+  resend_from_email: '',
+  resend_to_emails: '',
+  resend_subject_prefix: '[New RFQ]',
+  enable_webhook_notify: true,
+  notification_webhook_url: '',
+  order_no_prefix: 'ORD',
+  shipping_carriers: 'DHL Express,FedEx,UPS,SF Express,EMS',
+  print_sheet_title: 'OFFICIAL B2B PROCUREMENT REQUISITION',
+  print_sheet_footer: 'This document is an official B2B sample & procurement requisition sheet.',
+  co_admin_emails: '',
+  turnstile_hostnames: '',
+  login_retention_days: 90,
+};
+
+// 15-second in-memory TTL cache to eliminate redundant D1 read latency on high-frequency SSR
+let cachedSettings: SystemSettings | null = null;
+let cacheExpiry = 0;
+const CACHE_TTL_MS = 15_000;
+
+export function invalidateSettingsCache() {
+  cachedSettings = null;
+  cacheExpiry = 0;
+}
+
+/**
+ * Resolves current system settings with priority:
+ * D1 Database system_settings > Runtime Environment Variables > Built-in Defaults
+ */
+export async function getSystemSettings(customEnv?: any): Promise<SystemSettings> {
+  const now = Date.now();
+  if (cachedSettings && now < cacheExpiry) {
+    return cachedSettings;
+  }
+
+  let dbRecords: { key: string; value: string }[] = [];
+  try {
+    dbRecords = await executeWithAutoSchema(async (db: DbClient) => {
+      return db.query<{ key: string; value: string }>(
+        'SELECT key, value FROM system_settings'
+      );
+    });
+  } catch (err) {
+    console.warn('[SettingsRepo] D1 settings query warning, falling back to env/defaults:', err);
+  }
+
+  const dbMap = new Map<string, string>();
+  for (const r of dbRecords) {
+    if (r.key && typeof r.value === 'string') {
+      dbMap.set(r.key, r.value);
+    }
+  }
+
+  // Resolve setting by checking DB -> Env -> Default
+  const resolveStr = (key: keyof SystemSettings, envKey: string, fallback: string): string => {
+    const valFromDb = dbMap.get(key);
+    if (typeof valFromDb === 'string' && valFromDb.trim().length > 0) {
+      return valFromDb.trim();
+    }
+    const valFromEnv = getRuntimeEnv(envKey, customEnv);
+    if (typeof valFromEnv === 'string' && valFromEnv.trim().length > 0) {
+      return valFromEnv.trim();
+    }
+    return fallback;
+  };
+
+  const resolveBool = (key: keyof SystemSettings, envKey: string, fallback: boolean): boolean => {
+    const valFromDb = dbMap.get(key);
+    if (typeof valFromDb === 'string' && valFromDb.trim().length > 0) {
+      return valFromDb.trim().toLowerCase() === 'true' || valFromDb.trim() === '1';
+    }
+    const valFromEnv = getRuntimeEnv(envKey, customEnv);
+    if (typeof valFromEnv === 'string' && valFromEnv.trim().length > 0) {
+      return valFromEnv.trim().toLowerCase() === 'true' || valFromEnv.trim() === '1';
+    }
+    return fallback;
+  };
+
+  const resolveNum = (key: keyof SystemSettings, envKey: string, fallback: number): number => {
+    const valFromDb = dbMap.get(key);
+    if (typeof valFromDb === 'string' && valFromDb.trim().length > 0) {
+      const parsed = parseInt(valFromDb.trim(), 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    const valFromEnv = getRuntimeEnv(envKey, customEnv);
+    if (typeof valFromEnv === 'string' && valFromEnv.trim().length > 0) {
+      const parsed = parseInt(valFromEnv.trim(), 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return fallback;
+  };
+
+  const settings: SystemSettings = {
+    brand_name: resolveStr('brand_name', 'PUBLIC_BRAND_NAME', DEFAULT_SYSTEM_SETTINGS.brand_name),
+    contact_email: resolveStr('contact_email', 'PUBLIC_CONTACT_EMAIL', DEFAULT_SYSTEM_SETTINGS.contact_email),
+    whatsapp_number: resolveStr('whatsapp_number', 'PUBLIC_WHATSAPP_NUMBER', DEFAULT_SYSTEM_SETTINGS.whatsapp_number),
+    whatsapp_prefill: resolveStr('whatsapp_prefill', 'PUBLIC_WHATSAPP_PREFILL', DEFAULT_SYSTEM_SETTINGS.whatsapp_prefill),
+
+    enable_email_notify: resolveBool('enable_email_notify', 'ENABLE_EMAIL_NOTIFY', DEFAULT_SYSTEM_SETTINGS.enable_email_notify),
+    resend_from_email: resolveStr('resend_from_email', 'RESEND_FROM_EMAIL', DEFAULT_SYSTEM_SETTINGS.resend_from_email),
+    resend_to_emails: resolveStr('resend_to_emails', 'RESEND_TO_EMAIL', DEFAULT_SYSTEM_SETTINGS.resend_to_emails),
+    resend_subject_prefix: resolveStr('resend_subject_prefix', 'RESEND_SUBJECT_PREFIX', DEFAULT_SYSTEM_SETTINGS.resend_subject_prefix),
+    enable_webhook_notify: resolveBool('enable_webhook_notify', 'ENABLE_WEBHOOK_NOTIFY', DEFAULT_SYSTEM_SETTINGS.enable_webhook_notify),
+    notification_webhook_url: resolveStr('notification_webhook_url', 'NOTIFICATION_WEBHOOK_URL', DEFAULT_SYSTEM_SETTINGS.notification_webhook_url),
+
+    order_no_prefix: resolveStr('order_no_prefix', 'ORDER_NO_PREFIX', DEFAULT_SYSTEM_SETTINGS.order_no_prefix),
+    shipping_carriers: resolveStr('shipping_carriers', 'SHIPPING_CARRIERS', DEFAULT_SYSTEM_SETTINGS.shipping_carriers),
+    print_sheet_title: resolveStr('print_sheet_title', 'PRINT_SHEET_TITLE', DEFAULT_SYSTEM_SETTINGS.print_sheet_title),
+    print_sheet_footer: resolveStr('print_sheet_footer', 'PRINT_SHEET_FOOTER', DEFAULT_SYSTEM_SETTINGS.print_sheet_footer),
+
+    co_admin_emails: resolveStr('co_admin_emails', 'CO_ADMIN_EMAILS', DEFAULT_SYSTEM_SETTINGS.co_admin_emails),
+    turnstile_hostnames: resolveStr('turnstile_hostnames', 'TURNSTILE_HOSTNAMES', DEFAULT_SYSTEM_SETTINGS.turnstile_hostnames),
+    login_retention_days: resolveNum('login_retention_days', 'LOGIN_RETENTION_DAYS', DEFAULT_SYSTEM_SETTINGS.login_retention_days),
+  };
+
+  cachedSettings = settings;
+  cacheExpiry = now + CACHE_TTL_MS;
+  return settings;
+}
+
+/**
+ * Updates multiple settings atomically with upsert
+ */
+export async function updateSystemSettings(
+  updates: Record<string, any>,
+  updatedBy: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const validKeys = new Set(Object.keys(DEFAULT_SYSTEM_SETTINGS));
+    const entries = Object.entries(updates).filter(([k]) => validKeys.has(k));
+
+    if (entries.length === 0) {
+      return { success: true };
+    }
+
+    await executeWithAutoSchema(async (db: DbClient) => {
+      const sql = `
+        INSERT INTO system_settings (key, value, updated_by, updated_at)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET
+          value = excluded.value,
+          updated_by = excluded.updated_by,
+          updated_at = excluded.updated_at
+      `;
+
+      for (const [key, rawVal] of entries) {
+        const valStr = typeof rawVal === 'boolean' || typeof rawVal === 'number'
+          ? String(rawVal)
+          : String(rawVal || '').trim();
+        await db.execute(sql, [key, valStr, updatedBy]);
+      }
+    });
+
+    invalidateSettingsCache();
+    return { success: true };
+  } catch (err: any) {
+    console.error('[SettingsRepo] Failed to update settings:', err);
+    return { success: false, error: err.message || 'Failed to persist settings in database.' };
+  }
+}
+
+/**
+ * Helper to get the full union of Root Env Admins + D1 Co-Admins
+ */
+export function getMergedAdminEmails(settings: SystemSettings, customEnv?: any): string[] {
+  const rootRaw = getRuntimeEnv('ADMIN_EMAILS', customEnv) || '';
+  const rootAdmins = rootRaw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const coAdmins = (settings.co_admin_emails || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  return Array.from(new Set([...rootAdmins, ...coAdmins]));
+}

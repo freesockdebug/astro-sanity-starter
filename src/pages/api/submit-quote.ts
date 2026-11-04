@@ -4,7 +4,7 @@ import { SecurityService } from '@utils/security';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { getSessionFromRequest } from '@utils/auth';
-import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile } from '@utils/db';
+import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -249,8 +249,12 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       );
     };
 
-    // Load Studio site configuration (cached) for custom notification emails and webhook URLs
-    const siteConfig = await fetchSiteConfig();
+    // Load Studio site configuration (cached) and D1 system settings
+    const [siteConfig, systemSettings] = await Promise.all([
+      fetchSiteConfig(),
+      getSystemSettings(cfEnv).catch(() => null),
+    ]);
+    const effectiveBrand = systemSettings?.brand_name || DEFAULT_BRAND_TITLE;
 
     // 2. Cloudflare Turnstile Bot Verification
     const reqUrl = new URL(request.url);
@@ -271,7 +275,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }
 
       const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '';
-      const rawHostnames = getVal('TURNSTILE_HOSTNAMES') || (isDev ? 'localhost,127.0.0.1' : reqUrl.hostname);
+      const rawHostnames = systemSettings?.turnstile_hostnames || getVal('TURNSTILE_HOSTNAMES') || (isDev ? 'localhost,127.0.0.1' : reqUrl.hostname);
       const expectedHostnames = new Set(
         rawHostnames
           .split(',')
@@ -339,7 +343,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       // non-blocking
     }
 
-    const orderNo = generateOrderNo();
+    const orderNo = generateOrderNo(systemSettings?.order_no_prefix || 'ORD');
     let orderId = '';
     let d1WriteError: string | null = null;
 
@@ -390,12 +394,12 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       getVal('SANITY_TOKEN') ||
       getVal('SANITY_WRITE_TOKEN') ||
       getVal('sanity_token');
-    const sanityProjectId = getVal('SANITY_PROJECT_ID') || 'xvhhd8u0';
+    const sanityProjectId = getVal('SANITY_PROJECT_ID');
     const sanityDataset = getVal('SANITY_DATASET') || 'production';
 
     const sanityWriteTask = (async () => {
-      if (!sanityToken) {
-        sanityWriteError = 'SANITY_TOKEN is missing on Cloudflare Worker runtime';
+      if (!sanityToken || !sanityProjectId) {
+        sanityWriteError = 'SANITY_TOKEN or SANITY_PROJECT_ID is missing on Cloudflare Worker runtime';
         return;
       }
       try {
@@ -440,7 +444,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // 4. Send Email notification via Resend with timeout protection
     const resendApiKey = getVal('RESEND_API_KEY');
     const emailTask = (async () => {
-      if (!resendApiKey) return;
+      if (!resendApiKey || systemSettings?.enable_email_notify === false) return;
       try {
         const safeCompany = SecurityService.escapeHtml(buyerInfo.company);
         const safeName = SecurityService.escapeHtml(buyerInfo.name || 'N/A');
@@ -468,14 +472,14 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
         // Configurable Resend sender, recipients, and subject prefix
         const defaultDomain = DEFAULT_CONTACT_EMAIL ? (DEFAULT_CONTACT_EMAIL.split('@')[1] || '') : reqUrl.hostname;
-        const fromEmail = getVal('RESEND_FROM_EMAIL')?.trim() || `${DEFAULT_BRAND_TITLE} RFQ System <rfq@${defaultDomain}>`;
-        const rawToEmail = siteConfig?.notificationRecipientEmail?.trim() || getVal('RESEND_TO_EMAIL')?.trim() || DEFAULT_CONTACT_EMAIL;
+        const fromEmail = systemSettings?.resend_from_email || getVal('RESEND_FROM_EMAIL')?.trim() || `${effectiveBrand} RFQ System <rfq@${defaultDomain}>`;
+        const rawToEmail = systemSettings?.resend_to_emails || siteConfig?.notificationRecipientEmail?.trim() || getVal('RESEND_TO_EMAIL')?.trim() || DEFAULT_CONTACT_EMAIL;
         const toEmails = rawToEmail
           .split(/[,;]/)
           .map((e: string) => e.trim())
           .filter((e: string) => Boolean(e) && EMAIL_REGEX.test(e));
         const resolvedTo = toEmails.length > 0 ? toEmails : [DEFAULT_CONTACT_EMAIL];
-        const subjectPrefix = getVal('RESEND_SUBJECT_PREFIX')?.trim() || '[New B2B RFQ]';
+        const subjectPrefix = systemSettings?.resend_subject_prefix || getVal('RESEND_SUBJECT_PREFIX')?.trim() || '[New B2B RFQ]';
 
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -498,19 +502,19 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     })();
 
     // 5. Instant Notification Webhook (WeChat Work, DingTalk, Feishu, Slack, Discord, Generic Webhook)
-    const webhookUrl = siteConfig?.notificationWebhookUrl?.trim() || getVal('NOTIFICATION_WEBHOOK_URL')?.trim();
-    const enableWebhook = siteConfig?.enableNotificationWebhook !== false;
+    const webhookUrl = systemSettings?.notification_webhook_url || siteConfig?.notificationWebhookUrl?.trim() || getVal('NOTIFICATION_WEBHOOK_URL')?.trim();
+    const enableWebhook = (systemSettings?.enable_webhook_notify !== false) && (siteConfig?.enableNotificationWebhook !== false);
 
     const webhookTask = (async () => {
       if (!enableWebhook || !webhookUrl || !SecurityService.isSafeWebhookUrl(webhookUrl)) return;
       try {
         const itemLines = items
-          .map((item, idx) => `  ${idx + 1}. [${item.sku}] ${item.title} (${item.variant}) × ${item.quantity}双`)
+          .map((item, idx) => `  ${idx + 1}. [${item.sku}] ${item.title} (${item.variant}) × ${item.quantity} pcs`)
           .join('\n');
         
         const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
         const ipNotice = visitorIp ? `\n🌐 访客 IP：${visitorIp} ${detectedCountry ? `(${detectedCountry})` : ''}` : '';
-        const plainText = `🔔 【Gwenvenni 官网收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n📦 订单号：${orderNo}\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${resolvedDestination}${ipNotice}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
+        const plainText = `🔔 【${effectiveBrand} 收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n📦 订单号：${orderNo}\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${resolvedDestination}${ipNotice}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
 
         let webhookBody: any;
         if (webhookUrl.includes('qyapi.weixin.qq.com')) {
@@ -523,7 +527,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
             msgtype: 'markdown',
             markdown: {
               title: `【新询盘】${buyerInfo.company || buyerInfo.name || '买手咨询'} [${orderNo}]`,
-              text: `### 🔔 Gwenvenni 官网收到新询价单\n\n- **订单号**：${orderNo}\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`
+              text: `### 🔔 ${effectiveBrand} 收到新询价单\n\n- **订单号**：${orderNo}\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`
             }
           };
         } else if (webhookUrl.includes('feishu.cn') || webhookUrl.includes('larksuite.com')) {

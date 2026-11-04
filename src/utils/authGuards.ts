@@ -1,7 +1,7 @@
 // src/utils/authGuards.ts
 // Contextual authentication guards for Buyer Workspace and Admin Portal
-import { getSessionFromRequest, SESSION_COOKIE_NAME, type AuthUser } from './auth';
-import { getUserByIdOrEmail, listAdminOrders, type UserRecord } from './db';
+import { getSessionFromRequest, checkIsAdmin, SESSION_COOKIE_NAME, type AuthUser } from './auth';
+import { getUserByIdOrEmail, listAdminOrders, getSystemSettings, type UserRecord } from './db';
 
 export interface BuyerContextResult {
   sessionUser: AuthUser | null;
@@ -69,7 +69,19 @@ export async function requireAdminContext(
 ): Promise<AdminContextResult> {
   const sessionUser = await getSessionFromRequest(astro, cfEnv);
 
-  if (!sessionUser || !sessionUser.isAdmin) {
+  let isAdmin = sessionUser?.isAdmin || false;
+  if (sessionUser && !isAdmin) {
+    try {
+      const settings = await getSystemSettings(cfEnv);
+      if (checkIsAdmin(sessionUser.email, sessionUser.roles, cfEnv, settings.co_admin_emails)) {
+        isAdmin = true;
+      }
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  if (!sessionUser || !isAdmin) {
     return {
       sessionUser: sessionUser as any,
       pendingOrdersCount: 0,

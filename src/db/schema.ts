@@ -64,6 +64,12 @@ export const DDL_STATEMENTS = [
   user_agent TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 )`,
+  `CREATE TABLE IF NOT EXISTS system_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_by TEXT DEFAULT '',
+  updated_at TEXT DEFAULT (datetime('now'))
+)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no)`,

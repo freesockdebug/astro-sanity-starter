@@ -1,4 +1,4 @@
--- Cloudflare D1 Database Schema for GwenVenni B2B Order, RFQ & User System
+-- Cloudflare D1 Database Schema for B2B Commerce Starter (Orders, Users, Settings)
 -- Tables: orders, order_items, users
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -63,6 +63,13 @@ CREATE TABLE IF NOT EXISTS user_logins (
   city TEXT DEFAULT '',
   user_agent TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS system_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_by TEXT DEFAULT '',
+  updated_at TEXT DEFAULT (datetime('now'))
 );
 
 -- Indexes for performance & idempotent claiming

@@ -11,7 +11,8 @@ export function getAdminEmailList(): string[] {
   return raw.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
 }
 
-export function generateOrderNo(): string {
+export function generateOrderNo(prefix: string = 'ORD'): string {
+  const cleanPrefix = (prefix || 'ORD').trim().replace(/[^a-zA-Z0-9_-]/g, '').toUpperCase();
   const now = new Date();
   const yyyy = now.getUTCFullYear();
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
@@ -20,7 +21,7 @@ export function generateOrderNo(): string {
     .toString(16)
     .toUpperCase()
     .padStart(4, '0');
-  return `ORD-${yyyy}${mm}${dd}-${rand}`;
+  return `${cleanPrefix}-${yyyy}${mm}${dd}-${rand}`;
 }
 
 export function generateUuid(): string {

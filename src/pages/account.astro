@@ -4,7 +4,7 @@ import BuyerLayout from '@layouts/BuyerLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import TierBadge from '@components/TierBadge.astro';
 import { getBuyerContext, getRuntimeEnv } from '@utils/auth';
-import { getUserLoginHistory } from '@utils/db';
+import { getUserLoginHistory, getSystemSettings } from '@utils/db';
 import { getLangFromUrl, useTranslations } from '@i18n';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -17,10 +17,14 @@ const t = useTranslations(currentLang);
 const { sessionUser, dbUser, redirectResponse } = await getBuyerContext(Astro, cfEnv, { requireLogin: true });
 if (redirectResponse) return redirectResponse;
 
-const loginHistory = await getUserLoginHistory(sessionUser!.id, 20);
+const [loginHistory, systemSettings] = await Promise.all([
+  getUserLoginHistory(sessionUser!.id, 20),
+  getSystemSettings(cfEnv).catch(() => null),
+]);
 const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);
-const whatsappNumber = getRuntimeEnv('PUBLIC_WHATSAPP_NUMBER', cfEnv) || import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
-const contactEmail = getRuntimeEnv('PUBLIC_CONTACT_EMAIL', cfEnv) || import.meta.env.PUBLIC_CONTACT_EMAIL || '';
+const whatsappNumber = systemSettings?.whatsapp_number || getRuntimeEnv('PUBLIC_WHATSAPP_NUMBER', cfEnv) || import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
+const contactEmail = systemSettings?.contact_email || getRuntimeEnv('PUBLIC_CONTACT_EMAIL', cfEnv) || import.meta.env.PUBLIC_CONTACT_EMAIL || '';
+const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to consult on custom manufacturing & wholesale orders.';
 const pageTitle = t('account.metaTitle');
 const pageDesc = t('account.metaDesc');
 const tier = dbUser?.tier || 'STANDARD';
@@ -238,7 +242,7 @@ const tier = dbUser?.tier || 'STANDARD';
             <div class="pt-2 flex items-center gap-2">
               {whatsappNumber && (
                 <a
-                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, this is ${dbUser?.name || sessionUser.name || 'a B2B client'} from ${dbUser?.company || 'our company'} (${sessionUser.email}). I would like to consult on custom manufacturing & wholesale orders.`)}`}
+                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello, this is ${dbUser?.name || sessionUser.name || 'a B2B client'} from ${dbUser?.company || 'our company'} (${sessionUser.email}). ${whatsappPrefillBase}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="flex-1 py-2 px-3 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all text-center inline-flex items-center justify-center gap-1.5 shadow-sm"

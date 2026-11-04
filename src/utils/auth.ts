@@ -32,17 +32,28 @@ export function getRuntimeEnv(key: string, customEnv?: any): string | undefined 
 /**
  * Checks if a user is an administrator based on email whitelist or Logto roles
  */
-export function checkIsAdmin(email: string, roles: string[] = [], customEnv?: any): boolean {
+export function checkIsAdmin(
+  email: string,
+  roles: string[] = [],
+  customEnv?: any,
+  coAdminEmails?: string
+): boolean {
   if (roles.map((r) => r.toLowerCase()).includes('admin')) {
     return true;
   }
 
   const rawWhitelist = getRuntimeEnv('ADMIN_EMAILS', customEnv) || '';
-  const whitelist = rawWhitelist
+  const rootWhitelist = rawWhitelist
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
+  const coAdmins = (coAdminEmails || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const whitelist = Array.from(new Set([...rootWhitelist, ...coAdmins]));
   return whitelist.includes(email.trim().toLowerCase());
 }
 
@@ -295,7 +306,7 @@ export async function updateLogtoUserPassword(
       return { success: false, error: 'Authentication service temporarily unavailable.' };
     }
 
-    const { access_token } = await tokenRes.json();
+    const { access_token } = (await tokenRes.json()) as { access_token?: string };
     const headers = {
       Authorization: `Bearer ${access_token}`,
       'Content-Type': 'application/json',
@@ -340,7 +351,7 @@ export async function updateLogtoUserPassword(
     });
 
     if (!patchRes.ok) {
-      const errJson = await patchRes.json().catch(() => null);
+      const errJson = (await patchRes.json().catch(() => null)) as Record<string, any> | null;
       console.error('[Logto M2M] Password update error:', patchRes.status, errJson);
       return { success: false, error: errJson?.message || 'Failed to update password in authentication provider.' };
     }

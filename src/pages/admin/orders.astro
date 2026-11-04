@@ -3,7 +3,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import { requireAdminContext } from '@utils/auth';
-import { listAdminOrders } from '@utils/db';
+import { listAdminOrders, getSystemSettings } from '@utils/db';
 import { getLangFromUrl } from '@i18n';
 import {
   fetchNormalizedProducts,
@@ -25,7 +25,7 @@ const currentSearch = Astro.url.searchParams.get('search') || '';
 const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 const pageSize = 50;
 
-const [{ orders, total, stats }, products] = await Promise.all([
+const [{ orders, total, stats }, products, systemSettings] = await Promise.all([
   listAdminOrders({
     status: currentStatus,
     search: currentSearch,
@@ -33,7 +33,13 @@ const [{ orders, total, stats }, products] = await Promise.all([
     limit: pageSize,
   }),
   fetchNormalizedProducts().catch(() => []),
+  getSystemSettings(cfEnv).catch(() => null),
 ]);
+
+const defaultCarriers = ['DHL Express', 'FedEx International', 'UPS Worldwide', 'SF Express', 'Air Freight', 'Other'];
+const carrierOptions = systemSettings?.shipping_carriers
+  ? systemSettings.shipping_carriers.split(',').map((c) => c.trim()).filter(Boolean)
+  : defaultCarriers;
 
 const totalPages = Math.max(1, Math.ceil(total / pageSize));
 const productMap = buildProductMap(products);
@@ -955,13 +961,10 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
             required
             class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
           >
-            <option value="DHL Express">DHL Express</option>
-            <option value="FedEx International">FedEx International</option>
-            <option value="UPS Worldwide">UPS Worldwide</option>
-            <option value="SF Express (International)">SF Express (顺丰国际)</option>
-            <option value="Sea Freight (DDP)">Sea Freight (海运专线 DDP)</option>
-            <option value="Air Freight">Air Freight (空运专线)</option>
-            <option value="Other">Other / Custom Carrier</option>
+            {carrierOptions.map((c) => (
+              <option value={c}>{c}</option>
+            ))}
+            {!carrierOptions.includes('Other') && <option value="Other">Other / Custom Carrier</option>}
           </select>
         </div>
 
