@@ -118,7 +118,6 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       console.error('[Auth Callback] Logto exchange error:', err);
       return new Response(`Authentication Error: ${err.message}`, { status: 500 });
     }
-  }
 
   if (!authUser) {
     return new Response('Invalid authentication request.', { status: 400 });
