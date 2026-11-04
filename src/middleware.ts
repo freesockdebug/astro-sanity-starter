@@ -161,10 +161,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  const requestCacheControl = request.headers.get('cache-control') || '';
-  const isNoCache = requestCacheControl.includes('no-cache') || request.headers.get('pragma') === 'no-cache';
-
-  if (cache && !isAuthorizedPurge && !isNoCache) {
+  if (cache && !isAuthorizedPurge) {
     try {
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
