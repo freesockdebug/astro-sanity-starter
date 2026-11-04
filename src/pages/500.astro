@@ -1,0 +1,35 @@
+---
+// src/pages/500.astro
+import Layout from '@layouts/Layout.astro';
+
+export const prerender = false;
+
+interface Props {
+  error: unknown;
+}
+const { error } = Astro.props;
+const errMessage = error instanceof Error ? error.message : 'Unexpected server runtime error';
+console.error('[SSR:500] Unhandled page render exception:', errMessage, error);
+---
+
+<Layout title="Service Temporarily Unavailable" noindex={true}>
+  <section class="min-h-[65vh] flex items-center justify-center px-4 py-16">
+    <div class="max-w-md w-full bg-white rounded-2xl p-8 border border-black/8 shadow-xs text-center space-y-4">
+      <span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-amber-50 text-amber-800 border border-amber-200">
+        HTTP 500 · TEMPORARY INTERRUPTION
+      </span>
+      <h1 class="text-xl font-bold text-[#1d1d1f]">We’re refreshing this showroom view</h1>
+      <p class="text-xs text-[#86868b] leading-relaxed">
+        Our edge server encountered a temporary hiccup while loading this page. Your inquiry basket is preserved.
+      </p>
+      <div class="flex items-center justify-center gap-3 pt-2">
+        <a href={Astro.url.pathname} class="px-4 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-colors">
+          Retry Page
+        </a>
+        <a href="/" class="px-4 py-2 rounded-full text-xs font-medium bg-[#f5f5f7] text-[#1d1d1f] border border-black/10 hover:bg-[#e8e8ed] transition-colors">
+          Back to Home
+        </a>
+      </div>
+    </div>
+  </section>
+</Layout>

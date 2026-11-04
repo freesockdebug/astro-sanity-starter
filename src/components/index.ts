@@ -20,6 +20,7 @@ import AppleProductDetailSkeleton from './AppleProductDetailSkeleton.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
 import MarkdownRenderer from './MarkdownRenderer.astro';
 import LocalTime from './LocalTime.astro';
+import SectionBoundary from './SectionBoundary.astro';
 
 export {
   SockHero,
@@ -40,6 +41,7 @@ export {
   Breadcrumbs,
   MarkdownRenderer,
   LocalTime,
+  SectionBoundary,
 };
 
 /**

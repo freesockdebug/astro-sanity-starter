@@ -144,5 +144,36 @@ const resolvedImage = imageSrc
             win.__observeAppleShimmer = (target?: any, scope?: ParentNode) => shimmerController.observe(target || document, scope);
             win.__unobserveAppleShimmer = (el?: any) => shimmerController.unobserve(el);
         </script>
+
+        <!-- 3. Client-side Global Runtime Resilience Boundary -->
+        <div id="global-runtime-fallback" class="fixed bottom-4 right-4 z-50 hidden max-w-sm bg-white border border-black/10 rounded-2xl shadow-lg p-4 text-xs">
+          <div class="flex items-start justify-between gap-3">
+            <div class="space-y-1">
+              <p class="font-semibold text-[#1d1d1f]">Interactive script encountered an error</p>
+              <p id="global-runtime-msg" class="text-[11px] text-[#86868b] line-clamp-2"></p>
+            </div>
+            <button type="button" onclick="location.reload()" class="shrink-0 px-2.5 py-1 rounded-full bg-[#1d1d1f] text-white text-[11px] font-medium hover:bg-black transition-colors">
+              Reload
+            </button>
+          </div>
+        </div>
+
+        <script is:inline>
+          (function () {
+            function handleRuntimeError(message, source) {
+              if (!message || String(message).includes('ResizeObserver')) return;
+              console.warn('[ClientBoundary] Caught runtime exception:', message, source);
+            }
+
+            window.addEventListener('error', function (event) {
+              handleRuntimeError(event.message, event.filename);
+            });
+
+            window.addEventListener('unhandledrejection', function (event) {
+              var reason = event.reason && (event.reason.message || String(event.reason));
+              handleRuntimeError(reason, 'Unhandled Promise Rejection');
+            });
+          })();
+        </script>
     </body>
 </html>

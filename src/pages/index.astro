@@ -1,7 +1,7 @@
 ---
 // src/pages/index.astro
 import Layout from '@layouts/Layout.astro';
-import { componentMap, AppleStageNavigator } from '@components';
+import { componentMap, AppleStageNavigator, SectionBoundary } from '@components';
 import { client } from '@utils/sanity-client';
 import { SECTIONS, IMAGE, normalizeSections, extractHeroPreload } from '@data/blocks';
 import { SiteConfigService } from '@data/siteConfig';
@@ -97,7 +97,11 @@ const stages = sections
 >
   {sections.map((section: any) => {
     const Component = componentMap[section._type];
-    return Component ? <Component {...section} /> : null;
+    return Component ? (
+      <SectionBoundary sectionName={section._type}>
+        <Component {...section} />
+      </SectionBoundary>
+    ) : null;
   })}
 
   <!-- Apple Presentation Stage Navigator (Floating Glassmorphism Capsule) -->

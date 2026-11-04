@@ -1,0 +1,24 @@
+---
+// src/components/SectionBoundary.astro
+interface Props {
+  sectionName?: string;
+}
+const { sectionName = 'Section' } = Astro.props;
+
+let renderedHtml = '';
+let renderError: Error | null = null;
+
+try {
+  renderedHtml = await Astro.slots.render('default');
+} catch (err: any) {
+  renderError = err instanceof Error ? err : new Error(String(err));
+  console.error(`[SectionBoundary] Failed to render section "${sectionName}":`, err);
+}
+---
+{renderError ? (
+  <div class="my-4 p-4 rounded-2xl bg-[#f5f5f7] border border-black/5 text-center text-xs text-[#86868b]">
+    This module ({sectionName}) is temporarily unavailable.
+  </div>
+) : (
+  <Fragment set:html={renderedHtml} />
+)}

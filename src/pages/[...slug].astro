@@ -2,7 +2,7 @@
 // src/pages/[...slug].astro
 import type { Page } from 'types';
 import Layout from '@layouts/Layout.astro';
-import { componentMap } from '@components';
+import { componentMap, SectionBoundary } from '@components';
 import { client } from '@utils/sanity-client';
 import { PAGE_QUERY_OBJ } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
@@ -75,7 +75,11 @@ const localizedMetaDescription = (metaDescription && typeof metaDescription === 
                 {sections?.length &&
                     sections.map((section: any) => {
                         const Component = componentMap[section._type];
-                        return Component ? <Component {...section} /> : null;
+                        return Component ? (
+                            <SectionBoundary sectionName={section._type}>
+                                <Component {...section} />
+                            </SectionBoundary>
+                        ) : null;
                     })}
             </Fragment>
         </Layout>
