@@ -2,9 +2,8 @@
 // src/pages/products/index.astro
 import Layout from '@layouts/Layout.astro';
 import { AppleProductGridSkeleton } from '@components/index';
-import { client } from '@utils/sanity-client';
-import { PRODUCT_CARD_FIELDS, CATEGORY_FIELDS, ProductService, fetchCatalogCategories } from '@data/products';
-import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
+import { ProductService, fetchCatalogCategories } from '@data/products';
+import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_CATALOG, DEFAULT_RFQ } from '@data/defaults';
@@ -16,33 +15,16 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, st
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
-// Scheme 2: Single Aggregated GROQ Query - combines 5 independent API calls into 1 single roundtrip
-let batchData: any = null;
-try {
-  batchData = await client.fetch(`{
-    "products": *[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS},
-    "categories": *[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS},
-    "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
-    "rfqSettings": *[_type == "rfqSettings"][0],
-    "catalogSettings": *[_type == "catalogSettings"][0]
-  }`);
-} catch (e) {
-  console.error("Failed to batch-fetch catalog data from Sanity:", e);
-}
+// Multi-tier cached resolution: load catalog, categories, and settings in parallel via CMS services (L1 memory -> L2 KV -> L3 Sanity)
+const [rawProducts, rawCategories, siteConfig, rfqSettings, catalogSettings] = await Promise.all([
+  ProductService.getAll(),
+  ProductService.getCategories(),
+  SiteConfigService.getConfig(),
+  RfqSettingsService.getSettings(),
+  ProductService.getCatalogSettings(),
+]);
 
-// Pre-populate service caches unconditionally so Layout, QuoteDrawer, and Filter tabs make 0 additional API requests
-SiteConfigService.seed(batchData?.siteConfig);
-RfqSettingsService.seed(batchData?.rfqSettings);
-ProductService.seed({
-  products: batchData?.products || [],
-  categories: batchData?.categories || [],
-  catalogSettings: batchData?.catalogSettings || null
-});
-
-const mergedProducts = (batchData?.products || []).map((p: any) => ProductService.normalize(p, 480));
-const siteConfig = batchData?.siteConfig;
-const rfqSettings = batchData?.rfqSettings;
-const catalogSettings = batchData?.catalogSettings;
+const mergedProducts = (rawProducts || []).map((p: any) => ProductService.normalize(p, 480));
 
 const cardQuoteText = getLocalizedValue(rfqSettings?.cardQuoteBtnText, currentLang, t('catalog.cardQuoteBtn'));
 const allLabel = getLocalizedValue(catalogSettings?.allSilhouettesLabel, currentLang, t('catalog.allSilhouettes'));

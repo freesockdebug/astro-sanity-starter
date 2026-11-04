@@ -70,22 +70,24 @@ export async function invalidateSettingsCache(customEnv?: any) {
  * Resolves current system settings with priority:
  * L1 Memory Cache (5s) -> L2 Cloudflare KV (sys:settings:v1) -> L3 D1 Database -> Runtime Env -> Defaults
  */
-export async function getSystemSettings(customEnv?: any): Promise<SystemSettings> {
+export async function getSystemSettings(customEnv?: any, forceRefresh: boolean = false): Promise<SystemSettings> {
   const now = Date.now();
-  if (cachedSettings && now < cacheExpiry) {
+  if (!forceRefresh && cachedSettings && now < cacheExpiry) {
     return cachedSettings;
   }
 
   // L2: Try Cloudflare Edge KV cache (1~5ms edge response)
-  try {
-    const kvData = await kvGet<SystemSettings>(KV_SETTINGS_KEY, customEnv);
-    if (kvData && typeof kvData === 'object' && kvData.brand_name) {
-      cachedSettings = kvData;
-      cacheExpiry = now + CACHE_TTL_MS;
-      return kvData;
+  if (!forceRefresh) {
+    try {
+      const kvData = await kvGet<SystemSettings>(KV_SETTINGS_KEY, customEnv);
+      if (kvData && typeof kvData === 'object' && kvData.brand_name) {
+        cachedSettings = kvData;
+        cacheExpiry = now + CACHE_TTL_MS;
+        return kvData;
+      }
+    } catch {
+      // Non-blocking fallback to D1
     }
-  } catch {
-    // Non-blocking fallback to D1
   }
 
   let dbRecords: { key: string; value: string }[] = [];
@@ -218,9 +220,10 @@ export async function updateSystemSettings(
       }
     });
 
-    await invalidateSettingsCache(customEnv);
-    // Fetch and populate fresh settings into KV immediately
-    await getSystemSettings(customEnv);
+    // Invalidate local memory and force D1 read + KV overwrite in a single write
+    cachedSettings = null;
+    cacheExpiry = 0;
+    await getSystemSettings(customEnv, true);
     return { success: true };
   } catch (err: any) {
     console.error('[SettingsRepo] Failed to update settings:', err);

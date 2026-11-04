@@ -3,8 +3,8 @@
 import Layout from '@layouts/Layout.astro';
 import { AppleProductDetailSkeleton, Breadcrumbs } from '@components/index';
 import { client } from '@utils/sanity-client';
-import { PRODUCT_FIELDS, PRODUCT_CARD_FIELDS, ProductService, resolveProductMoq, getCurrencySymbol } from '@data/products';
-import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
+import { PRODUCT_FIELDS, ProductService, resolveProductMoq, getCurrencySymbol } from '@data/products';
+import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { cleanBrandTitle } from '@utils/text';
 import { SanityImageService } from '@utils/image';
@@ -21,33 +21,25 @@ const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 const { slug } = Astro.params;
 
-// Scheme 2: Single Aggregated GROQ Query - combines 4 independent API calls into 1 single roundtrip
-let batchData: any = null;
-try {
-  batchData = await client.fetch(
-    `{
-      "product": *[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS},
-      "allProducts": *[_type == "product"] | order(_createdAt asc) { "slug": slug.current, title, shortTitle },
-      "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
-      "rfqSettings": *[_type == "rfqSettings"][0],
-      "productStorySettings": *[_type == "productStorySettings"][0]
-    }`,
-    { slug }
-  );
-} catch (e) {
-  console.error(`Failed to batch-fetch product data for ${slug}:`, e);
-}
+// Multi-tier cached resolution: fetch current product & story settings from Sanity concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
+const [currentProduct, allProductsRaw, siteConfig, rfqSettings, productStorySettings] = await Promise.all([
+  client
+    .fetch<any>(`*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`, { slug })
+    .catch((e) => {
+      console.error(`Failed to batch-fetch product data for ${slug}:`, e);
+      return null;
+    }),
+  ProductService.getAll(),
+  SiteConfigService.getConfig(),
+  RfqSettingsService.getSettings(),
+  client.fetch<any>(`*[_type == "productStorySettings"][0]`).catch(() => null),
+]);
 
-// Pre-populate service caches unconditionally so Layout and QuoteDrawer make 0 additional API requests
-SiteConfigService.seed(batchData?.siteConfig);
-RfqSettingsService.seed(batchData?.rfqSettings);
-
-const currentProduct = batchData?.product;
 if (!currentProduct) {
   return Astro.redirect(getLocalizedPath('/#collections', currentLang));
 }
 
-const allProducts = batchData?.allProducts || [];
+const allProducts = allProductsRaw || [];
 
 // Ensure product has fallbacks for arrays and images
 currentProduct.gallery = (currentProduct.gallery && currentProduct.gallery.length > 0)
@@ -62,8 +54,6 @@ const resolvedMoq = resolveProductMoq(currentProduct.pricingTiers, currentProduc
 const currencySymbol = getCurrencySymbol(currentProduct.currency);
 const unitPairLabel = t('catalog.unitPair');
 
-const siteConfig = batchData?.siteConfig;
-const rfqSettings = batchData?.rfqSettings;
 const rawBrandTitle = siteConfig?.header?.title || DEFAULT_BRAND_TITLE;
 const brandTitle = cleanBrandTitle(rawBrandTitle);
 
@@ -101,8 +91,6 @@ const showBuySampleButton = rfqSettings?.showProductBuySampleButton ?? true;
 const showSpecSheetButton = rfqSettings?.showProductSpecSheetButton ?? true;
 
 // Editorial Story Resolution (Multilingual Markdown with luxurious Craftsmanship Fallback)
-const productStorySettings = batchData?.productStorySettings;
-
 const currentProductStoryBadge = getLocalizedValue(
   currentProduct.storyBadge,
   currentLang,

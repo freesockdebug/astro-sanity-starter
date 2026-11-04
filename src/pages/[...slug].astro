@@ -5,7 +5,7 @@ import Layout from '@layouts/Layout.astro';
 import { componentMap } from '@components';
 import { client } from '@utils/sanity-client';
 import { PAGE_QUERY_OBJ } from '@data/page';
-import { CONFIG_QUERY_OBJ, SiteConfigService } from '@data/siteConfig';
+import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { normalizeSections, extractHeroPreload } from '@data/blocks';
 import { getLangFromUrl, getLocalizedValue } from '@i18n';
@@ -34,26 +34,21 @@ if (rawSlug && /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml
 const formattedSlug = !rawSlug || rawSlug === '/' ? '/' : (rawSlug.startsWith('/') ? rawSlug : `/${rawSlug}`);
 const unslashed = formattedSlug.replace(/^\//, '');
 
-// Scheme 2: Single Aggregated GROQ Query - combines 3 independent API calls into 1 single roundtrip
-let batchData: any = null;
-try {
-  batchData = await client.fetch(
-    `{
-      "page": *[_type == "page" && (slug.current == $formattedSlug || slug.current == $unslashed)][0] ${PAGE_QUERY_OBJ},
-      "siteConfig": *[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ},
-      "rfqSettings": *[_type == "rfqSettings"][0]
-    }`,
-    { formattedSlug, unslashed }
-  );
-} catch (e) {
-  console.error(`Failed to batch-fetch page data for ${formattedSlug}:`, e);
-}
+// Multi-tier cached resolution: fetch dynamic page from Sanity concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
+const [page] = await Promise.all([
+  client
+    .fetch<Page | null>(
+      `*[_type == "page" && (slug.current == $formattedSlug || slug.current == $unslashed)][0] ${PAGE_QUERY_OBJ}`,
+      { formattedSlug, unslashed }
+    )
+    .catch((e) => {
+      console.error(`Failed to fetch page data for ${formattedSlug}:`, e);
+      return null;
+    }),
+  SiteConfigService.getConfig(),
+  RfqSettingsService.getSettings(),
+]);
 
-// Pre-populate service caches unconditionally so Layout, AppleNav, QuoteDrawer, and sections make 0 additional API requests
-SiteConfigService.seed(batchData?.siteConfig);
-RfqSettingsService.seed(batchData?.rfqSettings);
-
-const page: Page = batchData?.page;
 if (!page) {
     return new Response("404 Not Found", { status: 404, statusText: "Not Found" });
 }

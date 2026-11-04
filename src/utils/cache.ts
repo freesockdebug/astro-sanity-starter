@@ -76,7 +76,10 @@ export function createSwrCache<T>(
 
           // 3. L3 Upstream CMS Fetch
           const res = await fetcher();
-          const hasValidData = res !== undefined && res !== null;
+          const hasValidData =
+            res !== undefined &&
+            res !== null &&
+            (!Array.isArray(res) || res.length > 0);
           value = hasValidData ? res : fallback;
           timestamp = Date.now();
           if (onUpdate && value) onUpdate(value);
