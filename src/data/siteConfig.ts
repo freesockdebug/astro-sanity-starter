@@ -30,7 +30,8 @@ const configCache = createSwrCache<SiteConfig | null>(
   () => client.fetch<SiteConfig>(`*[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ}`),
   {} as SiteConfig,
   10_000,
-  (cfg) => SanityImageService.setStudioProxyConfig(cfg?.enableImageProxy)
+  (cfg) => SanityImageService.setStudioProxyConfig(cfg?.enableImageProxy),
+  { kvKey: 'cms:siteConfig', kvTtlSeconds: 86400 }
 );
 
 /**

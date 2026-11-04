@@ -41,7 +41,9 @@ const rfqCache = createSwrCache<RfqSettings>(
     return { ...DEFAULT_RFQ_SETTINGS };
   },
   { ...DEFAULT_RFQ_SETTINGS },
-  10_000
+  10_000,
+  undefined,
+  { kvKey: 'cms:rfqSettings', kvTtlSeconds: 86400 }
 );
 
 /**

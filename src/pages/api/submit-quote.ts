@@ -5,6 +5,7 @@ import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { getSessionFromRequest } from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
+import { kvGet, kvPut } from '@utils/kv';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -327,6 +328,37 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }
     }
 
+    // 2.5 Edge Idempotency Guard (Anti-Replay via Cloudflare KV, 60s TTL)
+    const normalizedEmail = buyerInfo.email.trim().toLowerCase();
+    const itemSig = items
+      .map((i: any) => `${i.sku || ''}:${i.variant || ''}:${i.quantity}`)
+      .sort()
+      .join('|');
+    const idempRaw = `${normalizedEmail}:${itemSig}:${buyerInfo.message || ''}`;
+    let idempKey = '';
+    try {
+      const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(idempRaw));
+      const hashHex = Array.from(new Uint8Array(hashBuf))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .slice(0, 32);
+      idempKey = `idemp:rfq:${hashHex}`;
+      const cachedRfq = await kvGet<{ orderNo: string }>(idempKey, cfEnv);
+      if (cachedRfq?.orderNo) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            orderNo: cachedRfq.orderNo,
+            duplicate: true,
+            message: 'Your inquiry has already been received and is currently being processed by our concierge team.',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch {
+      // Non-blocking fail-safe
+    }
+
     // 3. Create Official B2B Order in Cloudflare D1
     const sessionUser = await getSessionFromRequest(request, cfEnv);
     const userId = sessionUser ? sessionUser.id : null;
@@ -346,6 +378,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     }
 
     const orderNo = generateOrderNo(systemSettings?.order_no_prefix || 'ORD');
+    if (idempKey) {
+      kvPut(idempKey, { orderNo, email: normalizedEmail }, { expirationTtl: 60 }, cfEnv).catch(() => {});
+    }
     let orderId = '';
     let d1WriteError: string | null = null;
 

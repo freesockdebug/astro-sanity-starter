@@ -240,19 +240,25 @@ export interface CatalogCategoryItem {
 const productsCache = createSwrCache<Product[]>(
   () => client.fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`),
   [],
-  10_000
+  10_000,
+  undefined,
+  { kvKey: 'cms:products:all', kvTtlSeconds: 86400 }
 );
 
 const categoriesCache = createSwrCache<any[]>(
   () => client.fetch<any[]>(`*[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS}`),
   [],
-  10_000
+  10_000,
+  undefined,
+  { kvKey: 'cms:categories:all', kvTtlSeconds: 86400 }
 );
 
 const catalogSettingsCache = createSwrCache<any | null>(
   () => client.fetch<any>(`*[_type == "catalogSettings"][0]`),
   null,
-  10_000
+  10_000,
+  undefined,
+  { kvKey: 'cms:catalogSettings', kvTtlSeconds: 86400 }
 );
 
 /**

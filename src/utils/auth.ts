@@ -1,6 +1,8 @@
 // src/utils/auth.ts
 // Logto OIDC session management & role verification via Web Crypto HMAC-SHA256
 
+import { kvGet, kvPut } from './kv';
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -285,30 +287,47 @@ export async function updateLogtoUserPassword(
       ? btoa(`${m2mAppId}:${m2mAppSecret}`)
       : Buffer.from(`${m2mAppId}:${m2mAppSecret}`).toString('base64');
 
-    // 1. Fetch M2M Access Token
-    const tokenRes = await fetch(`${endpoint}/oidc/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${basicAuth}`,
-      },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        resource,
-        scope: 'all',
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
+    // 1. Fetch or reuse cached M2M Access Token from Cloudflare KV
+    const kvTokenKey = 'auth:logto_m2m_token';
+    let accessToken = await kvGet<string>(kvTokenKey, customEnv);
 
-    if (!tokenRes.ok) {
-      const errText = await tokenRes.text();
-      console.error('[Logto M2M] Failed to obtain token:', tokenRes.status, errText);
-      return { success: false, error: 'Authentication service temporarily unavailable.' };
+    if (!accessToken) {
+      const tokenRes = await fetch(`${endpoint}/oidc/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${basicAuth}`,
+        },
+        body: new URLSearchParams({
+          grant_type: 'client_credentials',
+          resource,
+          scope: 'all',
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!tokenRes.ok) {
+        const errText = await tokenRes.text();
+        console.error('[Logto M2M] Failed to obtain token:', tokenRes.status, errText);
+        return { success: false, error: 'Authentication service temporarily unavailable.' };
+      }
+
+      const tokenData = (await tokenRes.json()) as { access_token?: string; expires_in?: number };
+      accessToken = tokenData.access_token || '';
+      const expiresIn = tokenData.expires_in || 3600;
+      if (accessToken) {
+        // Cache token in KV, expiring 2 minutes before actual expiry
+        const ttl = Math.max(60, expiresIn - 120);
+        await kvPut(kvTokenKey, accessToken, { expirationTtl: ttl }, customEnv).catch(() => {});
+      }
     }
 
-    const { access_token } = (await tokenRes.json()) as { access_token?: string };
+    if (!accessToken) {
+      return { success: false, error: 'Failed to acquire access token from authentication service.' };
+    }
+
     const headers = {
-      Authorization: `Bearer ${access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     };
 

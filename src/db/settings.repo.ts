@@ -4,6 +4,7 @@
 import { getDb, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
+import { kvGet, kvPut, kvDelete } from '../utils/kv';
 
 export interface SystemSettings {
   // 1. Brand & Buyer Concierge
@@ -52,24 +53,39 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   login_retention_days: 90,
 };
 
-// 15-second in-memory TTL cache to eliminate redundant D1 read latency on high-frequency SSR
+export const KV_SETTINGS_KEY = 'sys:settings:v1';
+
+// L1 in-memory TTL cache (5s) for instant micro-loop execution
 let cachedSettings: SystemSettings | null = null;
 let cacheExpiry = 0;
-const CACHE_TTL_MS = 15_000;
+const CACHE_TTL_MS = 5_000;
 
-export function invalidateSettingsCache() {
+export async function invalidateSettingsCache(customEnv?: any) {
   cachedSettings = null;
   cacheExpiry = 0;
+  await kvDelete(KV_SETTINGS_KEY, customEnv).catch(() => {});
 }
 
 /**
  * Resolves current system settings with priority:
- * D1 Database system_settings > Runtime Environment Variables > Built-in Defaults
+ * L1 Memory Cache (5s) -> L2 Cloudflare KV (sys:settings:v1) -> L3 D1 Database -> Runtime Env -> Defaults
  */
 export async function getSystemSettings(customEnv?: any): Promise<SystemSettings> {
   const now = Date.now();
   if (cachedSettings && now < cacheExpiry) {
     return cachedSettings;
+  }
+
+  // L2: Try Cloudflare Edge KV cache (1~5ms edge response)
+  try {
+    const kvData = await kvGet<SystemSettings>(KV_SETTINGS_KEY, customEnv);
+    if (kvData && typeof kvData === 'object' && kvData.brand_name) {
+      cachedSettings = kvData;
+      cacheExpiry = now + CACHE_TTL_MS;
+      return kvData;
+    }
+  } catch {
+    // Non-blocking fallback to D1
   }
 
   let dbRecords: { key: string; value: string }[] = [];
@@ -157,6 +173,10 @@ export async function getSystemSettings(customEnv?: any): Promise<SystemSettings
 
   cachedSettings = settings;
   cacheExpiry = now + CACHE_TTL_MS;
+
+  // L2: Asynchronously populate KV cache
+  kvPut(KV_SETTINGS_KEY, settings, { expirationTtl: 86400 }, customEnv).catch(() => {});
+
   return settings;
 }
 
@@ -165,7 +185,8 @@ export async function getSystemSettings(customEnv?: any): Promise<SystemSettings
  */
 export async function updateSystemSettings(
   updates: Record<string, any>,
-  updatedBy: string
+  updatedBy: string,
+  customEnv?: any
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const validKeys = new Set(Object.keys(DEFAULT_SYSTEM_SETTINGS));
@@ -193,7 +214,10 @@ export async function updateSystemSettings(
       }
     });
 
-    invalidateSettingsCache();
+    await invalidateSettingsCache(customEnv);
+    // Fetch and populate fresh settings into KV immediately
+    const fresh = await getSystemSettings(customEnv);
+    await kvPut(KV_SETTINGS_KEY, fresh, { expirationTtl: 86400 }, customEnv).catch(() => {});
     return { success: true };
   } catch (err: any) {
     console.error('[SettingsRepo] Failed to update settings:', err);

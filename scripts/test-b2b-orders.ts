@@ -303,6 +303,34 @@ async function runSelfCheck() {
   assert.ok(customOrderNo.startsWith(`${testPrefix}-`));
   console.log('✔ [PASS] D1 System Settings persistence, caching & merged admin authorization verified');
 
+  // 20. Cloudflare Edge KV Caching & Graceful Degradation Engine
+  const { kvGet, kvPut, kvDelete } = await import('../src/utils/kv');
+  // Case A: Graceful degradation when KV namespace is null
+  const nullGet = await kvGet('any:key', {});
+  assert.strictEqual(nullGet, null);
+  const nullPut = await kvPut('any:key', { test: true }, undefined, {});
+  assert.strictEqual(nullPut, false);
+  const nullDel = await kvDelete('any:key', {});
+  assert.strictEqual(nullDel, false);
+
+  // Case B: Functional operation when Mock KV namespace is bound
+  const memoryStore = new Map<string, string>();
+  const mockKv = {
+    async get(k: string) { return memoryStore.get(k) || null; },
+    async put(k: string, v: string) { memoryStore.set(k, v); },
+    async delete(k: string) { memoryStore.delete(k); },
+  };
+  const mockEnv = { CACHE_KV: mockKv };
+
+  await kvPut('sys:settings:v1', { brand_name: 'EDGE_KV_ATELIER' }, { expirationTtl: 60 }, mockEnv);
+  const fromKv = await kvGet<{ brand_name: string }>('sys:settings:v1', mockEnv);
+  assert.strictEqual(fromKv?.brand_name, 'EDGE_KV_ATELIER');
+
+  await kvDelete('sys:settings:v1', mockEnv);
+  const afterDelete = await kvGet('sys:settings:v1', mockEnv);
+  assert.strictEqual(afterDelete, null);
+  console.log('✔ [PASS] Cloudflare Edge KV multi-tier caching & graceful degradation verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 

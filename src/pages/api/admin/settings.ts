@@ -242,7 +242,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    const saveResult = await updateSystemSettings(updates, admin.email);
+    const saveResult = await updateSystemSettings(updates, admin.email, cfEnv);
     if (!saveResult.success) {
       return new Response(JSON.stringify({ error: saveResult.error || 'Failed to save settings.' }), {
         status: 500,

@@ -7,6 +7,7 @@ import { NON_DEFAULT_LOCALES } from '@i18n';
 import { ProductService } from '@data/products';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
+import { kvGet, kvPut, kvDelete } from '@utils/kv';
 
 export const prerender = false;
 
@@ -270,6 +271,15 @@ export const POST: APIRoute = async (context) => {
     SiteConfigService.invalidate();
     RfqSettingsService.invalidateCache();
 
+    // Invalidate CMS KV cache keys across Cloudflare Edge
+    await Promise.all([
+      kvDelete('cms:siteConfig', cfEnv),
+      kvDelete('cms:rfqSettings', cfEnv),
+      kvDelete('cms:products:all', cfEnv),
+      kvDelete('cms:categories:all', cfEnv),
+      kvDelete('cms:catalogSettings', cfEnv),
+    ]).catch(() => {});
+
     // 5. LAYER 2: Cloudflare Global CDN Zone Cache Purge API
     let cfZoneId = getEnv('CLOUDFLARE_ZONE_ID')?.trim();
     const rawCfToken = getEnv('CLOUDFLARE_API_TOKEN');
@@ -317,23 +327,29 @@ export const POST: APIRoute = async (context) => {
           };
         }
 
-        // Auto-discover Zone ID if not explicitly specified
+        // Auto-discover Zone ID if not explicitly specified (with 7-day Edge KV cache)
         if (!cfZoneId && !url.hostname.includes('localhost') && !url.hostname.includes('127.0.0.1')) {
           const domainParts = url.hostname.split('.');
           const rootDomain = domainParts.length >= 2 ? domainParts.slice(-2).join('.') : url.hostname;
-          
-          const zoneRes = await fetch(`https://api.cloudflare.com/client/v4/zones?name=${rootDomain}`, {
-            headers: {
-              'Authorization': `Bearer ${cfApiToken}`,
-              'Content-Type': 'application/json'
-            },
-            signal: AbortSignal.timeout(6000)
-          });
-          
-          if (zoneRes.ok) {
-            const zoneData: any = await zoneRes.json();
-            if (zoneData?.result?.[0]?.id) {
-              cfZoneId = zoneData.result[0].id;
+          const zoneKey = `cf:zone_id:${rootDomain}`;
+
+          cfZoneId = await kvGet<string>(zoneKey, cfEnv);
+
+          if (!cfZoneId) {
+            const zoneRes = await fetch(`https://api.cloudflare.com/client/v4/zones?name=${rootDomain}`, {
+              headers: {
+                'Authorization': `Bearer ${cfApiToken}`,
+                'Content-Type': 'application/json'
+              },
+              signal: AbortSignal.timeout(6000)
+            });
+            
+            if (zoneRes.ok) {
+              const zoneData: any = await zoneRes.json();
+              if (zoneData?.result?.[0]?.id) {
+                cfZoneId = zoneData.result[0].id;
+                await kvPut(zoneKey, cfZoneId, { expirationTtl: 604800 }, cfEnv).catch(() => {});
+              }
             }
           }
         }

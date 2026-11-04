@@ -29,6 +29,12 @@
       "database_id": "ee9bf95f-2f23-4df7-aea4-cb81346473dd"
     }
   ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE_KV",
+      "id": "dfca59910c5b42658712e1df73884827"
+    }
+  ],
   "observability": {
     "enabled": true
   }
