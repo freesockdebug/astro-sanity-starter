@@ -1,13 +1,18 @@
 ---
 // src/pages/500.astro
 import Layout from '@layouts/Layout.astro';
+import { getLangFromUrl, getLocalizedPath } from '@i18n';
 
 export const prerender = false;
+Astro.response.status = 500;
+Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
 
 interface Props {
-  error: unknown;
+  error?: unknown;
 }
 const { error } = Astro.props;
+const currentLang = getLangFromUrl(Astro.url);
+const homeUrl = getLocalizedPath('/', currentLang);
 const errMessage = error instanceof Error ? error.message : 'Unexpected server runtime error';
 console.error('[SSR:500] Unhandled page render exception:', errMessage, error);
 ---
@@ -26,7 +31,7 @@ console.error('[SSR:500] Unhandled page render exception:', errMessage, error);
         <a href={Astro.url.pathname} class="px-4 py-2 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-colors">
           Retry Page
         </a>
-        <a href="/" class="px-4 py-2 rounded-full text-xs font-medium bg-[#f5f5f7] text-[#1d1d1f] border border-black/10 hover:bg-[#e8e8ed] transition-colors">
+        <a href={homeUrl} class="px-4 py-2 rounded-full text-xs font-medium bg-[#f5f5f7] text-[#1d1d1f] border border-black/10 hover:bg-[#e8e8ed] transition-colors">
           Back to Home
         </a>
       </div>

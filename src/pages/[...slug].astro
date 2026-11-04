@@ -76,7 +76,7 @@ const localizedMetaDescription = (metaDescription && typeof metaDescription === 
                     sections.map((section: any) => {
                         const Component = componentMap[section._type];
                         return Component ? (
-                            <SectionBoundary sectionName={section._type}>
+                            <SectionBoundary sectionName={section._type} sectionId={section.elementId || section.sectionAnchor}>
                                 <Component {...section} />
                             </SectionBoundary>
                         ) : null;

@@ -2,6 +2,7 @@
 /**
  * Central registry and component map for all site sections
  */
+import SectionBoundary from './SectionBoundary.astro';
 import SockHero from './SockHero.astro';
 import SockSpecMatrix from './SockSpecMatrix.astro';
 import SockCollections from './SockCollections.astro';
@@ -20,9 +21,9 @@ import AppleProductDetailSkeleton from './AppleProductDetailSkeleton.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
 import MarkdownRenderer from './MarkdownRenderer.astro';
 import LocalTime from './LocalTime.astro';
-import SectionBoundary from './SectionBoundary.astro';
 
 export {
+  SectionBoundary,
   SockHero,
   SockSpecMatrix,
   SockCollections,
@@ -41,7 +42,6 @@ export {
   Breadcrumbs,
   MarkdownRenderer,
   LocalTime,
-  SectionBoundary,
 };
 
 /**

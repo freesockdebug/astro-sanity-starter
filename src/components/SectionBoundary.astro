@@ -2,8 +2,9 @@
 // src/components/SectionBoundary.astro
 interface Props {
   sectionName?: string;
+  sectionId?: string;
 }
-const { sectionName = 'Section' } = Astro.props;
+const { sectionName = 'Section', sectionId } = Astro.props;
 
 let renderedHtml = '';
 let renderError: Error | null = null;
@@ -16,8 +17,10 @@ try {
 }
 ---
 {renderError ? (
-  <div class="my-4 p-4 rounded-2xl bg-[#f5f5f7] border border-black/5 text-center text-xs text-[#86868b]">
-    This module ({sectionName}) is temporarily unavailable.
+  <div id={sectionId} class="apple-rail-bento my-4">
+    <div class="p-4 rounded-2xl bg-[#f5f5f7] border border-black/5 text-center text-xs text-[#86868b]">
+      This module ({sectionName}) is temporarily unavailable.
+    </div>
   </div>
 ) : (
   <Fragment set:html={renderedHtml} />

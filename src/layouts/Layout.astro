@@ -1,6 +1,7 @@
 ---
 import { type SiteConfig, type CustomImage, type Page } from 'types';
 import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@components';
+import SectionBoundary from '@components/SectionBoundary.astro';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
 import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
@@ -113,20 +114,34 @@ const resolvedImage = imageSrc
         <link rel="sitemap" href="/sitemap-index.xml" />
     </head>
     <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
-        {!bare && <AppleNav config={configData} />}
+        {!bare && (
+            <SectionBoundary sectionName="AppleNav">
+                <AppleNav config={configData} />
+            </SectionBoundary>
+        )}
         <main class={mainClass}>
             <slot />
         </main>
-        {!bare && <AppleFooter config={configData} />}
-        {!bare && <QuoteDrawer />}
+        {!bare && (
+            <SectionBoundary sectionName="AppleFooter">
+                <AppleFooter config={configData} />
+            </SectionBoundary>
+        )}
+        {!bare && (
+            <SectionBoundary sectionName="QuoteDrawer">
+                <QuoteDrawer />
+            </SectionBoundary>
+        )}
 
         <!-- 1. WhatsApp Instant Live Chat Widget (Controlled from Sanity Studio) -->
         {!bare && configData?.enableWhatsApp && configData?.whatsAppNumber && (
-            <WhatsAppWidget
-                phoneNumber={configData.whatsAppNumber}
-                prefillText={getLocalizedValue(configData.whatsAppPrefillText, currentLang, t('whatsapp.prefill'))}
-                tooltip={getLocalizedValue(configData.whatsAppTooltip, currentLang, t('whatsapp.tooltip'))}
-            />
+            <SectionBoundary sectionName="WhatsAppWidget">
+                <WhatsAppWidget
+                    phoneNumber={configData.whatsAppNumber}
+                    prefillText={getLocalizedValue(configData.whatsAppPrefillText, currentLang, t('whatsapp.prefill'))}
+                    tooltip={getLocalizedValue(configData.whatsAppTooltip, currentLang, t('whatsapp.tooltip'))}
+                />
+            </SectionBoundary>
         )}
 
         <!-- 2. Idle + Viewport Shimmer Hook: Pooled IntersectionObserver with idle scheduling -->
@@ -146,32 +161,44 @@ const resolvedImage = imageSrc
         </script>
 
         <!-- 3. Client-side Global Runtime Resilience Boundary -->
-        <div id="global-runtime-fallback" class="fixed bottom-4 right-4 z-50 hidden max-w-sm bg-white border border-black/10 rounded-2xl shadow-lg p-4 text-xs">
+        <div id="global-runtime-fallback" role="alert" class="fixed bottom-4 right-4 z-50 hidden max-w-sm bg-white border border-black/10 rounded-2xl shadow-lg p-4 text-xs">
           <div class="flex items-start justify-between gap-3">
-            <div class="space-y-1">
+            <div class="space-y-1 min-w-0 flex-1">
               <p class="font-semibold text-[#1d1d1f]">Interactive script encountered an error</p>
-              <p id="global-runtime-msg" class="text-[11px] text-[#86868b] line-clamp-2"></p>
+              <p id="global-runtime-msg" class="text-[11px] text-[#86868b] line-clamp-2 break-all"></p>
             </div>
-            <button type="button" onclick="location.reload()" class="shrink-0 px-2.5 py-1 rounded-full bg-[#1d1d1f] text-white text-[11px] font-medium hover:bg-black transition-colors">
-              Reload
-            </button>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button type="button" onclick="location.reload()" class="px-2.5 py-1 rounded-full bg-[#1d1d1f] text-white text-[11px] font-medium hover:bg-black transition-colors cursor-pointer">
+                Reload
+              </button>
+              <button type="button" aria-label="Dismiss" onclick="document.getElementById('global-runtime-fallback')?.classList.add('hidden')" class="w-6 h-6 rounded-full bg-[#f5f5f7] text-[#52525b] hover:text-black flex items-center justify-center cursor-pointer">
+                ✕
+              </button>
+            </div>
           </div>
         </div>
 
         <script is:inline>
           (function () {
             function handleRuntimeError(message, source) {
-              if (!message || String(message).includes('ResizeObserver')) return;
-              console.warn('[ClientBoundary] Caught runtime exception:', message, source);
+              var msgStr = String(message || '');
+              if (!msgStr || msgStr.includes('ResizeObserver') || msgStr === 'Script error.') return;
+              if (source && !String(source).startsWith(location.origin) && !String(source).startsWith('/')) return;
+              console.warn('[ClientBoundary] Caught runtime exception:', msgStr, source);
+              var box = document.getElementById('global-runtime-fallback');
+              var textEl = document.getElementById('global-runtime-msg');
+              if (textEl) textEl.textContent = msgStr;
+              if (box) box.classList.remove('hidden');
             }
 
             window.addEventListener('error', function (event) {
-              handleRuntimeError(event.message, event.filename);
+              if (!event.error && !event.message) return;
+              handleRuntimeError(event.message || (event.error && event.error.message), event.filename);
             });
 
             window.addEventListener('unhandledrejection', function (event) {
               var reason = event.reason && (event.reason.message || String(event.reason));
-              handleRuntimeError(reason, 'Unhandled Promise Rejection');
+              handleRuntimeError(reason, location.pathname);
             });
           })();
         </script>
