@@ -1037,6 +1037,7 @@ const i18nClient = {
 
     // History popstate
     window.addEventListener('popstate', () => {
+      const prevView = currentView;
       currentStatus = getParam('status') || 'ALL';
       currentSearch = (getParam('search') || '').trim();
       currentView = getParam('view') || 'my';
@@ -1045,8 +1046,21 @@ const i18nClient = {
         if (currentSearch) clearSearchBtn.classList.remove('hidden');
         else clearSearchBtn.classList.add('hidden');
       }
+      if (viewMyBtn && viewAllBtn) {
+        if (currentView === 'all') {
+          viewAllBtn.className = 'px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer bg-[#1d1d1f] text-white shadow-xs';
+          viewMyBtn.className = 'px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer text-[#86868b] hover:text-black';
+        } else {
+          viewMyBtn.className = 'px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer bg-[#1d1d1f] text-white shadow-xs';
+          viewAllBtn.className = 'px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer text-[#86868b] hover:text-black';
+        }
+      }
       updateTabCounts();
-      applyFilter();
+      if (prevView !== currentView) {
+        loadOrders();
+      } else {
+        applyFilter();
+      }
     });
 
     // Initial Load

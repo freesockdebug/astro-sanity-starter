@@ -2,16 +2,14 @@
 // src/pages/admin/orders.astro
 import AdminLayout from '@layouts/AdminLayout.astro';
 import { requireAdminContext } from '@utils/auth';
-import { getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/orders', { skipPendingCount: true });
+const { sessionUser, systemSettings, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/orders', { skipPendingCount: true });
 if (redirectResponse) return redirectResponse;
 
-const systemSettings = await getSystemSettings(cfEnv).catch(() => null);
 const defaultCarriers = ['DHL Express', 'FedEx International', 'UPS Worldwide', 'SF Express', 'Air Freight', 'Other'];
 const carrierOptions = systemSettings?.shipping_carriers
   ? systemSettings.shipping_carriers.split(',').map((c: string) => c.trim()).filter(Boolean)

@@ -42,19 +42,21 @@ export async function verifyBuyerAuth(requestOrContext: any, cfEnv?: any): Promi
     };
   }
 
-  let dbUser: UserRecord | null = null;
-  try {
-    dbUser = await getUserByIdOrEmail(sessionUser.id, sessionUser.email);
-    if (dbUser && dbUser.status === 'BLOCKED') {
-      return {
-        user: sessionUser,
-        dbUser,
-        errorResponse: jsonNoCache({ error: 'Account suspended: Please contact concierge support.' }, 403),
-      };
-    }
-  } catch (err) {
-    // Non-blocking fail-safe
+  const [dbUser, settings] = await Promise.all([
+    getUserByIdOrEmail(sessionUser.id, sessionUser.email).catch(() => null),
+    getSystemSettings(cfEnv).catch(() => null),
+  ]);
+
+  if (dbUser && dbUser.status === 'BLOCKED') {
+    return {
+      user: sessionUser,
+      dbUser,
+      errorResponse: jsonNoCache({ error: 'Account suspended: Please contact concierge support.' }, 403),
+    };
   }
+
+  // Dynamically recompute admin status against runtime ADMIN_EMAILS & D1 co-admins
+  sessionUser.isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv, settings?.co_admin_emails);
 
   return {
     user: sessionUser,
