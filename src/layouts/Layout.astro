@@ -210,6 +210,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             var isTelemetryEnabled = typeof enableClientLogs === 'boolean' ? enableClientLogs : true;
             var minLevel = typeof clientLogMinLevel === 'string' ? clientLogMinLevel : 'warn';
             var shouldStreamInfoNav = isTelemetryEnabled && (minLevel === 'info' || minLevel === 'debug');
+            var hasActiveError = false;
 
             var STORAGE_KEY = '__gv_nav_breadcrumbs__';
             var MAX_BREADCRUMBS = 15;
@@ -382,6 +383,8 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             }
 
             // 1. Wrap History API (pushState & replaceState)
+            var currentTrackedPath = location.pathname + location.search + location.hash;
+
             function patchHistoryMethod(methodName) {
               var original = history[methodName];
               if (typeof original !== 'function') return;
@@ -390,6 +393,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
                 var result = original.apply(this, arguments);
                 var nextPath = location.pathname + location.search + location.hash;
                 if (prevPath !== nextPath) {
+                  currentTrackedPath = nextPath;
                   recordNavigation(methodName, prevPath, nextPath);
                 }
                 return result;
@@ -400,7 +404,6 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             patchHistoryMethod('replaceState');
 
             // 2. Listen to popstate & hashchange
-            var currentTrackedPath = location.pathname + location.search + location.hash;
             window.addEventListener('popstate', function () {
               var nextPath = location.pathname + location.search + location.hash;
               recordNavigation('popstate', currentTrackedPath, nextPath);
