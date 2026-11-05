@@ -251,29 +251,28 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // 1. Fetch filtered orders
-    const orders = await db.query<OrderRecord>(
-      `SELECT * FROM orders ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
-    );
+    // 1, 2 & 3. Concurrently fetch filtered orders, total count, and status statistics (collapse 3 RTTs into 1)
+    const [orders, countRow, statsRow] = await Promise.all([
+      db.query<OrderRecord>(
+        `SELECT * FROM orders ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      ),
+      db.first<{ cnt: number }>(
+        `SELECT COUNT(*) as cnt FROM orders ${whereSql}`,
+        params
+      ),
+      db.first<any>(
+        `SELECT
+          COUNT(*) as total_all,
+          SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as total_pending,
+          SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as total_approved,
+          SUM(CASE WHEN status = 'SHIPPED' THEN 1 ELSE 0 END) as total_shipped,
+          SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as total_rejected
+        FROM orders`
+      ),
+    ]);
 
-    // 2. Count total for filter
-    const countRow = await db.first<{ cnt: number }>(
-      `SELECT COUNT(*) as cnt FROM orders ${whereSql}`,
-      params
-    );
     const total = Number(countRow?.cnt || 0);
-
-    // 3. Stats by status
-    const statsRow = await db.first<any>(
-      `SELECT
-        COUNT(*) as total_all,
-        SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as total_pending,
-        SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as total_approved,
-        SUM(CASE WHEN status = 'SHIPPED' THEN 1 ELSE 0 END) as total_shipped,
-        SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as total_rejected
-      FROM orders`
-    );
 
     const stats = {
       all: Number(statsRow?.total_all || 0),

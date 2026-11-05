@@ -1,51 +1,25 @@
 ---
 // src/pages/admin/orders.astro
 import AdminLayout from '@layouts/AdminLayout.astro';
-import LocalTime from '@components/LocalTime.astro';
 import { requireAdminContext } from '@utils/auth';
-import { listAdminOrders, getSystemSettings } from '@utils/db';
-import { getLangFromUrl } from '@i18n';
-import {
-  fetchNormalizedProducts,
-  buildProductMap,
-  resolveOrderItemImage,
-  getOrderItemProductUrl,
-} from '@data/products';
+import { getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const currentLang = getLangFromUrl(Astro.url);
 const { sessionUser, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/orders', { skipPendingCount: true });
 if (redirectResponse) return redirectResponse;
 
-const currentStatus = Astro.url.searchParams.get('status') || 'ALL';
-const currentSearch = Astro.url.searchParams.get('search') || '';
-const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
-const pageSize = 50;
-
-const [{ orders, total, stats }, products, systemSettings] = await Promise.all([
-  listAdminOrders({
-    status: currentStatus,
-    search: currentSearch,
-    page: currentPage,
-    limit: pageSize,
-  }),
-  fetchNormalizedProducts().catch(() => []),
-  getSystemSettings(cfEnv).catch(() => null),
-]);
-
+const systemSettings = await getSystemSettings(cfEnv).catch(() => null);
 const defaultCarriers = ['DHL Express', 'FedEx International', 'UPS Worldwide', 'SF Express', 'Air Freight', 'Other'];
 const carrierOptions = systemSettings?.shipping_carriers
-  ? systemSettings.shipping_carriers.split(',').map((c) => c.trim()).filter(Boolean)
+  ? systemSettings.shipping_carriers.split(',').map((c: string) => c.trim()).filter(Boolean)
   : defaultCarriers;
 
-const totalPages = Math.max(1, Math.ceil(total / pageSize));
-const productMap = buildProductMap(products);
-
-const resolveItemImage = (item: any) => resolveOrderItemImage(item, productMap);
-const getItemProductUrl = (item: any) => getOrderItemProductUrl(item, currentLang);
+const initialStatus = Astro.url.searchParams.get('status') || 'ALL';
+const initialSearch = Astro.url.searchParams.get('search') || '';
+const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
 const pageTitle = 'B2B Admin Fulfillment Workspace';
 ---
@@ -54,7 +28,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   title={pageTitle}
   currentTab="orders"
   sessionEmail={sessionUser.email}
-  pendingOrdersCount={stats.pending}
+  pendingOrdersCount={0}
 >
   <!-- Page Header -->
   <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-2 border-b border-black/5 gap-3">
@@ -64,976 +38,950 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
     </div>
     <div class="flex items-center gap-2 self-start sm:self-auto">
       <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
-        Total: <strong class="text-[#1d1d1f] font-semibold">{total}</strong> orders
+        Total: <strong id="total-orders-count" class="text-[#1d1d1f] font-semibold">-</strong> orders
       </span>
     </div>
   </div>
 
   <!-- Desktop Stats Summary Cards (>= sm) -->
-  <div class="hidden sm:grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-3 mb-4">
+  <div class="hidden sm:grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-3 mb-4" id="stats-cards-container">
     <a
       href="/admin/orders"
-      class={`p-3.5 rounded-xl border text-xs transition-all ${
-        currentStatus === 'ALL'
-          ? 'bg-[#1d1d1f] text-white border-black shadow-xs'
-          : 'bg-white text-[#1d1d1f] border-black/5 hover:border-black/20'
-      }`}
+      data-status="ALL"
+      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-[#1d1d1f] text-white border-black shadow-xs cursor-pointer"
     >
       <span class="text-[11px] block opacity-75">All Orders</span>
-      <span class="text-lg font-bold font-mono tabular-nums">{stats.all}</span>
+      <span data-stat-field="all" class="text-lg font-bold font-mono tabular-nums">-</span>
     </a>
 
     <a
       href="/admin/orders?status=PENDING_APPROVAL"
-      class={`p-3.5 rounded-xl border text-xs transition-all ${
-        currentStatus === 'PENDING_APPROVAL'
-          ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
-          : 'bg-white text-amber-900 border-black/5 hover:border-amber-300'
-      }`}
+      data-status="PENDING_APPROVAL"
+      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-amber-900 border-black/5 hover:border-amber-300 cursor-pointer"
     >
       <span class="text-[11px] block opacity-75">Pending Approval</span>
-      <span class={`text-lg font-bold font-mono tabular-nums text-amber-600 ${currentStatus === 'PENDING_APPROVAL' ? '!text-white' : ''}`}>
-        {stats.pending}
-      </span>
+      <span data-stat-field="pending" class="text-lg font-bold font-mono tabular-nums text-amber-600">-</span>
     </a>
 
     <a
       href="/admin/orders?status=APPROVED"
-      class={`p-3.5 rounded-xl border text-xs transition-all ${
-        currentStatus === 'APPROVED'
-          ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
-          : 'bg-white text-blue-900 border-black/5 hover:border-blue-300'
-      }`}
+      data-status="APPROVED"
+      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-blue-900 border-black/5 hover:border-blue-300 cursor-pointer"
     >
       <span class="text-[11px] block opacity-75">Approved (To Ship)</span>
-      <span class={`text-lg font-bold font-mono tabular-nums text-blue-600 ${currentStatus === 'APPROVED' ? '!text-white' : ''}`}>
-        {stats.approved}
-      </span>
+      <span data-stat-field="approved" class="text-lg font-bold font-mono tabular-nums text-blue-600">-</span>
     </a>
 
     <a
       href="/admin/orders?status=SHIPPED"
-      class={`p-3.5 rounded-xl border text-xs transition-all ${
-        currentStatus === 'SHIPPED'
-          ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-          : 'bg-white text-emerald-900 border-black/5 hover:border-emerald-300'
-      }`}
+      data-status="SHIPPED"
+      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-emerald-900 border-black/5 hover:border-emerald-300 cursor-pointer"
     >
       <span class="text-[11px] block opacity-75">Shipped</span>
-      <span class={`text-lg font-bold font-mono tabular-nums text-emerald-600 ${currentStatus === 'SHIPPED' ? '!text-white' : ''}`}>
-        {stats.shipped}
-      </span>
+      <span data-stat-field="shipped" class="text-lg font-bold font-mono tabular-nums text-emerald-600">-</span>
     </a>
 
     <a
       href="/admin/orders?status=REJECTED"
-      class={`p-3.5 rounded-xl border text-xs transition-all ${
-        currentStatus === 'REJECTED'
-          ? 'bg-zinc-700 text-white border-zinc-800 shadow-xs'
-          : 'bg-white text-zinc-700 border-black/5 hover:border-zinc-300'
-      }`}
+      data-status="REJECTED"
+      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-zinc-700 border-black/5 hover:border-zinc-300 cursor-pointer"
     >
       <span class="text-[11px] block opacity-75">Rejected</span>
-      <span class="text-lg font-bold font-mono tabular-nums">{stats.rejected}</span>
+      <span data-stat-field="rejected" class="text-lg font-bold font-mono tabular-nums text-[#1d1d1f]">-</span>
     </a>
   </div>
 
-  <!-- Sticky Toolbar (Filters & Search): Sticks right below 56px top bar on mobile, 0 on desktop -->
+  <!-- Sticky Toolbar (Filters & Search) -->
   <div class="sticky top-14 lg:top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-    <!-- Status Segmented Pills (Horizontal scroll on mobile) -->
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+    <!-- Status Segmented Pills -->
+    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" id="status-tabs-container">
       {[
-        { key: 'ALL', label: 'All', count: stats.all, active: 'bg-[#1d1d1f] text-white border-black' },
-        { key: 'PENDING_APPROVAL', label: 'Pending', count: stats.pending, active: 'bg-amber-600 text-white border-amber-700' },
-        { key: 'APPROVED', label: 'Approved', count: stats.approved, active: 'bg-blue-600 text-white border-blue-700' },
-        { key: 'SHIPPED', label: 'Shipped', count: stats.shipped, active: 'bg-emerald-600 text-white border-emerald-700' },
-        { key: 'REJECTED', label: 'Rejected', count: stats.rejected, active: 'bg-zinc-700 text-white border-zinc-800' },
-      ].map((tab) => {
-        const isActive = currentStatus === tab.key;
-        return (
-          <a
-            href={tab.key === 'ALL' ? '/admin/orders' : `/admin/orders?status=${tab.key}`}
-            class={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${
-              isActive
-                ? tab.active + ' shadow-2xs font-semibold'
-                : 'bg-white text-[#52525b] border-black/5 hover:border-black/20'
-            }`}
-          >
-            <span>{tab.label}</span>
-            <span class={`font-mono text-[10px] px-1.5 py-0.5 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-[#f5f5f7] text-[#1d1d1f]'}`}>
-              {tab.count}
-            </span>
-          </a>
-        );
-      })}
+        { key: 'ALL', label: 'All' },
+        { key: 'PENDING_APPROVAL', label: 'Pending' },
+        { key: 'APPROVED', label: 'Approved' },
+        { key: 'SHIPPED', label: 'Shipped' },
+        { key: 'REJECTED', label: 'Rejected' },
+      ].map((tab) => (
+        <a
+          href={tab.key === 'ALL' ? '/admin/orders' : `/admin/orders?status=${tab.key}`}
+          data-tab-status={tab.key}
+          class="status-tab px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 bg-white text-[#52525b] border-black/5 hover:border-black/20 cursor-pointer"
+        >
+          <span>{tab.label}</span>
+          <span data-tab-field={tab.key} class="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-[#f5f5f7] text-[#1d1d1f]">
+            -
+          </span>
+        </a>
+      ))}
     </div>
 
     <!-- Search Form -->
-    <form method="GET" action="/admin/orders" class="relative flex items-center w-full sm:w-72">
-      {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
+    <form id="orders-search-form" class="relative flex items-center w-full sm:w-72">
       <input
         type="text"
+        id="orders-search-input"
         name="search"
-        value={currentSearch}
+        value={initialSearch}
         placeholder="Search Order No, email, company..."
         class="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] shadow-2xs"
       />
       <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
-      {currentSearch && (
-        <a
-          href={currentStatus !== 'ALL' ? `/admin/orders?status=${currentStatus}` : '/admin/orders'}
-          class="absolute right-2.5 text-xs text-[#86868b] hover:text-black"
-        >
-          ✕
-        </a>
-      )}
+      <button
+        type="button"
+        id="clear-search-btn"
+        class={`absolute right-2.5 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+        title="Clear search"
+      >
+        ✕
+      </button>
     </form>
   </div>
 
-      <!-- Orders Table Container -->
-      <div class="mt-4 sm:mt-6 bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
-        
-        {orders.length === 0 ? (
-          <div class="py-16 text-center text-xs text-[#86868b]">
-            No orders matching the current filter.
-          </div>
-        ) : (
-          <>
-            <!-- Mobile Compact Cards Layout (< md): 100% full width, zero horizontal scrolling -->
-            <div class="block md:hidden divide-y divide-black/5">
-              {orders.map((order) => {
-                const isPending = order.status === 'PENDING_APPROVAL';
-                const isApproved = order.status === 'APPROVED';
-                const isShipped = order.status === 'SHIPPED';
-                const isRejected = order.status === 'REJECTED';
-
-                return (
-                  <div class="p-3.5 space-y-2.5 bg-white">
-                    <!-- Top Bar: Order No + Date + Status -->
-                    <div class="flex items-start justify-between gap-2">
-                      <div class="min-w-0 flex-1">
-                        <span class="font-mono font-bold text-xs text-[#1d1d1f] block truncate">
-                          {order.order_no}
-                        </span>
-                        <span class="text-[10px] text-[#86868b] font-mono block mt-0.5">
-                          <LocalTime datetime={order.created_at} />
-                        </span>
-                      </div>
-
-                      <div class="shrink-0">
-                        {isPending && (
-                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            Pending
-                          </span>
-                        )}
-                        {isApproved && (
-                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            Approved
-                          </span>
-                        )}
-                        {isShipped && (
-                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            Shipped
-                          </span>
-                        )}
-                        {isRejected && (
-                          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">
-                            Rejected
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <!-- Buyer & Destination Summary Box -->
-                    <div class="bg-[#fbfbfd] p-2.5 rounded-xl border border-black/5 text-xs space-y-1">
-                      <div class="flex items-center justify-between text-[11px] gap-2">
-                        <span class="font-medium text-[#1d1d1f] truncate">
-                          {order.company_name || order.contact_name || 'Independent Buyer'}
-                        </span>
-                        <span class="text-[#86868b] shrink-0 font-mono text-[10px]">
-                          {order.destination_country || 'Worldwide'}
-                        </span>
-                      </div>
-                      <div class="flex items-center justify-between text-[11px] text-[#86868b] gap-2 font-mono">
-                        <a
-                          href={`/admin/users?search=${encodeURIComponent(order.buyer_email)}`}
-                          class="truncate hover:text-blue-600 hover:underline transition-colors"
-                          title="View buyer in customer management"
-                        >
-                          {order.buyer_email}
-                        </a>
-                        <span class="text-[#1d1d1f] font-semibold shrink-0">
-                          {order.total_styles} styles · {order.total_quantity} pcs
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Bottom Action Bar (Thumb-friendly buttons) -->
-                    <div class="flex items-center justify-between gap-2 pt-0.5">
-                      <!-- Toggle Details Drawer Button -->
-                      <button
-                        type="button"
-                        class="action-toggle-detail-btn h-8 px-2.5 rounded-lg text-xs font-medium text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] border border-black/10 hover:border-black/30 shadow-2xs inline-flex items-center gap-1 transition-all cursor-pointer active:scale-95 shrink-0"
-                        data-target={`detail-m-${order.id}`}
-                        title="Toggle order breakdown and line items"
-                      >
-                        <span>Items ({order.items?.length || 0})</span>
-                        <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-
-                      <!-- Action Buttons -->
-                      <div class="flex items-center gap-1.5 shrink-0">
-                        {isPending && (
-                          <>
-                            <button
-                              type="button"
-                              class="action-approve-btn h-8 px-3 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs shadow-emerald-700/20 inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-                              data-id={order.id}
-                              data-no={order.order_no}
-                            >
-                              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
-                              </svg>
-                              <span>Approve</span>
-                            </button>
-                            <button
-                              type="button"
-                              class="action-reject-btn h-8 px-2.5 rounded-lg text-xs font-medium bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 hover:border-rose-300 shadow-2xs inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-                              data-id={order.id}
-                              data-no={order.order_no}
-                            >
-                              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                              <span>Reject</span>
-                            </button>
-                          </>
-                        )}
-
-                        {isApproved && (
-                          <button
-                            type="button"
-                            class="action-ship-btn h-8 px-3 rounded-lg text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white shadow-2xs inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-                            data-id={order.id}
-                            data-no={order.order_no}
-                          >
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                            </svg>
-                            <span>Fulfill & Ship</span>
-                          </button>
-                        )}
-
-                        {isShipped && (
-                          <div class="h-8 inline-flex items-center gap-1 px-2 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-medium truncate max-w-[150px]">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                            <span class="truncate">{order.tracking_number || order.carrier || 'Shipped'}</span>
-                          </div>
-                        )}
-
-                        {isRejected && (
-                          <span class="h-8 inline-flex items-center px-2 rounded-lg bg-zinc-100 text-zinc-500 text-[10px] font-medium border border-zinc-200">
-                            Rejected
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <!-- Expandable Mobile Drawer (Accordion) -->
-                    <div id={`detail-m-${order.id}`} class="hidden pt-2 border-t border-black/5 space-y-2.5">
-                      <!-- Ordered Items List -->
-                      <div class="space-y-1.5">
-                        <div class="flex items-center justify-between text-[11px] font-semibold text-[#1d1d1f]">
-                          <span>Ordered Styles</span>
-                          <span class="font-mono text-[#86868b]">{order.total_quantity} pcs total</span>
-                        </div>
-                        <div class="divide-y divide-black/5 bg-[#fbfbfd] rounded-xl border border-black/5 p-2.5">
-                          {(order.items && order.items.length > 0) ? (
-                            order.items.map((item) => {
-                              const itemUrl = getItemProductUrl(item);
-                              return (
-                                <div class="py-2 first:pt-0 last:pb-0 flex items-center justify-between gap-2.5 text-xs">
-                                  <div class="flex items-center gap-2.5 min-w-0">
-                                    {itemUrl ? (
-                                      <a href={itemUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 group">
-                                        <img
-                                          src={resolveItemImage(item)}
-                                          alt={item.title}
-                                          class="w-9 h-9 rounded-md object-cover bg-white border border-black/5 shrink-0"
-                                          loading="lazy"
-                                        />
-                                      </a>
-                                    ) : (
-                                      <img
-                                        src={resolveItemImage(item)}
-                                        alt={item.title}
-                                        class="w-9 h-9 rounded-md object-cover bg-white border border-black/5 shrink-0"
-                                        loading="lazy"
-                                      />
-                                    )}
-                                    <div class="min-w-0">
-                                      {itemUrl ? (
-                                        <a href={itemUrl} target="_blank" rel="noopener noreferrer" class="font-medium text-[#1d1d1f] hover:underline truncate block text-[11px]">
-                                          {item.title}
-                                        </a>
-                                      ) : (
-                                        <p class="font-medium text-[#1d1d1f] truncate text-[11px]">{item.title}</p>
-                                      )}
-                                      <p class="text-[10px] text-[#86868b] truncate font-mono">
-                                        {item.sku ? `${item.sku} · ` : ''}{item.variant || 'Standard'}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div class="font-mono font-semibold text-[11px] tabular-nums shrink-0">
-                                    {item.quantity} pcs
-                                  </div>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <div class="py-2 text-center text-[11px] text-[#86868b]">No item details recorded.</div>
-                          )}
-                        </div>
-                      </div>
-
-                      <!-- Buyer & Shipping Info -->
-                      <div class="bg-[#fbfbfd] rounded-xl border border-black/5 p-2.5 text-[11px] space-y-1.5">
-                        {order.contact_name && (
-                          <div class="flex items-center justify-between">
-                            <span class="text-[#86868b]">Contact:</span>
-                            <span class="font-medium text-[#1d1d1f]">{order.contact_name}</span>
-                          </div>
-                        )}
-                        {order.whatsapp && (
-                          <div class="flex items-center justify-between">
-                            <span class="text-[#86868b]">WhatsApp:</span>
-                            <a href={`https://wa.me/${order.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" class="font-mono text-emerald-700 hover:underline">
-                              {order.whatsapp}
-                            </a>
-                          </div>
-                        )}
-                        {order.customer_notes && (
-                          <div class="pt-1 border-t border-black/5 text-[#52525b] italic">
-                            "{order.customer_notes}"
-                          </div>
-                        )}
-                        {order.admin_remark && (
-                          <div class="pt-1 border-t border-black/5 text-rose-700">
-                            Remark: {order.admin_remark}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <!-- Desktop Data Table (>= md): Full spreadsheet view -->
-            <div class="hidden md:block overflow-x-auto">
-              <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="bg-[#fbfbfd] border-b border-black/5 text-[#86868b] font-medium">
-                  <th class="py-3 px-4">Order No / Date</th>
-                  <th class="py-3 px-4">Buyer / Company</th>
-                  <th class="py-3 px-4">Destination</th>
-                  <th class="py-3 px-4 text-right">Styles / Qty</th>
-                  <th class="py-3 px-4">Status</th>
-                  <th class="py-3 px-4 text-right">Fulfillment Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-black/5">
-                {orders.map((order) => {
-                  const isPending = order.status === 'PENDING_APPROVAL';
-                  const isApproved = order.status === 'APPROVED';
-                  const isShipped = order.status === 'SHIPPED';
-                  const isRejected = order.status === 'REJECTED';
-
-                  return (
-                    <tr class="hover:bg-[#fbfbfd] transition-colors">
-                      <!-- Order No & Date -->
-                      <td class="py-3.5 px-4 font-mono">
-                        <span class="font-semibold text-[#1d1d1f] block">{order.order_no}</span>
-                        <LocalTime datetime={order.created_at} class="text-[11px] text-[#86868b] block" />
-                      </td>
-
-                      <!-- Buyer & Company -->
-                      <td class="py-3.5 px-4">
-                        <span class="font-medium text-[#1d1d1f] block truncate max-w-[180px]">
-                          {order.company_name || order.contact_name || 'Independent Buyer'}
-                        </span>
-                        <a
-                          href={`/admin/users?search=${encodeURIComponent(order.buyer_email)}`}
-                          class="text-[11px] text-[#86868b] hover:text-blue-600 hover:underline font-mono block truncate max-w-[180px] transition-colors"
-                          title="View customer profile"
-                        >
-                          {order.buyer_email}
-                        </a>
-                      </td>
-
-                      <!-- Destination -->
-                      <td class="py-3.5 px-4 text-[#52525b]">
-                        {order.destination_country || 'Unspecified'}
-                      </td>
-
-                      <!-- Items & Quantity -->
-                      <td class="py-3.5 px-4 text-right font-mono tabular-nums">
-                        <span class="font-semibold text-[#1d1d1f]">{order.total_quantity} pcs</span>
-                        <span class="text-[11px] text-[#86868b] block">{order.total_styles} style(s)</span>
-                      </td>
-
-                      <!-- Status Badge -->
-                      <td class="py-3.5 px-4">
-                        {isPending && (
-                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            Pending Approval
-                          </span>
-                        )}
-                        {isApproved && (
-                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            Approved
-                          </span>
-                        )}
-                        {isShipped && (
-                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            Shipped
-                          </span>
-                        )}
-                        {isRejected && (
-                          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">
-                            Rejected
-                          </span>
-                        )}
-                      </td>
-
-                      <!-- Actions Column -->
-                      <td class="py-3.5 px-4 text-right">
-                        <div class="flex items-center justify-end gap-1.5 flex-wrap">
-                          <!-- View Details Toggle Button -->
-                          <button
-                            type="button"
-                            class="action-toggle-detail-btn h-8 px-2.5 rounded-lg text-xs font-medium text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] border border-black/10 hover:border-black/30 shadow-2xs inline-flex items-center gap-1 transition-all cursor-pointer active:scale-95"
-                            data-target={`detail-${order.id}`}
-                            title="Toggle line items and customer details"
-                          >
-                            <span>Details</span>
-                            <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-
-                          {isPending && (
-                            <>
-                              <button
-                                type="button"
-                                class="action-approve-btn h-8 px-3 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs shadow-emerald-700/20 inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                                data-id={order.id}
-                                data-no={order.order_no}
-                              >
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span>Approve</span>
-                              </button>
-                              <button
-                                type="button"
-                                class="action-reject-btn h-8 px-3 rounded-lg text-xs font-medium bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 hover:border-rose-300 shadow-2xs inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                                data-id={order.id}
-                                data-no={order.order_no}
-                              >
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                                <span>Reject</span>
-                              </button>
-                            </>
-                          )}
-
-                          {isApproved && (
-                            <button
-                              type="button"
-                              class="action-ship-btn h-8 px-3.5 rounded-lg text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white shadow-2xs inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                              data-id={order.id}
-                              data-no={order.order_no}
-                            >
-                              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                              </svg>
-                              <span>Fulfill & Ship</span>
-                            </button>
-                          )}
-
-                          {isShipped && (
-                            <div class="h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-mono font-medium">
-                              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                              <span>{order.carrier || 'Express'}</span>
-                              {order.tracking_number && (
-                                <span class="font-bold truncate max-w-[120px]" title={order.tracking_number}>
-                                  {order.tracking_number}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {isRejected && (
-                            <span class="h-8 inline-flex items-center px-2.5 rounded-lg bg-zinc-100 text-zinc-500 text-[11px] font-medium border border-zinc-200">
-                              Rejected
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-
-                    <!-- Expandable Order Details Drawer Row -->
-                    <tr id={`detail-${order.id}`} class="order-detail-row hidden bg-[#fafafa] border-b border-black/5">
-                      <td colspan="6" class="p-4 sm:p-6">
-                        <div class="space-y-4">
-                          
-                          <!-- Top Meta Bar -->
-                          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-black/5 gap-2">
-                            <div class="flex items-center gap-2">
-                              <span class="text-xs font-semibold text-[#1d1d1f]">Order Breakdown:</span>
-                              <span class="font-mono text-xs font-bold text-[#1d1d1f] bg-white px-2 py-0.5 rounded border border-black/5">
-                                {order.order_no}
-                              </span>
-                              <span class="text-[11px] text-[#86868b]">
-                                Type: <strong class="capitalize text-[#1d1d1f]">{order.inquiry_type || 'Quote Cart'}</strong>
-                              </span>
-                            </div>
-                            <div class="text-[11px] text-[#86868b] flex items-center gap-3">
-                              <span>Submitted: <LocalTime datetime={order.created_at} class="text-[#1d1d1f] font-mono font-semibold" /></span>
-                              {order.claimed_at && (
-                                <span>· Claimed: <LocalTime datetime={order.claimed_at} class="text-emerald-700 font-mono font-semibold" /></span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                            
-                            <!-- Left: Line Items List (2 cols on large) -->
-                            <div class="lg:col-span-2 bg-white rounded-xl border border-black/5 p-4 space-y-3">
-                              <div class="flex items-center justify-between border-b border-black/5 pb-2">
-                                <h4 class="font-semibold text-xs text-[#1d1d1f]">Ordered Styles & Quantities ({order.items?.length || 0})</h4>
-                                <span class="font-mono text-xs font-bold text-[#1d1d1f]">{order.total_quantity} pcs total</span>
-                              </div>
-
-                              <div class="divide-y divide-black/5 max-h-72 overflow-y-auto pr-1">
-                                {(order.items && order.items.length > 0) ? (
-                                  order.items.map((item) => {
-                                    const itemUrl = getItemProductUrl(item);
-                                    return (
-                                      <div class="py-2.5 flex items-center justify-between gap-3 text-xs">
-                                        <div class="flex items-center gap-3 min-w-0">
-                                          {itemUrl ? (
-                                            <a
-                                              href={itemUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              class="shrink-0 group block"
-                                              title={`View ${item.title}`}
-                                            >
-                                              <img
-                                                src={resolveItemImage(item)}
-                                                alt={item.title}
-                                                class="w-11 h-11 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 group-hover:border-black/30 transition-all shrink-0"
-                                                loading="lazy"
-                                              />
-                                            </a>
-                                          ) : (
-                                            <img
-                                              src={resolveItemImage(item)}
-                                              alt={item.title}
-                                              class="w-11 h-11 rounded-lg object-cover bg-[#f5f5f7] border border-black/5 shrink-0"
-                                              loading="lazy"
-                                            />
-                                          )}
-                                          <div class="min-w-0">
-                                            {itemUrl ? (
-                                              <a
-                                                href={itemUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                class="font-medium text-[#1d1d1f] hover:text-black hover:underline truncate block inline-flex items-center gap-1 group"
-                                              >
-                                                <span class="truncate">{item.title}</span>
-                                                <svg class="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                                </svg>
-                                              </a>
-                                            ) : (
-                                              <p class="font-medium text-[#1d1d1f] truncate text-xs">{item.title}</p>
-                                            )}
-                                            <div class="flex items-center gap-2 text-[11px] text-[#86868b] mt-0.5 font-mono">
-                                              {item.sku && (
-                                                <span class="bg-[#f5f5f7] px-1.5 py-0.5 rounded text-[10px] text-[#52525b] border border-black/5">
-                                                  {item.sku}
-                                                </span>
-                                              )}
-                                              <span class="truncate">{item.variant || 'Standard Spec'}</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                        <div class="font-mono font-semibold text-xs tabular-nums text-right shrink-0">
-                                          {item.quantity} pcs
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                ) : (
-                                  <div class="py-4 text-center text-xs text-[#86868b]">
-                                    No item details recorded.
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <!-- Right: Buyer Contact & Delivery Destination -->
-                            <div class="space-y-3">
-                              <div class="bg-white rounded-xl border border-black/5 p-4 space-y-2.5 text-xs">
-                                <h4 class="font-semibold text-xs text-[#1d1d1f] border-b border-black/5 pb-1.5">
-                                  Buyer & Delivery Details
-                                </h4>
-                                
-                                <div>
-                                  <span class="text-[11px] text-[#86868b] block">Contact / Company:</span>
-                                  <p class="font-medium text-[#1d1d1f]">
-                                    {order.contact_name || 'Anonymous'}{order.company_name ? ` · ${order.company_name}` : ''}
-                                  </p>
-                                </div>
-
-                                <div>
-                                  <span class="text-[11px] text-[#86868b] block">Email:</span>
-                                  <div class="flex items-center gap-2 flex-wrap">
-                                    <a href={`mailto:${order.buyer_email}`} class="font-mono text-[#1d1d1f] hover:underline font-medium break-all">
-                                      {order.buyer_email}
-                                    </a>
-                                    <a
-                                      href={`/admin/users?search=${encodeURIComponent(order.buyer_email)}`}
-                                      class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-black/5 hover:bg-black/10 text-[#1d1d1f] transition-all"
-                                      title="Open customer profile in admin"
-                                    >
-                                      <span>👥 Customer</span>
-                                      <span>→</span>
-                                    </a>
-                                  </div>
-                                </div>
-
-                                {order.whatsapp && (
-                                  <div>
-                                    <span class="text-[11px] text-[#86868b] block">WhatsApp:</span>
-                                    <a
-                                      href={`https://wa.me/${order.whatsapp.replace(/[^0-9]/g, '')}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      class="inline-flex items-center gap-1.5 font-mono font-medium text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200 text-[11px] mt-0.5"
-                                    >
-                                      <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                                        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.861.174.086.275.072.376-.044.101-.116.433-.506.549-.679.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z" />
-                                      </svg>
-                                      <span>{order.whatsapp}</span>
-                                    </a>
-                                  </div>
-                                )}
-
-                                <div>
-                                  <span class="text-[11px] text-[#86868b] block">Destination Country:</span>
-                                  <p class="font-medium text-[#1d1d1f]">
-                                    {order.destination_country || 'Worldwide / Not Specified'}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <!-- Customer Procurement Message -->
-                              {order.customer_notes && (
-                                <div class="bg-amber-50/60 rounded-xl border border-amber-200/70 p-3.5 text-xs text-amber-950 space-y-1">
-                                  <span class="text-[11px] font-semibold text-amber-900 block">Customer Procurement Notes:</span>
-                                  <p class="italic leading-relaxed whitespace-pre-wrap">{order.customer_notes}</p>
-                                </div>
-                              )}
-
-                              <!-- Logistics details if shipped -->
-                              {isShipped && (
-                                <div class="bg-emerald-50/70 rounded-xl border border-emerald-200 p-3.5 text-xs text-emerald-950 space-y-1">
-                                  <span class="text-[11px] font-semibold text-emerald-900 block">Fulfillment Dispatched:</span>
-                                  <p><strong>Carrier:</strong> {order.carrier || 'Standard'}</p>
-                                  {order.tracking_number && (
-                                    <p class="font-mono"><strong>Waybill No:</strong> {order.tracking_number}</p>
-                                  )}
-                                  {order.admin_remark && (
-                                    <p class="text-[11px] text-emerald-800">Note: {order.admin_remark}</p>
-                                  )}
-                                </div>
-                              )}
-
-                              {isRejected && order.admin_remark && (
-                                <div class="bg-rose-50 rounded-xl border border-rose-200 p-3.5 text-xs text-rose-900 space-y-1">
-                                  <span class="text-[11px] font-semibold text-rose-800 block">Rejection Remark:</span>
-                                  <p>{order.admin_remark}</p>
-                                </div>
-                              )}
-                            </div>
-
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+  <!-- Orders Container -->
+  <div id="orders-container" class="mt-4 sm:mt-6 bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden min-h-[300px]">
+    <!-- Skeleton loader rendered initially for 0 CLS -->
+    <div id="orders-skeleton" class="p-6 space-y-4 animate-pulse">
+      <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
+      <div class="space-y-3">
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
       </div>
+    </div>
 
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b]">
-          <div>
-            Showing <strong class="text-[#1d1d1f]">{(currentPage - 1) * pageSize + 1}</strong> to{' '}
-            <strong class="text-[#1d1d1f]">{Math.min(currentPage * pageSize, total)}</strong> of{' '}
-            <strong class="text-[#1d1d1f]">{total}</strong> orders
-          </div>
-          <div class="flex items-center gap-2">
-            <a
-              href={currentPage > 1 ? `?status=${currentStatus}&search=${encodeURIComponent(currentSearch)}&page=${currentPage - 1}` : '#'}
-              class:list={[
-                'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all',
-                currentPage > 1
-                  ? 'border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]'
-                  : 'border-transparent text-[#86868b]/40 pointer-events-none'
-              ]}
-              aria-disabled={currentPage <= 1}
-            >
-              ← Previous
-            </a>
-            <span class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">
-              {currentPage} / {totalPages}
-            </span>
-            <a
-              href={currentPage < totalPages ? `?status=${currentStatus}&search=${encodeURIComponent(currentSearch)}&page=${currentPage + 1}` : '#'}
-              class:list={[
-                'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all',
-                currentPage < totalPages
-                  ? 'border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]'
-                  : 'border-transparent text-[#86868b]/40 pointer-events-none'
-              ]}
-              aria-disabled={currentPage >= totalPages}
-            >
-              Next →
-            </a>
-          </div>
-        </div>
-      )}
+    <!-- Dynamic Content injected here -->
+    <div id="orders-content" class="hidden"></div>
+  </div>
+
+  <!-- Pagination Container -->
+  <div id="pagination-container" class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b] hidden">
+    <div id="pagination-summary"></div>
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        id="pagination-prev"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+      >
+        ← Previous
+      </button>
+      <span id="pagination-current" class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">
+        1 / 1
+      </span>
+      <button
+        type="button"
+        id="pagination-next"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+      >
+        Next →
+      </button>
+    </div>
+  </div>
 
   <!-- Unified Apple-Grade Modals: Approve, Reject, Ship -->
   <Fragment slot="modals">
     <!-- 1. Approve Confirmation Modal -->
-  <dialog id="approve-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
-    <div class="space-y-4 text-xs text-[#1d1d1f]">
-      <div class="flex items-center justify-between pb-1">
-        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100/80">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <button id="close-approve-modal" type="button" class="text-base text-[#86868b] hover:text-black">✕</button>
-      </div>
-
-      <div>
-        <h3 class="text-sm font-semibold text-[#1d1d1f]">Approve Order Request</h3>
-        <p class="text-[11px] text-[#86868b] mt-1 leading-relaxed">
-          Are you sure you want to approve order <strong id="approve-modal-order-no" class="font-mono text-[#1d1d1f]"></strong>?
-          It will be marked as <strong class="text-emerald-700">APPROVED</strong> and moved to the fulfillment dispatch queue.
-        </p>
-      </div>
-
-      <input type="hidden" id="approve-order-id" />
-
-      <div id="approve-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-[11px] font-medium leading-relaxed"></div>
-
-      <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
-        <button
-          type="button"
-          id="cancel-approve-btn"
-          class="h-9 px-4 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] border border-black/5 transition-all cursor-pointer"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          id="confirm-approve-btn"
-          class="h-9 px-5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs shadow-emerald-700/20 active:scale-95 transition-all cursor-pointer"
-        >
-          Confirm Approval
-        </button>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- 2. Reject Order Modal -->
-  <dialog id="reject-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
-    <div class="space-y-4 text-xs text-[#1d1d1f]">
-      <div class="flex items-center justify-between pb-1">
-        <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100/80">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </div>
-        <button id="close-reject-modal" type="button" class="text-base text-[#86868b] hover:text-black">✕</button>
-      </div>
-
-      <div>
-        <h3 class="text-sm font-semibold text-[#1d1d1f]">Reject Order Request</h3>
-        <p class="text-[11px] text-[#86868b] mt-1 leading-relaxed">
-          Order <strong id="reject-modal-order-no" class="font-mono text-[#1d1d1f]"></strong>. Please provide a clear rejection reason (visible to the buyer):
-        </p>
-      </div>
-
-      <input type="hidden" id="reject-order-id" />
-      <div>
-        <textarea
-          id="reject-reason-input"
-          rows="3"
-          required
-          placeholder="e.g. Fabric lot out of stock, order quantity below minimum threshold..."
-          class="w-full px-3 py-2.5 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs resize-none placeholder:text-[#86868b]"
-        ></textarea>
-      </div>
-
-      <div id="reject-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-[11px] font-medium leading-relaxed"></div>
-
-      <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
-        <button
-          type="button"
-          id="cancel-reject-btn"
-          class="h-9 px-4 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] border border-black/5 transition-all cursor-pointer"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          id="confirm-reject-btn"
-          class="h-9 px-5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-2xs shadow-rose-700/20 active:scale-95 transition-all cursor-pointer"
-        >
-          Confirm Rejection
-        </button>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- 3. Ship & Logistics Dispatch Modal -->
-  <dialog id="ship-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-md mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
-    <div class="space-y-4 text-xs text-[#1d1d1f]">
-      <div class="flex items-center justify-between pb-1 border-b border-black/5">
-        <div class="flex items-center gap-2.5">
-          <div class="w-10 h-10 rounded-xl bg-[#1d1d1f] text-white flex items-center justify-center">
+    <dialog id="approve-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+      <div class="space-y-4 text-xs text-[#1d1d1f]">
+        <div class="flex items-center justify-between pb-1">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100/80">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <div>
-            <h3 class="text-sm font-semibold">Fulfill & Dispatch Shipment</h3>
-            <p class="text-[11px] text-[#86868b]">Order: <strong id="ship-modal-order-no" class="font-mono text-[#1d1d1f]"></strong></p>
-          </div>
-        </div>
-        <button id="close-ship-modal" type="button" class="text-base text-[#86868b] hover:text-black">✕</button>
-      </div>
-
-      <form id="ship-form" class="space-y-3">
-        <input type="hidden" id="ship-order-id" name="order_id" />
-        
-        <div>
-          <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Logistics Carrier / Freight Provider</label>
-          <select
-            id="ship-carrier-select"
-            name="carrier"
-            required
-            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
-          >
-            {carrierOptions.map((c) => (
-              <option value={c}>{c}</option>
-            ))}
-            {!carrierOptions.includes('Other') && <option value="Other">Other / Custom Carrier</option>}
-          </select>
+          <button id="close-approve-modal" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
         </div>
 
         <div>
-          <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Waybill / Tracking Number</label>
-          <input
-            type="text"
-            id="ship-tracking-number"
-            name="tracking_number"
-            required
-            placeholder="e.g. 78349281923"
-            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs"
-          />
+          <h3 class="text-base font-bold text-[#1d1d1f]">Approve B2B Order</h3>
+          <p class="text-xs text-[#86868b] mt-1 leading-relaxed">
+            Are you sure you want to approve order <strong id="approve-modal-order-no" class="font-mono text-[#1d1d1f]"></strong>? This transitions the order to <span class="text-blue-600 font-medium">Approved (To Ship)</span> status.
+          </p>
         </div>
 
-        <div>
-          <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Dispatch Notes / Admin Remarks (Optional)</label>
-          <textarea
-            id="ship-remark"
-            name="admin_remark"
-            rows="2"
-            placeholder="e.g. Packed in 2 export cartons, estimated arrival Nov 12."
-            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
-          ></textarea>
-        </div>
+        <input type="hidden" id="approve-order-id" />
+        <div id="approve-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-2.5 text-xs font-medium leading-relaxed"></div>
 
-        <div id="ship-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-[11px] font-medium leading-relaxed"></div>
-
-      <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
+        <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
           <button
             type="button"
-            id="cancel-ship-btn"
+            id="cancel-approve-btn"
             class="h-9 px-4 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] border border-black/5 transition-all cursor-pointer"
           >
             Cancel
           </button>
           <button
-            type="submit"
-            id="confirm-ship-btn"
-            class="h-9 px-5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer"
+            type="button"
+            id="confirm-approve-btn"
+            class="h-9 px-5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs shadow-emerald-700/20 active:scale-95 transition-all cursor-pointer"
           >
-            Confirm Shipment
+            Confirm Approval
           </button>
         </div>
-      </form>
-    </div>
-  </dialog>
+      </div>
+    </dialog>
+
+    <!-- 2. Reject Confirmation Modal -->
+    <dialog id="reject-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+      <div class="space-y-4 text-xs text-[#1d1d1f]">
+        <div class="flex items-center justify-between pb-1">
+          <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100/80">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <button id="close-reject-modal" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
+        </div>
+
+        <div>
+          <h3 class="text-base font-bold text-[#1d1d1f]">Reject Order</h3>
+          <p class="text-xs text-[#86868b] mt-1 leading-relaxed">
+            Decline order <strong id="reject-modal-order-no" class="font-mono text-[#1d1d1f]"></strong>. Please provide a clear remark explaining the rejection.
+          </p>
+        </div>
+
+        <input type="hidden" id="reject-order-id" />
+        <div>
+          <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Rejection Reason / Internal Note</label>
+          <textarea
+            id="reject-reason-input"
+            rows="3"
+            placeholder="e.g. MOQ requirements not met, out of stock yarn, duplicate order..."
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
+          ></textarea>
+        </div>
+
+        <div id="reject-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-2.5 text-xs font-medium leading-relaxed"></div>
+
+        <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
+          <button
+            type="button"
+            id="cancel-reject-btn"
+            class="h-9 px-4 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] border border-black/5 transition-all cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            id="confirm-reject-btn"
+            class="h-9 px-5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-2xs shadow-rose-700/20 active:scale-95 transition-all cursor-pointer"
+          >
+            Confirm Rejection
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- 3. Fulfillment / Shipping Dispatch Modal -->
+    <dialog id="ship-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-md mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+      <div class="space-y-4 text-xs text-[#1d1d1f]">
+        <div class="flex items-center justify-between pb-1">
+          <div class="w-10 h-10 rounded-xl bg-[#1d1d1f] text-white flex items-center justify-center">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+          </div>
+          <button id="close-ship-modal" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
+        </div>
+
+        <div>
+          <h3 class="text-base font-bold text-[#1d1d1f]">Dispatch Shipment</h3>
+          <p class="text-xs text-[#86868b] mt-1 leading-relaxed">
+            Record carrier logistics and tracking waybill for order <strong id="ship-modal-order-no" class="font-mono text-[#1d1d1f]"></strong>.
+          </p>
+        </div>
+
+        <form id="ship-form" class="space-y-3">
+          <input type="hidden" id="ship-order-id" name="order_id" />
+
+          <div>
+            <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Logistics Carrier / Freight Provider</label>
+            <select
+              id="ship-carrier-select"
+              name="carrier"
+              required
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
+            >
+              {carrierOptions.map((c: string) => (
+                <option value={c}>{c}</option>
+              ))}
+              {!carrierOptions.includes('Other') && <option value="Other">Other / Custom Carrier</option>}
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Waybill / Tracking Number</label>
+            <input
+              type="text"
+              id="ship-tracking-number"
+              name="tracking_number"
+              required
+              placeholder="e.g. 78349281923"
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs"
+            />
+          </div>
+
+          <div>
+            <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Dispatch Notes / Admin Remarks (Optional)</label>
+            <textarea
+              id="ship-remark"
+              name="admin_remark"
+              rows="2"
+              placeholder="e.g. Packed in 2 export cartons, estimated arrival Nov 12."
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
+            ></textarea>
+          </div>
+
+          <div id="ship-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-[11px] font-medium leading-relaxed"></div>
+
+          <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
+            <button
+              type="button"
+              id="cancel-ship-btn"
+              class="h-9 px-4 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] border border-black/5 transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              id="confirm-ship-btn"
+              class="h-9 px-5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer"
+            >
+              Confirm Shipment
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
   </Fragment>
 </AdminLayout>
 
 <script>
-  const showError = (el: HTMLElement | null, msg: string) => {
+  let currentStatus = 'ALL';
+  let currentSearch = '';
+  let currentPage = 1;
+  let currentLimit = 50;
+  let currentTotalPages = 1;
+  let activeAbortController = null;
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatDateTime(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  const showError = (el, msg) => {
     if (!el) return;
     el.textContent = msg;
     el.classList.remove('hidden');
   };
-  const clearError = (el: HTMLElement | null) => {
+  const clearError = (el) => {
     if (!el) return;
     el.textContent = '';
     el.classList.add('hidden');
   };
 
-  // Handle Toggle Order Details Accordion
-  document.querySelectorAll<HTMLButtonElement>('.action-toggle-detail-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const targetId = btn.getAttribute('data-target');
+  function updateActiveVisuals() {
+    // 1. Update stats cards
+    document.querySelectorAll('#stats-cards-container .stat-card').forEach((card) => {
+      const cardStatus = card.getAttribute('data-status');
+      const isSelected = cardStatus === currentStatus;
+      const countEl = card.querySelector('[data-stat-field]');
+
+      if (isSelected) {
+        if (cardStatus === 'ALL') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-[#1d1d1f] text-white border-black shadow-xs cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
+        } else if (cardStatus === 'PENDING_APPROVAL') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-amber-600 text-white border-amber-700 shadow-xs cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
+        } else if (cardStatus === 'APPROVED') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
+        } else if (cardStatus === 'SHIPPED') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-emerald-600 text-white border-emerald-700 shadow-xs cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
+        } else if (cardStatus === 'REJECTED') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-zinc-700 text-white border-zinc-800 shadow-xs cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
+        }
+      } else {
+        if (cardStatus === 'ALL') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-[#1d1d1f] border-black/5 hover:border-black/20 cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-[#1d1d1f]';
+        } else if (cardStatus === 'PENDING_APPROVAL') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-amber-900 border-black/5 hover:border-amber-300 cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-amber-600';
+        } else if (cardStatus === 'APPROVED') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-blue-900 border-black/5 hover:border-blue-300 cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-blue-600';
+        } else if (cardStatus === 'SHIPPED') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-emerald-900 border-black/5 hover:border-emerald-300 cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-emerald-600';
+        } else if (cardStatus === 'REJECTED') {
+          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-zinc-700 border-black/5 hover:border-zinc-300 cursor-pointer';
+          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-[#1d1d1f]';
+        }
+      }
+    });
+
+    // 2. Update status pills
+    document.querySelectorAll('#status-tabs-container .status-tab').forEach((tab) => {
+      const tabStatus = tab.getAttribute('data-tab-status');
+      const isSelected = tabStatus === currentStatus;
+      const countEl = tab.querySelector('[data-tab-field]');
+
+      if (isSelected) {
+        let activeClass = 'bg-[#1d1d1f] text-white border-black';
+        if (tabStatus === 'PENDING_APPROVAL') activeClass = 'bg-amber-600 text-white border-amber-700';
+        if (tabStatus === 'APPROVED') activeClass = 'bg-blue-600 text-white border-blue-700';
+        if (tabStatus === 'SHIPPED') activeClass = 'bg-emerald-600 text-white border-emerald-700';
+        if (tabStatus === 'REJECTED') activeClass = 'bg-zinc-700 text-white border-zinc-800';
+
+        tab.className = `status-tab px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 ${activeClass} shadow-2xs cursor-pointer`;
+        if (countEl) countEl.className = 'font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-white/20 text-white';
+      } else {
+        tab.className = 'status-tab px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 bg-white text-[#52525b] border-black/5 hover:border-black/20 cursor-pointer';
+        if (countEl) countEl.className = 'font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-[#f5f5f7] text-[#1d1d1f]';
+      }
+    });
+  }
+
+  function renderStats(stats, total) {
+    if (!stats) return;
+    const totalEl = document.getElementById('total-orders-count');
+    if (totalEl) totalEl.textContent = String(total ?? stats.all ?? 0);
+
+    const mapping = {
+      all: stats.all ?? 0,
+      pending: stats.pending ?? 0,
+      approved: stats.approved ?? 0,
+      shipped: stats.shipped ?? 0,
+      rejected: stats.rejected ?? 0,
+    };
+
+    Object.entries(mapping).forEach(([key, val]) => {
+      const cardEl = document.querySelector(`[data-stat-field="${key}"]`);
+      if (cardEl) cardEl.textContent = String(val);
+
+      const upperKey = key === 'all' ? 'ALL' : (key === 'pending' ? 'PENDING_APPROVAL' : (key === 'approved' ? 'APPROVED' : (key === 'shipped' ? 'SHIPPED' : 'REJECTED')));
+      const tabEl = document.querySelector(`[data-tab-field="${upperKey}"]`);
+      if (tabEl) tabEl.textContent = String(val);
+    });
+  }
+
+  function renderStatusBadge(status) {
+    if (status === 'PENDING_APPROVAL') {
+      return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+        Pending Approval
+      </span>`;
+    }
+    if (status === 'APPROVED') {
+      return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
+        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+        Approved
+      </span>`;
+    }
+    if (status === 'SHIPPED') {
+      return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        Shipped
+      </span>`;
+    }
+    if (status === 'REJECTED') {
+      return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">
+        Rejected
+      </span>`;
+    }
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">${escapeHtml(status)}</span>`;
+  }
+
+  function renderActionButtons(order, isMobile = false) {
+    const isPending = order.status === 'PENDING_APPROVAL';
+    const isApproved = order.status === 'APPROVED';
+    const isShipped = order.status === 'SHIPPED';
+    const isRejected = order.status === 'REJECTED';
+    const safeId = escapeHtml(order.id);
+    const safeNo = escapeHtml(order.order_no);
+
+    if (isPending) {
+      return `
+        <button
+          type="button"
+          class="action-approve-btn h-8 ${isMobile ? 'px-3' : 'px-3'} rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs shadow-emerald-700/20 inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+          data-id="${safeId}"
+          data-no="${safeNo}"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Approve</span>
+        </button>
+        <button
+          type="button"
+          class="action-reject-btn h-8 ${isMobile ? 'px-2.5' : 'px-3'} rounded-lg text-xs font-medium bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 hover:border-rose-300 shadow-2xs inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+          data-id="${safeId}"
+          data-no="${safeNo}"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <span>Reject</span>
+        </button>
+      `;
+    }
+
+    if (isApproved) {
+      return `
+        <button
+          type="button"
+          class="action-ship-btn h-8 ${isMobile ? 'px-3' : 'px-3.5'} rounded-lg text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white shadow-2xs inline-flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+          data-id="${safeId}"
+          data-no="${safeNo}"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          </svg>
+          <span>Fulfill & Ship</span>
+        </button>
+      `;
+    }
+
+    if (isShipped) {
+      const trackingOrCarrier = escapeHtml(order.tracking_number || order.carrier || 'Shipped');
+      return `
+        <div class="h-8 inline-flex items-center gap-1 px-2.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-medium truncate max-w-[150px]">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+          <span class="truncate">${trackingOrCarrier}</span>
+        </div>
+      `;
+    }
+
+    if (isRejected) {
+      return `
+        <span class="h-8 inline-flex items-center px-2.5 rounded-lg bg-zinc-100 text-zinc-500 text-[10px] font-medium border border-zinc-200">
+          Rejected
+        </span>
+      `;
+    }
+
+    return '';
+  }
+
+  function renderOrderItems(items, isMobile = false) {
+    if (!items || items.length === 0) {
+      return `<div class="py-2 text-center text-[11px] text-[#86868b]">No item details recorded.</div>`;
+    }
+
+    return items.map((item) => {
+      const itemTitle = escapeHtml(item.title);
+      const itemSku = escapeHtml(item.sku || '');
+      const itemVariant = escapeHtml(item.variant || 'Standard Spec');
+      const itemQty = Number(item.quantity || 0);
+      const imgSrc = escapeHtml(item.resolved_image || '/images/hero-light.webp');
+      const productUrl = item.product_url ? escapeHtml(item.product_url) : null;
+
+      const imgHtml = productUrl
+        ? `<a href="${productUrl}" target="_blank" rel="noopener noreferrer" class="shrink-0 group block" title="View ${itemTitle}">
+            <img src="${imgSrc}" alt="${itemTitle}" class="${isMobile ? 'w-9 h-9' : 'w-11 h-11'} rounded-md object-cover bg-white border border-black/5 shrink-0" loading="lazy" />
+          </a>`
+        : `<img src="${imgSrc}" alt="${itemTitle}" class="${isMobile ? 'w-9 h-9' : 'w-11 h-11'} rounded-md object-cover bg-white border border-black/5 shrink-0" loading="lazy" />`;
+
+      const titleHtml = productUrl
+        ? `<a href="${productUrl}" target="_blank" rel="noopener noreferrer" class="font-medium text-[#1d1d1f] hover:underline truncate block ${isMobile ? 'text-[11px]' : 'text-xs'}">
+            ${itemTitle}
+          </a>`
+        : `<p class="font-medium text-[#1d1d1f] truncate ${isMobile ? 'text-[11px]' : 'text-xs'}">${itemTitle}</p>`;
+
+      return `
+        <div class="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-2.5 text-xs">
+          <div class="flex items-center gap-2.5 min-w-0">
+            ${imgHtml}
+            <div class="min-w-0">
+              ${titleHtml}
+              <div class="flex items-center gap-2 text-[10px] text-[#86868b] truncate font-mono mt-0.5">
+                ${itemSku ? `<span class="bg-[#f5f5f7] px-1 py-0.5 rounded text-[10px] text-[#52525b] border border-black/5">${itemSku}</span>` : ''}
+                <span class="truncate">${itemVariant}</span>
+              </div>
+            </div>
+          </div>
+          <div class="font-mono font-semibold text-xs tabular-nums shrink-0 text-right">
+            ${itemQty} pcs
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderOrders(orders) {
+    const container = document.getElementById('orders-content');
+    if (!container) return;
+
+    if (!orders || orders.length === 0) {
+      container.innerHTML = `
+        <div class="py-16 text-center text-xs text-[#86868b]">
+          No orders matching the current filter.
+        </div>
+      `;
+      container.classList.remove('hidden');
+      return;
+    }
+
+    // 1. Mobile Cards Layout (< md)
+    const mobileCardsHtml = `
+      <div class="block md:hidden divide-y divide-black/5">
+        ${orders.map((order) => {
+          const safeId = escapeHtml(order.id);
+          const safeNo = escapeHtml(order.order_no);
+          const safeEmail = escapeHtml(order.buyer_email || '');
+          const safeCompany = escapeHtml(order.company_name || order.contact_name || 'Independent Buyer');
+          const safeCountry = escapeHtml(order.destination_country || 'Worldwide');
+          const dateStr = formatDateTime(order.created_at);
+          const itemCount = order.items?.length || 0;
+          const totalQty = Number(order.total_quantity || 0);
+          const totalStyles = Number(order.total_styles || 0);
+
+          return `
+            <div class="p-3.5 space-y-2.5 bg-white">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <span class="font-mono font-bold text-xs text-[#1d1d1f] block truncate">${safeNo}</span>
+                  <span class="text-[10px] text-[#86868b] font-mono block mt-0.5">${dateStr}</span>
+                </div>
+                <div class="shrink-0">
+                  ${renderStatusBadge(order.status)}
+                </div>
+              </div>
+
+              <div class="bg-[#fbfbfd] p-2.5 rounded-xl border border-black/5 text-xs space-y-1">
+                <div class="flex items-center justify-between text-[11px] gap-2">
+                  <span class="font-medium text-[#1d1d1f] truncate">${safeCompany}</span>
+                  <span class="text-[#86868b] shrink-0 font-mono text-[10px]">${safeCountry}</span>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-[#86868b] gap-2 font-mono">
+                  <a href="/admin/users?search=${encodeURIComponent(order.buyer_email || '')}" class="truncate hover:text-blue-600 hover:underline transition-colors" title="View buyer in customer management">
+                    ${safeEmail}
+                  </a>
+                  <span class="text-[#1d1d1f] font-semibold shrink-0">${totalStyles} styles · ${totalQty} pcs</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between gap-2 pt-0.5">
+                <button
+                  type="button"
+                  class="action-toggle-detail-btn h-8 px-2.5 rounded-lg text-xs font-medium text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] border border-black/10 hover:border-black/30 shadow-2xs inline-flex items-center gap-1 transition-all cursor-pointer active:scale-95 shrink-0"
+                  data-target="detail-m-${safeId}"
+                  title="Toggle order breakdown and line items"
+                >
+                  <span>Items (${itemCount})</span>
+                  <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  ${renderActionButtons(order, true)}
+                </div>
+              </div>
+
+              <div id="detail-m-${safeId}" class="hidden pt-2 border-t border-black/5 space-y-2.5">
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-[11px] font-semibold text-[#1d1d1f]">
+                    <span>Ordered Styles</span>
+                    <span class="font-mono text-[#86868b]">${totalQty} pcs total</span>
+                  </div>
+                  <div class="divide-y divide-black/5 bg-[#fbfbfd] rounded-xl border border-black/5 p-2.5">
+                    ${renderOrderItems(order.items, true)}
+                  </div>
+                </div>
+
+                <div class="bg-[#fbfbfd] rounded-xl border border-black/5 p-2.5 text-[11px] space-y-1.5">
+                  ${order.contact_name ? `<div class="flex items-center justify-between"><span class="text-[#86868b]">Contact:</span><span class="font-medium text-[#1d1d1f]">${escapeHtml(order.contact_name)}</span></div>` : ''}
+                  ${order.whatsapp ? `<div class="flex items-center justify-between"><span class="text-[#86868b]">WhatsApp:</span><a href="https://wa.me/${String(order.whatsapp).replace(/[^0-9]/g, '')}" target="_blank" rel="noopener noreferrer" class="font-mono text-emerald-700 hover:underline">${escapeHtml(order.whatsapp)}</a></div>` : ''}
+                  ${order.customer_notes ? `<div class="pt-1 border-t border-black/5 text-[#52525b] italic">"${escapeHtml(order.customer_notes)}"</div>` : ''}
+                  ${order.admin_remark ? `<div class="pt-1 border-t border-black/5 text-rose-700">Remark: ${escapeHtml(order.admin_remark)}</div>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    // 2. Desktop Table Layout (>= md)
+    const desktopTableHtml = `
+      <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-[#fbfbfd] border-b border-black/5 text-[#86868b] font-medium">
+              <th class="py-3 px-4">Order No / Date</th>
+              <th class="py-3 px-4">Buyer / Company</th>
+              <th class="py-3 px-4">Destination</th>
+              <th class="py-3 px-4 text-right">Styles / Qty</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4 text-right">Fulfillment Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-black/5">
+            ${orders.map((order) => {
+              const safeId = escapeHtml(order.id);
+              const safeNo = escapeHtml(order.order_no);
+              const safeEmail = escapeHtml(order.buyer_email || '');
+              const safeCompany = escapeHtml(order.company_name || order.contact_name || 'Independent Buyer');
+              const safeCountry = escapeHtml(order.destination_country || 'Unspecified');
+              const dateStr = formatDateTime(order.created_at);
+              const totalQty = Number(order.total_quantity || 0);
+              const totalStyles = Number(order.total_styles || 0);
+              const itemCount = order.items?.length || 0;
+
+              return `
+                <tr class="hover:bg-[#fbfbfd] transition-colors">
+                  <td class="py-3.5 px-4 font-mono">
+                    <span class="font-semibold text-[#1d1d1f] block">${safeNo}</span>
+                    <span class="text-[11px] text-[#86868b] block">${dateStr}</span>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <span class="font-medium text-[#1d1d1f] block truncate max-w-[180px]">${safeCompany}</span>
+                    <a href="/admin/users?search=${encodeURIComponent(order.buyer_email || '')}" class="text-[11px] text-[#86868b] hover:text-blue-600 hover:underline font-mono block truncate max-w-[180px] transition-colors" title="View customer profile">
+                      ${safeEmail}
+                    </a>
+                  </td>
+                  <td class="py-3.5 px-4 text-[#52525b]">${safeCountry}</td>
+                  <td class="py-3.5 px-4 text-right font-mono tabular-nums">
+                    <span class="font-semibold text-[#1d1d1f]">${totalQty} pcs</span>
+                    <span class="text-[11px] text-[#86868b] block">${totalStyles} style(s)</span>
+                  </td>
+                  <td class="py-3.5 px-4">${renderStatusBadge(order.status)}</td>
+                  <td class="py-3.5 px-4 text-right">
+                    <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        class="action-toggle-detail-btn h-8 px-2.5 rounded-lg text-xs font-medium text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] border border-black/10 hover:border-black/30 shadow-2xs inline-flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                        data-target="detail-${safeId}"
+                        title="Toggle line items and customer details"
+                      >
+                        <span>Details</span>
+                        <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      ${renderActionButtons(order, false)}
+                    </div>
+                  </td>
+                </tr>
+
+                <tr id="detail-${safeId}" class="order-detail-row hidden bg-[#fafafa] border-b border-black/5">
+                  <td colspan="6" class="p-4 sm:p-6">
+                    <div class="space-y-4">
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-black/5 gap-2">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs font-semibold text-[#1d1d1f]">Order Breakdown:</span>
+                          <span class="font-mono text-xs font-bold text-[#1d1d1f] bg-white px-2 py-0.5 rounded border border-black/5">${safeNo}</span>
+                          <span class="text-[11px] text-[#86868b]">Type: <strong class="capitalize text-[#1d1d1f]">${escapeHtml(order.inquiry_type || 'Quote Cart')}</strong></span>
+                        </div>
+                        <div class="text-[11px] text-[#86868b] flex items-center gap-3">
+                          <span>Submitted: <strong class="text-[#1d1d1f] font-mono font-semibold">${dateStr}</strong></span>
+                          ${order.claimed_at ? `<span>· Claimed: <strong class="text-emerald-700 font-mono font-semibold">${formatDateTime(order.claimed_at)}</strong></span>` : ''}
+                        </div>
+                      </div>
+
+                      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="lg:col-span-2 bg-white rounded-xl border border-black/5 p-4 space-y-3">
+                          <div class="flex items-center justify-between border-b border-black/5 pb-2">
+                            <h4 class="font-semibold text-xs text-[#1d1d1f]">Ordered Styles & Quantities (${itemCount})</h4>
+                            <span class="font-mono text-xs font-bold text-[#1d1d1f]">${totalQty} pcs total</span>
+                          </div>
+                          <div class="divide-y divide-black/5 max-h-72 overflow-y-auto pr-1">
+                            ${renderOrderItems(order.items, false)}
+                          </div>
+                        </div>
+
+                        <div class="space-y-3">
+                          <div class="bg-white rounded-xl border border-black/5 p-4 space-y-2.5 text-xs">
+                            <h4 class="font-semibold text-xs text-[#1d1d1f] border-b border-black/5 pb-1.5">Buyer & Delivery Details</h4>
+                            <div>
+                              <span class="text-[11px] text-[#86868b] block">Contact / Company:</span>
+                              <p class="font-medium text-[#1d1d1f]">${escapeHtml(order.contact_name || 'Anonymous')}${order.company_name ? ` · ${escapeHtml(order.company_name)}` : ''}</p>
+                            </div>
+                            <div>
+                              <span class="text-[11px] text-[#86868b] block">Email:</span>
+                              <div class="flex items-center gap-2 flex-wrap">
+                                <a href="mailto:${safeEmail}" class="font-mono text-[#1d1d1f] hover:underline font-medium break-all">${safeEmail}</a>
+                                <a href="/admin/users?search=${encodeURIComponent(order.buyer_email || '')}" class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-black/5 hover:bg-black/10 text-[#1d1d1f] transition-all" title="Open customer profile in admin">
+                                  <span>👥 Customer</span>
+                                  <span>→</span>
+                                </a>
+                              </div>
+                            </div>
+                            ${order.whatsapp ? `<div><span class="text-[11px] text-[#86868b] block">WhatsApp:</span><a href="https://wa.me/${String(order.whatsapp).replace(/[^0-9]/g, '')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 font-mono font-medium text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200 text-[11px] mt-0.5">${escapeHtml(order.whatsapp)}</a></div>` : ''}
+                            <div>
+                              <span class="text-[11px] text-[#86868b] block">Destination Country:</span>
+                              <p class="font-medium text-[#1d1d1f]">${safeCountry}</p>
+                            </div>
+                          </div>
+
+                          ${order.customer_notes ? `<div class="bg-amber-50/60 rounded-xl border border-amber-200/70 p-3.5 text-xs text-amber-950 space-y-1"><span class="text-[11px] font-semibold text-amber-900 block">Customer Procurement Notes:</span><p class="italic leading-relaxed whitespace-pre-wrap">${escapeHtml(order.customer_notes)}</p></div>` : ''}
+                          ${order.status === 'SHIPPED' ? `<div class="bg-emerald-50/70 rounded-xl border border-emerald-200 p-3.5 text-xs text-emerald-950 space-y-1"><span class="text-[11px] font-semibold text-emerald-900 block">Fulfillment Dispatched:</span><p><strong>Carrier:</strong> ${escapeHtml(order.carrier || 'Standard')}</p>${order.tracking_number ? `<p class="font-mono"><strong>Waybill No:</strong> ${escapeHtml(order.tracking_number)}</p>` : ''}${order.admin_remark ? `<p class="text-[11px] text-emerald-800">Note: ${escapeHtml(order.admin_remark)}</p>` : ''}</div>` : ''}
+                          ${order.status === 'REJECTED' && order.admin_remark ? `<div class="bg-rose-50 rounded-xl border border-rose-200 p-3.5 text-xs text-rose-900 space-y-1"><span class="text-[11px] font-semibold text-rose-800 block">Rejection Remark:</span><p>${escapeHtml(order.admin_remark)}</p></div>` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    container.innerHTML = mobileCardsHtml + desktopTableHtml;
+    container.classList.remove('hidden');
+  }
+
+  function renderPagination(page, totalPages, total, limit) {
+    const container = document.getElementById('pagination-container');
+    const summary = document.getElementById('pagination-summary');
+    const prevBtn = document.getElementById('pagination-prev');
+    const nextBtn = document.getElementById('pagination-next');
+    const currentIndicator = document.getElementById('pagination-current');
+
+    if (!container || totalPages <= 1) {
+      if (container) container.classList.add('hidden');
+      return;
+    }
+
+    container.classList.remove('hidden');
+    currentTotalPages = totalPages;
+
+    const start = (page - 1) * limit + 1;
+    const end = Math.min(page * limit, total);
+    if (summary) {
+      summary.innerHTML = `Showing <strong class="text-[#1d1d1f]">${start}</strong> to <strong class="text-[#1d1d1f]">${end}</strong> of <strong class="text-[#1d1d1f]">${total}</strong> orders`;
+    }
+
+    if (currentIndicator) {
+      currentIndicator.textContent = `${page} / ${totalPages}`;
+    }
+
+    if (prevBtn) {
+      prevBtn.disabled = page <= 1;
+    }
+    if (nextBtn) {
+      nextBtn.disabled = page >= totalPages;
+    }
+  }
+
+  async function fetchOrders(updateUrl = true) {
+    if (activeAbortController) {
+      activeAbortController.abort();
+    }
+    activeAbortController = new AbortController();
+
+    const skeleton = document.getElementById('orders-skeleton');
+    const content = document.getElementById('orders-content');
+    const paginationContainer = document.getElementById('pagination-container');
+
+    if (skeleton && content) {
+      skeleton.classList.remove('hidden');
+      content.classList.add('hidden');
+    }
+    if (paginationContainer) {
+      paginationContainer.classList.add('hidden');
+    }
+
+    updateActiveVisuals();
+
+    if (updateUrl) {
+      const url = new URL(window.location.href);
+      if (currentStatus && currentStatus !== 'ALL') {
+        url.searchParams.set('status', currentStatus);
+      } else {
+        url.searchParams.delete('status');
+      }
+
+      if (currentSearch) {
+        url.searchParams.set('search', currentSearch);
+      } else {
+        url.searchParams.delete('search');
+      }
+
+      if (currentPage > 1) {
+        url.searchParams.set('page', String(currentPage));
+      } else {
+        url.searchParams.delete('page');
+      }
+
+      window.history.pushState({ status: currentStatus, search: currentSearch, page: currentPage }, '', url.toString());
+    }
+
+    try {
+      const qs = new URLSearchParams();
+      if (currentStatus && currentStatus !== 'ALL') qs.set('status', currentStatus);
+      if (currentSearch) qs.set('search', currentSearch);
+      qs.set('page', String(currentPage));
+      qs.set('limit', String(currentLimit));
+
+      const res = await fetch(`/api/admin/orders?${qs.toString()}`, {
+        signal: activeAbortController.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (skeleton) skeleton.classList.add('hidden');
+
+      renderStats(data.stats, data.total);
+      renderOrders(data.orders || []);
+      renderPagination(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 50);
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.error('[Orders] Fetch failed:', err);
+      if (skeleton) skeleton.classList.add('hidden');
+      if (content) {
+        content.innerHTML = `
+          <div class="py-16 text-center text-xs text-rose-600 space-y-2">
+            <p>Failed to load orders (${escapeHtml(err.message)}).</p>
+            <button type="button" id="retry-fetch-btn" class="px-3 py-1.5 rounded-lg bg-black text-white text-xs font-semibold cursor-pointer">
+              Retry
+            </button>
+          </div>
+        `;
+        content.classList.remove('hidden');
+        document.getElementById('retry-fetch-btn')?.addEventListener('click', () => fetchOrders(false));
+      }
+    }
+  }
+
+  // Event Delegation for Accordion and Action Modals
+  const ordersContainer = document.getElementById('orders-container');
+  ordersContainer?.addEventListener('click', (e) => {
+    const target = e.target;
+
+    // 1. Toggle Accordion
+    const toggleBtn = target.closest('.action-toggle-detail-btn');
+    if (toggleBtn) {
+      const targetId = toggleBtn.getAttribute('data-target');
       if (!targetId) return;
       const targetRow = document.getElementById(targetId);
-      const icon = btn.querySelector('.chevron-icon') as HTMLElement | null;
+      const icon = toggleBtn.querySelector('.chevron-icon');
       if (targetRow) {
         const isCurrentlyHidden = targetRow.classList.contains('hidden');
         if (isCurrentlyHidden) {
@@ -1044,30 +992,158 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
           if (icon) icon.style.transform = 'rotate(0deg)';
         }
       }
-    });
+      return;
+    }
+
+    // 2. Approve Button
+    const approveBtn = target.closest('.action-approve-btn');
+    if (approveBtn) {
+      const orderId = approveBtn.getAttribute('data-id');
+      const orderNo = approveBtn.getAttribute('data-no');
+      const modal = document.getElementById('approve-modal');
+      const orderIdInput = document.getElementById('approve-order-id');
+      const orderNoLabel = document.getElementById('approve-modal-order-no');
+      const errorEl = document.getElementById('approve-error');
+
+      if (!orderId || !modal) return;
+      clearError(errorEl);
+      if (orderIdInput) orderIdInput.value = orderId;
+      if (orderNoLabel) orderNoLabel.textContent = orderNo || orderId;
+      modal.showModal();
+      return;
+    }
+
+    // 3. Reject Button
+    const rejectBtn = target.closest('.action-reject-btn');
+    if (rejectBtn) {
+      const orderId = rejectBtn.getAttribute('data-id');
+      const orderNo = rejectBtn.getAttribute('data-no');
+      const modal = document.getElementById('reject-modal');
+      const orderIdInput = document.getElementById('reject-order-id');
+      const orderNoLabel = document.getElementById('reject-modal-order-no');
+      const reasonInput = document.getElementById('reject-reason-input');
+      const errorEl = document.getElementById('reject-error');
+
+      if (!orderId || !modal) return;
+      clearError(errorEl);
+      if (orderIdInput) orderIdInput.value = orderId;
+      if (orderNoLabel) orderNoLabel.textContent = orderNo || orderId;
+      if (reasonInput) reasonInput.value = '';
+      modal.showModal();
+      setTimeout(() => reasonInput?.focus(), 100);
+      return;
+    }
+
+    // 4. Ship Button
+    const shipBtn = target.closest('.action-ship-btn');
+    if (shipBtn) {
+      const orderId = shipBtn.getAttribute('data-id');
+      const orderNo = shipBtn.getAttribute('data-no');
+      const modal = document.getElementById('ship-modal');
+      const orderIdInput = document.getElementById('ship-order-id');
+      const orderNoLabel = document.getElementById('ship-modal-order-no');
+      const errorEl = document.getElementById('ship-error');
+
+      if (!orderId || !modal) return;
+      clearError(errorEl);
+      if (orderIdInput) orderIdInput.value = orderId;
+      if (orderNoLabel) orderNoLabel.textContent = orderNo || orderId;
+      modal.showModal();
+      return;
+    }
   });
 
-  // 1. Handle Approve Modal
-  const approveModal = document.getElementById('approve-modal') as HTMLDialogElement | null;
-  const approveOrderIdInput = document.getElementById('approve-order-id') as HTMLInputElement | null;
-  const approveOrderNoLabel = document.getElementById('approve-modal-order-no');
+  // Card filter clicks
+  document.getElementById('stats-cards-container')?.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-status]');
+    if (!card) return;
+    e.preventDefault();
+    const status = card.getAttribute('data-status') || 'ALL';
+    if (status === currentStatus && currentPage === 1) return;
+    currentStatus = status;
+    currentPage = 1;
+    fetchOrders();
+  });
+
+  // Tab filter clicks
+  document.getElementById('status-tabs-container')?.addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-tab-status]');
+    if (!tab) return;
+    e.preventDefault();
+    const status = tab.getAttribute('data-tab-status') || 'ALL';
+    if (status === currentStatus && currentPage === 1) return;
+    currentStatus = status;
+    currentPage = 1;
+    fetchOrders();
+  });
+
+  // Search submission and clear
+  const searchForm = document.getElementById('orders-search-form');
+  const searchInput = document.getElementById('orders-search-input');
+  const clearSearchBtn = document.getElementById('clear-search-btn');
+
+  searchInput?.addEventListener('input', () => {
+    if (clearSearchBtn) {
+      if (searchInput.value.trim()) {
+        clearSearchBtn.classList.remove('hidden');
+      } else {
+        clearSearchBtn.classList.add('hidden');
+      }
+    }
+  });
+
+  clearSearchBtn?.addEventListener('click', () => {
+    if (searchInput) searchInput.value = '';
+    clearSearchBtn.classList.add('hidden');
+    currentSearch = '';
+    currentPage = 1;
+    fetchOrders();
+  });
+
+  searchForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = searchInput?.value.trim() || '';
+    if (val === currentSearch && currentPage === 1) return;
+    currentSearch = val;
+    currentPage = 1;
+    fetchOrders();
+  });
+
+  // Pagination navigation
+  document.getElementById('pagination-prev')?.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      fetchOrders();
+    }
+  });
+  document.getElementById('pagination-next')?.addEventListener('click', () => {
+    if (currentPage < currentTotalPages) {
+      currentPage++;
+      fetchOrders();
+    }
+  });
+
+  // Handle browser back/forward popstate
+  window.addEventListener('popstate', () => {
+    const url = new URL(window.location.href);
+    currentStatus = url.searchParams.get('status') || 'ALL';
+    currentSearch = url.searchParams.get('search') || '';
+    currentPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+    if (searchInput) searchInput.value = currentSearch;
+    if (clearSearchBtn) {
+      if (currentSearch) clearSearchBtn.classList.remove('hidden');
+      else clearSearchBtn.classList.add('hidden');
+    }
+    fetchOrders(false);
+  });
+
+  // Modals confirmation logic
+  // 1. Approve modal
+  const approveModal = document.getElementById('approve-modal');
   const approveErrorEl = document.getElementById('approve-error');
-  const confirmApproveBtn = document.getElementById('confirm-approve-btn') as HTMLButtonElement | null;
+  const confirmApproveBtn = document.getElementById('confirm-approve-btn');
   const cancelApproveBtn = document.getElementById('cancel-approve-btn');
   const closeApproveModal = document.getElementById('close-approve-modal');
-
-  document.querySelectorAll<HTMLButtonElement>('.action-approve-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const orderId = btn.getAttribute('data-id');
-      const orderNo = btn.getAttribute('data-no');
-      if (!orderId || !approveModal) return;
-
-      clearError(approveErrorEl);
-      if (approveOrderIdInput) approveOrderIdInput.value = orderId;
-      if (approveOrderNoLabel) approveOrderNoLabel.textContent = orderNo || orderId;
-      approveModal.showModal();
-    });
-  });
 
   const hideApproveModal = () => {
     clearError(approveErrorEl);
@@ -1077,7 +1153,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   closeApproveModal?.addEventListener('click', hideApproveModal);
 
   confirmApproveBtn?.addEventListener('click', async () => {
-    const orderId = approveOrderIdInput?.value;
+    const orderId = document.getElementById('approve-order-id')?.value;
     if (!orderId) return;
 
     clearError(approveErrorEl);
@@ -1094,12 +1170,12 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       });
       if (res.ok) {
         hideApproveModal();
-        window.location.reload();
+        fetchOrders(false);
       } else {
         const data = await res.json();
         showError(approveErrorEl, data.error || 'Approval failed');
       }
-    } catch (err: any) {
+    } catch (err) {
       showError(approveErrorEl, err.message || 'Network error');
     } finally {
       if (confirmApproveBtn) {
@@ -1109,30 +1185,12 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
     }
   });
 
-  // 2. Handle Reject Modal
-  const rejectModal = document.getElementById('reject-modal') as HTMLDialogElement | null;
-  const rejectOrderIdInput = document.getElementById('reject-order-id') as HTMLInputElement | null;
-  const rejectOrderNoLabel = document.getElementById('reject-modal-order-no');
-  const rejectReasonInput = document.getElementById('reject-reason-input') as HTMLTextAreaElement | null;
+  // 2. Reject modal
+  const rejectModal = document.getElementById('reject-modal');
   const rejectErrorEl = document.getElementById('reject-error');
-  const confirmRejectBtn = document.getElementById('confirm-reject-btn') as HTMLButtonElement | null;
+  const confirmRejectBtn = document.getElementById('confirm-reject-btn');
   const cancelRejectBtn = document.getElementById('cancel-reject-btn');
   const closeRejectModal = document.getElementById('close-reject-modal');
-
-  document.querySelectorAll<HTMLButtonElement>('.action-reject-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const orderId = btn.getAttribute('data-id');
-      const orderNo = btn.getAttribute('data-no');
-      if (!orderId || !rejectModal) return;
-
-      clearError(rejectErrorEl);
-      if (rejectOrderIdInput) rejectOrderIdInput.value = orderId;
-      if (rejectOrderNoLabel) rejectOrderNoLabel.textContent = orderNo || orderId;
-      if (rejectReasonInput) rejectReasonInput.value = '';
-      rejectModal.showModal();
-      setTimeout(() => rejectReasonInput?.focus(), 100);
-    });
-  });
 
   const hideRejectModal = () => {
     clearError(rejectErrorEl);
@@ -1142,14 +1200,14 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   closeRejectModal?.addEventListener('click', hideRejectModal);
 
   confirmRejectBtn?.addEventListener('click', async () => {
-    const orderId = rejectOrderIdInput?.value;
-    const reason = rejectReasonInput?.value?.trim();
+    const orderId = document.getElementById('reject-order-id')?.value;
+    const reason = document.getElementById('reject-reason-input')?.value?.trim();
     if (!orderId) return;
 
     clearError(rejectErrorEl);
     if (!reason) {
       showError(rejectErrorEl, 'Please provide a reason for rejecting this order.');
-      rejectReasonInput?.focus();
+      document.getElementById('reject-reason-input')?.focus();
       return;
     }
 
@@ -1166,12 +1224,12 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       });
       if (res.ok) {
         hideRejectModal();
-        window.location.reload();
+        fetchOrders(false);
       } else {
         const data = await res.json();
         showError(rejectErrorEl, data.error || 'Rejection failed');
       }
-    } catch (err: any) {
+    } catch (err) {
       showError(rejectErrorEl, err.message || 'Network error');
     } finally {
       if (confirmRejectBtn) {
@@ -1181,40 +1239,23 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
     }
   });
 
-  // 3. Handle Ship Modal
-  const shipModal = document.getElementById('ship-modal') as HTMLDialogElement | null;
+  // 3. Ship modal
+  const shipModal = document.getElementById('ship-modal');
+  const shipForm = document.getElementById('ship-form');
+  const shipErrorEl = document.getElementById('ship-error');
   const closeShipModal = document.getElementById('close-ship-modal');
   const cancelShipBtn = document.getElementById('cancel-ship-btn');
-  const shipForm = document.getElementById('ship-form') as HTMLFormElement | null;
-  const shipOrderIdInput = document.getElementById('ship-order-id') as HTMLInputElement | null;
-  const shipOrderNoLabel = document.getElementById('ship-modal-order-no');
-  const shipErrorEl = document.getElementById('ship-error');
 
-  document.querySelectorAll<HTMLButtonElement>('.action-ship-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const orderId = btn.getAttribute('data-id');
-      const orderNo = btn.getAttribute('data-no');
-      if (!orderId || !shipModal) return;
-
-      clearError(shipErrorEl);
-      if (shipOrderIdInput) shipOrderIdInput.value = orderId;
-      if (shipOrderNoLabel) shipOrderNoLabel.textContent = orderNo || orderId;
-
-      shipModal.showModal();
-    });
-  });
-
-  const hideModal = () => {
+  const hideShipModal = () => {
     clearError(shipErrorEl);
-    if (shipModal) shipModal.close();
+    shipModal?.close();
   };
-
-  closeShipModal?.addEventListener('click', hideModal);
-  cancelShipBtn?.addEventListener('click', hideModal);
+  closeShipModal?.addEventListener('click', hideShipModal);
+  cancelShipBtn?.addEventListener('click', hideShipModal);
 
   shipForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const orderId = shipOrderIdInput?.value;
+    const orderId = document.getElementById('ship-order-id')?.value;
     if (!orderId) return;
 
     clearError(shipErrorEl);
@@ -1223,7 +1264,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
     const trackingNumber = formData.get('tracking_number')?.toString();
     const adminRemark = formData.get('admin_remark')?.toString();
 
-    const submitBtn = document.getElementById('confirm-ship-btn') as HTMLButtonElement | null;
+    const submitBtn = document.getElementById('confirm-ship-btn');
     if (submitBtn) submitBtn.disabled = true;
 
     try {
@@ -1239,17 +1280,24 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       });
 
       if (res.ok) {
-        hideModal();
-        window.location.reload();
+        hideShipModal();
+        fetchOrders(false);
       } else {
         const data = await res.json();
         showError(shipErrorEl, data.error || 'Failed to dispatch shipment');
       }
-    } catch (err: any) {
+    } catch (err) {
       showError(shipErrorEl, err.message || 'Network error');
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }
   });
-</script>
 
+  // Initial load
+  const initialUrl = new URL(window.location.href);
+  currentStatus = initialUrl.searchParams.get('status') || 'ALL';
+  currentSearch = initialUrl.searchParams.get('search') || '';
+  currentPage = Math.max(1, parseInt(initialUrl.searchParams.get('page') || '1', 10));
+
+  fetchOrders(false);
+</script>
