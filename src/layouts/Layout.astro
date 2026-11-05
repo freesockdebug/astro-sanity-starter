@@ -6,6 +6,9 @@ import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
 import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
 import type { TwitterCardType } from 'astro-seo';
+import { getSystemSettings } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 import '../styles/globals.css';
 
@@ -59,6 +62,9 @@ const imageSrc = rawImageSrc ? SanityImageService.hero(rawImageSrc, 1200) : unde
 const resolvedImage = imageSrc
     ? { src: imageSrc.startsWith('http') || imageSrc.startsWith('/') ? imageSrc : new URL(imageSrc, Astro.site || Astro.url).toString() }
     : undefined;
+
+const systemSettings = await getSystemSettings(cfEnv).catch(() => null);
+const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_errors) : true;
 ---
 
 <!doctype html>
@@ -198,9 +204,14 @@ const resolvedImage = imageSrc
           </div>
         </div>
 
-        <script is:inline>
+        <script is:inline define:vars={{ enableClientLogs }}>
           (function () {
+            var isTelemetryEnabled = typeof enableClientLogs === 'boolean' ? enableClientLogs : true;
             var hasActiveError = false;
+            var reportCount = 0;
+            var MAX_REPORTS = 5;
+            var reportedSignatures = {};
+
             var box = document.getElementById('global-runtime-fallback');
             var textEl = document.getElementById('global-runtime-msg');
             var retryBtn = document.getElementById('global-runtime-retry-btn');
@@ -219,33 +230,116 @@ const resolvedImage = imageSrc
             if (retryBtn) {
               retryBtn.addEventListener('click', function () {
                 resetErrorBoundary();
-                // Re-initialize interactive shimmer & observers or reload if needed
                 if (window.__observeAppleShimmer) {
                   try { window.__observeAppleShimmer(document); } catch (e) {}
                 }
               });
             }
 
-            function handleRuntimeError(message, source) {
+            function shouldIgnore(msgStr, srcStr) {
+              if (!msgStr) return true;
+              if (
+                msgStr.indexOf('ResizeObserver') !== -1 ||
+                msgStr === 'Script error.' ||
+                msgStr.indexOf('AbortError') !== -1
+              ) {
+                return true;
+              }
+              if (srcStr) {
+                if (
+                  srcStr.indexOf('chrome-extension://') === 0 ||
+                  srcStr.indexOf('moz-extension://') === 0 ||
+                  srcStr.indexOf('safari-extension://') === 0
+                ) {
+                  return true;
+                }
+                if (srcStr.indexOf(location.origin) !== 0 && srcStr.indexOf('/') !== 0) {
+                  return true;
+                }
+              }
+              return false;
+            }
+
+            function sendErrorToBackend(payload) {
+              // 1. Governance check: when client logging is disabled in settings, do not send
+              if (!isTelemetryEnabled) return;
+              // 2. Loop protection: avoid recursion when viewing admin logs
+              if (location.pathname.indexOf('/admin/logs') === 0) return;
+              // 3. Per-page rate limit: max 5 reports
+              if (reportCount >= MAX_REPORTS) return;
+
+              var sig = [payload.type, payload.message, payload.source || '', payload.lineno || 0].join(':');
+              if (reportedSignatures[sig]) return;
+              reportedSignatures[sig] = true;
+              reportCount++;
+
+              try {
+                var json = JSON.stringify(payload);
+                if (navigator.sendBeacon) {
+                  var blob = new Blob([json], { type: 'application/json' });
+                  navigator.sendBeacon('/api/client-error', blob);
+                } else if (window.fetch) {
+                  fetch('/api/client-error', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: json,
+                    keepalive: true,
+                  }).catch(function () {});
+                }
+              } catch (e) {}
+            }
+
+            function handleRuntimeError(type, message, source, lineno, colno, errorObj) {
+              var msgStr = String(message || (errorObj && errorObj.message) || '');
+              var srcStr = source ? String(source) : '';
+              if (shouldIgnore(msgStr, srcStr)) return;
+
+              var stackStr = errorObj && errorObj.stack ? String(errorObj.stack) : '';
+
+              // 1. Report asynchronously to backend Logger -> D1
+              sendErrorToBackend({
+                type: type,
+                message: msgStr.slice(0, 500),
+                source: srcStr.slice(0, 300),
+                lineno: typeof lineno === 'number' ? lineno : undefined,
+                colno: typeof colno === 'number' ? colno : undefined,
+                stack: stackStr.slice(0, 1500),
+                path: location.pathname,
+                href: location.href,
+                viewport: window.innerWidth + 'x' + window.innerHeight,
+              });
+
+              // 2. Show non-intrusive fallback banner once
               if (hasActiveError) return;
-              var msgStr = String(message || '');
-              if (!msgStr || msgStr.includes('ResizeObserver') || msgStr === 'Script error.') return;
-              if (source && !String(source).startsWith(location.origin) && !String(source).startsWith('/')) return;
               hasActiveError = true;
-              console.warn('[ClientBoundary] Caught runtime exception:', msgStr, source);
+              console.warn('[ClientBoundary] Caught runtime exception:', msgStr, srcStr);
               if (textEl) textEl.textContent = msgStr;
               if (box) box.classList.remove('hidden');
             }
 
-            window.addEventListener('error', function (event) {
-              if (!event.error && !event.message) return;
-              handleRuntimeError(event.message || (event.error && event.error.message), event.filename);
+            // 1. Global window.onerror handler
+            var prevOnError = window.onerror;
+            window.onerror = function (message, source, lineno, colno, error) {
+              handleRuntimeError('onerror', message, source, lineno, colno, error);
+              if (typeof prevOnError === 'function') {
+                return prevOnError.apply(this, arguments);
+              }
+              return false;
+            };
+
+            // 2. Global unhandledrejection handler
+            window.addEventListener('unhandledrejection', function (event) {
+              var reason = event.reason;
+              var msg = reason && (reason.message || String(reason));
+              var errObj = reason instanceof Error ? reason : null;
+              handleRuntimeError('unhandledrejection', msg, location.pathname, undefined, undefined, errObj);
             });
 
-            window.addEventListener('unhandledrejection', function (event) {
-              var reason = event.reason && (event.reason.message || String(event.reason));
-              handleRuntimeError(reason, location.pathname);
-            });
+            // 3. Expose imperative helper for caught client exceptions
+            window.__reportClientError = function (error, customSource) {
+              var msg = error && (error.message || String(error));
+              handleRuntimeError('manual', msg, customSource || location.pathname, undefined, undefined, error);
+            };
           })();
         </script>
     </body>

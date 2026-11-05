@@ -100,6 +100,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       const isStaticOrLogSelf =
         pathname.startsWith('/_astro/') ||
         pathname.startsWith('/api/admin/logs') ||
+        pathname.startsWith('/api/client-error') ||
         pathname.startsWith('/admin/logs') ||
         pathname.startsWith('/favicon') ||
         pathname.endsWith('.png') ||

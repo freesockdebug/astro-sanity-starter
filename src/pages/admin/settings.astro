@@ -535,6 +535,25 @@ const pageTitle = 'Workspace Settings';
           </div>
         </div>
 
+        <!-- Frontend Client Error Telemetry -->
+        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-start gap-3">
+          <input
+            type="checkbox"
+            id="log_client_errors"
+            name="log_client_errors"
+            checked={settings.log_client_errors}
+            class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f] mt-0.5 shrink-0"
+          />
+          <div>
+            <label for="log_client_errors" class="block text-xs font-bold text-[#1d1d1f] cursor-pointer">
+              Frontend Client Error Telemetry (前端异常监控)
+            </label>
+            <p class="text-[11px] text-[#86868b] mt-0.5">
+              Capture unhandled browser exceptions (window.onerror & unhandledrejection) and report to D1 diagnostics. When disabled, client stops reporting and backend rejects telemetry.
+            </p>
+          </div>
+        </div>
+
         <!-- Log Retention Days -->
         <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col justify-between">
           <div>
@@ -673,6 +692,7 @@ const pageTitle = 'Workspace Settings';
           login_retention_days: parseInt(formData.get('login_retention_days') || '90', 10),
           enable_error_logging: form.querySelector('#enable_error_logging') ? form.querySelector('#enable_error_logging').checked : true,
           log_authenticated_users: form.querySelector('#log_authenticated_users') ? form.querySelector('#log_authenticated_users').checked : true,
+          log_client_errors: form.querySelector('#log_client_errors') ? form.querySelector('#log_client_errors').checked : true,
           log_retention_days: parseInt(formData.get('log_retention_days') || '30', 10),
           log_min_level: (formData.get('log_min_level') || 'warn').toString().trim().toLowerCase(),
           slow_request_threshold_ms: parseInt(formData.get('slow_request_threshold_ms') || '1000', 10),

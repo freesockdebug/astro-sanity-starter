@@ -501,6 +501,7 @@ const pageTitle = 'System Diagnostics & Logs';
       else if (m === 'POST') colorClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
       else if (m === 'PATCH' || m === 'PUT') colorClass = 'bg-amber-50 text-amber-700 border-amber-200';
       else if (m === 'DELETE') colorClass = 'bg-rose-50 text-rose-700 border-rose-200';
+      else if (m === 'CLIENT') colorClass = 'bg-purple-50 text-purple-700 border-purple-200';
 
       return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${colorClass}">${escapeHtml(m)}</span>`;
     }
@@ -615,7 +616,9 @@ const pageTitle = 'System Diagnostics & Logs';
                 const safePath = escapeHtml(log.path || '');
                 const safeMethod = log.method ? renderMethodBadge(log.method) : '';
                 const latencyBadge = renderLatencyBadge(log.latency_ms);
-                const statusBadge = log.status_code ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono ${log.status_code >= 400 ? 'bg-rose-50 text-rose-700 font-bold' : 'bg-emerald-50 text-emerald-700'}">${log.status_code}</span>` : '';
+                const statusBadge = log.method === 'CLIENT'
+                  ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-purple-50 text-purple-700">Browser</span>`
+                  : (log.status_code ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono ${log.status_code >= 400 ? 'bg-rose-50 text-rose-700 font-bold' : 'bg-emerald-50 text-emerald-700'}">${log.status_code}</span>` : '');
                 const timeStr = formatTime(log.created_at);
 
                 const geoTokens = [];
@@ -726,7 +729,11 @@ const pageTitle = 'System Diagnostics & Logs';
       if (modalTime) modalTime.textContent = formatTime(log.created_at);
       if (modalRay) modalRay.textContent = log.ray_id || '—';
       if (modalPath) modalPath.textContent = log.path || '—';
-      if (modalHttp) modalHttp.textContent = `${log.method || 'GET'} · HTTP ${log.status_code || 200}`;
+      if (modalHttp) {
+        modalHttp.textContent = log.method === 'CLIENT'
+          ? 'CLIENT · Browser Runtime'
+          : `${log.method || 'GET'} · HTTP ${log.status_code || 200}`;
+      }
       if (modalLatency) modalLatency.textContent = log.latency_ms ? `${log.latency_ms} ms` : '—';
       if (modalUser) modalUser.textContent = log.user_email || log.user_id || 'Anonymous';
       if (modalIp) modalIp.textContent = log.client_ip || '—';

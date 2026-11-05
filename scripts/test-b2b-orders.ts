@@ -467,6 +467,73 @@ async function runSelfCheck() {
   await clearErrorLogs();
   const clearedLogsRes = await listErrorLogs();
   assert.strictEqual(clearedLogsRes.total, 0);
+
+  // Test /api/client-error telemetry endpoint
+  const { POST: clientErrorPost } = await import('../src/pages/api/client-error');
+
+  // Test 1: When log_client_errors is false, backend rejects/skips telemetry
+  await updateSystemSettings({ log_client_errors: false }, 'admin@test.com');
+  const disabledReqContext: any = {
+    request: new Request('http://localhost/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'origin': 'http://localhost' },
+      body: JSON.stringify({ message: 'TypeError: test is not defined', path: '/products/test-slug' }),
+    }),
+    url: new URL('http://localhost/api/client-error'),
+    locals: {},
+  };
+  const disabledResp = await clientErrorPost(disabledReqContext);
+  assert.strictEqual(disabledResp.status, 200);
+  const disabledBody = await disabledResp.json();
+  assert.strictEqual(disabledBody.skipped, true);
+  const logsAfterDisabled = await listErrorLogs();
+  assert.strictEqual(logsAfterDisabled.total, 0);
+
+  // Test 2: When log_client_errors is true, backend accepts and ingests into D1
+  await updateSystemSettings({ log_client_errors: true }, 'admin@test.com');
+  const enabledReqContext: any = {
+    request: new Request('http://localhost/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'origin': 'http://localhost' },
+      body: JSON.stringify({
+        message: 'ReferenceError: window.ApplePay is undefined',
+        source: 'https://gwenvenni.com/scripts/checkout.js',
+        lineno: 42,
+        colno: 12,
+        path: '/orders',
+        stack: 'ReferenceError: window.ApplePay is undefined at checkout.js:42:12',
+      }),
+    }),
+    url: new URL('http://localhost/api/client-error'),
+    locals: {},
+  };
+  const enabledResp = await clientErrorPost(enabledReqContext);
+  assert.strictEqual(enabledResp.status, 202);
+  const enabledBody = await enabledResp.json();
+  assert.strictEqual(enabledBody.ok, true);
+
+  const logsAfterIngest = await listErrorLogs();
+  assert.strictEqual(logsAfterIngest.total, 1);
+  assert.strictEqual(logsAfterIngest.logs[0].source, 'client/browser');
+  assert.strictEqual(logsAfterIngest.logs[0].method, 'CLIENT');
+  assert.strictEqual(logsAfterIngest.logs[0].path, '/orders');
+  assert.strictEqual(logsAfterIngest.logs[0].message, 'ReferenceError: window.ApplePay is undefined');
+
+  // Test 3: Noisy errors (e.g. ResizeObserver) are ignored
+  const noiseReqContext: any = {
+    request: new Request('http://localhost/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'origin': 'http://localhost' },
+      body: JSON.stringify({ message: 'ResizeObserver loop completed with undelivered notifications' }),
+    }),
+    url: new URL('http://localhost/api/client-error'),
+    locals: {},
+  };
+  const noiseResp = await clientErrorPost(noiseReqContext);
+  assert.strictEqual(noiseResp.status, 200);
+  const noiseBody = await noiseResp.json();
+  assert.strictEqual(noiseBody.skipped, true);
+
   console.log('✔ [PASS] System Error, Performance Profiling & Log Level Governance verified');
 
   // 22. Client-Side Persistent Cache Layer (TTL, SWR & Invalidation)

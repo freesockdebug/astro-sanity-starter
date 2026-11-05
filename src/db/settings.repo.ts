@@ -37,6 +37,7 @@ export interface SystemSettings {
   // 5. Diagnostics & Observability
   enable_error_logging: boolean;
   log_authenticated_users: boolean;
+  log_client_errors: boolean;
   log_retention_days: number;
   log_min_level: LogMinLevel;
   slow_request_threshold_ms: number;
@@ -62,6 +63,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   login_retention_days: 90,
   enable_error_logging: true,
   log_authenticated_users: true,
+  log_client_errors: true,
   log_retention_days: 30,
   log_min_level: 'warn',
   slow_request_threshold_ms: 1000,
@@ -190,6 +192,7 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
 
     enable_error_logging: resolveBool('enable_error_logging', 'ENABLE_ERROR_LOGGING', DEFAULT_SYSTEM_SETTINGS.enable_error_logging),
     log_authenticated_users: resolveBool('log_authenticated_users', 'LOG_AUTHENTICATED_USERS', DEFAULT_SYSTEM_SETTINGS.log_authenticated_users),
+    log_client_errors: resolveBool('log_client_errors', 'LOG_CLIENT_ERRORS', DEFAULT_SYSTEM_SETTINGS.log_client_errors),
     log_retention_days: resolveNum('log_retention_days', 'LOG_RETENTION_DAYS', DEFAULT_SYSTEM_SETTINGS.log_retention_days),
     log_min_level: (resolveStr('log_min_level', 'LOG_MIN_LEVEL', DEFAULT_SYSTEM_SETTINGS.log_min_level).toLowerCase() as LogMinLevel),
     slow_request_threshold_ms: resolveNum('slow_request_threshold_ms', 'SLOW_REQUEST_THRESHOLD_MS', DEFAULT_SYSTEM_SETTINGS.slow_request_threshold_ms),

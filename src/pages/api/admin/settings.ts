@@ -226,6 +226,7 @@ export const POST: APIRoute = async ({ request }) => {
       'enable_webhook_notify',
       'enable_error_logging',
       'log_authenticated_users',
+      'log_client_errors',
     ];
     for (const key of boolKeys) {
       if (rawUpdates[key] !== undefined) {
