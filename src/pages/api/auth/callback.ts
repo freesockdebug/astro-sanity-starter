@@ -12,12 +12,14 @@ import {
 import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin, getSystemSettings } from '@utils/db';
 import { SecurityService } from '@utils/security';
 import { logger } from '@utils/logger';
+import { getActiveProfiler } from '@utils/profiler';
 // @ts-ignore
-import { env as cfEnv } from 'cloudflare:workers';
+import { env as cfEnv, waitUntil as cfWaitUntil } from 'cloudflare:workers';
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ request, url, cookies }) => {
+  const profiler = getActiveProfiler();
   const reqUrl = new URL(request.url);
   const code = url.searchParams.get('code');
   const returnedState = url.searchParams.get('state');
@@ -78,45 +80,49 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       redirect_uri: callbackUrl,
     });
 
-      const tokenRes = await fetch(`${endpoint}/oidc/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenBody.toString(),
-        signal: AbortSignal.timeout(6000),
-      });
+    profiler?.startSpan('auth.logto_token');
+    const tokenRes = await fetch(`${endpoint}/oidc/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenBody.toString(),
+      signal: AbortSignal.timeout(6000),
+    });
+    profiler?.endSpan('auth.logto_token');
 
-      if (!tokenRes.ok) {
-        const errText = await tokenRes.text();
-        throw new Error(`Token exchange failed: ${tokenRes.status} ${errText}`);
-      }
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      throw new Error(`Token exchange failed: ${tokenRes.status} ${errText}`);
+    }
 
-      const tokenData = (await tokenRes.json()) as any;
-      const accessToken = tokenData.access_token;
+    const tokenData = (await tokenRes.json()) as any;
+    const accessToken = tokenData.access_token;
 
-      // Fetch User Info
-      const meRes = await fetch(`${endpoint}/oidc/me`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(6000),
-      });
+    // Fetch User Info
+    profiler?.startSpan('auth.logto_userinfo');
+    const meRes = await fetch(`${endpoint}/oidc/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    profiler?.endSpan('auth.logto_userinfo');
 
-      if (!meRes.ok) {
-        const meErr = await meRes.text();
-        throw new Error(`UserInfo retrieval failed: ${meRes.status} ${meErr}`);
-      }
+    if (!meRes.ok) {
+      const meErr = await meRes.text();
+      throw new Error(`UserInfo retrieval failed: ${meRes.status} ${meErr}`);
+    }
 
-      const userInfo = (await meRes.json()) as any;
-      const email = userInfo.email || `${userInfo.sub}@logto.user`;
-      const roles: string[] = Array.isArray(userInfo.roles) ? userInfo.roles : [];
-      const settings = await getSystemSettings(cfEnv).catch(() => null);
-      const isAdmin = checkIsAdmin(email, roles, cfEnv, settings?.co_admin_emails);
+    const userInfo = (await meRes.json()) as any;
+    const email = userInfo.email || `${userInfo.sub}@logto.user`;
+    const roles: string[] = Array.isArray(userInfo.roles) ? userInfo.roles : [];
+    const settings = await getSystemSettings(cfEnv).catch(() => null);
+    const isAdmin = checkIsAdmin(email, roles, cfEnv, settings?.co_admin_emails);
 
-      authUser = {
-        id: userInfo.sub,
-        email,
-        name: userInfo.name || userInfo.username || email.split('@')[0],
-        isAdmin,
-        roles,
-      };
+    authUser = {
+      id: userInfo.sub,
+      email,
+      name: userInfo.name || userInfo.username || email.split('@')[0],
+      isAdmin,
+      roles,
+    };
     } catch (err: any) {
       logger.error({
         module: 'auth/callback',
@@ -148,13 +154,16 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
 
   // 4. Upsert User in D1 (Logto sub, email, name, roles sync + backfill company info)
   try {
+    profiler?.startSpan('d1.user_upsert');
     await upsertUserOnLogin({
       id: authUser.id,
       email: authUser.email,
       name: authUser.name,
       roles: authUser.roles,
     });
+    profiler?.endSpan('d1.user_upsert');
   } catch (syncErr) {
+    profiler?.endSpan('d1.user_upsert');
     logger.warn({
       module: 'auth/callback',
       event: 'USER_SYNC_FAILED',
@@ -167,33 +176,45 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
   }
 
   // 4.5. Record Login History (IP, Geo, Device) with 90-day retention
-  try {
-    const { ip: clientIp, country, city, userAgent } = SecurityService.resolveClientMeta(request);
-    await recordUserLogin({
-      userId: authUser.id,
-      email: authUser.email,
-      ip: clientIp,
-      country,
-      city,
-      userAgent,
-    }, cfEnv);
-  } catch (logErr) {
+  // Dispatched asynchronously via Cloudflare Workers waitUntil to avoid blocking user 302 redirect
+  const clientMeta = SecurityService.resolveClientMeta(request);
+  const loginAuditPromise = recordUserLogin({
+    userId: authUser.id,
+    email: authUser.email,
+    ip: clientMeta.ip,
+    country: clientMeta.country,
+    city: clientMeta.city,
+    userAgent: clientMeta.userAgent,
+  }, cfEnv).catch((logErr) => {
     logger.warn({
       module: 'auth/callback',
       event: 'LOGIN_AUDIT_LOG_FAILED',
       message: 'Failed to record login audit log',
-      userId: authUser.id,
-      userEmail: authUser.email,
+      userId: authUser?.id,
+      userEmail: authUser?.email,
       path: reqUrl.pathname,
       error: logErr,
     }, { cfEnv });
+  });
+
+  if (typeof cfWaitUntil === 'function') {
+    try {
+      cfWaitUntil(loginAuditPromise);
+    } catch {
+      await loginAuditPromise;
+    }
+  } else {
+    await loginAuditPromise;
   }
 
   // 5. Auto-Claim Historical Unclaimed Orders matching buyer_email
   let claimedCount = 0;
   try {
+    profiler?.startSpan('d1.auto_claim');
     claimedCount = await claimOrdersByEmail(authUser.email, authUser.id);
+    profiler?.endSpan('d1.auto_claim');
   } catch (claimErr) {
+    profiler?.endSpan('d1.auto_claim');
     logger.warn({
       module: 'auth/callback',
       event: 'AUTOCLAIM_FAILED',

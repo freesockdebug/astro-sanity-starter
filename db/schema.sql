@@ -83,6 +83,12 @@ CREATE TABLE IF NOT EXISTS system_error_logs (
   user_email TEXT,
   ray_id TEXT,
   path TEXT,
+  latency_ms INTEGER,
+  method TEXT,
+  status_code INTEGER,
+  client_ip TEXT,
+  country TEXT,
+  city TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -105,5 +111,9 @@ CREATE INDEX IF NOT EXISTS idx_error_logs_level ON system_error_logs(level);
 CREATE INDEX IF NOT EXISTS idx_error_logs_source ON system_error_logs(source);
 CREATE INDEX IF NOT EXISTS idx_error_logs_ray_id ON system_error_logs(ray_id);
 CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON system_error_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_error_logs_latency ON system_error_logs(latency_ms);
+CREATE INDEX IF NOT EXISTS idx_error_logs_path ON system_error_logs(path);
+CREATE INDEX IF NOT EXISTS idx_error_logs_ip ON system_error_logs(client_ip);
+CREATE INDEX IF NOT EXISTS idx_error_logs_country ON system_error_logs(country);
 
 

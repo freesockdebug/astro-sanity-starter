@@ -84,6 +84,9 @@ export const DDL_STATEMENTS = [
   latency_ms INTEGER,
   method TEXT,
   status_code INTEGER,
+  client_ip TEXT,
+  country TEXT,
+  city TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 )`,
   `INSERT OR IGNORE INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init')`,
@@ -102,7 +105,9 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_error_logs_ray_id ON system_error_logs(ray_id)`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON system_error_logs(created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_latency ON system_error_logs(latency_ms)`,
-  `CREATE INDEX IF NOT EXISTS idx_error_logs_path ON system_error_logs(path)`
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_path ON system_error_logs(path)`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_ip ON system_error_logs(client_ip)`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_country ON system_error_logs(country)`
 ];
 
 export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
@@ -134,6 +139,9 @@ export async function ensureSchema(rawOrClient?: any) {
     'ALTER TABLE system_error_logs ADD COLUMN latency_ms INTEGER DEFAULT NULL',
     'ALTER TABLE system_error_logs ADD COLUMN method TEXT DEFAULT NULL',
     'ALTER TABLE system_error_logs ADD COLUMN status_code INTEGER DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN client_ip TEXT DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN country TEXT DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN city TEXT DEFAULT NULL',
   ];
 
   for (const m of columnMigrations) {

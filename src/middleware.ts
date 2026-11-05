@@ -36,6 +36,21 @@ function safeSetHeader(response: Response, name: string, value: string): Respons
   return safeSetHeaders(response, { [name]: value });
 }
 
+function sanitizeQuery(search: string): string {
+  if (!search) return '';
+  try {
+    const params = new URLSearchParams(search);
+    for (const key of Array.from(params.keys())) {
+      if (/(code|token|secret|state|auth|password|key)/i.test(key)) {
+        params.set(key, '[REDACTED]');
+      }
+    }
+    return `?${params.toString()}`;
+  } catch {
+    return '[REDACTED_QUERY]';
+  }
+}
+
 /**
  * Cloudflare Edge Cache Middleware for HTML Pages with Observability & Slow-Request Diagnostics
  */
@@ -49,6 +64,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     const pathname = url.pathname;
     const rayId = request.headers.get('cf-ray') || crypto.randomUUID();
     (context.locals as any).rayId = rayId;
+    const clientMeta = SecurityService.resolveClientMeta(request);
+    (context.locals as any).clientMeta = clientMeta;
 
     if (cfEnv && typeof globalThis !== 'undefined') {
       (globalThis as any).__CF_ENV__ = cfEnv;
@@ -109,7 +126,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
               latencyMs,
               userId: sessionUser?.id,
               userEmail: sessionUser?.email,
-              context: { spans, query: url.search },
+              clientIp: clientMeta.ip,
+              country: clientMeta.country,
+              city: clientMeta.city,
+              context: { spans, query: sanitizeQuery(url.search) },
             },
             { cfEnv, ctx: runtimeCtx }
           );
@@ -127,7 +147,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
               latencyMs,
               userId: sessionUser?.id,
               userEmail: sessionUser?.email,
-              context: { spans, query: url.search },
+              clientIp: clientMeta.ip,
+              country: clientMeta.country,
+              city: clientMeta.city,
+              context: { spans, query: sanitizeQuery(url.search) },
             },
             { cfEnv, ctx: runtimeCtx }
           );
@@ -148,6 +171,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
             latencyMs,
             userId: sessionUser?.id,
             userEmail: sessionUser?.email,
+            clientIp: clientMeta.ip,
+            country: clientMeta.country,
+            city: clientMeta.city,
             context: { spans: profiler.getSpans() },
           },
           { cfEnv, ctx: runtimeCtx }
@@ -171,6 +197,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
           error: err,
           userId: sessionUser?.id,
           userEmail: sessionUser?.email,
+          clientIp: clientMeta.ip,
+          country: clientMeta.country,
+          city: clientMeta.city,
           context: { spans: profiler.getSpans() },
         },
         { cfEnv, ctx: runtimeCtx }

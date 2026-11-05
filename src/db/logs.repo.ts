@@ -21,6 +21,9 @@ export interface ErrorLogRecord {
   latency_ms?: number | null;
   method?: string | null;
   status_code?: number | null;
+  client_ip?: string | null;
+  country?: string | null;
+  city?: string | null;
   created_at: string;
 }
 
@@ -37,6 +40,9 @@ export interface RecordErrorLogInput {
   latencyMs?: number | null;
   method?: string | null;
   statusCode?: number | null;
+  clientIp?: string | null;
+  country?: string | null;
+  city?: string | null;
 }
 
 export interface EndpointBottleneck {
@@ -124,6 +130,9 @@ export async function recordErrorLog(
     const latencyMs = typeof input.latencyMs === 'number' && !isNaN(input.latencyMs) ? Math.max(0, Math.round(input.latencyMs)) : null;
     const method = input.method ? input.method.toUpperCase().slice(0, 10) : null;
     const statusCode = typeof input.statusCode === 'number' && !isNaN(input.statusCode) ? input.statusCode : null;
+    const clientIp = input.clientIp ? input.clientIp.slice(0, 50) : null;
+    const country = input.country ? input.country.toUpperCase().slice(0, 10) : null;
+    const city = input.city ? input.city.slice(0, 50) : null;
 
     let contextJson: string | null = null;
     if (input.context !== undefined && input.context !== null) {
@@ -139,9 +148,9 @@ export async function recordErrorLog(
     return await executeWithAutoSchema(async (db: DbClient) => {
       await db.execute(
         `INSERT INTO system_error_logs (
-          level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-        [level, source, errorCode, message, contextJson, userId, userEmail, rayId, path, latencyMs, method, statusCode]
+          level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        [level, source, errorCode, message, contextJson, userId, userEmail, rayId, path, latencyMs, method, statusCode, clientIp, country, city]
       );
 
       // Probabilistic retention cleanup (5% sampling)
@@ -201,8 +210,8 @@ export async function listErrorLogs(
 
       if (options.search && options.search.trim()) {
         const q = `%${options.search.trim().toLowerCase()}%`;
-        conditions.push('(LOWER(message) LIKE ? OR LOWER(source) LIKE ? OR LOWER(ray_id) LIKE ? OR LOWER(user_email) LIKE ? OR LOWER(path) LIKE ?)');
-        params.push(q, q, q, q, q);
+        conditions.push('(LOWER(message) LIKE ? OR LOWER(source) LIKE ? OR LOWER(ray_id) LIKE ? OR LOWER(user_email) LIKE ? OR LOWER(path) LIKE ? OR LOWER(client_ip) LIKE ? OR LOWER(country) LIKE ? OR LOWER(city) LIKE ?)');
+        params.push(q, q, q, q, q, q, q, q);
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -212,7 +221,7 @@ export async function listErrorLogs(
 
       const [logs, countRes, statsRes, bottlenecks] = await Promise.all([
         db.query<ErrorLogRecord>(
-          `SELECT id, level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, created_at
+          `SELECT id, level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
            FROM system_error_logs
            ${whereClause}
            ${orderClause}

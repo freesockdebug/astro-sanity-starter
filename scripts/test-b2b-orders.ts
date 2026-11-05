@@ -344,12 +344,26 @@ async function runSelfCheck() {
     context: { foo: 'bar', secret: 'super_secret_value' },
     rayId: 'ray_test_12345',
     path: '/api/test',
+    clientIp: '203.0.113.195',
+    country: 'US',
+    city: 'San Jose',
   });
   assert.strictEqual(logRecorded, true);
 
   const initialLogsRes = await listErrorLogs({ source: 'test-runner' });
   assert.ok(initialLogsRes.total >= 1);
   assert.strictEqual(initialLogsRes.logs[0].error_code, 'TEST_ERR_001');
+  assert.strictEqual(initialLogsRes.logs[0].client_ip, '203.0.113.195');
+  assert.strictEqual(initialLogsRes.logs[0].country, 'US');
+  assert.strictEqual(initialLogsRes.logs[0].city, 'San Jose');
+
+  // Search by client IP and country
+  const ipSearchRes = await listErrorLogs({ search: '203.0.113.195' });
+  assert.ok(ipSearchRes.total >= 1);
+  assert.strictEqual(ipSearchRes.logs[0].client_ip, '203.0.113.195');
+
+  const countrySearchRes = await listErrorLogs({ search: 'San Jose' });
+  assert.ok(countrySearchRes.total >= 1);
 
   // Test authenticated user logging toggle:
   // When log_authenticated_users = false, logged-in user errors are skipped!

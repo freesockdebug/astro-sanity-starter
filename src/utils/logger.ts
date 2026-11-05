@@ -5,6 +5,7 @@ import { waitUntil as cfWaitUntil, env as cfWorkerEnv } from 'cloudflare:workers
 import type { APIRoute, APIContext } from 'astro';
 import { recordErrorLog, type RecordErrorLogInput } from '../db/logs.repo';
 import { getActiveProfiler } from './profiler';
+import { SecurityService } from './security';
 
 export { LOG_LEVEL_WEIGHT } from '../db/logs.repo';
 
@@ -21,6 +22,9 @@ export interface LogContext {
   userId?: string;
   userEmail?: string;
   latencyMs?: number;
+  clientIp?: string;
+  country?: string;
+  city?: string;
   error?: any;
   stack?: string;
   context?: Record<string, any>;
@@ -154,6 +158,9 @@ function emit(level: LogLevel, context: LogContext, options: { cfEnv?: any; ctx?
       latencyMs: context.latencyMs ?? null,
       method: context.method || null,
       statusCode: context.statusCode ?? null,
+      clientIp: context.clientIp || null,
+      country: context.country || null,
+      city: context.city || null,
     },
     options.cfEnv,
     options.ctx
@@ -167,6 +174,9 @@ export interface MeasureOptions {
   rayId?: string;
   userId?: string;
   userEmail?: string;
+  clientIp?: string;
+  country?: string;
+  city?: string;
   /** Automatically upgrade to warn if latency exceeds this threshold (default: 500ms) */
   warnThresholdMs?: number;
   /** Associated request-level span timings dictionary */
@@ -210,6 +220,9 @@ export async function measure<T>(
         rayId: options.rayId,
         userId: options.userId,
         userEmail: options.userEmail,
+        clientIp: options.clientIp,
+        country: options.country,
+        city: options.city,
         context: { operation: label, latencyMs },
       },
       { cfEnv: options.cfEnv, ctx: options.ctx }
@@ -235,6 +248,9 @@ export async function measure<T>(
         rayId: options.rayId,
         userId: options.userId,
         userEmail: options.userEmail,
+        clientIp: options.clientIp,
+        country: options.country,
+        city: options.city,
         error: err,
         context: { operation: label, latencyMs },
       },
@@ -308,6 +324,7 @@ export function withApiPerf(
       crypto.randomUUID();
     const pathname = context.url.pathname;
     const method = context.request.method;
+    const { ip: clientIp, country, city } = SecurityService.resolveClientMeta(context.request);
     const cfEnv = options.cfEnv || (context.locals as any)?.runtime?.env || (globalThis as any).__CF_ENV__;
     const runtimeCtx = (context.locals as any)?.cfContext;
 
@@ -345,6 +362,9 @@ export function withApiPerf(
             statusCode: response.status,
             rayId,
             latencyMs,
+            clientIp,
+            country,
+            city,
             context: {
               method,
               statusCode: response.status,
@@ -372,6 +392,9 @@ export function withApiPerf(
           method,
           rayId,
           latencyMs,
+          clientIp,
+          country,
+          city,
           error: err,
           context: { method, latencyMs, spans },
         },

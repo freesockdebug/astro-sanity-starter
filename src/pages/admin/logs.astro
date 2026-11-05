@@ -161,7 +161,7 @@ const pageTitle = 'System Diagnostics & Logs';
           type="text"
           id="logs-search-input"
           value={initialSearch}
-          placeholder="Filter message, rayId, path, email..."
+          placeholder="Filter message, rayId, path, IP, country, email..."
           class="w-full h-8 pl-8 pr-7 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs text-[#1d1d1f]"
         />
         <svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -277,6 +277,14 @@ const pageTitle = 'System Diagnostics & Logs';
           <span class="text-[#86868b] block">User / Email</span>
           <strong id="modal-user" class="font-mono text-[#1d1d1f]"></strong>
         </div>
+        <div>
+          <span class="text-[#86868b] block">Client IP</span>
+          <strong id="modal-ip" class="font-mono text-[#1d1d1f]"></strong>
+        </div>
+        <div>
+          <span class="text-[#86868b] block">Country & City</span>
+          <strong id="modal-geo" class="font-mono text-[#1d1d1f]"></strong>
+        </div>
       </div>
 
       <!-- Sub-step Spans Breakdown Container -->
@@ -381,6 +389,8 @@ const pageTitle = 'System Diagnostics & Logs';
     const modalHttp = document.getElementById('modal-http');
     const modalLatency = document.getElementById('modal-latency');
     const modalUser = document.getElementById('modal-user');
+    const modalIp = document.getElementById('modal-ip');
+    const modalGeo = document.getElementById('modal-geo');
     const modalSpansContainer = document.getElementById('modal-spans-container');
     const modalSpansList = document.getElementById('modal-spans-list');
     const modalContext = document.getElementById('modal-context');
@@ -608,6 +618,12 @@ const pageTitle = 'System Diagnostics & Logs';
                 const statusBadge = log.status_code ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono ${log.status_code >= 400 ? 'bg-rose-50 text-rose-700 font-bold' : 'bg-emerald-50 text-emerald-700'}">${log.status_code}</span>` : '';
                 const timeStr = formatTime(log.created_at);
 
+                const geoTokens = [];
+                if (log.client_ip) geoTokens.push(log.client_ip);
+                if (log.country) geoTokens.push(log.country);
+                if (log.city) geoTokens.push(log.city);
+                const clientGeo = geoTokens.length > 0 ? escapeHtml(geoTokens.join(' · ')) : '';
+
                 return `
                   <tr class="hover:bg-[#f5f5f7]/40 transition-colors">
                     <td class="py-3 px-4 whitespace-nowrap">
@@ -635,7 +651,12 @@ const pageTitle = 'System Diagnostics & Logs';
                     </td>
 
                     <td class="py-3 px-4 whitespace-nowrap text-[11px]">
-                      <span class="text-[#1d1d1f] block font-mono truncate max-w-[140px]">${safeUser}</span>
+                      <span class="text-[#1d1d1f] block font-mono truncate max-w-[140px] font-medium">${safeUser}</span>
+                      ${clientGeo ? `
+                        <span class="text-[10px] font-mono text-[#52525b] block mt-0.5 truncate max-w-[150px]" title="${clientGeo}">
+                          🌐 ${clientGeo}
+                        </span>
+                      ` : ''}
                       ${safeRay ? `
                         <button
                           type="button"
@@ -708,6 +729,13 @@ const pageTitle = 'System Diagnostics & Logs';
       if (modalHttp) modalHttp.textContent = `${log.method || 'GET'} · HTTP ${log.status_code || 200}`;
       if (modalLatency) modalLatency.textContent = log.latency_ms ? `${log.latency_ms} ms` : '—';
       if (modalUser) modalUser.textContent = log.user_email || log.user_id || 'Anonymous';
+      if (modalIp) modalIp.textContent = log.client_ip || '—';
+      if (modalGeo) {
+        const parts = [];
+        if (log.country) parts.push(log.country);
+        if (log.city) parts.push(log.city);
+        modalGeo.textContent = parts.length > 0 ? parts.join(', ') : '—';
+      }
 
       // Parse context and sub-spans breakdown
       let parsedContext: any = null;
