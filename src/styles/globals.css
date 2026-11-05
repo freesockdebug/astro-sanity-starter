@@ -31,12 +31,13 @@
   --rail-max-narrow: 980px;
   --rail-max-bento: clamp(80rem, 82vw, 96.25rem); /* 1280px -> 1540px continuous affine mapping */
 
-  /* 5. Continuous Vertical & Component Spacing Tokens (replaces discrete @media max-height: 820px / 720px / 620px tiers) */
-  --space-hero-pt: clamp(3.25rem, min(5vw, 8svh), 5.5rem);
-  --space-hero-pb: clamp(1rem, min(2.5vw, 4svh), 3rem);
-  --space-section-pt: clamp(0.75rem, min(4vw, 6svh - 1.75rem), 4.5rem);
-  --space-section-pb: clamp(0.5rem, min(2.5vw, 3.5svh - 1rem), 2.5rem);
-  --space-bento-gap: clamp(0.5rem, min(1.25vw, 1.8svh), 1.25rem);
+  /* 5. Golden-Ratio Damped Vertical Spacing Tokens (φ⁻¹ ≈ 0.618) */
+  --phi-scale: 0.618;
+  --space-hero-pt: clamp(2.5rem, min(4vw, 6.5svh), 4.25rem);
+  --space-hero-pb: clamp(0.75rem, min(2vw, 3svh), 2rem);
+  --space-section-pt: calc(clamp(1.125rem, min(3.5vw, 5svh - 1rem), 3.75rem) * var(--phi-scale));
+  --space-section-pb: calc(var(--space-section-pt) * var(--phi-scale));
+  --space-bento-gap: clamp(0.5rem, min(1.1vw, 1.5svh), 1rem);
 
   /* 6. Apple HIG / Core Animation Standard Ease-In-Out Curve */
   --apple-ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
@@ -179,7 +180,9 @@ body {
 }
 
 .specs-section,
-#collections {
+#collections,
+#manufacturing,
+#inquiry {
   padding-top: var(--space-section-pt);
   padding-bottom: var(--space-section-pb);
 }
