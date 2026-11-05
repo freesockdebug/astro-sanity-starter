@@ -25,9 +25,9 @@ const DEFAULT_TTL_SECONDS = 7 * 24 * 3600; // 7 days
 export function getRuntimeEnv(key: string, customEnv?: any): string | undefined {
   return (
     customEnv?.[key] ||
+    (globalThis as any)?.__CF_ENV__?.[key] ||
     (typeof process !== 'undefined' && process.env && (process.env as any)[key]) ||
     (import.meta.env && (import.meta.env as any)[key]) ||
-    (globalThis as any)?.__CF_ENV__?.[key] ||
     (globalThis as any)?.[key]
   );
 }

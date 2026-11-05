@@ -12,6 +12,9 @@ import { SecurityService } from './utils/security';
  * server-rendered HTML directly from Cloudflare's Global Edge Cache.
  */
 export const onRequest = defineMiddleware(async (context, next) => {
+  if (cfEnv && typeof globalThis !== 'undefined') {
+    (globalThis as any).__CF_ENV__ = cfEnv;
+  }
   const { request, url } = context;
   const pathname = url.pathname;
 

@@ -73,13 +73,13 @@ export class SecurityService {
         return false;
       }
 
-      // Block IPv6 loopback, link-local, unique-local, and IPv4-mapped IPv6
+      // Block IPv6 loopback, link-local (fe80::/10), unique-local (fc00::/7), and IPv4-mapped IPv6
       if (
         hostname === '::1' ||
         hostname === '::' ||
+        /^fe[89ab][0-9a-f]:/i.test(hostname) ||
         hostname.startsWith('fe80:') ||
-        hostname.startsWith('fc00:') ||
-        hostname.startsWith('fd00:') ||
+        /^f[cd][0-9a-f]{2}:/i.test(hostname) ||
         hostname.startsWith('::ffff:')
       ) {
         return false;

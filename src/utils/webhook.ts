@@ -52,6 +52,7 @@ export async function dispatchWebhookMessage(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),
     });
     return { success: res.ok, status: res.status, error: res.ok ? undefined : `HTTP ${res.status}` };

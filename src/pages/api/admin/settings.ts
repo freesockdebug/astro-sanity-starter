@@ -1,6 +1,6 @@
 // src/pages/api/admin/settings.ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, getRuntimeEnv } from '@utils/auth';
+import { verifyAdminAuth, getRuntimeEnv, jsonNoCache } from '@utils/auth';
 import { getSystemSettings, updateSystemSettings } from '@utils/db';
 import { SecurityService } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
@@ -9,29 +9,17 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const NO_CACHE_HEADERS = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
-  'Cloudflare-CDN-Cache-Control': 'no-store',
-  'CDN-Cache-Control': 'no-store',
-  'Pragma': 'no-cache',
-  'Expires': '0',
-};
-
 export const GET: APIRoute = async ({ request }) => {
   const admin = await verifyAdminAuth(request, cfEnv);
   if (!admin) {
-    return new Response(JSON.stringify({ error: 'Forbidden. Administrator access required.' }), {
-      status: 403,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
   }
 
   let d1Healthy = true;
   let settings;
   try {
     settings = await getSystemSettings(cfEnv);
-  } catch (e) {
+  } catch {
     d1Healthy = false;
     settings = await getSystemSettings();
   }
@@ -46,53 +34,38 @@ export const GET: APIRoute = async ({ request }) => {
     rootAdminEmails: getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '',
   };
 
-  return new Response(JSON.stringify({ success: true, settings, health }), {
-    status: 200,
-    headers: NO_CACHE_HEADERS,
-  });
+  return jsonNoCache({ success: true, settings, health });
 };
 
 export const POST: APIRoute = async ({ request }) => {
   const admin = await verifyAdminAuth(request, cfEnv);
   if (!admin) {
-    return new Response(JSON.stringify({ error: 'Forbidden. Administrator access required.' }), {
-      status: 403,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
   }
 
   let body: any;
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON payload.' }), {
-      status: 400,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'Invalid JSON payload.' }, 400);
   }
 
-  const action = body.action || 'save';
+  const action = body?.action || 'save';
 
   // Action: Test Webhook dispatch
   if (action === 'test_webhook') {
-    const targetUrl = typeof body.url === 'string' ? body.url.trim() : '';
+    const targetUrl = typeof body?.url === 'string' ? body.url.trim() : '';
     if (!targetUrl) {
-      return new Response(JSON.stringify({ success: false, error: 'Webhook URL cannot be empty.' }), {
-        status: 400,
-        headers: NO_CACHE_HEADERS,
-      });
+      return jsonNoCache({ success: false, error: 'Webhook URL cannot be empty.' }, 400);
     }
 
     if (!SecurityService.isSafeWebhookUrl(targetUrl)) {
-      return new Response(
-        JSON.stringify({
+      return jsonNoCache(
+        {
           success: false,
           error: 'Security rejection: Webhook URL must be a public HTTPS endpoint (RFC 1918 / localhost / internal addresses blocked).',
-        }),
-        {
-          status: 400,
-          headers: NO_CACHE_HEADERS,
-        }
+        },
+        400
       );
     }
 
@@ -109,38 +82,35 @@ export const POST: APIRoute = async ({ request }) => {
       });
 
       if (!result.success) {
-        return new Response(
-          JSON.stringify({
+        return jsonNoCache(
+          {
             success: false,
             error: `Target server error: ${result.error || 'Dispatch failed'}`,
-          }),
-          { status: 200, headers: NO_CACHE_HEADERS }
+          },
+          200
         );
       }
 
-      return new Response(
-        JSON.stringify({ success: true, message: `Webhook reached successfully (HTTP ${result.status || 200}).` }),
-        { status: 200, headers: NO_CACHE_HEADERS }
+      return jsonNoCache(
+        { success: true, message: `Webhook reached successfully (HTTP ${result.status || 200}).` },
+        200
       );
     } catch (err: any) {
-      return new Response(
-        JSON.stringify({
+      return jsonNoCache(
+        {
           success: false,
           error: err.name === 'TimeoutError' ? 'Target webhook server timed out (>6s).' : (err.message || 'Network fetch failure.'),
-        }),
-        { status: 200, headers: NO_CACHE_HEADERS }
+        },
+        200
       );
     }
   }
 
   // Action: Save Settings
   if (action === 'save') {
-    const rawUpdates = body.updates;
+    const rawUpdates = body?.updates;
     if (!rawUpdates || typeof rawUpdates !== 'object') {
-      return new Response(JSON.stringify({ error: 'Missing updates object.' }), {
-        status: 400,
-        headers: NO_CACHE_HEADERS,
-      });
+      return jsonNoCache({ error: 'Missing updates object.' }, 400);
     }
 
     const updates: Record<string, any> = {};
@@ -149,11 +119,11 @@ export const POST: APIRoute = async ({ request }) => {
     if (typeof rawUpdates.notification_webhook_url === 'string') {
       const trimmedUrl = rawUpdates.notification_webhook_url.trim();
       if (trimmedUrl.length > 0 && !SecurityService.isSafeWebhookUrl(trimmedUrl)) {
-        return new Response(
-          JSON.stringify({
+        return jsonNoCache(
+          {
             error: 'Webhook URL must be a valid public HTTPS URL (internal and non-HTTPS URLs are blocked).',
-          }),
-          { status: 400, headers: NO_CACHE_HEADERS }
+          },
+          400
         );
       }
       updates.notification_webhook_url = trimmedUrl;
@@ -163,11 +133,11 @@ export const POST: APIRoute = async ({ request }) => {
     if (typeof rawUpdates.order_no_prefix === 'string') {
       const prefix = rawUpdates.order_no_prefix.trim().toUpperCase();
       if (!/^[A-Z0-9_-]{2,8}$/.test(prefix)) {
-        return new Response(
-          JSON.stringify({
+        return jsonNoCache(
+          {
             error: 'Order Prefix must be 2 to 8 alphanumeric characters, underscores, or dashes (e.g. ORD, REQ, RFQ).',
-          }),
-          { status: 400, headers: NO_CACHE_HEADERS }
+          },
+          400
         );
       }
       updates.order_no_prefix = prefix;
@@ -177,11 +147,11 @@ export const POST: APIRoute = async ({ request }) => {
     if (rawUpdates.login_retention_days !== undefined) {
       const days = parseInt(rawUpdates.login_retention_days, 10);
       if (isNaN(days) || days < 7 || days > 365) {
-        return new Response(
-          JSON.stringify({
+        return jsonNoCache(
+          {
             error: 'Login Retention Days must be an integer between 7 and 365.',
-          }),
-          { status: 400, headers: NO_CACHE_HEADERS }
+          },
+          400
         );
       }
       updates.login_retention_days = days;
@@ -218,22 +188,16 @@ export const POST: APIRoute = async ({ request }) => {
 
     const saveResult = await updateSystemSettings(updates, admin.email, cfEnv);
     if (!saveResult.success) {
-      return new Response(JSON.stringify({ error: saveResult.error || 'Failed to save settings.' }), {
-        status: 500,
-        headers: NO_CACHE_HEADERS,
-      });
+      return jsonNoCache({ error: saveResult.error || 'Failed to save settings.' }, 500);
     }
 
     const refreshedSettings = await getSystemSettings(cfEnv);
-    return new Response(
-      JSON.stringify({ success: true, message: 'Settings saved successfully.', settings: refreshedSettings }),
-      { status: 200, headers: NO_CACHE_HEADERS }
-    );
+    return jsonNoCache({
+      success: true,
+      message: 'Settings saved successfully.',
+      settings: refreshedSettings,
+    });
   }
 
-  return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
-    status: 400,
-    headers: NO_CACHE_HEADERS,
-  });
+  return jsonNoCache({ error: `Unknown action: ${action}` }, 400);
 };
-

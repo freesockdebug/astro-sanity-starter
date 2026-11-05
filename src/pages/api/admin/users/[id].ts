@@ -4,6 +4,7 @@ import { verifyAdminAuth, getRuntimeEnv, getMergedAdminEmails, jsonNoCache } fro
 import {
   getUserDetailsWithOrders,
   updateUserAdminMeta,
+  getSystemSettings,
   type CustomerTier,
   type UserStatus,
 } from '@utils/db';
@@ -58,14 +59,23 @@ export const POST: APIRoute = async ({ request, params }) => {
     return jsonNoCache({ error: 'At least one field (tier, status, adminNotes) is required.' }, 400);
   }
 
-  // Super-admin protection: Cannot block accounts listed in ADMIN_EMAILS
+  // Self-lockout & Admin protection: Cannot block own account or admin whitelist
   if (status === 'BLOCKED') {
-    const targetData = await getUserDetailsWithOrders(userId);
+    if (userId === user.id) {
+      return jsonNoCache({ error: 'You cannot block your own admin account.' }, 400);
+    }
+    const [targetData, settings] = await Promise.all([
+      getUserDetailsWithOrders(userId),
+      getSystemSettings(cfEnv),
+    ]);
     const targetEmail = targetData.user?.email?.toLowerCase().trim();
     if (targetEmail) {
-      const rootWhitelist = getMergedAdminEmails(undefined, cfEnv);
+      if (user.email && targetEmail === user.email.toLowerCase().trim()) {
+        return jsonNoCache({ error: 'You cannot block your own admin account.' }, 400);
+      }
+      const rootWhitelist = getMergedAdminEmails(settings?.co_admin_emails, cfEnv);
       if (rootWhitelist.includes(targetEmail)) {
-        return jsonNoCache({ error: 'Super administrators cannot be blocked.' }, 403);
+        return jsonNoCache({ error: 'Super administrators and co-administrators cannot be blocked.' }, 403);
       }
     }
   }

@@ -3,8 +3,7 @@
 import type { Page } from 'types';
 import Layout from '@layouts/Layout.astro';
 import { componentMap, SectionBoundary, NotFoundView } from '@components';
-import { client } from '@utils/sanity-client';
-import { PAGE_QUERY_OBJ } from '@data/page';
+import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { normalizeSections, extractHeroPreload } from '@data/blocks';
@@ -39,20 +38,13 @@ if (rawSlug && /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml
 const formattedSlug = !rawSlug || rawSlug === '/' ? '/' : (rawSlug.startsWith('/') ? rawSlug : `/${rawSlug}`);
 const unslashed = formattedSlug.replace(/^\//, '');
 
-// Multi-tier cached resolution: fetch dynamic page from Sanity concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
-const [page] = await Promise.all([
-  client
-    .fetch<Page | null>(
-      `*[_type == "page" && (slug.current == $formattedSlug || slug.current == $unslashed)][0] ${PAGE_QUERY_OBJ}`,
-      { formattedSlug, unslashed }
-    )
-    .catch((e) => {
-      console.error(`Failed to fetch page data for ${formattedSlug}:`, e);
-      return null;
-    }),
+// Multi-tier cached resolution: fetch dynamic page concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
+const [pages] = await Promise.all([
+  PageService.getBySlug(formattedSlug),
   SiteConfigService.getConfig(),
   RfqSettingsService.getSettings(),
 ]);
+const page = pages && pages.length > 0 ? pages[0] : null;
 
 if (!page) {
   Astro.response.status = 404;

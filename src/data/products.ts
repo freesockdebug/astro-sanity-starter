@@ -389,14 +389,14 @@ export class ProductService {
     const now = Date.now();
     const memHit = this.productSlugCache.get(slug);
     if (memHit && now - memHit.timestamp < 10_000) {
-      return memHit.data;
+      return structuredClone(memHit.data);
     }
 
     try {
       const kvHit = await kvGet<Product>(cacheKey, customEnv);
       if (kvHit) {
         this.productSlugCache.set(slug, { data: kvHit, timestamp: now });
-        return kvHit;
+        return structuredClone(kvHit);
       }
     } catch {}
 
@@ -408,8 +408,9 @@ export class ProductService {
       if (data) {
         this.productSlugCache.set(slug, { data, timestamp: now });
         await kvPut(cacheKey, data, { expirationTtl: 86400 }, customEnv).catch(() => {});
+        return structuredClone(data);
       }
-      return data;
+      return null;
     } catch (err: any) {
       console.error(`ProductService.getBySlug failed for ${slug}:`, err?.message);
       return null;

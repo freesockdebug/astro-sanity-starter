@@ -1,5 +1,6 @@
 import { client } from '@utils/sanity-client';
 import { createSwrCache } from '@utils/cache';
+import { kvGet, kvPut } from '@utils/kv';
 import { SECTIONS } from './blocks';
 import type { Page } from 'types';
 
@@ -34,6 +35,8 @@ const homePageCache = createSwrCache<Page | null>(
  * Service for fetching and resolving CMS Pages from Sanity
  */
 export class PageService {
+  private static pageSlugCache = new Map<string, { data: Page; timestamp: number }>();
+
   /**
    * Multi-tier cached retrieval of the homepage content (L1 isolate memory -> L2 Cloudflare KV -> L3 Sanity)
    */
@@ -43,6 +46,7 @@ export class PageService {
 
   public static invalidateCache(): void {
     homePageCache.invalidate();
+    this.pageSlugCache.clear();
   }
   /**
    * Fetch all pages
@@ -74,18 +78,37 @@ export class PageService {
   }
 
   /**
-   * Fetch a page by URL slug using parameterized GROQ (Safe from GROQ injection)
+   * Fetch a page by URL slug using multi-tier caching (L1 memory -> L2 KV -> L3 Sanity)
    */
-  public static async getBySlug(slug?: string | null): Promise<Page[]> {
-    try {
-      const formattedSlug = !slug || slug === '/' ? '/' : (slug.startsWith('/') ? slug : `/${slug}`);
-      const unslashed = formattedSlug.replace(/^\//, '');
+  public static async getBySlug(slug?: string | null, customEnv?: any): Promise<Page[]> {
+    const formattedSlug = !slug || slug === '/' ? '/' : (slug.startsWith('/') ? slug : `/${slug}`);
+    const unslashed = formattedSlug.replace(/^\//, '');
+    const cacheKey = `cms:page:${unslashed || 'home'}`;
+    const now = Date.now();
+    const memHit = this.pageSlugCache.get(cacheKey);
+    if (memHit && now - memHit.timestamp < 10_000) {
+      return [structuredClone(memHit.data)];
+    }
 
+    try {
+      const kvHit = await kvGet<Page>(cacheKey, customEnv);
+      if (kvHit) {
+        this.pageSlugCache.set(cacheKey, { data: kvHit, timestamp: now });
+        return [structuredClone(kvHit)];
+      }
+    } catch {}
+
+    try {
       const data = await client.fetch<Page[]>(
         `*[_type == "page" && (slug.current == $formattedSlug || slug.current == $unslashed)] ${PAGE_QUERY_OBJ}`,
         { formattedSlug, unslashed }
       );
-      return data || [];
+      const res = data || [];
+      if (res.length > 0) {
+        this.pageSlugCache.set(cacheKey, { data: res[0], timestamp: now });
+        await kvPut(cacheKey, res[0], { expirationTtl: 86400 }, customEnv).catch(() => {});
+      }
+      return res.map((p) => structuredClone(p));
     } catch (err: any) {
       console.error(`PageService.getBySlug failed for slug ${slug}:`, err?.message);
       return [];

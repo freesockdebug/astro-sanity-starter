@@ -272,6 +272,10 @@ export const POST: APIRoute = async (context) => {
     if (docType === 'product' && docSlug) {
       kvPurges.push(kvDelete(`cms:product:${docSlug}`, cfEnv));
     }
+    if (docType === 'page' && docSlug) {
+      const cleanSlug = docSlug.replace(/^\//, '');
+      kvPurges.push(kvDelete(`cms:page:${cleanSlug || 'home'}`, cfEnv));
+    }
     await Promise.all(kvPurges).catch(() => {});
 
     // 5. LAYER 2: Cloudflare Global CDN Zone Cache Purge API

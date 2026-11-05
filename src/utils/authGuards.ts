@@ -168,7 +168,7 @@ export async function requireAdminContext(
   let pendingOrdersCount = 0;
   if (!options.skipPendingCount) {
     try {
-      pendingOrdersCount = await getPendingOrdersCount(cfEnv);
+      pendingOrdersCount = await getPendingOrdersCount();
     } catch {
       // Non-blocking fail-safe
     }
