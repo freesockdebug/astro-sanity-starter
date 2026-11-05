@@ -7,6 +7,34 @@ import { SecurityService } from './utils/security';
 import { logger } from './utils/logger';
 
 /**
+ * Safely mutates headers on a Response, cloning into a new Response if headers are immutable
+ * (e.g. Response.redirect or cached responses).
+ */
+function safeSetHeaders(response: Response, headersToSet: Record<string, string>): Response {
+  try {
+    for (const [k, v] of Object.entries(headersToSet)) {
+      response.headers.set(k, v);
+    }
+    return response;
+  } catch {
+    const newHeaders = new Headers(response.headers);
+    for (const [k, v] of Object.entries(headersToSet)) {
+      newHeaders.set(k, v);
+    }
+    const body = [204, 205, 304].includes(response.status) ? null : response.body;
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
+  }
+}
+
+function safeSetHeader(response: Response, name: string, value: string): Response {
+  return safeSetHeaders(response, { [name]: value });
+}
+
+/**
  * Cloudflare Edge Cache Middleware for HTML Pages with Observability & Slow-Request Diagnostics
  */
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -25,7 +53,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   try {
-    const response = await handleRequest(context, next, pathname, url, request);
+    let response = await handleRequest(context, next, pathname, url, request);
     const latencyMs = Date.now() - startTime;
     if (latencyMs > 2000 && !pathname.startsWith('/_astro/')) {
       logger.warn(
@@ -40,7 +68,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         { cfEnv, ctx: runtimeCtx }
       );
     }
-    response.headers.set('X-Request-Id', rayId);
+    response = safeSetHeader(response, 'X-Request-Id', rayId);
     return response;
   } catch (err: any) {
     const latencyMs = Date.now() - startTime;
@@ -153,14 +181,16 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
       }
     }
 
-    const response = await next();
+    let response = await next();
     if (isOrdersPath || isAccountPath || isAdminPath || hasUserSession) {
-      response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
-      response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
-      response.headers.set('CDN-Cache-Control', 'no-store');
-      response.headers.set('Pragma', 'no-cache');
-      response.headers.set('Expires', '0');
-      response.headers.set('X-Edge-Cache', 'BYPASS');
+      response = safeSetHeaders(response, {
+        'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'X-Edge-Cache': 'BYPASS',
+      });
     }
     return response;
   }
@@ -211,8 +241,8 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     try {
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
-        const hitResponse = new Response(cachedResponse.body, cachedResponse);
-        hitResponse.headers.set('X-Edge-Cache', 'HIT');
+        let hitResponse = new Response(cachedResponse.body, cachedResponse);
+        hitResponse = safeSetHeader(hitResponse, 'X-Edge-Cache', 'HIT');
         return hitResponse;
       }
     } catch (err) {
