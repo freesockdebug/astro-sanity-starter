@@ -80,14 +80,14 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
       redirect_uri: callbackUrl,
     });
 
-    profiler?.startSpan('auth.logto_exchange');
-    const tokenRes = await fetch(`${endpoint}/oidc/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: tokenBody.toString(),
-      signal: AbortSignal.timeout(6000),
-    });
-    profiler?.endSpan('auth.logto_exchange');
+    const tokenFetch = () =>
+      fetch(`${endpoint}/oidc/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenBody.toString(),
+        signal: AbortSignal.timeout(6000),
+      });
+    const tokenRes = await (profiler ? profiler.time('auth.logto_exchange', tokenFetch) : tokenFetch());
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
@@ -117,12 +117,12 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
 
     // Fallback: Fetch User Info from /oidc/me if id_token was missing or incomplete
     if (!userInfo) {
-      profiler?.startSpan('auth.logto_userinfo');
-      const meRes = await fetch(`${endpoint}/oidc/me`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(6000),
-      });
-      profiler?.endSpan('auth.logto_userinfo');
+      const meFetch = () =>
+        fetch(`${endpoint}/oidc/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(6000),
+        });
+      const meRes = await (profiler ? profiler.time('auth.logto_userinfo', meFetch) : meFetch());
 
       if (!meRes.ok) {
         const meErr = await meRes.text();
@@ -151,6 +151,7 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
       path: reqUrl.pathname,
       rayId: request.headers.get('cf-ray') || undefined,
       error: err,
+      context: { spans: profiler?.getSpans() },
     }, { cfEnv });
     return new Response(`Authentication Error: ${err.message}`, { status: 500 });
   }

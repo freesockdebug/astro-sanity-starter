@@ -87,9 +87,11 @@ class D1ClientAdapter implements DbClient {
       return (res?.results || []) as T[];
     } finally {
       const dur = Date.now() - t0;
-      getActiveProfiler()?.addSpan('d1', dur);
-      if (dur > 200 && !sql.includes('system_error_logs')) {
-        console.warn(`[DB Slow SQL] query (${dur}ms): ${sql.slice(0, 160)}`);
+      if (!sql.includes('system_error_logs')) {
+        getActiveProfiler()?.addSpan('d1', dur);
+        if (dur > 200) {
+          console.warn(`[DB Slow SQL] query (${dur}ms): ${sql.slice(0, 160)}`);
+        }
       }
     }
   }
@@ -103,9 +105,11 @@ class D1ClientAdapter implements DbClient {
       return (res || null) as T | null;
     } finally {
       const dur = Date.now() - t0;
-      getActiveProfiler()?.addSpan('d1', dur);
-      if (dur > 200 && !sql.includes('system_error_logs')) {
-        console.warn(`[DB Slow SQL] first (${dur}ms): ${sql.slice(0, 160)}`);
+      if (!sql.includes('system_error_logs')) {
+        getActiveProfiler()?.addSpan('d1', dur);
+        if (dur > 200) {
+          console.warn(`[DB Slow SQL] first (${dur}ms): ${sql.slice(0, 160)}`);
+        }
       }
     }
   }
@@ -122,9 +126,11 @@ class D1ClientAdapter implements DbClient {
       };
     } finally {
       const dur = Date.now() - t0;
-      getActiveProfiler()?.addSpan('d1', dur);
-      if (dur > 200 && !sql.includes('system_error_logs')) {
-        console.warn(`[DB Slow SQL] execute (${dur}ms): ${sql.slice(0, 160)}`);
+      if (!sql.includes('system_error_logs')) {
+        getActiveProfiler()?.addSpan('d1', dur);
+        if (dur > 200) {
+          console.warn(`[DB Slow SQL] execute (${dur}ms): ${sql.slice(0, 160)}`);
+        }
       }
     }
   }
@@ -140,7 +146,9 @@ class D1ClientAdapter implements DbClient {
       await this.raw.batch(d1Stmts);
     } finally {
       const dur = Date.now() - t0;
-      getActiveProfiler()?.addSpan('d1', dur);
+      if (!operations.some((op) => op.sql.includes('system_error_logs'))) {
+        getActiveProfiler()?.addSpan('d1', dur);
+      }
     }
   }
 }
@@ -157,7 +165,9 @@ class SQLiteClientAdapter implements DbClient {
       const rows = stmt.all(...params);
       return (rows || []) as T[];
     } finally {
-      getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+      if (!sql.includes('system_error_logs')) {
+        getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+      }
     }
   }
 
@@ -169,7 +179,9 @@ class SQLiteClientAdapter implements DbClient {
       const row = stmt.get(...params);
       return (row || null) as T | null;
     } finally {
-      getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+      if (!sql.includes('system_error_logs')) {
+        getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+      }
     }
   }
 
@@ -184,7 +196,9 @@ class SQLiteClientAdapter implements DbClient {
         lastInsertId: info?.lastInsertRowid ? String(info.lastInsertRowid) : undefined,
       };
     } finally {
-      getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+      if (!sql.includes('system_error_logs')) {
+        getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+      }
     }
   }
 

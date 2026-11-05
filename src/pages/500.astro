@@ -29,6 +29,7 @@ if (rayId) {
 const cookieHeader = Astro.request.headers.get('cookie') || '';
 const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
 const sessionUser = sessionToken ? await verifySessionToken(sessionToken, cfEnv) : null;
+const clientMeta = (Astro.locals as any)?.clientMeta;
 
 logger.error(
   {
@@ -40,6 +41,9 @@ logger.error(
     rayId,
     userId: sessionUser?.id,
     userEmail: sessionUser?.email,
+    clientIp: clientMeta?.ip || Astro.request.headers.get('cf-connecting-ip') || undefined,
+    country: clientMeta?.country || Astro.request.headers.get('cf-ipcountry') || undefined,
+    city: clientMeta?.city || (Astro.request as any).cf?.city || undefined,
   },
   { cfEnv }
 );
