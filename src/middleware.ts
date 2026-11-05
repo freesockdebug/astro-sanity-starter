@@ -308,7 +308,18 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     }
 
     let response = await next();
-    if ((isOrdersPath || isAccountPath || isAdminPath || hasUserSession) && !pathname.startsWith('/cdn-image/')) {
+    const isStaticAsset =
+      pathname.startsWith('/_astro/') ||
+      pathname.startsWith('/images/') ||
+      pathname.startsWith('/cdn-image/') ||
+      pathname === '/favicon.ico' ||
+      pathname === '/favicon.svg' ||
+      pathname.endsWith('.webp') ||
+      pathname.endsWith('.png') ||
+      pathname.endsWith('.jpg') ||
+      pathname.endsWith('.svg');
+
+    if ((isOrdersPath || isAccountPath || isAdminPath || hasUserSession) && !isStaticAsset) {
       response = safeSetHeaders(response, {
         'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
         'Cloudflare-CDN-Cache-Control': 'no-store',

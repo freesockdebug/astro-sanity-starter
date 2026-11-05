@@ -121,3 +121,4 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
 
   return jsonNoCache({ ok: true, rayId }, 202);
 };
+

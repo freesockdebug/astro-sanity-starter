@@ -48,3 +48,22 @@ if (activeLayoutCss && fs.existsSync(path.join(clientAstroDir, activeLayoutCss))
 } else {
   console.warn('[ensure-asset-aliases] No active Layout.*.css found in dist/client/_astro');
 }
+
+// 2. Ensure comprehensive Cloudflare CDN caching policies for all static assets
+const headersFile = path.join(process.cwd(), 'dist/client/_headers');
+let headersContent = fs.existsSync(headersFile) ? fs.readFileSync(headersFile, 'utf-8') : '';
+const requiredRules = [
+  { prefix: '/_astro/*', rule: '/_astro/*\n  Cache-Control: public, max-age=31536000, immutable' },
+  { prefix: '/images/*', rule: '/images/*\n  Cache-Control: public, max-age=2592000, s-maxage=31536000, immutable' },
+  { prefix: '/favicon.ico', rule: '/favicon.ico\n  Cache-Control: public, max-age=604800, s-maxage=2592000' },
+  { prefix: '/favicon.svg', rule: '/favicon.svg\n  Cache-Control: public, max-age=604800, s-maxage=2592000' },
+];
+
+for (const { prefix, rule } of requiredRules) {
+  if (!headersContent.includes(prefix)) {
+    headersContent = (headersContent.trim() ? headersContent.trim() + '\n\n' : '') + rule;
+  }
+}
+fs.writeFileSync(headersFile, headersContent.trim() + '\n');
+console.log('[ensure-asset-aliases] Injected static asset caching rules into dist/client/_headers');
+
