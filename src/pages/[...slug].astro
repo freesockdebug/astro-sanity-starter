@@ -11,7 +11,12 @@ import { normalizeSections, extractHeroPreload } from '@data/blocks';
 import { getLangFromUrl, getLocalizedValue } from '@i18n';
 
 export const prerender = false;
-Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
+
+// Canonical redirect: /en/* is default locale; redirect to clean path
+if (Astro.url.pathname.startsWith('/en/') || Astro.url.pathname === '/en') {
+  const stripped = Astro.url.pathname.replace(/^\/en/, '') || '/';
+  return Astro.redirect(stripped);
+}
 
 const currentLang = getLangFromUrl(Astro.url);
 let rawSlug = Astro.url.pathname.replace(/^\/+|\/+$/g, '');
@@ -52,6 +57,8 @@ const [page] = await Promise.all([
 if (!page) {
   Astro.response.status = 404;
   Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+} else {
+  Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 }
 
 const { title, sections: rawSections, metaTitle, addTitleSuffix, metaDescription, socialImage } = page || ({} as Page);
