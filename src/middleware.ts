@@ -307,7 +307,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     }
 
     let response = await next();
-    if (isOrdersPath || isAccountPath || isAdminPath || hasUserSession) {
+    if ((isOrdersPath || isAccountPath || isAdminPath || hasUserSession) && !pathname.startsWith('/cdn-image/')) {
       response = safeSetHeaders(response, {
         'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
         'Cloudflare-CDN-Cache-Control': 'no-store',
