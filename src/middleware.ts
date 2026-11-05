@@ -47,7 +47,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (cfEnv && typeof globalThis !== 'undefined') {
     (globalThis as any).__CF_ENV__ = cfEnv;
   }
-  const runtimeCtx = (context.locals as any)?.runtime?.ctx || (context.locals as any)?.cfContext;
+  const runtimeCtx = (context.locals as any)?.cfContext;
   if (runtimeCtx && typeof globalThis !== 'undefined') {
     (globalThis as any).__CF_CTX__ = runtimeCtx;
   }
@@ -288,7 +288,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
         headers: edgeHeaders,
       });
 
-      const cfCtx = (context.locals as any)?.cfContext || (context.locals as any)?.runtime?.ctx;
+      const cfCtx = (context.locals as any)?.cfContext;
       if (cfCtx?.waitUntil) {
         cfCtx.waitUntil(cache.put(cacheKey, responseToCache));
       } else {
