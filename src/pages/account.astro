@@ -433,6 +433,8 @@ const tier = dbUser?.tier || 'STANDARD';
 </BuyerLayout>
 
 <script>
+  import { clientCache } from '@utils/clientCache';
+
   // Profile update handling
   const form = document.getElementById('profile-form') as HTMLFormElement | null;
   const saveBtn = document.getElementById('save-profile-btn') as HTMLButtonElement | null;
@@ -467,6 +469,7 @@ const tier = dbUser?.tier || 'STANDARD';
 
       const data = await res.json();
       if (res.ok) {
+        clientCache.del('auth:me').catch(() => {});
         try {
           const emailVal = (document.getElementById('profile-email') as HTMLInputElement)?.value || '';
           localStorage.setItem('b2b_buyer_profile', JSON.stringify({

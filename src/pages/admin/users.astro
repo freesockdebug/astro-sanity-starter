@@ -293,6 +293,8 @@ const pageTitle = 'Customer & Access Management';
 </AdminLayout>
 
 <script>
+  import { clientCache } from '@utils/clientCache';
+
   let currentSearch = '';
   let currentTier = 'ALL';
   let currentStatus = 'ALL';
@@ -650,18 +652,21 @@ const pageTitle = 'Customer & Access Management';
       qs.set('page', String(currentPage));
       qs.set('limit', String(currentLimit));
 
-      const res = await fetch(`/api/admin/users?${qs.toString()}`, {
-        signal: activeAbortController.signal,
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      if (skeleton) skeleton.classList.add('hidden');
-
-      renderStats(data.stats, data.total);
-      renderUsers(data.users || []);
-      renderPagination(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 30);
+      const cacheKey = `admin:users:${currentTier}:${currentStatus}:${currentSearch}:${currentPage}:${currentLimit}`;
+      await clientCache.fetchWithCache(
+        cacheKey,
+        `/api/admin/users?${qs.toString()}`,
+        {
+          mode: 'swr',
+          init: { signal: activeAbortController.signal },
+          onData: (data: any) => {
+            if (skeleton) skeleton.classList.add('hidden');
+            renderStats(data.stats, data.total);
+            renderUsers(data.users || []);
+            renderPagination(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 30);
+          },
+        }
+      );
     } catch (err) {
       if (err.name === 'AbortError') return;
       console.error('Failed to load users:', err);
@@ -711,11 +716,15 @@ const pageTitle = 'Customer & Access Management';
     ordersLoadingEl?.classList.remove('hidden');
 
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        signal: currentDrawerController.signal,
-      });
-      if (!res.ok) throw new Error('Failed to load user details');
-      const data = await res.json();
+      const data: any = await clientCache.fetchWithCache(
+        `admin:user:${userId}`,
+        `/api/admin/users/${userId}`,
+        {
+          mode: 'ttl',
+          ttlMs: 2 * 60 * 1000,
+          init: { signal: currentDrawerController.signal },
+        }
+      );
       const recentOrders = data.recentOrders || [];
       const recentLogins = data.recentLogins || [];
 
@@ -863,6 +872,8 @@ const pageTitle = 'Customer & Access Management';
 
       const data = await res.json();
       if (res.ok) {
+        await clientCache.del(`admin:user:${id}`);
+        await clientCache.invalidatePrefix('admin:users:');
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
           feedbackEl.textContent = '✓ Changes saved successfully.';

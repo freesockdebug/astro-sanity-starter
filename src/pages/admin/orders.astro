@@ -358,6 +358,8 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
 </AdminLayout>
 
 <script>
+  import { clientCache } from '@utils/clientCache';
+
   let currentStatus = 'ALL';
   let currentSearch = '';
   let currentPage = 1;
@@ -935,20 +937,21 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       qs.set('page', String(currentPage));
       qs.set('limit', String(currentLimit));
 
-      const res = await fetch(`/api/admin/orders?${qs.toString()}`, {
-        signal: activeAbortController.signal,
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      if (skeleton) skeleton.classList.add('hidden');
-
-      renderStats(data.stats, data.total);
-      renderOrders(data.orders || []);
-      renderPagination(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 50);
+      const cacheKey = `admin:orders:${currentStatus}:${currentSearch}:${currentPage}:${currentLimit}`;
+      await clientCache.fetchWithCache(
+        cacheKey,
+        `/api/admin/orders?${qs.toString()}`,
+        {
+          mode: 'swr',
+          init: { signal: activeAbortController.signal },
+          onData: (data: any) => {
+            if (skeleton) skeleton.classList.add('hidden');
+            renderStats(data.stats, data.total);
+            renderOrders(data.orders || []);
+            renderPagination(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 50);
+          },
+        }
+      );
     } catch (err) {
       if (err.name === 'AbortError') return;
       console.error('[Orders] Fetch failed:', err);
@@ -1168,6 +1171,8 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       });
       if (res.ok) {
         hideApproveModal();
+        await clientCache.invalidatePrefix('admin:orders');
+        await clientCache.invalidatePrefix('buyer:orders');
         fetchOrders(false);
       } else {
         const data = await res.json();
@@ -1222,6 +1227,8 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       });
       if (res.ok) {
         hideRejectModal();
+        await clientCache.invalidatePrefix('admin:orders');
+        await clientCache.invalidatePrefix('buyer:orders');
         fetchOrders(false);
       } else {
         const data = await res.json();
@@ -1279,6 +1286,8 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
 
       if (res.ok) {
         hideShipModal();
+        await clientCache.invalidatePrefix('admin:orders');
+        await clientCache.invalidatePrefix('buyer:orders');
         fetchOrders(false);
       } else {
         const data = await res.json();

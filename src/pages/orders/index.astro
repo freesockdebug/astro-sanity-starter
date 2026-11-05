@@ -336,6 +336,8 @@ const i18nClient = {
 </style>
 
 <script>
+  import { clientCache } from '@utils/clientCache';
+
   (function () {
     const dataEl = document.getElementById('orders-app-data');
     if (!dataEl) return;
@@ -907,46 +909,44 @@ const i18nClient = {
     }
 
     async function loadOrders() {
-      if (skeletonEl) skeletonEl.classList.remove('hidden');
-      if (gridEl) gridEl.classList.add('hidden');
-      if (emptyEl) emptyEl.classList.add('hidden');
+      const cacheKey = `buyer:orders:${currentView}:${currentLang}`;
+      const query = new URLSearchParams();
+      if (isAdmin && currentView === 'all') {
+        query.set('view', 'all');
+      }
+      query.set('lang', currentLang);
 
       try {
-        const query = new URLSearchParams();
-        if (isAdmin && currentView === 'all') {
-          query.set('view', 'all');
-        }
-        query.set('lang', currentLang);
+        await clientCache.fetchWithCache(
+          cacheKey,
+          `/api/orders?${query.toString()}`,
+          {
+            mode: 'swr',
+            onData: (data: any) => {
+              if (!data?.success) return;
+              ordersList = data.orders || [];
+              stats = data.stats || {
+                all: ordersList.length,
+                pending: ordersList.filter((o: any) => o.status === 'PENDING_APPROVAL').length,
+                approved: ordersList.filter((o: any) => o.status === 'APPROVED').length,
+                shipped: ordersList.filter((o: any) => o.status === 'SHIPPED').length,
+                rejected: ordersList.filter((o: any) => o.status === 'REJECTED').length,
+              };
 
-        const res = await fetch(`/api/orders?${query.toString()}`);
-        if (!res.ok) {
-          throw new Error(`HTTP error ${res.status}`);
-        }
-        const data = await res.json();
-        if (data.success) {
-          ordersList = data.orders || [];
-          stats = data.stats || {
-            all: ordersList.length,
-            pending: ordersList.filter((o) => o.status === 'PENDING_APPROVAL').length,
-            approved: ordersList.filter((o) => o.status === 'APPROVED').length,
-            shipped: ordersList.filter((o) => o.status === 'SHIPPED').length,
-            rejected: ordersList.filter((o) => o.status === 'REJECTED').length,
-          };
+              if (totalCountEl) totalCountEl.textContent = stats.all;
+              if (myCountBadge && data.counts?.my !== undefined) myCountBadge.textContent = `(${data.counts.my})`;
+              if (allCountBadge && data.counts?.all !== undefined) allCountBadge.textContent = `(${data.counts.all})`;
 
-          if (totalCountEl) totalCountEl.textContent = stats.all;
-          if (myCountBadge && data.counts?.my !== undefined) myCountBadge.textContent = `(${data.counts.my})`;
-          if (allCountBadge && data.counts?.all !== undefined) allCountBadge.textContent = `(${data.counts.all})`;
+              if (claimBanner && data.claimedCount > 0) {
+                claimBanner.classList.remove('hidden');
+              }
 
-          if (claimBanner && data.claimedCount > 0) {
-            claimBanner.classList.remove('hidden');
+              updateTabCounts();
+              if (skeletonEl) skeletonEl.classList.add('hidden');
+              applyFilter();
+            },
           }
-
-          updateTabCounts();
-          if (skeletonEl) skeletonEl.classList.add('hidden');
-          applyFilter();
-        } else {
-          throw new Error(data.error || 'Failed to load orders');
-        }
+        );
       } catch (err) {
         console.error('Error fetching orders:', err);
         if (skeletonEl) skeletonEl.classList.add('hidden');

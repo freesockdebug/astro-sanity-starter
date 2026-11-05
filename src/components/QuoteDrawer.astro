@@ -220,6 +220,7 @@ if (reqCountryCode) {
 
 <script>
   import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '@stores/quoteCart';
+  import { clientCache } from '@utils/clientCache';
 
   // Prevent cross-origin Turnstile script from throwing uncaught Script error. on domain/network mismatch
   (window as any).onTurnstileError = () => {
@@ -238,7 +239,7 @@ if (reqCountryCode) {
     document.head.appendChild(script);
   }
 
-  // Auto-fill visitor country via SSR cache or Cloudflare /api/geo
+  // Auto-fill visitor country via SSR cache or Cloudflare /api/geo (TTL: 24h)
   function autoFillVisitorCountry() {
     const destInput = document.querySelector('#quote-drawer-root input[name="destination"]') as HTMLInputElement | null;
     if (!destInput || destInput.value.trim()) return;
@@ -250,12 +251,15 @@ if (reqCountryCode) {
       return;
     }
 
-    fetch('/api/geo')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.countryName && destInput && !destInput.value.trim()) {
-          destInput.value = data.countryName;
-        }
+    clientCache
+      .fetchWithCache('geo:visitor', '/api/geo', {
+        mode: 'ttl',
+        ttlMs: 24 * 60 * 60 * 1000,
+        onData: (data: any) => {
+          if (data?.countryName && destInput && !destInput.value.trim()) {
+            destInput.value = data.countryName;
+          }
+        },
       })
       .catch(() => {});
   }
@@ -271,8 +275,12 @@ if (reqCountryCode) {
         if (rawCache) cachedProfile = JSON.parse(rawCache);
       } catch {}
 
-      const res = await fetch('/api/auth/me');
-      const data = await res.json();
+      const data = await clientCache
+        .fetchWithCache('auth:me', '/api/auth/me', {
+          mode: 'ttl',
+          ttlMs: 3 * 60 * 1000,
+        })
+        .catch(() => null);
       const profile = (data && data.authenticated && data.user) ? data.user : cachedProfile;
 
       if (data && data.authenticated && data.user) {
@@ -702,6 +710,8 @@ if (reqCountryCode) {
         }
         rfqForm.reset();
         clearQuote();
+        clientCache.invalidatePrefix('buyer:orders').catch(() => {});
+        clientCache.invalidatePrefix('admin:orders').catch(() => {});
 
         // Hide Turnstile container on success so it does not re-verify or distract
         const turnstileContainer = rfqForm.querySelector('.cf-turnstile') as HTMLElement;

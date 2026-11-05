@@ -380,6 +380,24 @@ async function runSelfCheck() {
   assert.strictEqual(clearedLogsRes.total, 0);
   console.log('✔ [PASS] System Error & Diagnostics Logging with User Toggle Control verified');
 
+  // 22. Client-Side Persistent Cache Layer (TTL, SWR & Invalidation)
+  const { clientCache } = await import('../src/utils/clientCache');
+  await clientCache.set('test:key1', { foo: 'bar' }, 10000);
+  const cachedVal = await clientCache.get('test:key1');
+  assert.deepStrictEqual(cachedVal, { foo: 'bar' });
+
+  // Invalidate prefix
+  await clientCache.set('admin:orders:tab1', { count: 5 });
+  await clientCache.set('admin:orders:tab2', { count: 10 });
+  await clientCache.set('buyer:orders:my', { count: 2 });
+  await clientCache.invalidatePrefix('admin:orders:');
+  assert.strictEqual(await clientCache.get('admin:orders:tab1'), null);
+  assert.strictEqual(await clientCache.get('admin:orders:tab2'), null);
+  assert.deepStrictEqual(await clientCache.get('buyer:orders:my'), { count: 2 });
+  await clientCache.clear();
+  assert.strictEqual(await clientCache.get('buyer:orders:my'), null);
+  console.log('✔ [PASS] Client-Side Cache Layer (TTL, SWR & Prefix Invalidation) verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 

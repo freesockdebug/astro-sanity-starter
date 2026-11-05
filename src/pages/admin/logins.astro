@@ -122,6 +122,8 @@ const pageTitle = 'Login Audit Logs';
 </AdminLayout>
 
 <script>
+  import { clientCache } from '@utils/clientCache';
+
   let allLogins = [];
   let currentSearch = '';
 
@@ -296,14 +298,15 @@ const pageTitle = 'Login Audit Logs';
     const content = document.getElementById('logins-content');
 
     try {
-      const res = await fetch('/api/admin/logins?limit=150');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      allLogins = data.logins || [];
-
-      if (skeleton) skeleton.classList.add('hidden');
-      updateMetrics(allLogins);
-      filterAndRender();
+      await clientCache.fetchWithCache('admin:logins:150', '/api/admin/logins?limit=150', {
+        mode: 'swr',
+        onData: (data: any) => {
+          allLogins = data.logins || [];
+          if (skeleton) skeleton.classList.add('hidden');
+          updateMetrics(allLogins);
+          filterAndRender();
+        },
+      });
     } catch (err) {
       console.error('Failed to load logins:', err);
       if (skeleton) skeleton.classList.add('hidden');

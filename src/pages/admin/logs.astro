@@ -233,6 +233,8 @@ const pageTitle = 'System Diagnostics & Logs';
 </AdminLayout>
 
 <script>
+  import { clientCache } from '@utils/clientCache';
+
   (function () {
     let logsList = [];
     let currentLevel = 'ALL';
@@ -443,32 +445,31 @@ const pageTitle = 'System Diagnostics & Logs';
     if (closeModalBottomBtn) closeModalBottomBtn.addEventListener('click', () => detailModal && detailModal.close());
 
     async function loadLogs() {
-      if (skeletonEl) skeletonEl.classList.remove('hidden');
-      if (contentEl) contentEl.classList.add('hidden');
-      if (emptyEl) emptyEl.classList.add('hidden');
-
+      const cacheKey = `admin:logs:${currentLevel}:${currentSearch}`;
       try {
         const query = new URLSearchParams();
         if (currentLevel && currentLevel !== 'ALL') query.set('level', currentLevel);
         if (currentSearch) query.set('search', currentSearch);
         query.set('limit', '50');
 
-        const res = await fetch(`/api/admin/logs?${query.toString()}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        await clientCache.fetchWithCache(
+          cacheKey,
+          `/api/admin/logs?${query.toString()}`,
+          {
+            mode: 'swr',
+            onData: (data: any) => {
+              if (!data?.success) return;
+              logsList = data.logs || [];
+              if (metricTotal) metricTotal.textContent = data.stats?.total ?? 0;
+              if (metricErrors) metricErrors.textContent = data.stats?.errors ?? 0;
+              if (metricWarns) metricWarns.textContent = data.stats?.warns ?? 0;
+              if (metricCritical) metricCritical.textContent = data.stats?.critical ?? 0;
 
-        if (data.success) {
-          logsList = data.logs || [];
-          if (metricTotal) metricTotal.textContent = data.stats?.total ?? 0;
-          if (metricErrors) metricErrors.textContent = data.stats?.errors ?? 0;
-          if (metricWarns) metricWarns.textContent = data.stats?.warns ?? 0;
-          if (metricCritical) metricCritical.textContent = data.stats?.critical ?? 0;
-
-          if (skeletonEl) skeletonEl.classList.add('hidden');
-          renderRows(logsList);
-        } else {
-          throw new Error(data.error || 'Failed to fetch logs');
-        }
+              if (skeletonEl) skeletonEl.classList.add('hidden');
+              renderRows(logsList);
+            },
+          }
+        );
       } catch (err) {
         console.error('Error fetching logs:', err);
         if (skeletonEl) skeletonEl.classList.add('hidden');
@@ -534,6 +535,7 @@ const pageTitle = 'System Diagnostics & Logs';
           const res = await fetch('/api/admin/logs', { method: 'DELETE' });
           const data = await res.json();
           if (data.success) {
+            await clientCache.invalidatePrefix('admin:logs:');
             loadLogs();
           } else {
             alert(data.error || 'Failed to clear logs');

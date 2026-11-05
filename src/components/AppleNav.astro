@@ -157,6 +157,8 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
 </header>
 
 <script>
+  import { clientCache } from '@utils/clientCache';
+
   const toggle = document.getElementById('mobile-menu-toggle');
   const menu = document.getElementById('mobile-menu');
   if (toggle && menu) {
@@ -170,10 +172,11 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     window.location.href = `/api/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`;
   };
 
-  // Check auth state on load to light up user dot indicator
-  fetch('/api/auth/me')
-    .then((res) => res.json())
-    .then((data) => {
+  // Check auth state on load to light up user dot indicator (TTL: 3 minutes)
+  clientCache.fetchWithCache('auth:me', '/api/auth/me', {
+    mode: 'ttl',
+    ttlMs: 3 * 60 * 1000,
+    onData: (data: any) => {
       if (data && data.authenticated) {
         const dot = document.getElementById('nav-user-indicator');
         if (dot) dot.classList.remove('hidden');
@@ -184,8 +187,16 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
           if (mobileAdminLink) mobileAdminLink.classList.remove('hidden');
         }
       }
-    })
-    .catch(() => {});
+    },
+  }).catch(() => {});
+
+  // Clear client cache on sign out
+  document.addEventListener('click', (e) => {
+    const anchor = (e.target as HTMLElement)?.closest('a[href*="/api/auth/logout"]');
+    if (anchor) {
+      clientCache.clear().catch(() => {});
+    }
+  });
 
   // Intercept in-page hash links for fluid cinematic scrolling
   document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((anchor) => {
