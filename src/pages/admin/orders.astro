@@ -897,9 +897,19 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
     const content = document.getElementById('orders-content');
     const paginationContainer = document.getElementById('pagination-container');
 
+    let skeletonTimer: any = null;
     if (skeleton && content) {
-      skeleton.classList.remove('hidden');
-      content.classList.add('hidden');
+      // If content is empty (cold start), show skeleton immediately.
+      // If content is already populated (switching tabs), wait 80ms to avoid flicker on instant cache hits.
+      if (content.classList.contains('hidden') || !content.innerHTML.trim()) {
+        skeleton.classList.remove('hidden');
+        content.classList.add('hidden');
+      } else {
+        skeletonTimer = setTimeout(() => {
+          skeleton.classList.remove('hidden');
+          content.classList.add('hidden');
+        }, 80);
+      }
     }
     if (paginationContainer) {
       paginationContainer.classList.add('hidden');
@@ -945,6 +955,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
           mode: 'swr',
           init: { signal: activeAbortController.signal },
           onData: (data: any) => {
+            if (skeletonTimer) clearTimeout(skeletonTimer);
             if (skeleton) skeleton.classList.add('hidden');
             renderStats(data.stats, data.total);
             renderOrders(data.orders || []);
@@ -952,8 +963,9 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
           },
         }
       );
-    } catch (err) {
-      if (err.name === 'AbortError') return;
+    } catch (err: any) {
+      if (skeletonTimer) clearTimeout(skeletonTimer);
+      if (err?.name === 'AbortError') return;
       console.error('[Orders] Fetch failed:', err);
       if (skeleton) skeleton.classList.add('hidden');
       if (content) {

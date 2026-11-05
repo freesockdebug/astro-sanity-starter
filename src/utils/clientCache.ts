@@ -18,6 +18,39 @@ const DB_NAME = 'gw_client_cache_v1';
 const STORE_NAME = 'keyval';
 let dbInstance: IDBDatabase | null = null;
 const memoryFallback = new Map<string, CacheEnvelope>();
+const inFlightNetwork = new Map<string, Promise<any>>();
+
+async function doFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const timeoutSignal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+    ? AbortSignal.timeout(6000)
+    : undefined;
+
+  const res = await fetch(url, {
+    ...init,
+    signal: init?.signal || timeoutSignal,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
+
+function fetchJsonWithDeduplication<T>(url: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') {
+    return doFetch<T>(url, init);
+  }
+
+  const existing = inFlightNetwork.get(url);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = doFetch<T>(url, init).finally(() => {
+    inFlightNetwork.delete(url);
+  });
+
+  inFlightNetwork.set(url, promise);
+  return promise;
+}
 
 /**
  * Resolves IndexedDB connection safely across all browsers and environments.
@@ -211,16 +244,7 @@ export const clientCache = {
         return cached.data;
       }
 
-      const timeoutSignal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
-        ? AbortSignal.timeout(6000)
-        : undefined;
-
-      const res = await fetch(url, {
-        ...init,
-        signal: init?.signal || timeoutSignal,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const freshData = (await res.json()) as T;
+      const freshData = await fetchJsonWithDeduplication<T>(url, init);
       await setEnvelope(key, freshData, ttlMs);
       if (onData) onData(freshData, false);
       return freshData;
@@ -243,24 +267,11 @@ export const clientCache = {
     }
 
     try {
-      const timeoutSignal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
-        ? AbortSignal.timeout(6000)
-        : undefined;
-
-      const res = await fetch(url, {
-        ...init,
-        signal: init?.signal || timeoutSignal,
-      });
-      if (!res.ok) {
-        if (hasEmittedCache && cachedData !== null) {
-          return cachedData;
-        }
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const freshData = (await res.json()) as T;
+      const freshData = await fetchJsonWithDeduplication<T>(url, init);
+      // Prevent resetting active user UI states (such as open accordions or focus) if data is identical
+      const isUnchanged = hasEmittedCache && JSON.stringify(cachedData) === JSON.stringify(freshData);
       await setEnvelope(key, freshData);
-      if (onData) {
+      if (onData && !isUnchanged) {
         onData(freshData, false);
       }
       return freshData;
@@ -273,3 +284,13 @@ export const clientCache = {
     }
   },
 };
+
+// Global click delegation to clear all client caches whenever a user logs out from anywhere
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    const anchor = (e.target as HTMLElement)?.closest?.('a[href*="/api/auth/logout"]');
+    if (anchor) {
+      clientCache.clear().catch(() => {});
+    }
+  });
+}

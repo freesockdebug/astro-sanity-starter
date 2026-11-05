@@ -305,6 +305,7 @@ const i18nClient = {
 )}
 
 <script id="orders-app-data" type="application/json" set:html={JSON.stringify({
+  userId: sessionUser?.id || '',
   i18n: i18nClient,
   lang: currentLang,
   isAdmin: !!sessionUser?.isAdmin,
@@ -909,7 +910,8 @@ const i18nClient = {
     }
 
     async function loadOrders() {
-      const cacheKey = `buyer:orders:${currentView}:${currentLang}`;
+      const userKey = appData.userId || 'anon';
+      const cacheKey = `buyer:orders:${userKey}:${currentView}:${currentLang}`;
       const query = new URLSearchParams();
       if (isAdmin && currentView === 'all') {
         query.set('view', 'all');

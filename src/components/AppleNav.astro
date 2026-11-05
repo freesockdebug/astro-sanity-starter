@@ -190,14 +190,6 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     },
   }).catch(() => {});
 
-  // Clear client cache on sign out
-  document.addEventListener('click', (e) => {
-    const anchor = (e.target as HTMLElement)?.closest('a[href*="/api/auth/logout"]');
-    if (anchor) {
-      clientCache.clear().catch(() => {});
-    }
-  });
-
   // Intercept in-page hash links for fluid cinematic scrolling
   document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((anchor) => {
     anchor.addEventListener('click', (e) => {

@@ -396,7 +396,40 @@ async function runSelfCheck() {
   assert.deepStrictEqual(await clientCache.get('buyer:orders:my'), { count: 2 });
   await clientCache.clear();
   assert.strictEqual(await clientCache.get('buyer:orders:my'), null);
-  console.log('✔ [PASS] Client-Side Cache Layer (TTL, SWR & Prefix Invalidation) verified');
+
+  // Test SWR unchanged suppression & In-flight network deduplication
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  globalThis.fetch = (async () => {
+    fetchCount++;
+    return new Response(JSON.stringify({ status: 'ok', items: [1, 2, 3] }), { status: 200 });
+  }) as any;
+
+  try {
+    await clientCache.set('test:swr', { status: 'ok', items: [1, 2, 3] });
+    const onDataCalls: boolean[] = [];
+    await clientCache.fetchWithCache('test:swr', 'https://mock.api/test', {
+      mode: 'swr',
+      onData: (data, isFromCache) => {
+        onDataCalls.push(isFromCache);
+      },
+    });
+    // Since data was identical, onData should only be called once (cache phase), skipping the redundant fresh render
+    assert.deepStrictEqual(onDataCalls, [true]);
+
+    // Test in-flight network deduplication: concurrent calls to identical URL share single fetch
+    fetchCount = 0;
+    const [res1, res2] = await Promise.all([
+      clientCache.fetchWithCache('test:dedup1', 'https://mock.api/dedup', { mode: 'ttl' }),
+      clientCache.fetchWithCache('test:dedup2', 'https://mock.api/dedup', { mode: 'ttl' }),
+    ]);
+    assert.strictEqual(fetchCount, 1);
+    assert.deepStrictEqual(res1, res2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  console.log('✔ [PASS] Client-Side Cache Layer (TTL, SWR, In-Flight Deduplication & Prefix Invalidation) verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

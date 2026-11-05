@@ -617,9 +617,17 @@ const pageTitle = 'Customer & Access Management';
     const content = document.getElementById('users-content');
     const paginationContainer = document.getElementById('users-pagination-container');
 
+    let skeletonTimer: any = null;
     if (skeleton && content) {
-      skeleton.classList.remove('hidden');
-      content.classList.add('hidden');
+      if (content.classList.contains('hidden') || !content.innerHTML.trim()) {
+        skeleton.classList.remove('hidden');
+        content.classList.add('hidden');
+      } else {
+        skeletonTimer = setTimeout(() => {
+          skeleton.classList.remove('hidden');
+          content.classList.add('hidden');
+        }, 80);
+      }
     }
     if (paginationContainer) {
       paginationContainer.classList.add('hidden');
@@ -660,6 +668,7 @@ const pageTitle = 'Customer & Access Management';
           mode: 'swr',
           init: { signal: activeAbortController.signal },
           onData: (data: any) => {
+            if (skeletonTimer) clearTimeout(skeletonTimer);
             if (skeleton) skeleton.classList.add('hidden');
             renderStats(data.stats, data.total);
             renderUsers(data.users || []);
@@ -667,8 +676,9 @@ const pageTitle = 'Customer & Access Management';
           },
         }
       );
-    } catch (err) {
-      if (err.name === 'AbortError') return;
+    } catch (err: any) {
+      if (skeletonTimer) clearTimeout(skeletonTimer);
+      if (err?.name === 'AbortError') return;
       console.error('Failed to load users:', err);
       if (skeleton) skeleton.classList.add('hidden');
       if (content) {
