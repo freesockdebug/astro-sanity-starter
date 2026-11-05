@@ -1,20 +1,9 @@
 // src/utils/device.ts
 /**
- * Unified Device & Screen Detection Utility
- * - UA Analysis powered by open-source 'ua-parser-js' (SSR + Client)
+ * Unified Screen & Layout Geometry Utility
  * - Viewport & Responsive Breakpoint Detection (W3C / Tailwind standards)
  * - Single Source of Truth for Right Gutter Geometry & Floating Component Alignment
  */
-import { UAParser } from 'ua-parser-js';
-
-export interface DeviceInfo {
-  isMobile: boolean;
-  isTablet: boolean;
-  isDesktop: boolean;
-  deviceType: 'mobile' | 'tablet' | 'desktop';
-  os: string;
-  browser: string;
-}
 
 export interface ClientScreenInfo {
   // Viewport dimensions (excludes scrollbars to prevent edge clipping)
@@ -34,31 +23,6 @@ export interface ClientScreenInfo {
   remainingRight: number;
   gutterCenterX: number | null;
   isDockMode: boolean;
-}
-
-/**
- * Detect device info from User Agent (SSR or Client)
- */
-export function getDeviceInfo(userAgent?: string): DeviceInfo {
-  const ua = userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : '');
-  const parser = new UAParser(ua);
-  const device = parser.getDevice();
-  const os = parser.getOS();
-  const browser = parser.getBrowser();
-
-  const type = device.type;
-  const isMobile = type === 'mobile';
-  const isTablet = type === 'tablet';
-  const isDesktop = !isMobile && !isTablet;
-
-  return {
-    isMobile,
-    isTablet,
-    isDesktop,
-    deviceType: isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop',
-    os: os.name || 'unknown',
-    browser: browser.name || 'unknown'
-  };
 }
 
 /**

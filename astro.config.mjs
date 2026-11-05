@@ -38,7 +38,7 @@ export default defineConfig({
             drop: isProduction ? ['console', 'debugger'] : []
         },
         optimizeDeps: {
-            exclude: ['marked', '@sanity/client', 'ua-parser-js', '@nanostores/persistent']
+            exclude: ['marked', '@sanity/client', '@nanostores/persistent']
         }
     },
     server: {
