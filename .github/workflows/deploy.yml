@@ -51,6 +51,10 @@ jobs:
           if [ -n "$CF_ACCOUNT_ID" ]; then
             export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
           fi
+          echo "Applying idempotent D1 column migrations..."
+          for col in "latency_ms INTEGER" "method TEXT" "status_code INTEGER" "client_ip TEXT" "country TEXT" "city TEXT"; do
+            npx wrangler d1 execute b2b --remote --command="ALTER TABLE system_error_logs ADD COLUMN $col DEFAULT NULL" -y || true
+          done
           echo "Syncing D1 database schema (db/schema.sql) to remote D1: b2b..."
           npx wrangler d1 execute b2b --remote --file=db/schema.sql -y
 
