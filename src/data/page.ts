@@ -22,7 +22,7 @@ export const PAGE_QUERY_OBJ = `{
 
 const homePageCache = createSwrCache<Page | null>(
   async () => {
-    const pages = await PageService.getBySlug('/');
+    const pages = await PageService.getBySlug('/', undefined, true);
     return pages[0] || null;
   },
   null,
@@ -80,23 +80,26 @@ export class PageService {
   /**
    * Fetch a page by URL slug using multi-tier caching (L1 memory -> L2 KV -> L3 Sanity)
    */
-  public static async getBySlug(slug?: string | null, customEnv?: any): Promise<Page[]> {
+  public static async getBySlug(slug?: string | null, customEnv?: any, forceRefresh = false): Promise<Page[]> {
     const formattedSlug = !slug || slug === '/' ? '/' : (slug.startsWith('/') ? slug : `/${slug}`);
     const unslashed = formattedSlug.replace(/^\//, '');
     const cacheKey = `cms:page:${unslashed || 'home'}`;
     const now = Date.now();
-    const memHit = this.pageSlugCache.get(cacheKey);
-    if (memHit && now - memHit.timestamp < 10_000) {
-      return [structuredClone(memHit.data)];
-    }
 
-    try {
-      const kvHit = await kvGet<Page>(cacheKey, customEnv);
-      if (kvHit) {
-        this.pageSlugCache.set(cacheKey, { data: kvHit, timestamp: now });
-        return [structuredClone(kvHit)];
+    if (!forceRefresh) {
+      const memHit = this.pageSlugCache.get(cacheKey);
+      if (memHit && now - memHit.timestamp < 10_000) {
+        return [structuredClone(memHit.data)];
       }
-    } catch {}
+
+      try {
+        const kvHit = await kvGet<Page>(cacheKey, customEnv);
+        if (kvHit) {
+          this.pageSlugCache.set(cacheKey, { data: kvHit, timestamp: now });
+          return [structuredClone(kvHit)];
+        }
+      } catch {}
+    }
 
     try {
       const data = await client.fetch<Page[]>(
