@@ -76,6 +76,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
     let lazySessionUser: Promise<any> | null = null;
     const getSessionUser = () => {
+      const explicitUser = (context.locals as any)?.sessionUser || (context.locals as any)?.user;
+      if (explicitUser) return Promise.resolve(explicitUser);
       if (!sessionToken) return Promise.resolve(null);
       if (!lazySessionUser) {
         lazySessionUser = profiler.time('auth', () => verifySessionToken(sessionToken, cfEnv));

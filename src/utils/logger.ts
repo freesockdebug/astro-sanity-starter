@@ -63,7 +63,7 @@ function sanitizeData(data: any, depth = 0): any {
 
     const sanitized: Record<string, any> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (SENSITIVE_KEY_REGEX.test(key)) {
+      if (typeof value !== 'number' && typeof value !== 'boolean' && SENSITIVE_KEY_REGEX.test(key)) {
         sanitized[key] = '[REDACTED]';
       } else {
         sanitized[key] = sanitizeData(value, depth + 1);

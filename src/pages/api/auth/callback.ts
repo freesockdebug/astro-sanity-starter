@@ -18,7 +18,7 @@ import { env as cfEnv, waitUntil as cfWaitUntil } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, url, cookies }) => {
+export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
   const profiler = getActiveProfiler();
   const reqUrl = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -80,14 +80,14 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       redirect_uri: callbackUrl,
     });
 
-    profiler?.startSpan('auth.logto_token');
+    profiler?.startSpan('auth.logto_exchange');
     const tokenRes = await fetch(`${endpoint}/oidc/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: tokenBody.toString(),
       signal: AbortSignal.timeout(6000),
     });
-    profiler?.endSpan('auth.logto_token');
+    profiler?.endSpan('auth.logto_exchange');
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
@@ -97,20 +97,40 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
     const tokenData = (await tokenRes.json()) as any;
     const accessToken = tokenData.access_token;
 
-    // Fetch User Info
-    profiler?.startSpan('auth.logto_userinfo');
-    const meRes = await fetch(`${endpoint}/oidc/me`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      signal: AbortSignal.timeout(6000),
-    });
-    profiler?.endSpan('auth.logto_userinfo');
-
-    if (!meRes.ok) {
-      const meErr = await meRes.text();
-      throw new Error(`UserInfo retrieval failed: ${meRes.status} ${meErr}`);
+    // Fast Path: extract user identity directly from id_token to eliminate redundant WAN round-trip
+    let userInfo: any = null;
+    if (tokenData.id_token && typeof tokenData.id_token === 'string') {
+      try {
+        const parts = tokenData.id_token.split('.');
+        if (parts.length >= 2) {
+          let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (b64.length % 4) b64 += '=';
+          const decoded = JSON.parse(atob(b64));
+          if (decoded && decoded.sub && (decoded.email || decoded.username)) {
+            userInfo = decoded;
+          }
+        }
+      } catch {
+        // Fallback to /oidc/me network call below
+      }
     }
 
-    const userInfo = (await meRes.json()) as any;
+    // Fallback: Fetch User Info from /oidc/me if id_token was missing or incomplete
+    if (!userInfo) {
+      profiler?.startSpan('auth.logto_userinfo');
+      const meRes = await fetch(`${endpoint}/oidc/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(6000),
+      });
+      profiler?.endSpan('auth.logto_userinfo');
+
+      if (!meRes.ok) {
+        const meErr = await meRes.text();
+        throw new Error(`UserInfo retrieval failed: ${meRes.status} ${meErr}`);
+      }
+      userInfo = (await meRes.json()) as any;
+    }
+
     const email = userInfo.email || `${userInfo.sub}@logto.user`;
     const roles: string[] = Array.isArray(userInfo.roles) ? userInfo.roles : [];
     const settings = await getSystemSettings(cfEnv).catch(() => null);
@@ -123,21 +143,24 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       isAdmin,
       roles,
     };
-    } catch (err: any) {
-      logger.error({
-        module: 'auth/callback',
-        event: 'LOGTO_EXCHANGE_ERROR',
-        message: err?.message || 'Logto exchange error',
-        path: reqUrl.pathname,
-        rayId: request.headers.get('cf-ray') || undefined,
-        error: err,
-      }, { cfEnv });
-      return new Response(`Authentication Error: ${err.message}`, { status: 500 });
-    }
+  } catch (err: any) {
+    logger.error({
+      module: 'auth/callback',
+      event: 'LOGTO_EXCHANGE_ERROR',
+      message: err?.message || 'Logto exchange error',
+      path: reqUrl.pathname,
+      rayId: request.headers.get('cf-ray') || undefined,
+      error: err,
+    }, { cfEnv });
+    return new Response(`Authentication Error: ${err.message}`, { status: 500 });
+  }
 
   if (!authUser) {
     return new Response('Invalid authentication request.', { status: 400 });
   }
+
+  // Populate locals so middleware logs real user instead of 'Anonymous'
+  (locals as any).sessionUser = authUser;
 
   // 3. Security Risk Guard: Check if account is BLOCKED in D1
   try {
@@ -209,21 +232,40 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
 
   // 5. Auto-Claim Historical Unclaimed Orders matching buyer_email
   let claimedCount = 0;
-  try {
-    profiler?.startSpan('d1.auto_claim');
-    claimedCount = await claimOrdersByEmail(authUser.email, authUser.id);
-    profiler?.endSpan('d1.auto_claim');
-  } catch (claimErr) {
-    profiler?.endSpan('d1.auto_claim');
-    logger.warn({
-      module: 'auth/callback',
-      event: 'AUTOCLAIM_FAILED',
-      message: 'Auto-claim orders failed',
-      userId: authUser.id,
-      userEmail: authUser.email,
-      path: reqUrl.pathname,
-      error: claimErr,
-    }, { cfEnv });
+  if (!isPopup && typeof cfWaitUntil === 'function') {
+    const claimPromise = claimOrdersByEmail(authUser.email, authUser.id).catch((claimErr) => {
+      logger.warn({
+        module: 'auth/callback',
+        event: 'AUTOCLAIM_FAILED',
+        message: 'Auto-claim orders failed in background',
+        userId: authUser?.id,
+        userEmail: authUser?.email,
+        path: reqUrl.pathname,
+        error: claimErr,
+      }, { cfEnv });
+    });
+    try {
+      cfWaitUntil(claimPromise);
+    } catch {
+      await claimPromise;
+    }
+  } else {
+    try {
+      profiler?.startSpan('d1.auto_claim');
+      claimedCount = await claimOrdersByEmail(authUser.email, authUser.id);
+      profiler?.endSpan('d1.auto_claim');
+    } catch (claimErr) {
+      profiler?.endSpan('d1.auto_claim');
+      logger.warn({
+        module: 'auth/callback',
+        event: 'AUTOCLAIM_FAILED',
+        message: 'Auto-claim orders failed',
+        userId: authUser.id,
+        userEmail: authUser.email,
+        path: reqUrl.pathname,
+        error: claimErr,
+      }, { cfEnv });
+    }
   }
 
   // 6. Generate Tamper-Proof Session Cookie
