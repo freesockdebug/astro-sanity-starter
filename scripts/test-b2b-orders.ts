@@ -331,6 +331,55 @@ async function runSelfCheck() {
   assert.strictEqual(afterDelete, null);
   console.log('✔ [PASS] Cloudflare Edge KV multi-tier caching & graceful degradation verified');
 
+  // 21. System Error & Diagnostics Logging with User Toggle Control
+  const { recordErrorLog, listErrorLogs, clearErrorLogs } = await import('../src/db/logs.repo');
+  const { logger } = await import('../src/utils/logger');
+
+  // Record an error log for guest/system
+  const logRecorded = await recordErrorLog({
+    level: 'error',
+    source: 'test-runner',
+    errorCode: 'TEST_ERR_001',
+    message: 'Diagnostics test log entry',
+    context: { foo: 'bar', secret: 'super_secret_value' },
+    rayId: 'ray_test_12345',
+    path: '/api/test',
+  });
+  assert.strictEqual(logRecorded, true);
+
+  const initialLogsRes = await listErrorLogs({ source: 'test-runner' });
+  assert.ok(initialLogsRes.total >= 1);
+  assert.strictEqual(initialLogsRes.logs[0].error_code, 'TEST_ERR_001');
+
+  // Test authenticated user logging toggle:
+  // When log_authenticated_users = false, logged-in user errors are skipped!
+  await updateSystemSettings({ log_authenticated_users: false }, 'admin@test.com');
+  const userLogBlocked = await recordErrorLog({
+    level: 'error',
+    source: 'test-auth-runner',
+    message: 'User action should be skipped',
+    userId: 'usr_logged_in_123',
+    userEmail: 'user@test.com',
+  });
+  assert.strictEqual(userLogBlocked, false);
+
+  // Restore log_authenticated_users = true
+  await updateSystemSettings({ log_authenticated_users: true }, 'admin@test.com');
+  const userLogAllowed = await recordErrorLog({
+    level: 'warn',
+    source: 'test-auth-runner',
+    message: 'User action allowed now',
+    userId: 'usr_logged_in_123',
+    userEmail: 'user@test.com',
+  });
+  assert.strictEqual(userLogAllowed, true);
+
+  // Test clearErrorLogs
+  await clearErrorLogs();
+  const clearedLogsRes = await listErrorLogs();
+  assert.strictEqual(clearedLogsRes.total, 0);
+  console.log('✔ [PASS] System Error & Diagnostics Logging with User Toggle Control verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 

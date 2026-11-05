@@ -7,6 +7,7 @@ import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
 import { kvGet, kvPut, kvDelete } from '@utils/kv';
+import { logger } from '@utils/logger';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -293,7 +294,14 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         }
         verifyResult = await verifyRes.json();
       } catch (err: any) {
-        console.error('Turnstile verification network error:', err);
+        logger.error({
+          module: 'submit-quote',
+          event: 'TURNSTILE_NETWORK_ERROR',
+          message: 'Turnstile verification network error',
+          path: '/api/submit-quote',
+          rayId: request.headers.get('cf-ray') || undefined,
+          error: err,
+        }, { cfEnv });
         return new Response(
           JSON.stringify({ error: 'Verification service error. Please try again.' }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -405,7 +413,16 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           }
         }
       } catch (err: any) {
-        console.error('Could not write order to D1:', err);
+        logger.error({
+          module: 'submit-quote',
+          event: 'D1_WRITE_FAILED',
+          message: `Failed to write order ${orderNo} to D1`,
+          path: '/api/submit-quote',
+          rayId: request.headers.get('cf-ray') || undefined,
+          userId: sessionUser?.id,
+          userEmail: normalizedEmail,
+          error: err,
+        }, { cfEnv });
         d1WriteError = err?.message || 'D1 create failed';
       }
     })();
@@ -562,7 +579,16 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       if (idempKey) {
         await kvDelete(idempKey, cfEnv).catch(() => {});
       }
-      console.error('Order could not be saved to primary database (D1):', d1WriteError, sanityWriteError);
+      logger.critical({
+        module: 'submit-quote',
+        event: 'ORDER_PERSISTENCE_FAILED',
+        message: `Order ${orderNo} could not be saved to primary database (D1)`,
+        path: '/api/submit-quote',
+        rayId: request.headers.get('cf-ray') || undefined,
+        userId: sessionUser?.id,
+        userEmail: normalizedEmail,
+        context: { d1WriteError, sanityWriteError, orderNo },
+      }, { cfEnv });
       return new Response(
         JSON.stringify({
           error: `Order could not be saved to primary database: ${d1WriteError || sanityWriteError || 'Database write failed'}.`,
@@ -590,7 +616,14 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     if (idempKey) {
       await kvDelete(idempKey, cfEnv).catch(() => {});
     }
-    console.error('Error handling submit-quote:', error);
+    logger.error({
+      module: 'submit-quote',
+      event: 'UNHANDLED_SUBMIT_QUOTE_ERROR',
+      message: error?.message || 'Error handling submit-quote',
+      path: '/api/submit-quote',
+      rayId: request.headers.get('cf-ray') || undefined,
+      error,
+    }, { cfEnv });
     return new Response(
       JSON.stringify({ error: error?.message || 'Internal Server Error' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

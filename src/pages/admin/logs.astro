@@ -1,0 +1,551 @@
+---
+// src/pages/admin/logs.astro
+// Unified System Diagnostics & Error Audit Workbench (App Shell + JSON Client Render)
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { requireAdminContext } from '@utils/auth';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/logs',
+  { skipPendingCount: true }
+);
+if (redirectResponse) return redirectResponse;
+
+const initialLevel = Astro.url.searchParams.get('level') || 'ALL';
+const initialSearch = (Astro.url.searchParams.get('search') || '').trim();
+
+const pageTitle = 'System Diagnostics & Logs';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="logs"
+  sessionEmail={sessionUser.email}
+  pendingOrdersCount={pendingOrdersCount}
+>
+  <!-- Page Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
+    <div>
+      <div class="flex items-center gap-2">
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">System Diagnostics</h1>
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          Cloudflare D1 & Observability
+        </span>
+      </div>
+      <p class="text-xs text-[#86868b] mt-0.5">
+        Real-time edge execution logs, unhandled exceptions, and business anomaly audit trail.
+      </p>
+    </div>
+
+    <!-- Actions (Refresh & Clear Logs) -->
+    <div class="flex items-center gap-2 self-start sm:self-auto">
+      <button
+        id="refresh-logs-btn"
+        type="button"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-black/10 text-[#1d1d1f] hover:bg-[#f5f5f7] shadow-2xs active:scale-95 transition-all cursor-pointer"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span>Refresh</span>
+      </button>
+
+      <button
+        id="clear-logs-btn"
+        type="button"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 shadow-2xs active:scale-95 transition-all cursor-pointer"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        <span>Clear Logs</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Metric Overview Cards -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
+      <span class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider block">Total Logged Events</span>
+      <span id="metric-total" class="text-2xl font-bold font-mono text-[#1d1d1f]">-</span>
+    </div>
+
+    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
+      <span class="text-[11px] font-medium text-rose-600 uppercase tracking-wider block">Errors</span>
+      <span id="metric-errors" class="text-2xl font-bold font-mono text-rose-600">-</span>
+    </div>
+
+    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
+      <span class="text-[11px] font-medium text-amber-600 uppercase tracking-wider block">Warnings</span>
+      <span id="metric-warns" class="text-2xl font-bold font-mono text-amber-600">-</span>
+    </div>
+
+    <div class="p-4 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
+      <span class="text-[11px] font-medium text-purple-600 uppercase tracking-wider block">Critical</span>
+      <span id="metric-critical" class="text-2xl font-bold font-mono text-purple-600">-</span>
+    </div>
+  </div>
+
+  <!-- Filter & Search Bar -->
+  <div class="sticky top-14 lg:top-0 z-20 py-2.5 -my-2.5 bg-[#f5f5f7]/95 backdrop-blur-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs mb-4">
+    <!-- Level Tabs -->
+    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none" id="level-tabs">
+      {[
+        { key: 'ALL', label: 'All Levels' },
+        { key: 'ERROR', label: 'Errors' },
+        { key: 'WARN', label: 'Warnings' },
+        { key: 'CRITICAL', label: 'Critical' },
+      ].map((tab) => {
+        const isActive = initialLevel === tab.key;
+        return (
+          <button
+            type="button"
+            data-level={tab.key}
+            class={`level-tab-btn px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border cursor-pointer ${
+              isActive
+                ? 'bg-[#1d1d1f] text-white border-black shadow-xs font-semibold'
+                : 'bg-white text-[#52525b] border-black/5 hover:border-black/20 hover:text-black'
+            }`}
+          >
+            <span>{tab.label}</span>
+          </button>
+        );
+      })}
+    </div>
+
+    <!-- Search Input -->
+    <div class="relative sm:w-72">
+      <input
+        type="text"
+        id="logs-search-input"
+        value={initialSearch}
+        placeholder="Filter by message, rayId, source, email..."
+        class="w-full pl-8 pr-7 py-1.5 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs"
+      />
+      <svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <button
+        type="button"
+        id="clear-search-btn"
+        class={`absolute right-2.5 top-2 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+      >
+        ✕
+      </button>
+    </div>
+  </div>
+
+  <!-- Skeletons (0-CLS Shimmer) -->
+  <div id="logs-skeleton" class="rounded-2xl bg-white border border-black/5 p-4 shadow-2xs space-y-3">
+    {[1, 2, 3, 4, 5].map(() => (
+      <div class="flex items-center justify-between py-2 border-b border-black/5 last:border-0 animate-pulse">
+        <div class="flex items-center gap-3">
+          <div class="h-6 w-16 bg-black/10 rounded-md"></div>
+          <div class="space-y-1">
+            <div class="h-4 w-48 bg-black/10 rounded-md"></div>
+            <div class="h-3 w-32 bg-black/5 rounded-md"></div>
+          </div>
+        </div>
+        <div class="h-4 w-24 bg-black/5 rounded-md"></div>
+      </div>
+    ))}
+  </div>
+
+  <!-- Main Log List Container -->
+  <div id="logs-content" class="hidden rounded-2xl bg-white border border-black/5 shadow-2xs overflow-hidden">
+    <!-- Populated by JavaScript -->
+  </div>
+
+  <!-- Empty State -->
+  <div id="logs-empty" class="hidden rounded-2xl bg-white border border-black/5 p-12 text-center shadow-2xs">
+    <div class="w-12 h-12 rounded-2xl bg-[#f5f5f7] flex items-center justify-center mx-auto mb-3 text-emerald-600">
+      <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </div>
+    <h3 class="text-sm font-semibold text-[#1d1d1f]">All Systems Nominal</h3>
+    <p class="text-xs text-[#86868b] mt-1 max-w-sm mx-auto">
+      No diagnostic errors or warnings found matching the active filter.
+    </p>
+  </div>
+
+  <!-- Detail Dialog / Modal -->
+  <dialog id="log-detail-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-5 rounded-3xl w-[calc(100vw-32px)] max-w-2xl mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+    <div class="space-y-4 text-xs text-[#1d1d1f]">
+      <div class="flex items-center justify-between pb-2 border-b border-black/5">
+        <div class="flex items-center gap-2">
+          <span id="modal-level-badge"></span>
+          <span id="modal-source" class="font-mono font-semibold text-xs text-[#1d1d1f]"></span>
+        </div>
+        <button id="close-modal-btn" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
+      </div>
+
+      <div class="space-y-1">
+        <span class="text-[10px] uppercase font-bold text-[#86868b] tracking-wider">Message</span>
+        <p id="modal-message" class="text-xs font-semibold text-[#1d1d1f]"></p>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 py-2 border-y border-black/5 text-[11px]">
+        <div>
+          <span class="text-[#86868b] block">Time</span>
+          <strong id="modal-time" class="font-mono text-[#1d1d1f]"></strong>
+        </div>
+        <div>
+          <span class="text-[#86868b] block">CF Ray ID</span>
+          <strong id="modal-ray" class="font-mono text-[#1d1d1f] break-all"></strong>
+        </div>
+        <div>
+          <span class="text-[#86868b] block">Request Path</span>
+          <strong id="modal-path" class="font-mono text-[#1d1d1f]"></strong>
+        </div>
+        <div>
+          <span class="text-[#86868b] block">User / Email</span>
+          <strong id="modal-user" class="font-mono text-[#1d1d1f]"></strong>
+        </div>
+        <div>
+          <span class="text-[#86868b] block">Error Code</span>
+          <strong id="modal-code" class="font-mono text-[#1d1d1f]"></strong>
+        </div>
+      </div>
+
+      <div class="space-y-1">
+        <span class="text-[10px] uppercase font-bold text-[#86868b] tracking-wider">Context & Stack Trace</span>
+        <pre id="modal-context" class="p-3 rounded-xl bg-[#1d1d1f] text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-72 whitespace-pre-wrap select-all"></pre>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button
+          type="button"
+          id="close-modal-bottom-btn"
+          class="h-9 px-4 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all cursor-pointer"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </dialog>
+</AdminLayout>
+
+<script>
+  (function () {
+    let logsList = [];
+    let currentLevel = 'ALL';
+    let currentSearch = '';
+
+    const skeletonEl = document.getElementById('logs-skeleton');
+    const contentEl = document.getElementById('logs-content');
+    const emptyEl = document.getElementById('logs-empty');
+    const searchInput = document.getElementById('logs-search-input');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
+    const refreshBtn = document.getElementById('refresh-logs-btn');
+    const clearLogsBtn = document.getElementById('clear-logs-btn');
+
+    const metricTotal = document.getElementById('metric-total');
+    const metricErrors = document.getElementById('metric-errors');
+    const metricWarns = document.getElementById('metric-warns');
+    const metricCritical = document.getElementById('metric-critical');
+
+    const detailModal = document.getElementById('log-detail-modal');
+    const modalLevelBadge = document.getElementById('modal-level-badge');
+    const modalSource = document.getElementById('modal-source');
+    const modalMessage = document.getElementById('modal-message');
+    const modalTime = document.getElementById('modal-time');
+    const modalRay = document.getElementById('modal-ray');
+    const modalPath = document.getElementById('modal-path');
+    const modalUser = document.getElementById('modal-user');
+    const modalCode = document.getElementById('modal-code');
+    const modalContext = document.getElementById('modal-context');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const closeModalBottomBtn = document.getElementById('close-modal-bottom-btn');
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatTime(dt) {
+      if (!dt) return '—';
+      const d = new Date(dt);
+      if (isNaN(d.getTime())) return String(dt);
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+    }
+
+    function renderLevelBadge(lvl) {
+      const level = (lvl || 'error').toUpperCase();
+      if (level === 'CRITICAL') {
+        return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">CRITICAL</span>';
+      }
+      if (level === 'ERROR') {
+        return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">ERROR</span>';
+      }
+      if (level === 'WARN') {
+        return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">WARN</span>';
+      }
+      return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">INFO</span>';
+    }
+
+    function renderRows(logs) {
+      if (!contentEl) return;
+
+      if (!logs || logs.length === 0) {
+        contentEl.classList.add('hidden');
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyEl) emptyEl.classList.add('hidden');
+
+      const html = `
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-[#1d1d1f]">
+            <thead class="bg-[#f5f5f7]/60 text-[#86868b] font-medium border-b border-black/5">
+              <tr>
+                <th class="py-3 px-4">Level / Time</th>
+                <th class="py-3 px-4">Source & Code</th>
+                <th class="py-3 px-4">Message</th>
+                <th class="py-3 px-4">User / Ray ID</th>
+                <th class="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-black/5">
+              ${logs.map((log) => {
+                const safeSource = escapeHtml(log.source || 'system');
+                const safeCode = log.error_code ? escapeHtml(log.error_code) : '';
+                const safeMessage = escapeHtml(log.message || '');
+                const safeUser = escapeHtml(log.user_email || log.user_id || 'Anonymous');
+                const safeRay = escapeHtml(log.ray_id || '');
+                const safePath = escapeHtml(log.path || '');
+                const timeStr = formatTime(log.created_at);
+
+                return `
+                  <tr class="hover:bg-[#f5f5f7]/40 transition-colors">
+                    <td class="py-3 px-4 whitespace-nowrap">
+                      <div class="flex items-center gap-2">
+                        ${renderLevelBadge(log.level)}
+                        <span class="text-[11px] font-mono text-[#86868b]">${timeStr}</span>
+                      </div>
+                    </td>
+
+                    <td class="py-3 px-4 whitespace-nowrap">
+                      <span class="font-mono font-semibold text-[#1d1d1f] block">${safeSource}</span>
+                      ${safeCode ? `<span class="text-[10px] font-mono text-[#86868b]">${safeCode}</span>` : ''}
+                    </td>
+
+                    <td class="py-3 px-4 max-w-xs sm:max-w-md">
+                      <span class="truncate block font-medium text-[#1d1d1f]" title="${safeMessage}">${safeMessage}</span>
+                      ${safePath ? `<span class="text-[10px] font-mono text-[#86868b] truncate block">${safePath}</span>` : ''}
+                    </td>
+
+                    <td class="py-3 px-4 whitespace-nowrap text-[11px]">
+                      <span class="text-[#1d1d1f] block font-mono truncate max-w-[140px]">${safeUser}</span>
+                      ${safeRay ? `
+                        <button
+                          type="button"
+                          class="copy-ray-btn text-[10px] font-mono text-[#86868b] hover:text-black flex items-center gap-1 cursor-pointer"
+                          data-copy="${safeRay}"
+                          title="Copy CF Ray ID"
+                        >
+                          <span class="truncate max-w-[100px]">${safeRay}</span>
+                          <span class="copy-icon">📋</span>
+                        </button>
+                      ` : ''}
+                    </td>
+
+                    <td class="py-3 px-4 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        class="view-detail-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all cursor-pointer"
+                        data-id="${log.id}"
+                      >
+                        Details
+                      </button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      contentEl.innerHTML = html;
+      contentEl.classList.remove('hidden');
+
+      // Bind detail button events
+      contentEl.querySelectorAll('.view-detail-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = Number(btn.getAttribute('data-id'));
+          const log = logsList.find((l) => l.id === id);
+          if (!log) return;
+          openDetailModal(log);
+        });
+      });
+
+      // Bind copy rayId events
+      contentEl.querySelectorAll('.copy-ray-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const text = btn.getAttribute('data-copy');
+          if (!text) return;
+          try {
+            await navigator.clipboard.writeText(text);
+            const icon = btn.querySelector('.copy-icon');
+            if (icon) {
+              icon.textContent = '✓';
+              setTimeout(() => { icon.textContent = '📋'; }, 1500);
+            }
+          } catch {}
+        });
+      });
+    }
+
+    function openDetailModal(log) {
+      if (!detailModal) return;
+
+      if (modalLevelBadge) modalLevelBadge.innerHTML = renderLevelBadge(log.level);
+      if (modalSource) modalSource.textContent = log.source || 'system';
+      if (modalMessage) modalMessage.textContent = log.message || '';
+      if (modalTime) modalTime.textContent = formatTime(log.created_at);
+      if (modalRay) modalRay.textContent = log.ray_id || '—';
+      if (modalPath) modalPath.textContent = log.path || '—';
+      if (modalUser) modalUser.textContent = log.user_email || log.user_id || 'Anonymous';
+      if (modalCode) modalCode.textContent = log.error_code || '—';
+
+      if (modalContext) {
+        let formatted = log.context_json || 'No extra context recorded.';
+        try {
+          const parsed = JSON.parse(log.context_json);
+          formatted = JSON.stringify(parsed, null, 2);
+        } catch {}
+        modalContext.textContent = formatted;
+      }
+
+      detailModal.showModal();
+    }
+
+    if (closeModalBtn) closeModalBtn.addEventListener('click', () => detailModal && detailModal.close());
+    if (closeModalBottomBtn) closeModalBottomBtn.addEventListener('click', () => detailModal && detailModal.close());
+
+    async function loadLogs() {
+      if (skeletonEl) skeletonEl.classList.remove('hidden');
+      if (contentEl) contentEl.classList.add('hidden');
+      if (emptyEl) emptyEl.classList.add('hidden');
+
+      try {
+        const query = new URLSearchParams();
+        if (currentLevel && currentLevel !== 'ALL') query.set('level', currentLevel);
+        if (currentSearch) query.set('search', currentSearch);
+        query.set('limit', '50');
+
+        const res = await fetch(`/api/admin/logs?${query.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (data.success) {
+          logsList = data.logs || [];
+          if (metricTotal) metricTotal.textContent = data.stats?.total ?? 0;
+          if (metricErrors) metricErrors.textContent = data.stats?.errors ?? 0;
+          if (metricWarns) metricWarns.textContent = data.stats?.warns ?? 0;
+          if (metricCritical) metricCritical.textContent = data.stats?.critical ?? 0;
+
+          if (skeletonEl) skeletonEl.classList.add('hidden');
+          renderRows(logsList);
+        } else {
+          throw new Error(data.error || 'Failed to fetch logs');
+        }
+      } catch (err) {
+        console.error('Error fetching logs:', err);
+        if (skeletonEl) skeletonEl.classList.add('hidden');
+        if (emptyEl) emptyEl.classList.remove('hidden');
+      }
+    }
+
+    // Level tabs
+    document.querySelectorAll('.level-tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const lvl = btn.getAttribute('data-level');
+        if (!lvl || lvl === currentLevel) return;
+        currentLevel = lvl;
+
+        document.querySelectorAll('.level-tab-btn').forEach((b) => {
+          const isActive = b.getAttribute('data-level') === currentLevel;
+          if (isActive) {
+            b.className = 'level-tab-btn px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer bg-[#1d1d1f] text-white border-black shadow-xs';
+          } else {
+            b.className = 'level-tab-btn px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border cursor-pointer bg-white text-[#52525b] border-black/5 hover:border-black/20 hover:text-black';
+          }
+        });
+
+        loadLogs();
+      });
+    });
+
+    // Search input
+    let searchTimer = null;
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        currentSearch = searchInput.value.trim();
+        if (clearSearchBtn) {
+          if (currentSearch) clearSearchBtn.classList.remove('hidden');
+          else clearSearchBtn.classList.add('hidden');
+        }
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          loadLogs();
+        }, 300);
+      });
+    }
+
+    if (clearSearchBtn) {
+      clearSearchBtn.addEventListener('click', () => {
+        if (searchInput) searchInput.value = '';
+        currentSearch = '';
+        clearSearchBtn.classList.add('hidden');
+        loadLogs();
+      });
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        loadLogs();
+      });
+    }
+
+    if (clearLogsBtn) {
+      clearLogsBtn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to permanently clear all diagnostic logs?')) return;
+        try {
+          const res = await fetch('/api/admin/logs', { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            loadLogs();
+          } else {
+            alert(data.error || 'Failed to clear logs');
+          }
+        } catch (e) {
+          alert('Network failure');
+        }
+      });
+    }
+
+    // Initial load
+    loadLogs();
+  })();
+</script>
+

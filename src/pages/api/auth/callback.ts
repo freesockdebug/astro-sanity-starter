@@ -11,6 +11,7 @@ import {
 } from '@utils/auth';
 import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin, getSystemSettings } from '@utils/db';
 import { SecurityService } from '@utils/security';
+import { logger } from '@utils/logger';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -117,7 +118,14 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
         roles,
       };
     } catch (err: any) {
-      console.error('[Auth Callback] Logto exchange error:', err);
+      logger.error({
+        module: 'auth/callback',
+        event: 'LOGTO_EXCHANGE_ERROR',
+        message: err?.message || 'Logto exchange error',
+        path: reqUrl.pathname,
+        rayId: request.headers.get('cf-ray') || undefined,
+        error: err,
+      }, { cfEnv });
       return new Response(`Authentication Error: ${err.message}`, { status: 500 });
     }
 
@@ -147,7 +155,15 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       roles: authUser.roles,
     });
   } catch (syncErr) {
-    console.error('[Auth Callback] User D1 sync failed:', syncErr);
+    logger.warn({
+      module: 'auth/callback',
+      event: 'USER_SYNC_FAILED',
+      message: 'User D1 sync failed',
+      userId: authUser.id,
+      userEmail: authUser.email,
+      path: reqUrl.pathname,
+      error: syncErr,
+    }, { cfEnv });
   }
 
   // 4.5. Record Login History (IP, Geo, Device) with 90-day retention
@@ -162,7 +178,15 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       userAgent,
     });
   } catch (logErr) {
-    console.warn('[Auth Callback] Failed to record login audit log:', logErr);
+    logger.warn({
+      module: 'auth/callback',
+      event: 'LOGIN_AUDIT_LOG_FAILED',
+      message: 'Failed to record login audit log',
+      userId: authUser.id,
+      userEmail: authUser.email,
+      path: reqUrl.pathname,
+      error: logErr,
+    }, { cfEnv });
   }
 
   // 5. Auto-Claim Historical Unclaimed Orders matching buyer_email
@@ -170,7 +194,15 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
   try {
     claimedCount = await claimOrdersByEmail(authUser.email, authUser.id);
   } catch (claimErr) {
-    console.error('[Auth Callback] Auto-claim orders failed:', claimErr);
+    logger.warn({
+      module: 'auth/callback',
+      event: 'AUTOCLAIM_FAILED',
+      message: 'Auto-claim orders failed',
+      userId: authUser.id,
+      userEmail: authUser.email,
+      path: reqUrl.pathname,
+      error: claimErr,
+    }, { cfEnv });
   }
 
   // 6. Generate Tamper-Proof Session Cookie

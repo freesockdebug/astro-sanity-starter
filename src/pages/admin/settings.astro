@@ -480,6 +480,82 @@ const pageTitle = 'Workspace Settings';
       </div>
     </div>
 
+    <!-- Section 5: Diagnostics & Observability -->
+    <div class="p-5 sm:p-6 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-4">
+      <div class="border-b border-black/5 pb-3 flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">5. Diagnostics & Observability Governance</h2>
+          <p class="text-xs text-[#86868b] mt-0.5">Control D1 business error logging, logged-in user tracking, and retention thresholds.</p>
+        </div>
+        <a
+          href="/admin/logs"
+          class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all text-[#1d1d1f]"
+        >
+          <span>Open Diagnostics Console</span>
+          <span>→</span>
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+        <!-- Enable Error Logging -->
+        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-start gap-3">
+          <input
+            type="checkbox"
+            id="enable_error_logging"
+            name="enable_error_logging"
+            checked={settings.enable_error_logging}
+            class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f] mt-0.5 shrink-0"
+          />
+          <div>
+            <label for="enable_error_logging" class="block text-xs font-bold text-[#1d1d1f] cursor-pointer">
+              Enable D1 Error Logging
+            </label>
+            <p class="text-[11px] text-[#86868b] mt-0.5">
+              Persist runtime errors, unhandled exceptions, and API anomalies into D1 database for in-dashboard diagnostics.
+            </p>
+          </div>
+        </div>
+
+        <!-- Log Authenticated Users -->
+        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-start gap-3">
+          <input
+            type="checkbox"
+            id="log_authenticated_users"
+            name="log_authenticated_users"
+            checked={settings.log_authenticated_users}
+            class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f] mt-0.5 shrink-0"
+          />
+          <div>
+            <label for="log_authenticated_users" class="block text-xs font-bold text-[#1d1d1f] cursor-pointer">
+              Log Authenticated Users
+            </label>
+            <p class="text-[11px] text-[#86868b] mt-0.5">
+              Control whether activity and error records are logged for signed-in buyers and administrators (GDPR / Privacy).
+            </p>
+          </div>
+        </div>
+
+        <!-- Log Retention Days -->
+        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col justify-between">
+          <div>
+            <label for="log_retention_days" class="block text-xs font-bold text-[#1d1d1f] mb-1">
+              Error Log Retention (Days)
+            </label>
+            <input
+              type="number"
+              id="log_retention_days"
+              name="log_retention_days"
+              value={settings.log_retention_days}
+              min="1"
+              max="365"
+              class="w-full px-3 py-1.5 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] font-mono font-bold"
+            />
+          </div>
+          <p class="text-[11px] text-[#86868b] mt-1">Automatic rolling prune threshold (1 to 365 days).</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Bottom Save Toolbar -->
     <div class="sticky bottom-4 z-20 flex items-center justify-between p-4 rounded-2xl bg-white/95 backdrop-blur-md border border-black/10 shadow-lg">
       <div class="text-xs text-[#86868b]">
@@ -551,6 +627,9 @@ const pageTitle = 'Workspace Settings';
           co_admin_emails: (formData.get('co_admin_emails') || '').toString().trim(),
           turnstile_hostnames: (formData.get('turnstile_hostnames') || '').toString().trim(),
           login_retention_days: parseInt(formData.get('login_retention_days') || '90', 10),
+          enable_error_logging: form.querySelector('#enable_error_logging') ? form.querySelector('#enable_error_logging').checked : true,
+          log_authenticated_users: form.querySelector('#log_authenticated_users') ? form.querySelector('#log_authenticated_users').checked : true,
+          log_retention_days: parseInt(formData.get('log_retention_days') || '30', 10),
         };
         return updates;
       }

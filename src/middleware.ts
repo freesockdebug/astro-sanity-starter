@@ -4,20 +4,80 @@ import { env as cfEnv } from 'cloudflare:workers';
 import { SiteConfigService } from '@data/siteConfig';
 import { SESSION_COOKIE_NAME, getCookieValue, getRuntimeEnv } from './utils/auth';
 import { SecurityService } from './utils/security';
+import { logger } from './utils/logger';
 
 /**
- * Cloudflare Edge Cache Middleware for HTML Pages
- * 
- * Target: Drastically drops TTFB from ~2,500ms down to ~20ms by serving
- * server-rendered HTML directly from Cloudflare's Global Edge Cache.
+ * Cloudflare Edge Cache Middleware for HTML Pages with Observability & Slow-Request Diagnostics
  */
 export const onRequest = defineMiddleware(async (context, next) => {
+  const startTime = Date.now();
+  const { request, url } = context;
+  const pathname = url.pathname;
+  const rayId = request.headers.get('cf-ray') || crypto.randomUUID();
+  (context.locals as any).rayId = rayId;
+
   if (cfEnv && typeof globalThis !== 'undefined') {
     (globalThis as any).__CF_ENV__ = cfEnv;
   }
-  const { request, url } = context;
-  const pathname = url.pathname;
+  const runtimeCtx = (context.locals as any)?.runtime?.ctx || (context.locals as any)?.cfContext;
+  if (runtimeCtx && typeof globalThis !== 'undefined') {
+    (globalThis as any).__CF_CTX__ = runtimeCtx;
+  }
 
+  try {
+    const response = await handleRequest(context, next, pathname, url, request);
+    const latencyMs = Date.now() - startTime;
+    if (latencyMs > 2000 && !pathname.startsWith('/_astro/')) {
+      logger.warn(
+        {
+          module: 'middleware',
+          event: 'SLOW_REQUEST',
+          message: `Slow request detected (${latencyMs}ms)`,
+          path: pathname,
+          rayId,
+          latencyMs,
+        },
+        { cfEnv, ctx: runtimeCtx }
+      );
+    }
+    response.headers.set('X-Request-Id', rayId);
+    return response;
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime;
+    logger.error(
+      {
+        module: 'middleware',
+        event: 'UNHANDLED_EXCEPTION',
+        message: err?.message || 'Unhandled server exception',
+        path: pathname,
+        rayId,
+        latencyMs,
+        error: err,
+      },
+      { cfEnv, ctx: runtimeCtx }
+    );
+
+    if (pathname.startsWith('/api/')) {
+      return new Response(
+        JSON.stringify({
+          error: 'Internal Server Error',
+          requestId: rayId,
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Request-Id': rayId,
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+          },
+        }
+      );
+    }
+    throw err;
+  }
+});
+
+async function handleRequest(context: any, next: any, pathname: string, url: URL, request: Request): Promise<Response> {
   // Fast canonical redirect for root admin path to primary orders console
   if (pathname === '/admin' || pathname === '/admin/') {
     return new Response(null, {
@@ -30,11 +90,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   // 1. Self-Healing Stale Asset Redirection & Fallback Guard
-  // When a client holds a cached/stale HTML requesting an older hashed CSS/JS bundle
-  // (e.g. /_astro/Layout.old.css), prevent styling catastrophic 404s by redirecting to current active bundle.
   if (pathname.startsWith('/_astro/')) {
     if (pathname.endsWith('.css') && pathname.includes('Layout.')) {
-      // Evergreen Canonical Fallback: redirect any missed/stale Layout.*.css directly to /_astro/Layout.css
       if (pathname !== '/_astro/Layout.css') {
         return new Response(null, {
           status: 302,
@@ -118,17 +175,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     ? (caches as any).default 
     : null;
 
-  // Normalise cache request key to canonical origin + pathname
-  // This guarantees cross-query sharing (stripping tracking/ads) and precise edge invalidation
   const canonicalUrl = new URL(pathname, url.origin);
   const cacheKey = new Request(canonicalUrl.toString(), {
     method: 'GET',
   });
 
-  // 4. Secure Purge Guard: Prevent unauthorized external attackers from spamming ?purge=1 to hammer SSR & CMS quotas.
-  // Edge purge via query param is strictly constrained to:
-  // (a) Loopback dev origin (localhost / 127.0.0.1)
-  // (b) Valid secret authentication (?key=... matching REVALIDATE_SECRET or header)
   const isPurgeParam = url.searchParams.has('purge') || url.searchParams.has('revalidate');
   let isAuthorizedPurge = false;
   if (isPurgeParam) {
@@ -152,7 +203,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     try {
       await cache.delete(cacheKey);
     } catch (e) {
-      console.warn('[EdgeCache] Error purging cache:', e);
+      logger.warn({ module: 'middleware', event: 'CACHE_PURGE_ERROR', message: 'Error purging cache', error: e });
     }
   }
 
@@ -160,13 +211,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     try {
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
-        // Cache HIT: deliver instantly from edge in 10-30ms!
         const hitResponse = new Response(cachedResponse.body, cachedResponse);
         hitResponse.headers.set('X-Edge-Cache', 'HIT');
         return hitResponse;
       }
     } catch (err) {
-      console.warn('[EdgeCache] Error reading cache:', err);
+      logger.warn({ module: 'middleware', event: 'CACHE_READ_ERROR', message: 'Error reading cache', error: err });
     }
   }
 
@@ -182,7 +232,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
         ? siteConfig.edgeCacheTtl
         : 300;
 
-      // When Studio configures 0s (real-time mode), bypass edge caching
       if (edgeTtl === 0) {
         const bypassHeaders = new Headers(response.headers);
         bypassHeaders.set('Cache-Control', 'public, max-age=0, no-cache, no-store, must-revalidate');
@@ -198,9 +247,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
       const cloned = response.clone();
       const edgeHeaders = new Headers(cloned.headers);
 
-      // Instruct Cloudflare Edge Cache & Browser:
-      // Browser: max-age=0, must-revalidate (browser always gets fresh)
-      // Edge / CDN: s-maxage=${edgeTtl} (configured via Studio), SWR for ${swr}s
       edgeHeaders.set('Cache-Control', `public, max-age=0, s-maxage=${edgeTtl}, stale-while-revalidate=${swr}`);
       edgeHeaders.delete('Cloudflare-CDN-Cache-Control');
       edgeHeaders.delete('CDN-Cache-Control');
@@ -212,17 +258,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
         headers: edgeHeaders,
       });
 
-      // Asynchronously store to Cloudflare Edge Cache without blocking the response
-      const cfCtx = (context.locals as any)?.cfContext;
+      const cfCtx = (context.locals as any)?.cfContext || (context.locals as any)?.runtime?.ctx;
       if (cfCtx?.waitUntil) {
         cfCtx.waitUntil(cache.put(cacheKey, responseToCache));
       } else {
         cache.put(cacheKey, responseToCache).catch((err: any) => {
-          console.warn('[EdgeCache] Async cache put error:', err);
+          logger.warn({ module: 'middleware', event: 'ASYNC_CACHE_PUT_ERROR', message: 'Async cache put error', error: err });
         });
       }
 
-      // Return response with proper cache headers so upstream CDN caches it as well
       const returnedResponse = new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -230,9 +274,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
       });
       return returnedResponse;
     } catch (err) {
-      console.warn('[EdgeCache] Error writing cache:', err);
+      logger.warn({ module: 'middleware', event: 'CACHE_WRITE_ERROR', message: 'Error writing cache', error: err });
     }
   }
 
   return response;
-});
+}
+

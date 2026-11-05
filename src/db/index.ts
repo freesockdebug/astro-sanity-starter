@@ -7,5 +7,6 @@ export * from './schema';
 export * from './orders.repo';
 export * from './users.repo';
 export * from './logins.repo';
+export * from './logs.repo';
 export * from './settings.repo';
 

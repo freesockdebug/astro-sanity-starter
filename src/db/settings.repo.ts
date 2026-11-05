@@ -31,6 +31,11 @@ export interface SystemSettings {
   co_admin_emails: string;
   turnstile_hostnames: string;
   login_retention_days: number;
+
+  // 5. Diagnostics & Observability
+  enable_error_logging: boolean;
+  log_authenticated_users: boolean;
+  log_retention_days: number;
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -51,6 +56,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   co_admin_emails: '',
   turnstile_hostnames: '',
   login_retention_days: 90,
+  enable_error_logging: true,
+  log_authenticated_users: true,
+  log_retention_days: 30,
 };
 
 export const KV_SETTINGS_KEY = 'sys:settings:v1';
@@ -173,6 +181,10 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
     co_admin_emails: resolveStr('co_admin_emails', 'CO_ADMIN_EMAILS', DEFAULT_SYSTEM_SETTINGS.co_admin_emails),
     turnstile_hostnames: resolveStr('turnstile_hostnames', 'TURNSTILE_HOSTNAMES', DEFAULT_SYSTEM_SETTINGS.turnstile_hostnames),
     login_retention_days: resolveNum('login_retention_days', 'LOGIN_RETENTION_DAYS', DEFAULT_SYSTEM_SETTINGS.login_retention_days),
+
+    enable_error_logging: resolveBool('enable_error_logging', 'ENABLE_ERROR_LOGGING', DEFAULT_SYSTEM_SETTINGS.enable_error_logging),
+    log_authenticated_users: resolveBool('log_authenticated_users', 'LOG_AUTHENTICATED_USERS', DEFAULT_SYSTEM_SETTINGS.log_authenticated_users),
+    log_retention_days: resolveNum('log_retention_days', 'LOG_RETENTION_DAYS', DEFAULT_SYSTEM_SETTINGS.log_retention_days),
   };
 
   cachedSettings = settings;

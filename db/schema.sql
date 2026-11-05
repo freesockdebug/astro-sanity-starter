@@ -72,6 +72,20 @@ CREATE TABLE IF NOT EXISTS system_settings (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS system_error_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  level TEXT NOT NULL,
+  source TEXT NOT NULL,
+  error_code TEXT,
+  message TEXT NOT NULL,
+  context_json TEXT,
+  user_id TEXT,
+  user_email TEXT,
+  ray_id TEXT,
+  path TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Seed initial super administrator
 INSERT OR IGNORE INTO system_settings (key, value, updated_by)
 VALUES ('co_admin_emails', '', 'system_init');
@@ -87,4 +101,9 @@ CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_user_logins_user_id ON user_logins(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_logins_created_at ON user_logins(created_at);
+CREATE INDEX IF NOT EXISTS idx_error_logs_level ON system_error_logs(level);
+CREATE INDEX IF NOT EXISTS idx_error_logs_source ON system_error_logs(source);
+CREATE INDEX IF NOT EXISTS idx_error_logs_ray_id ON system_error_logs(ray_id);
+CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON system_error_logs(created_at);
+
 

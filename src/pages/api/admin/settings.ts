@@ -157,6 +157,20 @@ export const POST: APIRoute = async ({ request }) => {
       updates.login_retention_days = days;
     }
 
+    // Validate Log Retention Days
+    if (rawUpdates.log_retention_days !== undefined) {
+      const days = parseInt(rawUpdates.log_retention_days, 10);
+      if (isNaN(days) || days < 1 || days > 365) {
+        return jsonNoCache(
+          {
+            error: 'Log Retention Days must be an integer between 1 and 365.',
+          },
+          400
+        );
+      }
+      updates.log_retention_days = days;
+    }
+
     // Pass through string and boolean fields safely
     const stringKeys = [
       'brand_name',
@@ -179,7 +193,12 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    const boolKeys = ['enable_email_notify', 'enable_webhook_notify'];
+    const boolKeys = [
+      'enable_email_notify',
+      'enable_webhook_notify',
+      'enable_error_logging',
+      'log_authenticated_users',
+    ];
     for (const key of boolKeys) {
       if (rawUpdates[key] !== undefined) {
         updates[key] = Boolean(rawUpdates[key]);

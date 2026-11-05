@@ -6,7 +6,7 @@ import AdminSidebar from '@components/admin/AdminSidebar.astro';
 
 interface Props {
   title: string;
-  currentTab: 'orders' | 'users' | 'logins' | 'settings';
+  currentTab: 'orders' | 'users' | 'logins' | 'logs' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
 }
@@ -22,6 +22,7 @@ const tabNames: Record<string, string> = {
   orders: 'Orders & Fulfillment',
   users: 'Customers & Access',
   logins: 'Login Audit Logs',
+  logs: 'System Diagnostics',
   settings: 'Workspace Settings',
 };
 
