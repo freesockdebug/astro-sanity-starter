@@ -227,19 +227,19 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                 <span class="text-[10px] text-[#52525b] font-mono">{item.leadTime || '15-20d'}</span>
               </div>
 
-              <!-- 3. Merged Title & Composition Block -->
-              <div class="shrink-0 min-h-[3.6em] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
+              <!-- 3. Merged Title & Composition Block (Dynamic Typography Metric) -->
+              <div class="shrink-0 text-xs leading-tight min-h-[calc(2lh+1.2em)] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
                 <a href={getLocalizedPath(`/products/${item.slug}`, currentLang)} class="block">
-                  <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug" title={getLocalizedValue(item.title, currentLang)}>
+                  <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-tight" title={getLocalizedValue(item.title, currentLang)}>
                     {getLocalizedValue(item.shortTitle || item.title, currentLang)}
                   </h3>
                 </a>
-                <p class="text-[10px] text-[#52525b] line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
+                <p class="text-[10px] leading-tight text-[#52525b] line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
               </div>
             </div>
 
             <!-- 5. Wholesale Price & Action Bottom Row -->
-            <div class="shrink-0 mt-2 pt-1.5 border-t border-black/5 flex items-center justify-between px-0.5">
+            <div class="shrink-0 mt-1 pt-1 border-t border-black/5 flex items-center justify-between px-0.5">
               <div class="flex flex-col">
                 <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
                   <span class="text-[10px] font-mono">{item.currencySymbol || item.currency || '$'}</span>
@@ -295,15 +295,15 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               <span class="card-lead text-[10px] text-[#52525b] font-mono">15-20d</span>
             </div>
 
-            <div class="shrink-0 min-h-[3.6em] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
+            <div class="shrink-0 text-xs leading-tight min-h-[calc(2lh+1.2em)] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
               <a href="" class="card-link-title block">
-                <h3 class="card-title text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug"></h3>
+                <h3 class="card-title text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-tight"></h3>
               </a>
-              <p class="card-comp text-[10px] text-[#52525b] line-clamp-1 truncate"></p>
+              <p class="card-comp text-[10px] leading-tight text-[#52525b] line-clamp-1 truncate"></p>
             </div>
           </div>
 
-          <div class="shrink-0 mt-2 pt-1.5 border-t border-black/5 flex items-center justify-between px-0.5">
+          <div class="shrink-0 mt-1 pt-1 border-t border-black/5 flex items-center justify-between px-0.5">
             <div class="flex flex-col">
               <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
                 <span class="card-curr text-[10px] font-mono">$</span>
