@@ -2,40 +2,17 @@
 // src/pages/admin/logins.astro
 // Admin Security Audit: 90-Day Login History & IP/Device Tracker
 import AdminLayout from '@layouts/AdminLayout.astro';
-import LocalTime from '@components/LocalTime.astro';
 import { requireAdminContext } from '@utils/auth';
-import { listAllLoginHistory, getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/logins');
+const { sessionUser, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/logins');
 if (redirectResponse) return redirectResponse;
 
-const currentSearch = Astro.url.searchParams.get('search')?.trim() || '';
-const [logins, systemSettings] = await Promise.all([
-  listAllLoginHistory(150),
-  getSystemSettings(cfEnv).catch(() => null),
-]);
 const retentionDays = systemSettings?.login_retention_days || 90;
-
-// Search filter
-const searchLower = currentSearch.toLowerCase();
-const displayLogins = searchLower
-  ? logins.filter((l) =>
-      (l.email || '').toLowerCase().includes(searchLower) ||
-      (l.user_id || '').toLowerCase().includes(searchLower) ||
-      (l.ip || '').toLowerCase().includes(searchLower) ||
-      (l.city || '').toLowerCase().includes(searchLower) ||
-      (l.country || '').toLowerCase().includes(searchLower)
-    )
-  : logins;
-
-// Summary metrics (calculated on raw dataset)
-const uniqueUsers = new Set(logins.map((l) => l.email.toLowerCase())).size;
-const uniqueIps = new Set(logins.map((l) => l.ip).filter(Boolean)).size;
-const countries = Array.from(new Set(logins.map((l) => l.country).filter(Boolean)));
+const initialSearch = Astro.url.searchParams.get('search')?.trim() || '';
 
 const pageTitle = 'Login Audit Logs';
 ---
@@ -60,12 +37,12 @@ const pageTitle = 'Login Audit Logs';
     </div>
   </div>
 
-  <!-- KPI Metric Cards (Compact auto-fit grid on mobile, expanded on desktop) -->
+  <!-- KPI Metric Cards -->
   <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-2 sm:gap-4 mb-4 sm:mb-6">
     <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
       <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Sessions</span>
       <div class="flex items-baseline gap-1 sm:gap-2">
-        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-[#1d1d1f]">{logins.length}</span>
+        <span id="metric-sessions" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-[#1d1d1f]">-</span>
         <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Events</span>
       </div>
     </div>
@@ -73,7 +50,7 @@ const pageTitle = 'Login Audit Logs';
     <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
       <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Accounts</span>
       <div class="flex items-baseline gap-1 sm:gap-2">
-        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-[#1d1d1f]">{uniqueUsers}</span>
+        <span id="metric-accounts" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-[#1d1d1f]">-</span>
         <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Emails</span>
       </div>
     </div>
@@ -81,7 +58,7 @@ const pageTitle = 'Login Audit Logs';
     <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
       <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Origin IPs</span>
       <div class="flex items-baseline gap-1 sm:gap-2">
-        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-blue-700">{uniqueIps}</span>
+        <span id="metric-ips" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-blue-700">-</span>
         <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">IPs</span>
       </div>
     </div>
@@ -89,7 +66,7 @@ const pageTitle = 'Login Audit Logs';
     <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
       <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Span</span>
       <div class="flex items-baseline gap-1 sm:gap-2">
-        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-purple-700">{countries.length || 1}</span>
+        <span id="metric-countries" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-purple-700">-</span>
         <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Countries</span>
       </div>
     </div>
@@ -99,118 +76,282 @@ const pageTitle = 'Login Audit Logs';
   <div class="sticky top-14 lg:top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
     <div class="flex items-center gap-2 text-xs">
       <span class="font-semibold text-[#1d1d1f]">Session Log Stream</span>
-      <span class="text-[#86868b]">({displayLogins.length} of {logins.length} events)</span>
+      <span id="log-count-summary" class="text-[#86868b]">(Loading...)</span>
     </div>
 
     <!-- Search Form -->
-    <form method="GET" action="/admin/logins" class="relative flex items-center w-full sm:w-80">
+    <div class="relative flex items-center w-full sm:w-80">
       <input
         type="text"
-        name="search"
-        value={currentSearch}
+        id="logins-search-input"
+        value={initialSearch}
         placeholder="Search email, user ID, IP, city..."
         class="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] shadow-2xs"
       />
       <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
-      {currentSearch && (
-        <a href="/admin/logins" class="absolute right-2.5 text-xs text-[#86868b] hover:text-black">
-          ✕
-        </a>
-      )}
-    </form>
+      <button
+        type="button"
+        id="clear-logins-search"
+        class={`absolute right-2.5 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+        title="Clear search"
+      >
+        ✕
+      </button>
+    </div>
   </div>
 
   <!-- Audit Logs Container: Mobile Cards (< md) + Desktop Table (>= md) -->
-  <div class="bg-white rounded-2xl border border-black/5 shadow-xs overflow-hidden">
-    {displayLogins.length === 0 ? (
-      <div class="py-16 text-center text-xs text-[#86868b]">
-        {currentSearch ? `No login events matching "${currentSearch}".` : 'No login activity recorded yet.'}
+  <div id="logins-container" class="bg-white rounded-2xl border border-black/5 shadow-xs overflow-hidden min-h-[300px]">
+    <!-- Skeleton loader -->
+    <div id="logins-skeleton" class="p-6 space-y-4 animate-pulse">
+      <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
+      <div class="space-y-3">
+        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
       </div>
-    ) : (
-      <>
-        <!-- 1. Mobile Cards Layout (< md): 100% full width, zero horizontal scrolling -->
-        <div class="block md:hidden divide-y divide-black/5">
-          {displayLogins.map((entry) => {
-            const locationStr = [entry.city, entry.country].filter(Boolean).join(', ') || 'Global';
-            return (
-              <div class="p-3.5 space-y-2 bg-white text-xs">
-                <!-- Row 1: Email & Local Time -->
-                <div class="flex items-start justify-between gap-2">
-                  <div class="min-w-0 flex-1">
-                    <span class="font-semibold text-[#1d1d1f] truncate block">{entry.email}</span>
-                    <span class="font-mono text-[10px] text-[#86868b] truncate block" title={entry.user_id}>{entry.user_id}</span>
-                  </div>
-                  <span class="text-[11px] text-[#86868b] shrink-0 font-mono">
-                    <LocalTime datetime={entry.created_at} showSeconds={true} />
-                  </span>
-                </div>
-                <!-- Row 2: IP, Location & Device info in light grey box -->
-                <div class="p-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 space-y-1">
-                  <div class="flex items-center justify-between text-[11px]">
-                    <span class="font-mono font-medium text-[#1d1d1f]">{entry.ip || '—'}</span>
-                    <span class="text-[#52525b]">📍 {locationStr}</span>
-                  </div>
-                  <p class="text-[10px] text-[#86868b] truncate" title={entry.user_agent}>
-                    {entry.user_agent || 'Unknown Device'}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    </div>
 
-        <!-- 2. Desktop High-Density Table (>= md) -->
-        <div class="hidden md:block overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr class="bg-[#fafafa] border-b border-black/5 text-[#86868b] font-medium text-[11px]">
-                <th class="py-3 px-4">User Email & ID</th>
-                <th class="py-3 px-4">IP Address</th>
-                <th class="py-3 px-4">Location</th>
-                <th class="py-3 px-4">Client User-Agent</th>
-                <th class="py-3 px-4 text-right">Login Timestamp</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-black/5">
-              {displayLogins.map((entry) => {
-                const locationStr = [entry.city, entry.country].filter(Boolean).join(', ') || 'Global / Edge';
-                return (
-                  <tr class="hover:bg-[#f5f5f7]/60 transition-colors">
-                    <td class="py-3 px-4">
-                      <div class="font-medium text-[#1d1d1f]">{entry.email}</div>
-                      <div class="text-[10px] font-mono text-[#86868b] truncate max-w-[200px]" title={entry.user_id}>
-                        {entry.user_id}
-                      </div>
-                    </td>
-                    <td class="py-3 px-4 font-mono text-[11px] text-[#1d1d1f]">
-                      {entry.ip ? (
-                        <span class="px-2 py-0.5 rounded bg-[#f5f5f7] border border-black/5">
-                          {entry.ip}
-                        </span>
-                      ) : (
-                        <span class="text-[#86868b]">—</span>
-                      )}
-                    </td>
-                    <td class="py-3 px-4">
-                      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-zinc-100 text-[#1d1d1f] border border-black/5">
-                        📍 {locationStr}
-                      </span>
-                    </td>
-                    <td class="py-3 px-4 text-[11px] text-[#52525b] max-w-xs truncate" title={entry.user_agent}>
-                      {entry.user_agent || 'Unknown Client'}
-                    </td>
-                    <td class="py-3 px-4 text-right whitespace-nowrap font-mono text-[11px]">
-                      <LocalTime datetime={entry.created_at} showSeconds={true} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </>
-    )}
+    <!-- Content injected here -->
+    <div id="logins-content" class="hidden"></div>
   </div>
 </AdminLayout>
+
+<script>
+  let allLogins = [];
+  let currentSearch = '';
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatDateTime(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  function updateMetrics(logins) {
+    const sessionsEl = document.getElementById('metric-sessions');
+    const accountsEl = document.getElementById('metric-accounts');
+    const ipsEl = document.getElementById('metric-ips');
+    const countriesEl = document.getElementById('metric-countries');
+
+    if (sessionsEl) sessionsEl.textContent = String(logins.length);
+    if (accountsEl) {
+      const uniqueUsers = new Set(logins.map((l) => (l.email || '').toLowerCase())).size;
+      accountsEl.textContent = String(uniqueUsers);
+    }
+    if (ipsEl) {
+      const uniqueIps = new Set(logins.map((l) => l.ip).filter(Boolean)).size;
+      ipsEl.textContent = String(uniqueIps);
+    }
+    if (countriesEl) {
+      const uniqueCountries = new Set(logins.map((l) => l.country).filter(Boolean)).size;
+      countriesEl.textContent = String(uniqueCountries || 1);
+    }
+  }
+
+  function renderTable(displayLogins) {
+    const content = document.getElementById('logins-content');
+    const summary = document.getElementById('log-count-summary');
+    if (!content) return;
+
+    if (summary) {
+      summary.textContent = `(${displayLogins.length} of ${allLogins.length} events)`;
+    }
+
+    if (displayLogins.length === 0) {
+      content.innerHTML = `
+        <div class="py-16 text-center text-xs text-[#86868b]">
+          ${currentSearch ? `No login events matching "${escapeHtml(currentSearch)}".` : 'No login activity recorded yet.'}
+        </div>
+      `;
+      content.classList.remove('hidden');
+      return;
+    }
+
+    // 1. Mobile Cards Layout (< md)
+    const mobileCardsHtml = `
+      <div class="block md:hidden divide-y divide-black/5">
+        ${displayLogins.map((entry) => {
+          const locationStr = escapeHtml([entry.city, entry.country].filter(Boolean).join(', ') || 'Global');
+          const safeEmail = escapeHtml(entry.email || '');
+          const safeUserId = escapeHtml(entry.user_id || '');
+          const safeIp = escapeHtml(entry.ip || '—');
+          const safeAgent = escapeHtml(entry.user_agent || 'Unknown Device');
+          const dateStr = formatDateTime(entry.created_at);
+
+          return `
+            <div class="p-3.5 space-y-2 bg-white text-xs">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <span class="font-semibold text-[#1d1d1f] truncate block">${safeEmail}</span>
+                  <span class="font-mono text-[10px] text-[#86868b] truncate block" title="${safeUserId}">${safeUserId}</span>
+                </div>
+                <span class="text-[11px] text-[#86868b] shrink-0 font-mono">
+                  ${dateStr}
+                </span>
+              </div>
+              <div class="p-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 space-y-1">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="font-mono font-medium text-[#1d1d1f]">${safeIp}</span>
+                  <span class="text-[#52525b]">📍 ${locationStr}</span>
+                </div>
+                <p class="text-[10px] text-[#86868b] truncate" title="${safeAgent}">
+                  ${safeAgent}
+                </p>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    // 2. Desktop High-Density Table (>= md)
+    const desktopTableHtml = `
+      <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-[#fafafa] border-b border-black/5 text-[#86868b] font-medium text-[11px]">
+              <th class="py-3 px-4">User Email & ID</th>
+              <th class="py-3 px-4">IP Address</th>
+              <th class="py-3 px-4">Location</th>
+              <th class="py-3 px-4">Client User-Agent</th>
+              <th class="py-3 px-4 text-right">Login Timestamp</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-black/5">
+            ${displayLogins.map((entry) => {
+              const locationStr = escapeHtml([entry.city, entry.country].filter(Boolean).join(', ') || 'Global / Edge');
+              const safeEmail = escapeHtml(entry.email || '');
+              const safeUserId = escapeHtml(entry.user_id || '');
+              const safeIp = escapeHtml(entry.ip || '');
+              const safeAgent = escapeHtml(entry.user_agent || 'Unknown Client');
+              const dateStr = formatDateTime(entry.created_at);
+
+              return `
+                <tr class="hover:bg-[#f5f5f7]/60 transition-colors">
+                  <td class="py-3 px-4">
+                    <div class="font-medium text-[#1d1d1f]">${safeEmail}</div>
+                    <div class="text-[10px] font-mono text-[#86868b] truncate max-w-[200px]" title="${safeUserId}">
+                      ${safeUserId}
+                    </div>
+                  </td>
+                  <td class="py-3 px-4 font-mono text-[11px] text-[#1d1d1f]">
+                    ${safeIp ? `<span class="px-2 py-0.5 rounded bg-[#f5f5f7] border border-black/5">${safeIp}</span>` : `<span class="text-[#86868b]">—</span>`}
+                  </td>
+                  <td class="py-3 px-4">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-zinc-100 text-[#1d1d1f] border border-black/5">
+                      📍 ${locationStr}
+                    </span>
+                  </td>
+                  <td class="py-3 px-4 text-[11px] text-[#52525b] max-w-xs truncate" title="${safeAgent}">
+                    ${safeAgent}
+                  </td>
+                  <td class="py-3 px-4 text-right whitespace-nowrap font-mono text-[11px]">
+                    ${dateStr}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    content.innerHTML = mobileCardsHtml + desktopTableHtml;
+    content.classList.remove('hidden');
+  }
+
+  function filterAndRender() {
+    const searchLower = currentSearch.toLowerCase();
+    const filtered = searchLower
+      ? allLogins.filter((l) =>
+          (l.email || '').toLowerCase().includes(searchLower) ||
+          (l.user_id || '').toLowerCase().includes(searchLower) ||
+          (l.ip || '').toLowerCase().includes(searchLower) ||
+          (l.city || '').toLowerCase().includes(searchLower) ||
+          (l.country || '').toLowerCase().includes(searchLower)
+        )
+      : allLogins;
+
+    renderTable(filtered);
+  }
+
+  async function loadLogins() {
+    const skeleton = document.getElementById('logins-skeleton');
+    const content = document.getElementById('logins-content');
+
+    try {
+      const res = await fetch('/api/admin/logins?limit=150');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      allLogins = data.logins || [];
+
+      if (skeleton) skeleton.classList.add('hidden');
+      updateMetrics(allLogins);
+      filterAndRender();
+    } catch (err) {
+      console.error('Failed to load logins:', err);
+      if (skeleton) skeleton.classList.add('hidden');
+      if (content) {
+        content.innerHTML = `
+          <div class="py-16 text-center text-xs text-rose-600">
+            Failed to load login audit logs. <button type="button" id="retry-logins-btn" class="underline ml-1 cursor-pointer">Retry</button>
+          </div>
+        `;
+        content.classList.remove('hidden');
+        document.getElementById('retry-logins-btn')?.addEventListener('click', loadLogins);
+      }
+    }
+  }
+
+  // 0ms instant client-side search filtering
+  const searchInput = document.getElementById('logins-search-input');
+  const clearBtn = document.getElementById('clear-logins-search');
+
+  searchInput?.addEventListener('input', () => {
+    currentSearch = searchInput.value.trim();
+    if (clearBtn) {
+      if (currentSearch) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+    }
+
+    const url = new URL(window.location.href);
+    if (currentSearch) url.searchParams.set('search', currentSearch);
+    else url.searchParams.delete('search');
+    window.history.replaceState({}, '', url.toString());
+
+    filterAndRender();
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    if (searchInput) searchInput.value = '';
+    currentSearch = '';
+    clearBtn.classList.add('hidden');
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('search');
+    window.history.replaceState({}, '', url.toString());
+
+    filterAndRender();
+  });
+
+  // Initial load
+  const initialUrl = new URL(window.location.href);
+  currentSearch = initialUrl.searchParams.get('search')?.trim() || '';
+  loadLogins();
+</script>

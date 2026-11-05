@@ -178,11 +178,6 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       ? ` OR LOWER(email) IN (${adminEmails.map((e) => `'${e.replace(/'/g, "''")}'`).join(',')})`
       : '';
 
-    const users = await db.query<UserRecord>(querySql, [...params, limit, offset]);
-
-    const countRow = await db.first<{ cnt: number }>(countSql, params);
-    const total = Number(countRow?.cnt || 0);
-
     const statsSql = `SELECT
       COUNT(*) as total_all,
       SUM(CASE WHEN tier = 'VIP' THEN 1 ELSE 0 END) as total_vip,
@@ -191,11 +186,18 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) as total_blocked,
       SUM(CASE WHEN (logto_roles LIKE '%admin%'${adminEmailsClause}) THEN 1 ELSE 0 END) as total_admins
     FROM users`;
-    const statsRow = await db.first<any>(statsSql);
 
-    const unclaimedRow = await db.first<{ unclaimed: number }>(
-      `SELECT COUNT(*) as unclaimed FROM orders WHERE user_id IS NULL OR user_id = ''`
-    );
+    const unclaimedSql = `SELECT COUNT(*) as unclaimed FROM orders WHERE user_id IS NULL OR user_id = ''`;
+
+    // Concurrently execute users query, count, tier distribution stats, and unclaimed orders count (1 RTT)
+    const [users, countRow, statsRow, unclaimedRow] = await Promise.all([
+      db.query<UserRecord>(querySql, [...params, limit, offset]),
+      db.first<{ cnt: number }>(countSql, params),
+      db.first<any>(statsSql),
+      db.first<{ unclaimed: number }>(unclaimedSql),
+    ]);
+
+    const total = Number(countRow?.cnt || 0);
 
     const stats = {
       all: Number(statsRow?.total_all || 0),

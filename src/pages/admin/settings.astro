@@ -3,20 +3,17 @@
 // Unified Dynamic Configuration Center: D1-backed Settings & Platform Infrastructure Health
 import AdminLayout from '@layouts/AdminLayout.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
-import { getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+const { sessionUser, pendingOrdersCount, systemSettings: settings, redirectResponse } = await requireAdminContext(
   Astro,
   cfEnv,
   '/admin/settings'
 );
 if (redirectResponse) return redirectResponse;
-
-const settings = await getSystemSettings(cfEnv);
 
 const rootAdminEmails = getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '';
 const hasLogtoOidc = !!(getRuntimeEnv('LOGTO_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_ENDPOINT', cfEnv));

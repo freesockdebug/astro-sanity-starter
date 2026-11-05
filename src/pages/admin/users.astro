@@ -1,89 +1,19 @@
 ---
 // src/pages/admin/users.astro
 import AdminLayout from '@layouts/AdminLayout.astro';
-import LocalTime from '@components/LocalTime.astro';
-import TierBadge from '@components/TierBadge.astro';
-import { requireAdminContext, checkIsAdmin } from '@utils/auth';
-import { listAdminUsers, getSystemSettings } from '@utils/db';
-import { getLangFromUrl, getLocalizedPath } from '@i18n';
+import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-let errorOccurred: string | null = null;
-let sessionUser: any = null;
-let pendingOrdersCount = 0;
-let redirectResponse: any = null;
-let users: any[] = [];
-let total = 0;
-let stats: any = { all: 0, vip: 0, partner: 0, standard: 0, blocked: 0, admins: 0, unclaimedGuestOrders: 0 };
-let currentLang = 'en';
-let currentSearch = '';
-let currentTier = 'ALL';
-let currentStatus = 'ALL';
-let currentPage = 1;
-const pageSize = 30;
-let totalPages = 1;
-let systemSettings: any = null;
-
-try {
-  currentLang = getLangFromUrl(Astro.url);
-  const authRes = await requireAdminContext(Astro, cfEnv, '/admin/users');
-  sessionUser = authRes.sessionUser;
-  pendingOrdersCount = authRes.pendingOrdersCount;
-  redirectResponse = authRes.redirectResponse;
-
-  if (!redirectResponse) {
-    currentSearch = Astro.url.searchParams.get('search') || '';
-    currentTier = Astro.url.searchParams.get('tier') || 'ALL';
-    currentStatus = Astro.url.searchParams.get('status') || 'ALL';
-    currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
-
-    const [data, settings] = await Promise.all([
-      listAdminUsers({
-        search: currentSearch,
-        tier: currentTier,
-        status: currentStatus,
-        page: currentPage,
-        limit: pageSize,
-      }),
-      getSystemSettings(cfEnv).catch(() => null),
-    ]);
-    systemSettings = settings;
-    users = data.users || [];
-    total = data.total || 0;
-    stats = data.stats || stats;
-    totalPages = Math.max(1, Math.ceil(total / pageSize));
-  }
-} catch (err: any) {
-  console.error('[admin/users.astro Error]:', err);
-  errorOccurred = err?.stack || err?.message || String(err);
-}
-
+const { sessionUser, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/users');
 if (redirectResponse) return redirectResponse;
-if (errorOccurred) {
-  return new Response(`Admin Users Render Error:\n${errorOccurred}`, {
-    status: 500,
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-  });
-}
 
-const buildUsersUrl = (overrides: { page?: number; tier?: string; status?: string; search?: string } = {}) => {
-  const p = new URLSearchParams();
-  const t = overrides.tier !== undefined ? overrides.tier : currentTier;
-  const s = overrides.status !== undefined ? overrides.status : currentStatus;
-  const q = overrides.search !== undefined ? overrides.search : currentSearch;
-  const pg = overrides.page !== undefined ? overrides.page : currentPage;
-
-  if (t && t !== 'ALL') p.set('tier', t);
-  if (s && s !== 'ALL') p.set('status', s);
-  if (q) p.set('search', q);
-  if (pg > 1) p.set('page', String(pg));
-
-  const qs = p.toString();
-  return qs ? `/admin/users?${qs}` : '/admin/users';
-};
+const initialSearch = Astro.url.searchParams.get('search') || '';
+const initialTier = Astro.url.searchParams.get('tier') || 'ALL';
+const initialStatus = Astro.url.searchParams.get('status') || 'ALL';
+const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
 const pageTitle = 'Customer & Access Management';
 ---
@@ -102,17 +32,17 @@ const pageTitle = 'Customer & Access Management';
     </div>
     <div class="flex items-center gap-2 self-start sm:self-auto">
       <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
-        Total: <strong class="text-[#1d1d1f] font-semibold">{total}</strong> buyers
+        Total: <strong id="total-users-count" class="text-[#1d1d1f] font-semibold">-</strong> buyers
       </span>
     </div>
   </div>
 
   <!-- Metric Cards Header (Compact 4-grid on mobile, expanded on desktop) -->
-  <div class="grid grid-cols-4 gap-1.5 sm:gap-4 mb-4 sm:mb-6">
+  <div class="grid grid-cols-4 gap-1.5 sm:gap-4 mb-4 sm:mb-6" id="users-metrics-container">
     <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
       <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Total</span>
       <div class="flex items-baseline gap-1 sm:gap-2">
-        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight">{stats.all}</span>
+        <span id="stat-total" class="text-base sm:text-2xl font-bold font-mono tracking-tight">-</span>
         <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Buyers</span>
       </div>
     </div>
@@ -120,9 +50,7 @@ const pageTitle = 'Customer & Access Management';
     <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
       <span class="text-[9px] sm:text-[11px] text-amber-800 uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">VIPs</span>
       <div class="flex items-baseline gap-1 sm:gap-2">
-        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-amber-700">
-          {stats.vip + stats.partner}
-        </span>
+        <span id="stat-vips" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-amber-700">-</span>
         <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">High-val</span>
       </div>
     </div>
@@ -130,324 +58,110 @@ const pageTitle = 'Customer & Access Management';
     <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
       <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Guest</span>
       <div class="flex items-baseline gap-1 sm:gap-2">
-        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight">{stats.unclaimedGuestOrders}</span>
+        <span id="stat-guest" class="text-base sm:text-2xl font-bold font-mono tracking-tight">-</span>
         <a href="/admin/orders" class="text-[9px] sm:text-xs text-blue-600 hover:underline hidden xs:inline">Orders →</a>
       </div>
     </div>
 
-    <a
-      href={buildUsersUrl({ status: currentStatus === 'BLOCKED' ? 'ALL' : 'BLOCKED', tier: 'ALL', page: 1 })}
-      class={`p-2 sm:p-4 rounded-xl sm:rounded-2xl border shadow-2xs transition-all block ${
-        currentStatus === 'BLOCKED'
-          ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500/20'
-          : 'bg-white border-black/5 hover:border-rose-200'
-      }`}
+    <div
+      id="stat-blocked-card"
+      class="p-2 sm:p-4 rounded-xl sm:rounded-2xl border shadow-2xs transition-all block bg-white border-black/5 hover:border-rose-200 cursor-pointer"
     >
       <span class="text-[9px] sm:text-[11px] text-rose-800 uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Blocked</span>
       <div class="flex items-baseline gap-1 sm:gap-2">
-        <span class="text-base sm:text-2xl font-bold font-mono tracking-tight text-rose-700">{stats.blocked}</span>
-        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">{currentStatus === 'BLOCKED' ? '✕' : 'Filter'}</span>
+        <span id="stat-blocked" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-rose-700">-</span>
+        <span id="stat-blocked-label" class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Filter</span>
       </div>
-    </a>
+    </div>
   </div>
 
-  <!-- Sticky Toolbar (Filters & Search): Sticks right below 56px top bar on mobile, 0 on desktop -->
+  <!-- Sticky Toolbar (Filters & Search) -->
   <div class="sticky top-14 lg:top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {[
-            { key: 'ALL', label: 'All Buyers', count: stats.all, isBlocked: false },
-            { key: 'VIP', label: 'VIP', count: stats.vip, isBlocked: false },
-            { key: 'PARTNER', label: 'Partners', count: stats.partner, isBlocked: false },
-            { key: 'STANDARD', label: 'Standard', count: stats.standard, isBlocked: false },
-            { key: 'BLOCKED', label: 'Blocked', count: stats.blocked, isBlocked: true },
-          ].map((tab) => {
-            const isActive = tab.isBlocked
-              ? currentStatus === 'BLOCKED'
-              : (currentStatus !== 'BLOCKED' && currentTier === tab.key);
-            const href = tab.isBlocked
-              ? buildUsersUrl({ status: 'BLOCKED', tier: 'ALL', page: 1 })
-              : buildUsersUrl({ status: 'ALL', tier: tab.key, page: 1 });
-            return (
-              <a
-                href={href}
-                class:list={[
-                  'px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5',
-                  isActive
-                    ? (tab.isBlocked
-                        ? 'bg-rose-700 text-white border-rose-800 font-semibold shadow-2xs'
-                        : 'bg-[#1d1d1f] text-white border-black font-semibold shadow-2xs')
-                    : 'bg-white text-[#52525b] border-black/5 hover:border-black/20'
-                ]}
-              >
-                <span>{tab.label}</span>
-                <span class:list={[
-                  'font-mono text-[10px] px-1.5 py-0.2 rounded-md',
-                  isActive ? 'bg-white/20 text-white' : (tab.isBlocked ? 'bg-rose-50 text-rose-700' : 'bg-[#f5f5f7] text-[#1d1d1f]')
-                ]}>
-                  {tab.count}
-                </span>
-              </a>
-            );
-          })}
-        </div>
+    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" id="user-tabs-container">
+      {[
+        { key: 'ALL', label: 'All Buyers', isBlocked: false },
+        { key: 'VIP', label: 'VIP', isBlocked: false },
+        { key: 'PARTNER', label: 'Partners', isBlocked: false },
+        { key: 'STANDARD', label: 'Standard', isBlocked: false },
+        { key: 'BLOCKED', label: 'Blocked', isBlocked: true },
+      ].map((tab) => (
+        <button
+          type="button"
+          data-tab-type={tab.isBlocked ? 'blocked' : 'tier'}
+          data-tab-key={tab.key}
+          class="user-tab px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5 bg-white text-[#52525b] border-black/5 hover:border-black/20 cursor-pointer"
+        >
+          <span>{tab.label}</span>
+          <span data-tab-count={tab.key} class="font-mono text-[10px] px-1.5 py-0.2 rounded-md bg-[#f5f5f7] text-[#1d1d1f]">
+            -
+          </span>
+        </button>
+      ))}
+    </div>
 
-        <form method="GET" action="/admin/users" class="relative flex items-center w-full sm:w-72">
-          {currentTier !== 'ALL' && <input type="hidden" name="tier" value={currentTier} />}
-          {currentStatus !== 'ALL' && <input type="hidden" name="status" value={currentStatus} />}
-          <input
-            type="text"
-            name="search"
-            value={currentSearch}
-            placeholder="Search email, name, company..."
-            class="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-white border border-black/10 focus:outline-none focus:border-black placeholder:text-[#86868b] transition-all shadow-2xs"
-          />
-          <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          {currentSearch && (
-            <a href={buildUsersUrl({ search: '', page: 1 })} class="absolute right-2.5 text-xs text-[#86868b] hover:text-black">✕</a>
-          )}
-        </form>
+    <!-- Search Form -->
+    <form id="users-search-form" class="relative flex items-center w-full sm:w-72">
+      <input
+        type="text"
+        id="users-search-input"
+        name="search"
+        value={initialSearch}
+        placeholder="Search email, name, company..."
+        class="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-white border border-black/10 focus:outline-none focus:border-black placeholder:text-[#86868b] transition-all shadow-2xs"
+      />
+      <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <button
+        type="button"
+        id="clear-users-search"
+        class={`absolute right-2.5 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+      >
+        ✕
+      </button>
+    </form>
+  </div>
+
+  <!-- Users Content Table & Cards -->
+  <div id="users-container" class="bg-white rounded-3xl border border-black/10 shadow-sm overflow-hidden min-h-[300px]">
+    <!-- Skeleton loader -->
+    <div id="users-skeleton" class="p-6 space-y-4 animate-pulse">
+      <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
+      <div class="space-y-3">
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
       </div>
+    </div>
 
-      <!-- Users Content Table & Cards -->
-      <div class="bg-white rounded-3xl border border-black/10 shadow-sm overflow-hidden">
-        {users.length === 0 ? (
-          <div class="py-16 px-4 text-center">
-            <div class="w-12 h-12 rounded-2xl bg-[#f5f5f7] flex items-center justify-center mx-auto mb-3 text-[#86868b]">
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
-            <h3 class="text-sm font-semibold text-[#1d1d1f]">No Customers Found</h3>
-            <p class="text-xs text-[#86868b] mt-1 max-w-sm mx-auto">
-              {currentSearch
-                ? `No customers match query "${currentSearch}". Try a different email or company name.`
-                : 'Customer profiles will automatically appear here once buyers sign in via Logto.'}
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Desktop Table View */}
-            <div class="hidden md:block overflow-x-auto">
-              <table class="w-full text-left text-xs text-[#1d1d1f]">
-                <thead class="bg-[#f5f5f7]/60 text-[#86868b] font-medium border-b border-black/5">
-                  <tr>
-                    <th class="py-3 px-4">Customer Profile</th>
-                    <th class="py-3 px-4">Company & Location</th>
-                    <th class="py-3 px-4">Tier & Status</th>
-                    <th class="py-3 px-4">Orders & Inquiries</th>
-                    <th class="py-3 px-4">Last Active</th>
-                    <th class="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-black/5">
-                  {users.map((u) => {
-                    const roles: string[] = (() => {
-                      try { return JSON.parse(u.logto_roles || '[]'); } catch { return []; }
-                    })();
-                    const isUserAdmin = checkIsAdmin(u.email, roles, cfEnv, systemSettings?.co_admin_emails);
-                    const hasPending = (u.pending_orders || 0) > 0;
+    <!-- Content injected here -->
+    <div id="users-content" class="hidden"></div>
+  </div>
 
-                    return (
-                      <tr class="hover:bg-[#f5f5f7]/40 transition-colors">
-                        <td class="py-3.5 px-4">
-                          <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                              {(u.name || u.email)[0]}
-                            </div>
-                            <div>
-                              <div class="flex items-center gap-1.5">
-                                <span class="font-semibold text-[#1d1d1f]">{u.name || 'Unnamed Buyer'}</span>
-                                {isUserAdmin && (
-                                  <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                                    Admin
-                                  </span>
-                                )}
-                              </div>
-                              <span class="text-[#86868b] font-mono text-[11px] block">{u.email}</span>
-                            </div>
-                          </div>
-                        </td>
+  <!-- Pagination Controls -->
+  <div id="users-pagination-container" class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b] hidden">
+    <div id="users-pagination-summary"></div>
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        id="users-pagination-prev"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+      >
+        ← Previous
+      </button>
+      <span id="users-pagination-current" class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">1 / 1</span>
+      <button
+        type="button"
+        id="users-pagination-next"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+      >
+        Next →
+      </button>
+    </div>
+  </div>
 
-                        <td class="py-3.5 px-4">
-                          <span class="font-medium text-[#1d1d1f] block">{u.company || '—'}</span>
-                          <span class="text-[11px] text-[#86868b]">{u.country || u.phone || 'Direct Buyer'}</span>
-                        </td>
-
-                        <td class="py-3.5 px-4">
-                          <div class="flex items-center gap-1.5">
-                            <TierBadge tier={u.tier} size="sm">{u.tier}</TierBadge>
-                            {u.status === 'BLOCKED' ? (
-                              <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                                BLOCKED
-                              </span>
-                            ) : (
-                              <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                ACTIVE
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td class="py-3.5 px-4">
-                          <a
-                            href={`/admin/orders?search=${encodeURIComponent(u.email)}`}
-                            class="inline-flex items-center gap-1.5 font-medium hover:text-blue-600 transition-colors group"
-                            title="Filter orders for this buyer"
-                          >
-                            <span>{u.total_orders || 0} Orders</span>
-                            {hasPending && (
-                              <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
-                                {u.pending_orders} pending
-                              </span>
-                            )}
-                            <span class="text-[#86868b] group-hover:text-blue-600">→</span>
-                          </a>
-                        </td>
-
-                        <td class="py-3.5 px-4 text-[#86868b] text-[11px]">
-                          <span class="block text-[#1d1d1f]">
-                            {u.last_login_at ? <LocalTime datetime={u.last_login_at} /> : 'Never'}
-                          </span>
-                          {u.last_login_ip && (
-                            <span class="text-[10px] text-[#86868b] font-mono block">
-                              {u.last_login_ip} {u.last_login_country ? `(${u.last_login_country})` : ''}
-                            </span>
-                          )}
-                        </td>
-
-                        <td class="py-3.5 px-4 text-right">
-                          <button
-                            type="button"
-                            class="action-open-drawer-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-[#1d1d1f] hover:text-white transition-all cursor-pointer border border-black/5"
-                            data-id={u.id}
-                            data-email={u.email}
-                            data-name={u.name}
-                            data-company={u.company}
-                            data-tier={u.tier}
-                            data-status={u.status}
-                            data-notes={u.admin_notes || ''}
-                            data-roles={u.logto_roles}
-                          >
-                            Edit & Notes
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Responsive Cards */}
-            <div class="md:hidden divide-y divide-black/5">
-              {users.map((u) => {
-                const roles: string[] = (() => {
-                  try { return JSON.parse(u.logto_roles || '[]'); } catch { return []; }
-                })();
-                const isUserAdmin = checkIsAdmin(u.email, roles, cfEnv, systemSettings?.co_admin_emails);
-                const hasPending = (u.pending_orders || 0) > 0;
-
-                return (
-                  <div class="p-4 space-y-3">
-                    <div class="flex items-start justify-between gap-2">
-                      <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                          {(u.name || u.email)[0]}
-                        </div>
-                        <div>
-                          <div class="flex items-center gap-1.5">
-                            <span class="font-semibold text-xs text-[#1d1d1f]">{u.name || 'Unnamed Buyer'}</span>
-                            {isUserAdmin && (
-                              <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800">
-                                Admin
-                              </span>
-                            )}
-                          </div>
-                          <span class="text-[#86868b] font-mono text-[11px] block">{u.email}</span>
-                        </div>
-                      </div>
-
-                      <div class="flex items-center gap-1">
-                        <TierBadge tier={u.tier} size="sm">{u.tier}</TierBadge>
-                        {u.status === 'BLOCKED' && (
-                          <span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                            BLOCKED
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div class="flex items-center justify-between text-xs text-[#86868b] pt-1">
-                      <span>{u.company || u.country || 'Independent Buyer'}</span>
-                      <a
-                        href={`/admin/orders?search=${encodeURIComponent(u.email)}`}
-                        class="font-semibold text-[#1d1d1f] hover:underline"
-                      >
-                        {u.total_orders || 0} Orders {hasPending && `(${u.pending_orders} pending)`} →
-                      </a>
-                    </div>
-
-                    <div class="pt-2 flex items-center justify-end">
-                      <button
-                        type="button"
-                        class="action-open-drawer-btn w-full py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] text-[#1d1d1f] border border-black/5 hover:bg-black hover:text-white transition-all cursor-pointer text-center"
-                        data-id={u.id}
-                        data-email={u.email}
-                        data-name={u.name}
-                        data-company={u.company}
-                        data-tier={u.tier}
-                        data-status={u.status}
-                        data-notes={u.admin_notes || ''}
-                        data-roles={u.logto_roles}
-                      >
-                        Edit Profile & Remarks
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b]">
-          <div>
-            Showing <strong class="text-[#1d1d1f]">{(currentPage - 1) * pageSize + 1}</strong> to{' '}
-            <strong class="text-[#1d1d1f]">{Math.min(currentPage * pageSize, total)}</strong> of{' '}
-            <strong class="text-[#1d1d1f]">{total}</strong> customers
-          </div>
-          <div class="flex items-center gap-2">
-            <a
-              href={currentPage > 1 ? buildUsersUrl({ page: currentPage - 1 }) : '#'}
-              class:list={[
-                'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all',
-                currentPage > 1 ? 'border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]' : 'border-transparent text-[#86868b]/40 pointer-events-none'
-              ]}
-              aria-disabled={currentPage <= 1}
-            >
-              ← Previous
-            </a>
-            <span class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">{currentPage} / {totalPages}</span>
-            <a
-              href={currentPage < totalPages ? buildUsersUrl({ page: currentPage + 1 }) : '#'}
-              class:list={[
-                'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all',
-                currentPage < totalPages ? 'border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]' : 'border-transparent text-[#86868b]/40 pointer-events-none'
-              ]}
-              aria-disabled={currentPage >= totalPages}
-            >
-              Next →
-            </a>
-          </div>
-        </div>
-      )}
-
-  <!-- Slide-over Customer Detail Drawer (Desktop Right Drawer / Mobile Bottom Sheet) -->
+  <!-- Slide-over Customer Detail Drawer -->
   <Fragment slot="modals">
     <div id="drawer-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden transition-opacity opacity-0"></div>
     <aside
@@ -456,7 +170,6 @@ const pageTitle = 'Customer & Access Management';
       class="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:right-0 sm:left-auto z-50 w-full sm:w-[clamp(22rem,18rem+10vw,32rem)] max-h-[90vh] sm:max-h-screen rounded-t-3xl sm:rounded-none sm:rounded-l-2xl bg-white border-t sm:border-t-0 sm:border-l border-black/10 shadow-2xl flex flex-col user-physics-drawer"
       aria-label="Customer Profile Drawer"
     >
-      <!-- Mobile Pull / Drag Indicator Bar -->
       <div class="pt-2.5 sm:hidden flex justify-center shrink-0">
         <div class="w-10 h-1 bg-black/15 rounded-full"></div>
       </div>
@@ -466,161 +179,530 @@ const pageTitle = 'Customer & Access Management';
           <h3 class="text-sm font-semibold text-[#1d1d1f]">Customer Profile & Access</h3>
           <p class="text-[11px] text-[#86868b] mt-0.5">Tiering, internal remarks, and security flags</p>
         </div>
-        <button id="close-drawer-btn" type="button" class="p-1 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] transition-all text-base">✕</button>
+        <button id="close-drawer-btn" type="button" class="p-1 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] transition-all text-base cursor-pointer">✕</button>
       </div>
 
-    <form id="drawer-form" class="p-5 overflow-y-auto flex-1 space-y-5 text-xs text-[#1d1d1f]">
-      <input type="hidden" id="drawer-user-id" />
+      <form id="drawer-form" class="p-5 overflow-y-auto flex-1 space-y-5 text-xs text-[#1d1d1f]">
+        <input type="hidden" id="drawer-user-id" />
 
-      <!-- Identity Card -->
-      <div class="p-3.5 rounded-2xl bg-[#f5f5f7] border border-black/5 space-y-1.5">
-        <div class="flex items-center justify-between">
-          <span class="font-semibold text-xs" id="drawer-user-name"></span>
-          <span id="drawer-roles-badge" class="font-mono text-[10px] px-2 py-0.5 rounded bg-black/10 text-[#1d1d1f]"></span>
+        <!-- Identity Card -->
+        <div class="p-3.5 rounded-2xl bg-[#f5f5f7] border border-black/5 space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-xs" id="drawer-user-name"></span>
+            <span id="drawer-roles-badge" class="font-mono text-[10px] px-2 py-0.5 rounded bg-black/10 text-[#1d1d1f]"></span>
+          </div>
+          <p class="font-mono text-[11px] text-[#86868b]" id="drawer-user-email"></p>
+          <p class="text-[11px] text-[#52525b]" id="drawer-user-company"></p>
         </div>
-        <p class="font-mono text-[11px] text-[#86868b]" id="drawer-user-email"></p>
-        <p class="text-[11px] text-[#52525b]" id="drawer-user-company"></p>
-      </div>
 
-      <!-- Customer Tier Selection -->
-      <div>
-        <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Customer Tier (B2B Classification)</label>
-        <div class="grid grid-cols-3 gap-2">
-          <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5">
-            <input type="radio" name="tier" value="STANDARD" class="sr-only" />
-            <span class="font-semibold">Standard</span>
-            <span class="text-[10px] text-[#86868b]">Regular</span>
-          </label>
-          <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-amber-600 has-checked:bg-amber-50">
-            <input type="radio" name="tier" value="VIP" class="sr-only" />
-            <span class="font-semibold text-amber-800">VIP</span>
-            <span class="text-[10px] text-amber-700/80">Key Buyer</span>
-          </label>
-          <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-purple-600 has-checked:bg-purple-50">
-            <input type="radio" name="tier" value="PARTNER" class="sr-only" />
-            <span class="font-semibold text-purple-800">Partner</span>
-            <span class="text-[10px] text-purple-700/80">Atelier Contract</span>
-          </label>
+        <!-- Customer Tier Selection -->
+        <div>
+          <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Customer Tier (B2B Classification)</label>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5">
+              <input type="radio" name="tier" value="STANDARD" class="sr-only" />
+              <span class="font-semibold">Standard</span>
+              <span class="text-[10px] text-[#86868b]">Regular</span>
+            </label>
+            <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-amber-600 has-checked:bg-amber-50">
+              <input type="radio" name="tier" value="VIP" class="sr-only" />
+              <span class="font-semibold text-amber-800">VIP</span>
+              <span class="text-[10px] text-amber-700/80">Key Buyer</span>
+            </label>
+            <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-purple-600 has-checked:bg-purple-50">
+              <input type="radio" name="tier" value="PARTNER" class="sr-only" />
+              <span class="font-semibold text-purple-800">Partner</span>
+              <span class="text-[10px] text-purple-700/80">Atelier Contract</span>
+            </label>
+          </div>
         </div>
-      </div>
 
-      <!-- Account Status (Risk & Block) -->
-      <div>
-        <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Account Status (Security Control)</label>
-        <select
-          id="drawer-status-select"
-          name="status"
-          class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
+        <!-- Account Status (Risk & Block) -->
+        <div>
+          <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Account Status (Security Control)</label>
+          <select
+            id="drawer-status-select"
+            name="status"
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
+          >
+            <option value="ACTIVE">ACTIVE (Normal Ordering & Inquiries)</option>
+            <option value="BLOCKED">BLOCKED (Suspend Submission Privileges)</option>
+          </select>
+        </div>
+
+        <!-- Internal Admin Notes -->
+        <div>
+          <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Internal Admin Remarks (Private to staff)</label>
+          <textarea
+            id="drawer-notes-input"
+            name="admin_notes"
+            rows="3"
+            placeholder="e.g. French Haute Couture buyer, prefers hand-beaded lace swatches, credit terms approved..."
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs placeholder:text-[#86868b]"
+          ></textarea>
+        </div>
+
+        <!-- Recent Orders Timeline -->
+        <div class="pt-2 border-t border-black/5 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block font-semibold text-[11px] text-[#52525b]">Recent Orders (Latest 5)</label>
+            <span id="drawer-orders-loading" class="text-[10px] text-[#86868b] hidden">Loading...</span>
+          </div>
+          <div id="drawer-recent-orders-list" class="space-y-2"></div>
+          <a
+            id="drawer-orders-link"
+            href="#"
+            class="inline-flex items-center justify-between w-full p-2.5 rounded-xl bg-[#f5f5f7] hover:bg-black/5 text-[#1d1d1f] font-medium transition-all text-xs"
+          >
+            <span>📦 View All Orders By This Customer</span>
+            <span>→</span>
+          </a>
+        </div>
+
+        <!-- Recent Login Activity Timeline -->
+        <div class="pt-3 border-t border-black/5 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block font-semibold text-[11px] text-[#52525b]">Login Security Footprint (Recent Sessions)</label>
+            <span class="text-[10px] text-[#86868b]">{systemSettings?.login_retention_days || 90}-day Retention</span>
+          </div>
+          <div id="drawer-recent-logins-list" class="space-y-1.5 text-xs"></div>
+        </div>
+
+        <!-- Error / Success Alert Bar -->
+        <div id="drawer-feedback" class="hidden p-3 rounded-xl text-xs font-medium leading-relaxed"></div>
+      </form>
+
+      <div class="p-4 border-t border-black/5 flex items-center justify-end gap-2 bg-white shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <button
+          type="button"
+          id="cancel-drawer-btn"
+          class="h-9 px-4 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] border border-black/5 transition-all cursor-pointer"
         >
-          <option value="ACTIVE">ACTIVE (Normal Ordering & Inquiries)</option>
-          <option value="BLOCKED">BLOCKED (Suspend Submission Privileges)</option>
-        </select>
-      </div>
-
-      <!-- Internal Admin Notes -->
-      <div>
-        <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Internal Admin Remarks (Private to staff)</label>
-        <textarea
-          id="drawer-notes-input"
-          name="admin_notes"
-          rows="3"
-          placeholder="e.g. French Haute Couture buyer, prefers hand-beaded lace swatches, credit terms approved..."
-          class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs placeholder:text-[#86868b]"
-        ></textarea>
-      </div>
-
-      <!-- Recent Orders Timeline -->
-      <div class="pt-2 border-t border-black/5 space-y-2">
-        <div class="flex items-center justify-between">
-          <label class="block font-semibold text-[11px] text-[#52525b]">Recent Orders (Latest 5)</label>
-          <span id="drawer-orders-loading" class="text-[10px] text-[#86868b] hidden">Loading...</span>
-        </div>
-        <div id="drawer-recent-orders-list" class="space-y-2">
-          <!-- Rendered via JS -->
-        </div>
-        <a
-          id="drawer-orders-link"
-          href="#"
-          class="inline-flex items-center justify-between w-full p-2.5 rounded-xl bg-[#f5f5f7] hover:bg-black/5 text-[#1d1d1f] font-medium transition-all text-xs"
+          Close
+        </button>
+        <button
+          type="button"
+          id="save-drawer-btn"
+          class="h-9 px-5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer"
         >
-          <span>📦 View All Orders By This Customer</span>
-          <span>→</span>
-        </a>
+          Save Changes
+        </button>
       </div>
-
-      <!-- Recent Login Activity Timeline -->
-      <div class="pt-3 border-t border-black/5 space-y-2">
-        <div class="flex items-center justify-between">
-          <label class="block font-semibold text-[11px] text-[#52525b]">Login Security Footprint (Recent Sessions)</label>
-          <span class="text-[10px] text-[#86868b]">{systemSettings?.login_retention_days || 90}-day Retention</span>
-        </div>
-        <div id="drawer-recent-logins-list" class="space-y-1.5 text-xs">
-          <!-- Rendered via JS -->
-        </div>
-      </div>
-
-      <!-- Error / Success Alert Bar -->
-      <div id="drawer-feedback" class="hidden p-3 rounded-xl text-xs font-medium leading-relaxed"></div>
-    </form>
-
-    <div class="p-4 border-t border-black/5 flex items-center justify-end gap-2 bg-white shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <button
-        type="button"
-        id="cancel-drawer-btn"
-        class="h-9 px-4 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] border border-black/5 transition-all cursor-pointer"
-      >
-        Close
-      </button>
-      <button
-        type="button"
-        id="save-drawer-btn"
-        class="h-9 px-5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer"
-      >
-        Save Changes
-      </button>
-    </div>
-  </aside>
+    </aside>
   </Fragment>
 </AdminLayout>
 
 <script>
-  function escapeHtml(str: any): string {
+  let currentSearch = '';
+  let currentTier = 'ALL';
+  let currentStatus = 'ALL';
+  let currentPage = 1;
+  let currentLimit = 30;
+  let currentTotalPages = 1;
+  let activeAbortController = null;
+
+  function escapeHtml(str) {
     if (str === null || str === undefined) return '';
     return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+      .replace(/'/g, '&#39;');
   }
 
+  function formatDateTime(iso) {
+    if (!iso) return 'Never';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function renderTierBadge(tier) {
+    if (tier === 'VIP') {
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">VIP</span>`;
+    }
+    if (tier === 'PARTNER') {
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-800 border border-purple-200">Partner</span>`;
+    }
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#f5f5f7] text-[#52525b] border border-black/5">Standard</span>`;
+  }
+
+  function updateActiveVisuals() {
+    // 1. Update blocked card state
+    const blockedCard = document.getElementById('stat-blocked-card');
+    const blockedLabel = document.getElementById('stat-blocked-label');
+    if (blockedCard) {
+      if (currentStatus === 'BLOCKED') {
+        blockedCard.className = 'p-2 sm:p-4 rounded-xl sm:rounded-2xl border shadow-2xs transition-all block bg-rose-50 border-rose-300 ring-2 ring-rose-500/20 cursor-pointer';
+        if (blockedLabel) blockedLabel.textContent = '✕';
+      } else {
+        blockedCard.className = 'p-2 sm:p-4 rounded-xl sm:rounded-2xl border shadow-2xs transition-all block bg-white border-black/5 hover:border-rose-200 cursor-pointer';
+        if (blockedLabel) blockedLabel.textContent = 'Filter';
+      }
+    }
+
+    // 2. Update tabs
+    document.querySelectorAll('#user-tabs-container .user-tab').forEach((tab) => {
+      const isBlockedTab = tab.getAttribute('data-tab-type') === 'blocked';
+      const key = tab.getAttribute('data-tab-key');
+      const countEl = tab.querySelector('[data-tab-count]');
+
+      let isActive = false;
+      if (isBlockedTab) {
+        isActive = currentStatus === 'BLOCKED';
+      } else {
+        isActive = currentStatus !== 'BLOCKED' && currentTier === key;
+      }
+
+      if (isActive) {
+        if (isBlockedTab) {
+          tab.className = 'user-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border flex items-center gap-1.5 bg-rose-700 text-white border-rose-800 shadow-2xs cursor-pointer';
+          if (countEl) countEl.className = 'font-mono text-[10px] px-1.5 py-0.2 rounded-md bg-white/20 text-white';
+        } else {
+          tab.className = 'user-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border flex items-center gap-1.5 bg-[#1d1d1f] text-white border-black shadow-2xs cursor-pointer';
+          if (countEl) countEl.className = 'font-mono text-[10px] px-1.5 py-0.2 rounded-md bg-white/20 text-white';
+        }
+      } else {
+        tab.className = 'user-tab px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5 bg-white text-[#52525b] border-black/5 hover:border-black/20 cursor-pointer';
+        if (countEl) {
+          countEl.className = `font-mono text-[10px] px-1.5 py-0.2 rounded-md ${isBlockedTab ? 'bg-rose-50 text-rose-700' : 'bg-[#f5f5f7] text-[#1d1d1f]'}`;
+        }
+      }
+    });
+  }
+
+  function renderStats(stats, total) {
+    if (!stats) return;
+    const totalEl = document.getElementById('total-users-count');
+    const statTotal = document.getElementById('stat-total');
+    const statVips = document.getElementById('stat-vips');
+    const statGuest = document.getElementById('stat-guest');
+    const statBlocked = document.getElementById('stat-blocked');
+
+    if (totalEl) totalEl.textContent = String(total ?? stats.all ?? 0);
+    if (statTotal) statTotal.textContent = String(stats.all ?? 0);
+    if (statVips) statVips.textContent = String((stats.vip || 0) + (stats.partner || 0));
+    if (statGuest) statGuest.textContent = String(stats.unclaimedGuestOrders || 0);
+    if (statBlocked) statBlocked.textContent = String(stats.blocked || 0);
+
+    const mapping = {
+      ALL: stats.all ?? 0,
+      VIP: stats.vip ?? 0,
+      PARTNER: stats.partner ?? 0,
+      STANDARD: stats.standard ?? 0,
+      BLOCKED: stats.blocked ?? 0,
+    };
+    Object.entries(mapping).forEach(([key, val]) => {
+      const tabCount = document.querySelector(`[data-tab-count="${key}"]`);
+      if (tabCount) tabCount.textContent = String(val);
+    });
+  }
+
+  function renderUsers(users) {
+    const container = document.getElementById('users-content');
+    if (!container) return;
+
+    if (!users || users.length === 0) {
+      container.innerHTML = `
+        <div class="py-16 px-4 text-center">
+          <div class="w-12 h-12 rounded-2xl bg-[#f5f5f7] flex items-center justify-center mx-auto mb-3 text-[#86868b]">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+          <h3 class="text-sm font-semibold text-[#1d1d1f]">No Customers Found</h3>
+          <p class="text-xs text-[#86868b] mt-1 max-w-sm mx-auto">
+            ${currentSearch ? `No customers match query "${escapeHtml(currentSearch)}".` : 'Customer profiles will appear here once buyers sign in.'}
+          </p>
+        </div>
+      `;
+      container.classList.remove('hidden');
+      return;
+    }
+
+    // 1. Mobile view
+    const mobileHtml = `
+      <div class="md:hidden divide-y divide-black/5">
+        ${users.map((u) => {
+          const safeId = escapeHtml(u.id);
+          const safeEmail = escapeHtml(u.email);
+          const safeName = escapeHtml(u.name || 'Unnamed Buyer');
+          const safeCompany = escapeHtml(u.company || u.country || 'Independent Buyer');
+          const totalOrders = Number(u.total_orders || 0);
+          const pendingOrders = Number(u.pending_orders || 0);
+          const isBlocked = u.status === 'BLOCKED';
+
+          return `
+            <div class="p-4 space-y-3">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                    ${escapeHtml((u.name || u.email || 'B')[0])}
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-semibold text-xs text-[#1d1d1f]">${safeName}</span>
+                    </div>
+                    <span class="text-[#86868b] font-mono text-[11px] block">${safeEmail}</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1">
+                  ${renderTierBadge(u.tier)}
+                  ${isBlocked ? `<span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>` : ''}
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-xs text-[#86868b] pt-1">
+                <span>${safeCompany}</span>
+                <a href="/admin/orders?search=${encodeURIComponent(u.email)}" class="font-semibold text-[#1d1d1f] hover:underline">
+                  ${totalOrders} Orders ${pendingOrders > 0 ? `(${pendingOrders} pending)` : ''} →
+                </a>
+              </div>
+
+              <div class="pt-2 flex items-center justify-end">
+                <button
+                  type="button"
+                  class="action-open-drawer-btn w-full py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] text-[#1d1d1f] border border-black/5 hover:bg-black hover:text-white transition-all cursor-pointer text-center"
+                  data-id="${safeId}"
+                  data-email="${safeEmail}"
+                  data-name="${safeName}"
+                  data-company="${escapeHtml(u.company || '')}"
+                  data-tier="${escapeHtml(u.tier || 'STANDARD')}"
+                  data-status="${escapeHtml(u.status || 'ACTIVE')}"
+                  data-notes="${escapeHtml(u.admin_notes || '')}"
+                  data-roles="${escapeHtml(u.logto_roles || '[]')}"
+                >
+                  Edit Profile & Remarks
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    // 2. Desktop table view
+    const desktopHtml = `
+      <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-left text-xs text-[#1d1d1f]">
+          <thead class="bg-[#f5f5f7]/60 text-[#86868b] font-medium border-b border-black/5">
+            <tr>
+              <th class="py-3 px-4">Customer Profile</th>
+              <th class="py-3 px-4">Company & Location</th>
+              <th class="py-3 px-4">Tier & Status</th>
+              <th class="py-3 px-4">Orders & Inquiries</th>
+              <th class="py-3 px-4">Last Active</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-black/5">
+            ${users.map((u) => {
+              const safeId = escapeHtml(u.id);
+              const safeEmail = escapeHtml(u.email);
+              const safeName = escapeHtml(u.name || 'Unnamed Buyer');
+              const safeCompany = escapeHtml(u.company || '—');
+              const safeLocation = escapeHtml(u.country || u.phone || 'Direct Buyer');
+              const totalOrders = Number(u.total_orders || 0);
+              const pendingOrders = Number(u.pending_orders || 0);
+              const isBlocked = u.status === 'BLOCKED';
+              const lastActiveStr = formatDateTime(u.last_login_at);
+
+              return `
+                <tr class="hover:bg-[#f5f5f7]/40 transition-colors">
+                  <td class="py-3.5 px-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                        ${escapeHtml((u.name || u.email || 'B')[0])}
+                      </div>
+                      <div>
+                        <div class="flex items-center gap-1.5">
+                          <span class="font-semibold text-[#1d1d1f]">${safeName}</span>
+                        </div>
+                        <span class="text-[#86868b] font-mono text-[11px] block">${safeEmail}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <span class="font-medium text-[#1d1d1f] block">${safeCompany}</span>
+                    <span class="text-[11px] text-[#86868b]">${safeLocation}</span>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <div class="flex items-center gap-1.5">
+                      ${renderTierBadge(u.tier)}
+                      ${isBlocked
+                        ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>`
+                        : `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">ACTIVE</span>`}
+                    </div>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <a href="/admin/orders?search=${encodeURIComponent(u.email)}" class="inline-flex items-center gap-1.5 font-medium hover:text-blue-600 transition-colors group" title="Filter orders for this buyer">
+                      <span>${totalOrders} Orders</span>
+                      ${pendingOrders > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">${pendingOrders} pending</span>` : ''}
+                      <span class="text-[#86868b] group-hover:text-blue-600">→</span>
+                    </a>
+                  </td>
+                  <td class="py-3.5 px-4 text-[#86868b] text-[11px]">
+                    <span class="block text-[#1d1d1f]">${lastActiveStr}</span>
+                    ${u.last_login_ip ? `<span class="text-[10px] text-[#86868b] font-mono block">${escapeHtml(u.last_login_ip)} ${u.last_login_country ? `(${escapeHtml(u.last_login_country)})` : ''}</span>` : ''}
+                  </td>
+                  <td class="py-3.5 px-4 text-right">
+                    <button
+                      type="button"
+                      class="action-open-drawer-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-[#1d1d1f] hover:text-white transition-all cursor-pointer border border-black/5"
+                      data-id="${safeId}"
+                      data-email="${safeEmail}"
+                      data-name="${safeName}"
+                      data-company="${escapeHtml(u.company || '')}"
+                      data-tier="${escapeHtml(u.tier || 'STANDARD')}"
+                      data-status="${escapeHtml(u.status || 'ACTIVE')}"
+                      data-notes="${escapeHtml(u.admin_notes || '')}"
+                      data-roles="${escapeHtml(u.logto_roles || '[]')}"
+                    >
+                      Edit & Notes
+                    </button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    container.innerHTML = desktopHtml + mobileHtml;
+    container.classList.remove('hidden');
+  }
+
+  function renderPagination(page, totalPages, total, limit) {
+    const container = document.getElementById('users-pagination-container');
+    const summary = document.getElementById('users-pagination-summary');
+    const prevBtn = document.getElementById('users-pagination-prev');
+    const nextBtn = document.getElementById('users-pagination-next');
+    const currentIndicator = document.getElementById('users-pagination-current');
+
+    if (!container || totalPages <= 1) {
+      if (container) container.classList.add('hidden');
+      return;
+    }
+
+    container.classList.remove('hidden');
+    currentTotalPages = totalPages;
+
+    const start = (page - 1) * limit + 1;
+    const end = Math.min(page * limit, total);
+    if (summary) {
+      summary.innerHTML = `Showing <strong class="text-[#1d1d1f]">${start}</strong> to <strong class="text-[#1d1d1f]">${end}</strong> of <strong class="text-[#1d1d1f]">${total}</strong> customers`;
+    }
+    if (currentIndicator) {
+      currentIndicator.textContent = `${page} / ${totalPages}`;
+    }
+    if (prevBtn) prevBtn.disabled = page <= 1;
+    if (nextBtn) nextBtn.disabled = page >= totalPages;
+  }
+
+  async function loadUsers(updateUrl = true) {
+    if (activeAbortController) {
+      activeAbortController.abort();
+    }
+    activeAbortController = new AbortController();
+
+    const skeleton = document.getElementById('users-skeleton');
+    const content = document.getElementById('users-content');
+    const paginationContainer = document.getElementById('users-pagination-container');
+
+    if (skeleton && content) {
+      skeleton.classList.remove('hidden');
+      content.classList.add('hidden');
+    }
+    if (paginationContainer) {
+      paginationContainer.classList.add('hidden');
+    }
+
+    updateActiveVisuals();
+
+    if (updateUrl) {
+      const url = new URL(window.location.href);
+      if (currentTier && currentTier !== 'ALL') url.searchParams.set('tier', currentTier);
+      else url.searchParams.delete('tier');
+
+      if (currentStatus && currentStatus !== 'ALL') url.searchParams.set('status', currentStatus);
+      else url.searchParams.delete('status');
+
+      if (currentSearch) url.searchParams.set('search', currentSearch);
+      else url.searchParams.delete('search');
+
+      if (currentPage > 1) url.searchParams.set('page', String(currentPage));
+      else url.searchParams.delete('page');
+
+      window.history.pushState({}, '', url.toString());
+    }
+
+    try {
+      const qs = new URLSearchParams();
+      if (currentTier && currentTier !== 'ALL') qs.set('tier', currentTier);
+      if (currentStatus && currentStatus !== 'ALL') qs.set('status', currentStatus);
+      if (currentSearch) qs.set('search', currentSearch);
+      qs.set('page', String(currentPage));
+      qs.set('limit', String(currentLimit));
+
+      const res = await fetch(`/api/admin/users?${qs.toString()}`, {
+        signal: activeAbortController.signal,
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (skeleton) skeleton.classList.add('hidden');
+
+      renderStats(data.stats, data.total);
+      renderUsers(data.users || []);
+      renderPagination(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 30);
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.error('Failed to load users:', err);
+      if (skeleton) skeleton.classList.add('hidden');
+      if (content) {
+        content.innerHTML = `
+          <div class="py-16 text-center text-xs text-rose-600">
+            Failed to load customers (${escapeHtml(err.message)}).
+            <button type="button" id="retry-users-btn" class="underline ml-1 cursor-pointer">Retry</button>
+          </div>
+        `;
+        content.classList.remove('hidden');
+        document.getElementById('retry-users-btn')?.addEventListener('click', () => loadUsers(false));
+      }
+    }
+  }
+
+  // Event Delegation for Drawer & Tabs
   const backdrop = document.getElementById('drawer-backdrop');
   const drawer = document.getElementById('user-drawer');
   const closeBtn = document.getElementById('close-drawer-btn');
   const cancelBtn = document.getElementById('cancel-drawer-btn');
-  const saveBtn = document.getElementById('save-drawer-btn') as HTMLButtonElement | null;
+  const saveBtn = document.getElementById('save-drawer-btn');
   const feedbackEl = document.getElementById('drawer-feedback');
 
-  const userIdInput = document.getElementById('drawer-user-id') as HTMLInputElement | null;
+  const userIdInput = document.getElementById('drawer-user-id');
   const nameLabel = document.getElementById('drawer-user-name');
   const emailLabel = document.getElementById('drawer-user-email');
   const companyLabel = document.getElementById('drawer-user-company');
   const rolesBadge = document.getElementById('drawer-roles-badge');
-  const statusSelect = document.getElementById('drawer-status-select') as HTMLSelectElement | null;
-  const notesInput = document.getElementById('drawer-notes-input') as HTMLTextAreaElement | null;
-  const ordersLink = document.getElementById('drawer-orders-link') as HTMLAnchorElement | null;
+  const statusSelect = document.getElementById('drawer-status-select');
+  const notesInput = document.getElementById('drawer-notes-input');
+  const ordersLink = document.getElementById('drawer-orders-link');
   const ordersListEl = document.getElementById('drawer-recent-orders-list');
   const ordersLoadingEl = document.getElementById('drawer-orders-loading');
   const loginsListEl = document.getElementById('drawer-recent-logins-list');
 
-  let currentFetchController: AbortController | null = null;
+  let currentDrawerController = null;
 
-  async function loadRecentOrders(userId: string) {
+  async function loadRecentDetails(userId) {
     if (!ordersListEl) return;
-    if (currentFetchController) {
-      currentFetchController.abort();
-    }
-    currentFetchController = new AbortController();
+    if (currentDrawerController) currentDrawerController.abort();
+    currentDrawerController = new AbortController();
 
     ordersListEl.innerHTML = '';
     if (loginsListEl) loginsListEl.innerHTML = '';
@@ -628,125 +710,82 @@ const pageTitle = 'Customer & Access Management';
 
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
-        signal: currentFetchController.signal,
+        signal: currentDrawerController.signal,
       });
       if (!res.ok) throw new Error('Failed to load user details');
       const data = await res.json();
-      const recentOrders: any[] = data.recentOrders || [];
-      const recentLogins: any[] = data.recentLogins || [];
+      const recentOrders = data.recentOrders || [];
+      const recentLogins = data.recentLogins || [];
 
-      // Render Orders
       if (recentOrders.length === 0) {
-        ordersListEl.innerHTML = `
-          <div class="p-3 rounded-xl bg-[#f5f5f7] text-[#86868b] text-[11px] text-center">
-            No orders found for this customer.
-          </div>
-        `;
+        ordersListEl.innerHTML = `<div class="p-3 rounded-xl bg-[#f5f5f7] text-[#86868b] text-[11px] text-center">No orders found for this customer.</div>`;
       } else {
-        ordersListEl.innerHTML = recentOrders
-          .map((order) => {
-            let badgeHtml = '';
-            switch (order.status) {
-              case 'PENDING_APPROVAL':
-                badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">Pending</span>';
-                break;
-              case 'APPROVED':
-                badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200">Approved</span>';
-                break;
-              case 'SHIPPED':
-                badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">Shipped</span>';
-                break;
-              case 'REJECTED':
-                badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">Rejected</span>';
-                break;
-              default:
-                badgeHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700">${escapeHtml(order.status)}</span>`;
-            }
-
-            const date = (order.created_at || '').slice(0, 10);
-            const orderLink = `/admin/orders?search=${encodeURIComponent(order.order_no || '')}`;
-            const safeOrderNo = escapeHtml(order.order_no || '');
-            const safeQty = Number(order.total_quantity) || 0;
-            const safeStyles = Number(order.total_styles) || 0;
-            const safeDate = escapeHtml(date);
-
-            return `
-              <a href="${orderLink}" class="block p-2.5 rounded-xl border border-black/5 hover:border-black/20 hover:bg-[#fbfbfd] transition-all bg-white">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="font-mono font-semibold text-[#1d1d1f]">${safeOrderNo}</span>
-                  ${badgeHtml}
-                </div>
-                <div class="flex items-center justify-between text-[11px] text-[#86868b]">
-                  <span>${safeQty} pcs (${safeStyles} style${safeStyles === 1 ? '' : 's'})</span>
-                  <span class="font-mono">${safeDate}</span>
-                </div>
-              </a>
-            `;
-          })
-          .join('');
+        ordersListEl.innerHTML = recentOrders.map((order) => {
+          let badgeHtml = '';
+          switch (order.status) {
+            case 'PENDING_APPROVAL':
+              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">Pending</span>';
+              break;
+            case 'APPROVED':
+              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200">Approved</span>';
+              break;
+            case 'SHIPPED':
+              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">Shipped</span>';
+              break;
+            case 'REJECTED':
+              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">Rejected</span>';
+              break;
+            default:
+              badgeHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700">${escapeHtml(order.status)}</span>`;
+          }
+          const date = (order.created_at || '').slice(0, 10);
+          return `
+            <a href="/admin/orders?search=${encodeURIComponent(order.order_no || '')}" class="block p-2.5 rounded-xl border border-black/5 hover:border-black/20 hover:bg-[#fbfbfd] transition-all bg-white">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-mono font-semibold text-[#1d1d1f]">${escapeHtml(order.order_no || '')}</span>
+                ${badgeHtml}
+              </div>
+              <div class="flex items-center justify-between text-[11px] text-[#86868b]">
+                <span>${Number(order.total_quantity) || 0} pcs (${Number(order.total_styles) || 0} styles)</span>
+                <span class="font-mono">${escapeHtml(date)}</span>
+              </div>
+            </a>
+          `;
+        }).join('');
       }
 
-      // Render Logins
       if (loginsListEl) {
         if (recentLogins.length === 0) {
-          loginsListEl.innerHTML = `
-            <div class="p-2.5 rounded-xl bg-[#f5f5f7] text-[#86868b] text-[11px] text-center">
-              No login sessions recorded yet.
-            </div>
-          `;
+          loginsListEl.innerHTML = `<div class="p-2.5 rounded-xl bg-[#f5f5f7] text-[#86868b] text-[11px] text-center">No login sessions recorded yet.</div>`;
         } else {
-          loginsListEl.innerHTML = recentLogins
-            .map((login) => {
-              const locationStr = [login.city, login.country].filter(Boolean).join(', ') || 'Global';
-              let dateStr = (login.created_at || '').slice(0, 16);
-              if (login.created_at) {
-                const rawIso = login.created_at.includes('T') ? login.created_at : login.created_at.replace(' ', 'T') + 'Z';
-                const d = new Date(rawIso);
-                if (!isNaN(d.getTime())) {
-                  dateStr = d.toLocaleString(undefined, {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false,
-                    timeZoneName: 'short',
-                  });
-                }
-              }
-              const safeIp = escapeHtml(login.ip || '—');
-              const safeLocation = escapeHtml(locationStr);
-              const safeDate = escapeHtml(dateStr);
-              const safeRawDate = escapeHtml(login.created_at || '');
-              return `
-                <div class="flex items-center justify-between p-2 rounded-lg bg-[#f5f5f7] text-[11px]">
-                  <div>
-                    <span class="font-mono font-medium text-[#1d1d1f]">${safeIp}</span>
-                    <span class="text-[#86868b] ml-1.5">${safeLocation}</span>
-                  </div>
-                  <span class="font-mono text-[#86868b] text-[10px]" title="UTC: ${safeRawDate}">${safeDate}</span>
+          loginsListEl.innerHTML = recentLogins.map((login) => {
+            const loc = [login.city, login.country].filter(Boolean).join(', ') || 'Global';
+            const date = (login.created_at || '').slice(0, 16).replace('T', ' ');
+            return `
+              <div class="p-2 rounded-xl bg-[#f5f5f7] flex items-center justify-between">
+                <div>
+                  <span class="font-mono font-medium text-[#1d1d1f] text-[11px] block">${escapeHtml(login.ip || '—')}</span>
+                  <span class="text-[10px] text-[#86868b]">📍 ${escapeHtml(loc)}</span>
                 </div>
-              `;
-            })
-            .join('');
+                <span class="font-mono text-[10px] text-[#86868b]">${escapeHtml(date)}</span>
+              </div>
+            `;
+          }).join('');
         }
       }
-    } catch (e: any) {
-      if (e.name === 'AbortError') return;
-      ordersListEl.innerHTML = `
-        <div class="p-3 rounded-xl bg-rose-50 text-rose-700 text-[11px] text-center border border-rose-200">
-          Failed to load customer details.
-        </div>
-      `;
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        if (ordersListEl) ordersListEl.innerHTML = `<div class="p-3 text-center text-xs text-rose-600">Failed to load details.</div>`;
+      }
     } finally {
       ordersLoadingEl?.classList.add('hidden');
     }
   }
 
   const showDrawer = () => {
+    if (drawer) drawer.dataset.state = 'open';
     backdrop?.classList.remove('hidden');
     setTimeout(() => backdrop?.classList.remove('opacity-0'), 10);
-    if (drawer) drawer.dataset.state = 'open';
   };
 
   const hideDrawer = () => {
@@ -763,46 +802,47 @@ const pageTitle = 'Customer & Access Management';
   cancelBtn?.addEventListener('click', hideDrawer);
   backdrop?.addEventListener('click', hideDrawer);
 
-  document.querySelectorAll<HTMLButtonElement>('.action-open-drawer-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = btn.getAttribute('data-id') || '';
-      const email = btn.getAttribute('data-email') || '';
-      const name = btn.getAttribute('data-name') || 'Unnamed Buyer';
-      const company = btn.getAttribute('data-company') || '';
-      const tier = btn.getAttribute('data-tier') || 'STANDARD';
-      const status = btn.getAttribute('data-status') || 'ACTIVE';
-      const notes = btn.getAttribute('data-notes') || '';
-      const rolesRaw = btn.getAttribute('data-roles') || '[]';
+  document.getElementById('users-container')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.action-open-drawer-btn');
+    if (!btn) return;
 
-      if (userIdInput) userIdInput.value = id;
-      if (nameLabel) nameLabel.textContent = name;
-      if (emailLabel) emailLabel.textContent = email;
-      if (companyLabel) companyLabel.textContent = company || 'No company specified';
+    const id = btn.getAttribute('data-id') || '';
+    const email = btn.getAttribute('data-email') || '';
+    const name = btn.getAttribute('data-name') || 'Unnamed Buyer';
+    const company = btn.getAttribute('data-company') || '';
+    const tier = btn.getAttribute('data-tier') || 'STANDARD';
+    const status = btn.getAttribute('data-status') || 'ACTIVE';
+    const notes = btn.getAttribute('data-notes') || '';
+    const rolesRaw = btn.getAttribute('data-roles') || '[]';
 
-      let rolesText = 'Logto: Buyer';
-      try {
-        const roles = JSON.parse(rolesRaw);
-        if (roles.length > 0) rolesText = `Logto: ${roles.join(', ')}`;
-      } catch {}
-      if (rolesBadge) rolesBadge.textContent = rolesText;
+    if (userIdInput) userIdInput.value = id;
+    if (nameLabel) nameLabel.textContent = name;
+    if (emailLabel) emailLabel.textContent = email;
+    if (companyLabel) companyLabel.textContent = company || 'No company specified';
 
-      const tierRadio = document.querySelector<HTMLInputElement>(`input[name="tier"][value="${tier}"]`);
-      if (tierRadio) tierRadio.checked = true;
+    let rolesText = 'Logto: Buyer';
+    try {
+      const roles = JSON.parse(rolesRaw);
+      if (roles.length > 0) rolesText = `Logto: ${roles.join(', ')}`;
+    } catch {}
+    if (rolesBadge) rolesBadge.textContent = rolesText;
 
-      if (statusSelect) statusSelect.value = status;
-      if (notesInput) notesInput.value = notes;
-      if (ordersLink) ordersLink.href = `/admin/orders?search=${encodeURIComponent(email)}`;
+    const tierRadio = document.querySelector(`input[name="tier"][value="${tier}"]`);
+    if (tierRadio) tierRadio.checked = true;
 
-      loadRecentOrders(id);
-      showDrawer();
-    });
+    if (statusSelect) statusSelect.value = status;
+    if (notesInput) notesInput.value = notes;
+    if (ordersLink) ordersLink.href = `/admin/orders?search=${encodeURIComponent(email)}`;
+
+    loadRecentDetails(id);
+    showDrawer();
   });
 
   saveBtn?.addEventListener('click', async () => {
     const id = userIdInput?.value;
     if (!id) return;
 
-    const tierInput = document.querySelector<HTMLInputElement>('input[name="tier"]:checked');
+    const tierInput = document.querySelector('input[name="tier"]:checked');
     const tier = tierInput?.value || 'STANDARD';
     const status = statusSelect?.value || 'ACTIVE';
     const adminNotes = notesInput?.value || '';
@@ -823,16 +863,19 @@ const pageTitle = 'Customer & Access Management';
       if (res.ok) {
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
-          feedbackEl.textContent = '✓ Changes saved successfully. Refreshing...';
+          feedbackEl.textContent = '✓ Changes saved successfully.';
         }
-        setTimeout(() => window.location.reload(), 700);
+        setTimeout(() => {
+          hideDrawer();
+          loadUsers(false);
+        }, 500);
       } else {
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
           feedbackEl.textContent = data.error || 'Failed to save changes';
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       if (feedbackEl) {
         feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
         feedbackEl.textContent = err.message || 'Network error';
@@ -844,6 +887,105 @@ const pageTitle = 'Customer & Access Management';
       }
     }
   });
+
+  // Tab clicks
+  document.getElementById('user-tabs-container')?.addEventListener('click', (e) => {
+    const tab = e.target.closest('.user-tab');
+    if (!tab) return;
+    const isBlocked = tab.getAttribute('data-tab-type') === 'blocked';
+    const key = tab.getAttribute('data-tab-key') || 'ALL';
+
+    if (isBlocked) {
+      currentStatus = 'BLOCKED';
+      currentTier = 'ALL';
+    } else {
+      currentStatus = 'ALL';
+      currentTier = key;
+    }
+    currentPage = 1;
+    loadUsers();
+  });
+
+  // Blocked metric card click
+  document.getElementById('stat-blocked-card')?.addEventListener('click', () => {
+    if (currentStatus === 'BLOCKED') {
+      currentStatus = 'ALL';
+      currentTier = 'ALL';
+    } else {
+      currentStatus = 'BLOCKED';
+      currentTier = 'ALL';
+    }
+    currentPage = 1;
+    loadUsers();
+  });
+
+  // Search submission and clear
+  const searchForm = document.getElementById('users-search-form');
+  const searchInput = document.getElementById('users-search-input');
+  const clearBtn = document.getElementById('clear-users-search');
+
+  searchInput?.addEventListener('input', () => {
+    if (clearBtn) {
+      if (searchInput.value.trim()) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+    }
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    if (searchInput) searchInput.value = '';
+    currentSearch = '';
+    clearBtn.classList.add('hidden');
+    currentPage = 1;
+    loadUsers();
+  });
+
+  searchForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = searchInput?.value.trim() || '';
+    if (val === currentSearch && currentPage === 1) return;
+    currentSearch = val;
+    currentPage = 1;
+    loadUsers();
+  });
+
+  // Pagination navigation
+  document.getElementById('users-pagination-prev')?.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      loadUsers();
+    }
+  });
+  document.getElementById('users-pagination-next')?.addEventListener('click', () => {
+    if (currentPage < currentTotalPages) {
+      currentPage++;
+      loadUsers();
+    }
+  });
+
+  // Browser back/forward navigation
+  window.addEventListener('popstate', () => {
+    const url = new URL(window.location.href);
+    currentTier = url.searchParams.get('tier') || 'ALL';
+    currentStatus = url.searchParams.get('status') || 'ALL';
+    currentSearch = url.searchParams.get('search') || '';
+    currentPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+
+    if (searchInput) searchInput.value = currentSearch;
+    if (clearBtn) {
+      if (currentSearch) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+    }
+    loadUsers(false);
+  });
+
+  // Initial load
+  const initialUrl = new URL(window.location.href);
+  currentTier = initialUrl.searchParams.get('tier') || 'ALL';
+  currentStatus = initialUrl.searchParams.get('status') || 'ALL';
+  currentSearch = initialUrl.searchParams.get('search') || '';
+  currentPage = Math.max(1, parseInt(initialUrl.searchParams.get('page') || '1', 10));
+
+  loadUsers(false);
 </script>
 
 <style>
@@ -860,4 +1002,3 @@ const pageTitle = 'Customer & Access Management';
     transform: translate(0, 0) !important;
   }
 </style>
-

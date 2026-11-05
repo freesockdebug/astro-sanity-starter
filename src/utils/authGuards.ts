@@ -66,6 +66,7 @@ export async function verifyBuyerAuth(requestOrContext: any, cfEnv?: any): Promi
 export interface BuyerContextResult {
   sessionUser: AuthUser | null;
   dbUser: UserRecord | null;
+  systemSettings?: any;
   redirectResponse?: Response;
 }
 
@@ -110,12 +111,13 @@ export async function getBuyerContext(
   // Dynamically recompute admin status against runtime ADMIN_EMAILS & D1 co-admins
   sessionUser.isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv, settings?.co_admin_emails);
 
-  return { sessionUser, dbUser };
+  return { sessionUser, dbUser, systemSettings: settings };
 }
 
 export interface AdminContextResult {
   sessionUser: AuthUser;
   pendingOrdersCount: number;
+  systemSettings?: any;
   redirectResponse?: Response;
 }
 
@@ -174,7 +176,7 @@ export async function requireAdminContext(
     }
   }
 
-  return { sessionUser, pendingOrdersCount };
+  return { sessionUser, pendingOrdersCount, systemSettings: settings };
 }
 
 /**

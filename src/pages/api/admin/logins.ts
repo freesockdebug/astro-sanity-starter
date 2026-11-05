@@ -13,8 +13,8 @@ export const GET: APIRoute = async ({ request, url }) => {
     return jsonNoCache({ error: 'Forbidden. Admin access required.' }, 403);
   }
 
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
+  const limit = Math.min(300, Math.max(1, parseInt(url.searchParams.get('limit') || '150', 10)));
   const logins = await listAllLoginHistory(limit);
 
-  return jsonNoCache({ logins });
+  return jsonNoCache({ success: true, logins });
 };

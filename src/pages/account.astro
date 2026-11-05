@@ -4,7 +4,7 @@ import BuyerLayout from '@layouts/BuyerLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import TierBadge from '@components/TierBadge.astro';
 import { getBuyerContext, getRuntimeEnv } from '@utils/auth';
-import { getUserLoginHistory, getSystemSettings } from '@utils/db';
+import { getUserLoginHistory } from '@utils/db';
 import { getLangFromUrl, useTranslations } from '@i18n';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -14,13 +14,10 @@ export const prerender = false;
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
-const { sessionUser, dbUser, redirectResponse } = await getBuyerContext(Astro, cfEnv, { requireLogin: true });
+const { sessionUser, dbUser, systemSettings, redirectResponse } = await getBuyerContext(Astro, cfEnv, { requireLogin: true });
 if (redirectResponse) return redirectResponse;
 
-const [loginHistory, systemSettings] = await Promise.all([
-  getUserLoginHistory(sessionUser!.id, 20),
-  getSystemSettings(cfEnv).catch(() => null),
-]);
+const loginHistory = await getUserLoginHistory(sessionUser!.id, 20);
 const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);
 const whatsappNumber = systemSettings?.whatsapp_number || getRuntimeEnv('PUBLIC_WHATSAPP_NUMBER', cfEnv) || import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
 const contactEmail = systemSettings?.contact_email || getRuntimeEnv('PUBLIC_CONTACT_EMAIL', cfEnv) || import.meta.env.PUBLIC_CONTACT_EMAIL || '';

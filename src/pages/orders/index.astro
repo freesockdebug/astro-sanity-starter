@@ -5,11 +5,9 @@ import BuyerLayout from '@layouts/BuyerLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import OrderStepper from '@components/orders/OrderStepper.astro';
 import { getBuyerContext } from '@utils/auth';
-import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, getSystemSettings, type OrderRecord } from '@utils/db';
+import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, type OrderRecord } from '@utils/db';
 import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
 import {
-  fetchNormalizedProducts,
-  buildProductMap,
   resolveOrderItemImage,
   getOrderItemProductUrl,
 } from '@data/products';
@@ -21,11 +19,7 @@ export const prerender = false;
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
-// Initiate product catalog fetch concurrently with D1 auth/queries
-const productsPromise = fetchNormalizedProducts().catch(() => []);
-const systemSettingsPromise = getSystemSettings(cfEnv).catch(() => null);
-
-const { sessionUser, dbUser, redirectResponse } = await getBuyerContext(Astro, cfEnv);
+const { sessionUser, dbUser, systemSettings, redirectResponse } = await getBuyerContext(Astro, cfEnv);
 if (redirectResponse) return redirectResponse;
 
 const viewMode = Astro.url.searchParams.get('view') || 'my';
@@ -45,7 +39,9 @@ if (sessionUser) {
 
   const [orders, adminRes] = await Promise.all([
     getOrdersByUserId(sessionUser.id, sessionUser.email),
-    sessionUser.isAdmin ? listAdminOrders({ limit: 100 }) : Promise.resolve({ orders: [] }),
+    (sessionUser.isAdmin && viewMode === 'all')
+      ? listAdminOrders({ limit: 100 })
+      : Promise.resolve({ orders: [] as OrderRecord[] }),
   ]);
   myOrders = orders;
   allOrders = adminRes.orders;
@@ -85,13 +81,10 @@ if (currentSearch) {
   });
 }
 
-const [products, systemSettings] = await Promise.all([productsPromise, systemSettingsPromise]);
-const productMap = buildProductMap(products);
-
 const printSheetTitle = systemSettings?.print_sheet_title || 'OFFICIAL B2B PROCUREMENT REQUISITION';
 const printSheetFooter = systemSettings?.print_sheet_footer || 'B2B Sample & Procurement Requisition Sheet';
 
-const resolveItemImage = (item: any) => resolveOrderItemImage(item, productMap);
+const resolveItemImage = (item: any) => resolveOrderItemImage(item);
 const getItemProductUrl = (item: any) => getOrderItemProductUrl(item, currentLang);
 
 const pageTitle = t('orders.metaTitle');
