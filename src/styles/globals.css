@@ -33,7 +33,7 @@
 
   /* 5. Golden-Ratio Damped Vertical Spacing Tokens (φ⁻¹ ≈ 0.618) */
   --phi-scale: 0.618;
-  --space-hero-pt: clamp(2.5rem, min(4vw, 6.5svh), 4.25rem);
+  --space-hero-pt: clamp(3.5rem, min(4.5vw, 7.5svh), 4.25rem);
   --space-hero-pb: clamp(0.75rem, min(2vw, 3svh), 2rem);
   --space-section-pt: calc(clamp(1.125rem, min(3.5vw, 5svh - 1rem), 3.75rem) * var(--phi-scale));
   --space-section-pb: calc(var(--space-section-pt) * var(--phi-scale));
