@@ -33,26 +33,28 @@ export async function recordUserLogin(input: {
         [input.userId, normalizedEmail, safeIp, safeCountry, safeCity, safeUA]
       );
 
-      // Automatic retention cleanup based on dynamic system settings (default 90 days)
-      let retentionDays = 90;
-      try {
-        const row = await db.first<{ value: string }>(
-          `SELECT value FROM system_settings WHERE key = 'login_retention_days' LIMIT 1`
-        );
-        if (row?.value) {
-          const parsed = parseInt(row.value, 10);
-          if (!isNaN(parsed) && parsed > 0) {
-            retentionDays = parsed;
+      // Probabilistic retention cleanup (10% sampling) to prevent hammering D1 on every single login
+      if (Math.random() < 0.1) {
+        let retentionDays = 90;
+        try {
+          const row = await db.first<{ value: string }>(
+            `SELECT value FROM system_settings WHERE key = 'login_retention_days' LIMIT 1`
+          );
+          if (row?.value) {
+            const parsed = parseInt(row.value, 10);
+            if (!isNaN(parsed) && parsed > 0) {
+              retentionDays = parsed;
+            }
           }
+        } catch {
+          // Fallback to default 90 days
         }
-      } catch {
-        // Fallback to default 90 days
-      }
 
-      await db.execute(
-        `DELETE FROM user_logins WHERE created_at < datetime('now', ?)`,
-        [`-${retentionDays} days`]
-      );
+        await db.execute(
+          `DELETE FROM user_logins WHERE created_at < datetime('now', ?)`,
+          [`-${retentionDays} days`]
+        );
+      }
       return true;
     });
   } catch (e) {

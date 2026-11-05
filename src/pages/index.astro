@@ -2,11 +2,11 @@
 // src/pages/index.astro
 import Layout from '@layouts/Layout.astro';
 import { componentMap, AppleStageNavigator, SectionBoundary } from '@components';
-import { client } from '@utils/sanity-client';
-import { SECTIONS, IMAGE, normalizeSections, extractHeroPreload } from '@data/blocks';
+import { normalizeSections, extractHeroPreload } from '@data/blocks';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { ProductService } from '@data/products';
+import { PageService } from '@data/page';
 import { DEFAULT_META_TITLE, DEFAULT_META_DESCRIPTION, DEFAULT_FALLBACK_IMAGE, DEFAULT_HERO, DEFAULT_SPEC_MATRIX, DEFAULT_MANUFACTURING } from '@data/defaults';
 import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
 
@@ -15,19 +15,7 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, st
 
 // Multi-tier cached resolution: fetch page content from Sanity concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
 const [homeData] = await Promise.all([
-  client
-    .fetch(`*[_type == "page" && slug.current == "/"][0]{
-      title,
-      metaTitle,
-      addTitleSuffix,
-      metaDescription,
-      socialImage ${IMAGE},
-      sections[]${SECTIONS}
-    }`)
-    .catch((e) => {
-      console.error("Failed to fetch homepage data from Sanity:", e);
-      return null;
-    }),
+  PageService.getHomePage(),
   SiteConfigService.getConfig(),
   RfqSettingsService.getSettings(),
   ProductService.getAll(),

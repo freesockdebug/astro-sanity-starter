@@ -1,6 +1,6 @@
 // src/pages/api/admin/users/[id].ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, getRuntimeEnv } from '@utils/auth';
+import { verifyAdminAuth, getRuntimeEnv, getMergedAdminEmails, jsonNoCache } from '@utils/auth';
 import {
   getUserDetailsWithOrders,
   updateUserAdminMeta,
@@ -12,84 +12,50 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const NO_CACHE_HEADERS = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
-  'Cloudflare-CDN-Cache-Control': 'no-store',
-  'CDN-Cache-Control': 'no-store',
-  'Pragma': 'no-cache',
-  'Expires': '0',
-};
-
 const VALID_TIERS = new Set<CustomerTier>(['STANDARD', 'VIP', 'PARTNER']);
 const VALID_STATUSES = new Set<UserStatus>(['ACTIVE', 'BLOCKED']);
 
 export const GET: APIRoute = async ({ request, params }) => {
   const user = await verifyAdminAuth(request, cfEnv);
   if (!user) {
-    return new Response(JSON.stringify({ error: 'Forbidden. Admin access required.' }), {
-      status: 403,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'Forbidden. Admin access required.' }, 403);
   }
 
   const userId = params.id;
   if (!userId) {
-    return new Response(JSON.stringify({ error: 'User ID is required.' }), {
-      status: 400,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'User ID is required.' }, 400);
   }
 
   const data = await getUserDetailsWithOrders(userId);
   if (!data.user) {
-    return new Response(JSON.stringify({ error: 'User not found.' }), {
-      status: 404,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'User not found.' }, 404);
   }
 
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: NO_CACHE_HEADERS,
-  });
+  return jsonNoCache(data);
 };
 
 export const POST: APIRoute = async ({ request, params }) => {
   const user = await verifyAdminAuth(request, cfEnv);
   if (!user) {
-    return new Response(JSON.stringify({ error: 'Forbidden. Admin access required.' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonNoCache({ error: 'Forbidden. Admin access required.' }, 403);
   }
 
   const userId = params.id;
   if (!userId) {
-    return new Response(JSON.stringify({ error: 'User ID is required.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonNoCache({ error: 'User ID is required.' }, 400);
   }
 
   let body: any;
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON payload.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonNoCache({ error: 'Invalid JSON payload.' }, 400);
   }
 
   const { tier, status, adminNotes } = body || {};
 
-  // Self-lockout prevention: Admins cannot suspend their own logged-in account
-  if (userId === user.id && status === 'BLOCKED') {
-    return new Response(JSON.stringify({ error: 'You cannot block your own admin account.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  if (!tier && !status && adminNotes === undefined) {
+    return jsonNoCache({ error: 'At least one field (tier, status, adminNotes) is required.' }, 400);
   }
 
   // Super-admin protection: Cannot block accounts listed in ADMIN_EMAILS
@@ -97,31 +63,19 @@ export const POST: APIRoute = async ({ request, params }) => {
     const targetData = await getUserDetailsWithOrders(userId);
     const targetEmail = targetData.user?.email?.toLowerCase().trim();
     if (targetEmail) {
-      const rootWhitelist = (getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '')
-        .split(',')
-        .map((e: string) => e.trim().toLowerCase())
-        .filter(Boolean);
+      const rootWhitelist = getMergedAdminEmails(undefined, cfEnv);
       if (rootWhitelist.includes(targetEmail)) {
-        return new Response(JSON.stringify({ error: 'Super administrators cannot be blocked.' }), {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return jsonNoCache({ error: 'Super administrators cannot be blocked.' }, 403);
       }
     }
   }
 
   if (tier && !VALID_TIERS.has(tier)) {
-    return new Response(JSON.stringify({ error: 'Invalid tier value. Allowed: STANDARD, VIP, PARTNER.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonNoCache({ error: 'Invalid tier value. Allowed: STANDARD, VIP, PARTNER.' }, 400);
   }
 
   if (status && !VALID_STATUSES.has(status)) {
-    return new Response(JSON.stringify({ error: 'Invalid status value. Allowed: ACTIVE, BLOCKED.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonNoCache({ error: 'Invalid status value. Allowed: ACTIVE, BLOCKED.' }, 400);
   }
 
   const success = await updateUserAdminMeta(userId, {
@@ -131,21 +85,11 @@ export const POST: APIRoute = async ({ request, params }) => {
   });
 
   if (!success) {
-    return new Response(JSON.stringify({ error: 'User not found or update failed.' }), {
-      status: 404,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'User not found or update failed.' }, 404);
   }
 
-  return new Response(
-    JSON.stringify({
-      success: true,
-      message: 'User profile updated successfully.',
-    }),
-    {
-      status: 200,
-      headers: NO_CACHE_HEADERS,
-    }
-  );
+  return jsonNoCache({
+    success: true,
+    message: 'User profile updated successfully.',
+  });
 };
-

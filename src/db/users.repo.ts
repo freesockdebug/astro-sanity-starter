@@ -65,45 +65,38 @@ export async function upsertUserOnLogin(user: {
   const rolesJson = JSON.stringify(user.roles || []);
 
   return executeWithAutoSchema(async (db: DbClient) => {
-    // 1. If user with same email exists under a different id (account recreated in Logto), migrate the id first
-    await db.execute(
-      `UPDATE users SET id = ? WHERE LOWER(email) = LOWER(?) AND id != ?`,
-      [user.id, normalizedEmail, user.id]
-    );
-
-    // 2. Synchronize past orders and login logs to the new user id
-    try {
-      await db.execute(
-        `UPDATE orders
+    // 1-3. Atomically migrate ID, sync historical orders/logins, and upsert user record via batch
+    await db.batch([
+      {
+        sql: `UPDATE users SET id = ? WHERE LOWER(email) = LOWER(?) AND id != ?`,
+        params: [user.id, normalizedEmail, user.id],
+      },
+      {
+        sql: `UPDATE orders
          SET user_id = ?, updated_at = datetime('now')
          WHERE LOWER(buyer_email) = LOWER(?)
            AND user_id IS NOT NULL AND user_id != '' AND user_id != ?`,
-        [user.id, normalizedEmail, user.id]
-      );
-
-      await db.execute(
-        `UPDATE user_logins
+        params: [user.id, normalizedEmail, user.id],
+      },
+      {
+        sql: `UPDATE user_logins
          SET user_id = ?
          WHERE LOWER(email) = LOWER(?)
            AND user_id != ?`,
-        [user.id, normalizedEmail, user.id]
-      );
-    } catch {
-      // Non-blocking
-    }
-
-    // 3. Upsert user record
-    await db.execute(
-      `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET
-         email = excluded.email,
-         name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
-         logto_roles = excluded.logto_roles,
-         last_login_at = datetime('now'),
-         updated_at = datetime('now')`,
-      [user.id, normalizedEmail, userName, rolesJson]
-    );
+        params: [user.id, normalizedEmail, user.id],
+      },
+      {
+        sql: `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET
+           email = excluded.email,
+           name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
+           logto_roles = excluded.logto_roles,
+           last_login_at = datetime('now'),
+           updated_at = datetime('now')`,
+        params: [user.id, normalizedEmail, userName, rolesJson],
+      },
+    ]);
 
     // 4. Backfill company, country, phone from past orders if blank
     await db.execute(
@@ -157,14 +150,19 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     const querySql = `
       SELECT 
         u.*,
-        COUNT(o.id) as total_orders,
-        SUM(CASE WHEN o.status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as pending_orders,
-        SUM(CASE WHEN o.status = 'SHIPPED' THEN 1 ELSE 0 END) as shipped_orders,
+        COUNT(DISTINCT o.id) as total_orders,
+        COUNT(DISTINCT CASE WHEN o.status = 'PENDING_APPROVAL' THEN o.id END) as pending_orders,
+        COUNT(DISTINCT CASE WHEN o.status = 'SHIPPED' THEN o.id END) as shipped_orders,
         MAX(o.created_at) as latest_order_date,
-        (SELECT ip FROM user_logins WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_login_ip,
-        (SELECT country FROM user_logins WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_login_country
+        latest_login.ip as last_login_ip,
+        latest_login.country as last_login_country
       FROM users u
       LEFT JOIN orders o ON (o.user_id = u.id OR LOWER(o.buyer_email) = LOWER(u.email))
+      LEFT JOIN (
+        SELECT user_id, ip, country,
+               ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) as rn
+        FROM user_logins
+      ) latest_login ON latest_login.user_id = u.id AND latest_login.rn = 1
       ${whereSql}
       GROUP BY u.id
       ORDER BY u.last_login_at DESC, u.created_at DESC

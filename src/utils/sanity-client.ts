@@ -1,17 +1,14 @@
 import { createClient, type ClientConfig, type SanityClient } from '@sanity/client';
+import { getRuntimeEnv } from './auth';
 
-const getEnv = (key: string): string | undefined => {
-    return (import.meta.env && import.meta.env[key]) || (typeof process !== 'undefined' && process.env && process.env[key]);
-};
-
-const SANITY_PROJECT_ID = getEnv('SANITY_PROJECT_ID');
+const SANITY_PROJECT_ID = getRuntimeEnv('SANITY_PROJECT_ID');
 if (!SANITY_PROJECT_ID) {
     throw new Error('Missing required environment variable: SANITY_PROJECT_ID');
 }
-const SANITY_DATASET = getEnv('SANITY_DATASET') || 'production';
-const SANITY_TOKEN = getEnv('SANITY_TOKEN');
-const STACKBIT_PREVIEW = getEnv('STACKBIT_PREVIEW');
-const SANITY_PREVIEW_DRAFTS = getEnv('SANITY_PREVIEW_DRAFTS');
+const SANITY_DATASET = getRuntimeEnv('SANITY_DATASET') || 'production';
+const SANITY_TOKEN = getRuntimeEnv('SANITY_TOKEN');
+const STACKBIT_PREVIEW = getRuntimeEnv('STACKBIT_PREVIEW');
+const SANITY_PREVIEW_DRAFTS = getRuntimeEnv('SANITY_PREVIEW_DRAFTS');
 
 const isDev = Boolean(import.meta.env?.DEV || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development'));
 const isDeployPreview = typeof process !== 'undefined' && process.env?.CONTEXT === 'deploy-preview';

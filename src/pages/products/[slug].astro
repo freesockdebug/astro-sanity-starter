@@ -2,8 +2,7 @@
 // src/pages/products/[slug].astro
 import Layout from '@layouts/Layout.astro';
 import { AppleProductDetailSkeleton, Breadcrumbs } from '@components/index';
-import { client } from '@utils/sanity-client';
-import { PRODUCT_FIELDS, ProductService, resolveProductMoq, getCurrencySymbol } from '@data/products';
+import { ProductService, resolveProductMoq, getCurrencySymbol } from '@data/products';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { cleanBrandTitle } from '@utils/text';
@@ -22,18 +21,13 @@ const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 const { slug } = Astro.params;
 
-// Multi-tier cached resolution: fetch current product & story settings from Sanity concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
+// Multi-tier cached resolution: fetch current product & story settings concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
 const [currentProduct, allProductsRaw, siteConfig, rfqSettings, productStorySettings] = await Promise.all([
-  client
-    .fetch<any>(`*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`, { slug })
-    .catch((e) => {
-      console.error(`Failed to batch-fetch product data for ${slug}:`, e);
-      return null;
-    }),
+  slug ? ProductService.getBySlug(slug) : null,
   ProductService.getAll(),
   SiteConfigService.getConfig(),
   RfqSettingsService.getSettings(),
-  client.fetch<any>(`*[_type == "productStorySettings"][0]`).catch(() => null),
+  ProductService.getProductStorySettings(),
 ]);
 
 if (!currentProduct) {

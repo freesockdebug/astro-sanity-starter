@@ -3,6 +3,7 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, getRuntimeEnv } from '@utils/auth';
 import { getSystemSettings, updateSystemSettings } from '@utils/db';
 import { SecurityService } from '@utils/security';
+import { dispatchWebhookMessage } from '@utils/webhook';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -97,55 +98,28 @@ export const POST: APIRoute = async ({ request }) => {
 
     try {
       const currentSettings = await getSystemSettings(cfEnv);
-      const plainText = `🔔 【${currentSettings.brand_name}】Webhook 连接测试成功\n- 触发者：${admin.email}\n- 时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- 运行环境：Cloudflare Workers\n- 状态：测试消息发送正常`;
+      const brand = currentSettings.brand_name || 'GWENVENNI';
+      const plainText = `🔔 【${brand}】Webhook 连接测试成功\n- 触发者：${admin.email}\n- 时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- 运行环境：Cloudflare Workers\n- 状态：测试消息发送正常`;
+      const markdownText = `### 🔔 [${brand}] Webhook 验证成功\n\n- **触发者**：${admin.email}\n- **时间**：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- **运行环境**：Cloudflare Workers\n- **状态**：Live Delivery OK`;
 
-      let testPayload: any;
-      if (targetUrl.includes('qyapi.weixin.qq.com')) {
-        testPayload = {
-          msgtype: 'markdown',
-          markdown: { content: plainText },
-        };
-      } else if (targetUrl.includes('dingtalk.com')) {
-        testPayload = {
-          msgtype: 'markdown',
-          markdown: {
-            title: `【${currentSettings.brand_name}】Webhook 验证测试`,
-            text: `### 🔔 [${currentSettings.brand_name}] Webhook 验证成功\n\n- **触发者**：${admin.email}\n- **时间**：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- **运行环境**：Cloudflare Workers\n- **状态**：Live Delivery OK`,
-          },
-        };
-      } else if (targetUrl.includes('feishu.cn') || targetUrl.includes('larksuite.com')) {
-        testPayload = {
-          msg_type: 'text',
-          content: { text: plainText },
-        };
-      } else {
-        testPayload = {
-          msgtype: 'text',
-          text: { content: plainText },
-          content: plainText,
-        };
-      }
-
-      const res = await fetch(targetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testPayload),
-        signal: AbortSignal.timeout(6000),
+      const result = await dispatchWebhookMessage(targetUrl, {
+        title: `【${brand}】Webhook 验证测试`,
+        markdownText,
+        plainText,
       });
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
+      if (!result.success) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: `Target server responded with HTTP ${res.status}: ${errText.slice(0, 160)}`,
+            error: `Target server error: ${result.error || 'Dispatch failed'}`,
           }),
           { status: 200, headers: NO_CACHE_HEADERS }
         );
       }
 
       return new Response(
-        JSON.stringify({ success: true, message: `Webhook reached successfully (HTTP ${res.status}).` }),
+        JSON.stringify({ success: true, message: `Webhook reached successfully (HTTP ${result.status || 200}).` }),
         { status: 200, headers: NO_CACHE_HEADERS }
       );
     } catch (err: any) {

@@ -325,3 +325,15 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
   });
 }
 
+/**
+ * Fast indexed lookup for count of pending orders (used for admin badges without executing full list query)
+ */
+export async function getPendingOrdersCount(customEnv?: any): Promise<number> {
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const row = await db.first<{ count: number }>(
+      `SELECT COUNT(*) as count FROM orders WHERE status = 'PENDING_APPROVAL'`
+    );
+    return Number(row?.count || 0);
+  }, customEnv);
+}
+

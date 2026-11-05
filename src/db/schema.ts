@@ -98,6 +98,15 @@ export async function ensureSchema(rawOrClient?: any) {
   }
   if (!target) return;
 
+  if (target.batch && target.prepare) {
+    try {
+      await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
+      return;
+    } catch (batchErr) {
+      console.warn('[DB] ensureSchema batch notice, falling back to sequential:', batchErr);
+    }
+  }
+
   for (const sql of DDL_STATEMENTS) {
     try {
       if (target.prepare) {

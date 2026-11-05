@@ -27,8 +27,34 @@ export function getRuntimeEnv(key: string, customEnv?: any): string | undefined 
     customEnv?.[key] ||
     (typeof process !== 'undefined' && process.env && (process.env as any)[key]) ||
     (import.meta.env && (import.meta.env as any)[key]) ||
+    (globalThis as any)?.__CF_ENV__?.[key] ||
     (globalThis as any)?.[key]
   );
+}
+
+/**
+ * Single source of truth helper to get the merged list of Root Env Admins + Co-Admins
+ */
+export function getMergedAdminEmails(
+  coAdminEmailsOrSettings?: string | { co_admin_emails?: string },
+  customEnv?: any
+): string[] {
+  const rootRaw = getRuntimeEnv('ADMIN_EMAILS', customEnv) || '';
+  const rootAdmins = rootRaw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const coAdminRaw = typeof coAdminEmailsOrSettings === 'string'
+    ? coAdminEmailsOrSettings
+    : (coAdminEmailsOrSettings?.co_admin_emails || '');
+
+  const coAdmins = coAdminRaw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  return Array.from(new Set([...rootAdmins, ...coAdmins]));
 }
 
 /**
@@ -43,19 +69,7 @@ export function checkIsAdmin(
   if (roles.map((r) => r.toLowerCase()).includes('admin')) {
     return true;
   }
-
-  const rawWhitelist = getRuntimeEnv('ADMIN_EMAILS', customEnv) || '';
-  const rootWhitelist = rawWhitelist
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  const coAdmins = (coAdminEmails || '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  const whitelist = Array.from(new Set([...rootWhitelist, ...coAdmins]));
+  const whitelist = getMergedAdminEmails(coAdminEmails, customEnv);
   return whitelist.includes(email.trim().toLowerCase());
 }
 
@@ -84,15 +98,21 @@ function base64UrlDecode(str: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+const hmacKeyCache = new Map<string, CryptoKey>();
+
 async function getHmacKey(secret: string): Promise<CryptoKey> {
+  const cached = hmacKeyCache.get(secret);
+  if (cached) return cached;
   const enc = new TextEncoder();
-  return crypto.subtle.importKey(
+  const key = await crypto.subtle.importKey(
     'raw',
     enc.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign', 'verify']
   );
+  hmacKeyCache.set(secret, key);
+  return key;
 }
 
 /**
@@ -243,11 +263,13 @@ export async function getSessionFromRequest(requestOrContext: any, customEnv?: a
 /**
  * Formats Set-Cookie header for session token
  */
-export function formatSessionCookie(token: string, maxAge = DEFAULT_TTL_SECONDS): string {
-  const isSecure = typeof location !== 'undefined' ? location.protocol === 'https:' : true;
+export function formatSessionCookie(token: string, maxAge = DEFAULT_TTL_SECONDS, isSecure?: boolean): string {
+  const secureFlag = typeof isSecure === 'boolean'
+    ? isSecure
+    : (typeof location !== 'undefined' ? location.protocol === 'https:' : true);
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(
     token
-  )}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+  )}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secureFlag ? '; Secure' : ''}`;
 }
 
 /**

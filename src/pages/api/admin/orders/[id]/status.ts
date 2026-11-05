@@ -1,50 +1,31 @@
 // src/pages/api/admin/orders/[id]/status.ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth } from '@utils/auth';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { updateOrderStatus, type OrderStatus } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const NO_CACHE_HEADERS = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
-  'Cloudflare-CDN-Cache-Control': 'no-store',
-  'CDN-Cache-Control': 'no-store',
-  'Pragma': 'no-cache',
-  'Expires': '0',
-};
-
 export const POST: APIRoute = async ({ request, params }) => {
   const user = await verifyAdminAuth(request, cfEnv);
   if (!user) {
-    return new Response(JSON.stringify({ error: 'Forbidden. Administrator access required.' }), {
-      status: 403,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
   }
 
   const orderId = params.id;
   if (!orderId) {
-    return new Response(JSON.stringify({ error: 'Order ID is required.' }), {
-      status: 400,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'Order ID is required.' }, 400);
   }
 
   let body: any;
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON payload.' }), {
-      status: 400,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'Invalid JSON payload.' }, 400);
   }
 
   const { action, status, carrier, trackingNumber, adminRemark } = body || {};
-
   const ALLOWED_STATUSES = new Set<OrderStatus>(['PENDING_APPROVAL', 'APPROVED', 'SHIPPED', 'REJECTED']);
 
   let targetStatus: OrderStatus;
@@ -55,18 +36,12 @@ export const POST: APIRoute = async ({ request, params }) => {
   } else if (action === 'ship') {
     targetStatus = 'SHIPPED';
     if (!carrier && !trackingNumber) {
-      return new Response(
-        JSON.stringify({ error: 'Carrier name or tracking number is required to ship an order.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
+      return jsonNoCache({ error: 'Carrier name or tracking number is required to ship an order.' }, 400);
     }
   } else if (status && ALLOWED_STATUSES.has(status as OrderStatus)) {
     targetStatus = status as OrderStatus;
   } else {
-    return new Response(JSON.stringify({ error: 'Valid action (approve, reject, ship) or allowed status required.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonNoCache({ error: 'Valid action (approve, reject, ship) or allowed status required.' }, 400);
   }
 
   const success = await updateOrderStatus(orderId, {
@@ -78,19 +53,12 @@ export const POST: APIRoute = async ({ request, params }) => {
   });
 
   if (!success) {
-    return new Response(JSON.stringify({ error: 'Order not found or status update failed.' }), {
-      status: 404,
-      headers: NO_CACHE_HEADERS,
-    });
+    return jsonNoCache({ error: 'Order not found or status update failed.' }, 404);
   }
 
-  return new Response(
-    JSON.stringify({
-      success: true,
-      status: targetStatus,
-      message: `Order status updated to ${targetStatus}.`,
-    }),
-    { status: 200, headers: NO_CACHE_HEADERS }
-  );
+  return jsonNoCache({
+    success: true,
+    status: targetStatus,
+    message: `Order status updated to ${targetStatus}.`,
+  });
 };
-

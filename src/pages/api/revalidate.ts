@@ -3,32 +3,16 @@ import type { APIRoute } from 'astro';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 import { SecurityService } from '@utils/security';
+import { getRuntimeEnv } from '@utils/auth';
 import { NON_DEFAULT_LOCALES } from '@i18n';
 import { ProductService } from '@data/products';
+import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { kvGet, kvPut, kvDelete } from '@utils/kv';
 
 export const prerender = false;
 
-/**
- * Universal environment variable accessor safe for Cloudflare Worker runtime (Astro v6 compliant)
- */
-const getEnv = (key: string): string | undefined => {
-  try {
-    if (typeof cfEnv !== 'undefined' && cfEnv && (cfEnv as any)[key]) {
-      return (cfEnv as any)[key];
-    }
-  } catch {
-    // Non-worker environment fallback
-  }
-
-  return (
-    (typeof process !== 'undefined' && process.env && (process.env as any)[key]) ||
-    (import.meta.env && (import.meta.env as any)[key]) ||
-    (globalThis as any)?.[key]
-  );
-};
 
 /**
  * Normalise a relative path or absolute URL into canonical URL pairs (with & without trailing slash)
@@ -119,13 +103,17 @@ export const POST: APIRoute = async (context) => {
       url.searchParams.get('token') ||
       body?.secret;
 
-    const expectedSecret = getEnv('REVALIDATE_SECRET') || getEnv('SANITY_REVALIDATE_SECRET') || 'itsasecret';
     const isDev = Boolean(import.meta.env?.DEV);
     const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    const configuredSecret = getRuntimeEnv('REVALIDATE_SECRET', cfEnv) || getRuntimeEnv('SANITY_REVALIDATE_SECRET', cfEnv);
+    const expectedSecret = configuredSecret || (isDev || isLocalhost ? 'itsasecret' : '');
 
     // 2. Authenticate webhook request:
-    // Strictly require matching secret with fallback to studio contract secret 'itsasecret'
-    const isAuthorized = providedSecret === expectedSecret || isDev || isLocalhost;
+    // Strictly require matching secret via constant-time comparison in production
+    const isAuthorized =
+      (expectedSecret && providedSecret && SecurityService.timingSafeEqual(providedSecret, expectedSecret)) ||
+      isDev ||
+      isLocalhost;
 
     if (!isAuthorized) {
       return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or missing revalidation secret' }), {
@@ -253,36 +241,42 @@ export const POST: APIRoute = async (context) => {
       : null;
 
     if (workerCache) {
-      for (const targetUrl of urlsToPurge) {
-        try {
-          const req = new Request(targetUrl, { method: 'GET' });
-          const deleted = await workerCache.delete(req);
-          if (deleted) {
-            workerPurgedCount++;
-          }
-        } catch (e) {
-          console.warn('[Revalidate] Worker cache delete error for', targetUrl, e);
+      const deleteResults = await Promise.allSettled(
+        urlsToPurge.map((targetUrl) =>
+          workerCache.delete(new Request(targetUrl, { method: 'GET' }))
+        )
+      );
+      for (const res of deleteResults) {
+        if (res.status === 'fulfilled' && res.value) {
+          workerPurgedCount++;
         }
       }
     }
 
     // Invalidate in-memory SWR caches within this Worker isolate
     ProductService.invalidateCache();
+    PageService.invalidateCache();
     SiteConfigService.invalidate();
     RfqSettingsService.invalidateCache();
 
     // Invalidate CMS KV cache keys across Cloudflare Edge
-    await Promise.all([
+    const kvPurges: Promise<any>[] = [
       kvDelete('cms:siteConfig', cfEnv),
       kvDelete('cms:rfqSettings', cfEnv),
       kvDelete('cms:products:all', cfEnv),
       kvDelete('cms:categories:all', cfEnv),
       kvDelete('cms:catalogSettings', cfEnv),
-    ]).catch(() => {});
+      kvDelete('cms:productStorySettings', cfEnv),
+      kvDelete('cms:page:home', cfEnv),
+    ];
+    if (docType === 'product' && docSlug) {
+      kvPurges.push(kvDelete(`cms:product:${docSlug}`, cfEnv));
+    }
+    await Promise.all(kvPurges).catch(() => {});
 
     // 5. LAYER 2: Cloudflare Global CDN Zone Cache Purge API
-    let cfZoneId = getEnv('CLOUDFLARE_ZONE_ID')?.trim();
-    const rawCfToken = getEnv('CLOUDFLARE_API_TOKEN');
+    let cfZoneId = getRuntimeEnv('CLOUDFLARE_ZONE_ID', cfEnv)?.trim();
+    const rawCfToken = getRuntimeEnv('CLOUDFLARE_API_TOKEN', cfEnv);
     const cfApiToken = rawCfToken?.trim();
     let cfPurged = false;
     let cfMessage = 'Skipped (credentials not set in environment)';

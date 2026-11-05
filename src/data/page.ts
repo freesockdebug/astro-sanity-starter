@@ -1,4 +1,5 @@
 import { client } from '@utils/sanity-client';
+import { createSwrCache } from '@utils/cache';
 import { SECTIONS } from './blocks';
 import type { Page } from 'types';
 
@@ -18,10 +19,31 @@ export const PAGE_QUERY_OBJ = `{
   sections[] ${SECTIONS}
 }`;
 
+const homePageCache = createSwrCache<Page | null>(
+  async () => {
+    const pages = await PageService.getBySlug('/');
+    return pages[0] || null;
+  },
+  null,
+  10_000,
+  undefined,
+  { kvKey: 'cms:page:home', kvTtlSeconds: 86400 }
+);
+
 /**
  * Service for fetching and resolving CMS Pages from Sanity
  */
 export class PageService {
+  /**
+   * Multi-tier cached retrieval of the homepage content (L1 isolate memory -> L2 Cloudflare KV -> L3 Sanity)
+   */
+  public static async getHomePage(forceRefresh = false): Promise<Page | null> {
+    return homePageCache.get(forceRefresh);
+  }
+
+  public static invalidateCache(): void {
+    homePageCache.invalidate();
+  }
   /**
    * Fetch all pages
    */

@@ -212,12 +212,14 @@ export async function updateSystemSettings(
           updated_at = excluded.updated_at
       `;
 
-      for (const [key, rawVal] of entries) {
+      const operations = entries.map(([key, rawVal]) => {
         const valStr = typeof rawVal === 'boolean' || typeof rawVal === 'number'
           ? String(rawVal)
           : String(rawVal || '').trim();
-        await db.execute(sql, [key, valStr, updatedBy]);
-      }
+        return { sql, params: [key, valStr, updatedBy] };
+      });
+
+      await db.batch(operations);
     });
 
     // Invalidate local memory and force D1 read + KV overwrite in a single write
@@ -231,21 +233,5 @@ export async function updateSystemSettings(
   }
 }
 
-/**
- * Helper to get the full union of Root Env Admins + D1 Co-Admins
- */
-export function getMergedAdminEmails(settings: SystemSettings, customEnv?: any): string[] {
-  const rootRaw = getRuntimeEnv('ADMIN_EMAILS', customEnv) || '';
-  const rootAdmins = rootRaw
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  const coAdmins = (settings.co_admin_emails || '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  return Array.from(new Set([...rootAdmins, ...coAdmins]));
-}
+export { getMergedAdminEmails } from '../utils/auth';
 

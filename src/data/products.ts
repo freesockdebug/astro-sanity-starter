@@ -1,6 +1,7 @@
 import { client } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
 import { createSwrCache } from '@utils/cache';
+import { kvGet, kvPut } from '@utils/kv';
 import { DEFAULT_CATALOG } from './defaults';
 import { getLocalizedPath } from '@i18n';
 import type { Product } from 'types';
@@ -261,14 +262,25 @@ const catalogSettingsCache = createSwrCache<any | null>(
   { kvKey: 'cms:catalogSettings', kvTtlSeconds: 86400 }
 );
 
+const storySettingsCache = createSwrCache<any | null>(
+  () => client.fetch<any>(`*[_type == "productStorySettings"][0]`),
+  null,
+  10_000,
+  undefined,
+  { kvKey: 'cms:productStorySettings', kvTtlSeconds: 86400 }
+);
+
 /**
  * Service class handling Product querying, caching, and fallback resolution
  */
 export class ProductService {
-  public static seed(data: { products?: Product[]; categories?: any[]; catalogSettings?: any }): void {
+  private static productSlugCache = new Map<string, { data: Product; timestamp: number }>();
+
+  public static seed(data: { products?: Product[]; categories?: any[]; catalogSettings?: any; productStorySettings?: any }): void {
     if (data.products !== undefined) productsCache.seed(data.products);
     if (data.categories !== undefined) categoriesCache.seed(data.categories);
     if (data.catalogSettings !== undefined) catalogSettingsCache.seed(data.catalogSettings);
+    if (data.productStorySettings !== undefined) storySettingsCache.seed(data.productStorySettings);
   }
 
   /**
@@ -369,20 +381,46 @@ export class ProductService {
   }
 
   /**
-   * Fetch a single product by slug
+   * Fetch a single product by slug with multi-tier caching (L1 memory -> L2 KV -> L3 Sanity)
    */
-  public static async getBySlug(slug: string): Promise<Product | null> {
+  public static async getBySlug(slug: string, customEnv?: any): Promise<Product | null> {
     if (!slug) return null;
+    const cacheKey = `cms:product:${slug}`;
+    const now = Date.now();
+    const memHit = this.productSlugCache.get(slug);
+    if (memHit && now - memHit.timestamp < 10_000) {
+      return memHit.data;
+    }
+
+    try {
+      const kvHit = await kvGet<Product>(cacheKey, customEnv);
+      if (kvHit) {
+        this.productSlugCache.set(slug, { data: kvHit, timestamp: now });
+        return kvHit;
+      }
+    } catch {}
+
     try {
       const data = await client.fetch<Product | null>(
         `*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`,
         { slug }
       );
+      if (data) {
+        this.productSlugCache.set(slug, { data, timestamp: now });
+        await kvPut(cacheKey, data, { expirationTtl: 86400 }, customEnv).catch(() => {});
+      }
       return data;
     } catch (err: any) {
       console.error(`ProductService.getBySlug failed for ${slug}:`, err?.message);
       return null;
     }
+  }
+
+  /**
+   * Fetch product story settings from Sanity with SWR and KV caching
+   */
+  public static async getProductStorySettings(forceRefresh = false): Promise<any> {
+    return storySettingsCache.get(forceRefresh);
   }
 
   /**
@@ -437,6 +475,8 @@ export class ProductService {
     productsCache.invalidate();
     categoriesCache.invalidate();
     catalogSettingsCache.invalidate();
+    storySettingsCache.invalidate();
+    this.productSlugCache.clear();
   }
 }
 

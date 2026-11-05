@@ -1,3 +1,5 @@
+import { getRuntimeEnv } from './auth';
+
 /**
  * Security utilities and sanitizers for user inputs
  */
@@ -43,21 +45,42 @@ export class SecurityService {
 
   /**
    * Validates outbound webhook URLs against SSRF (Server-Side Request Forgery).
-   * Enforces HTTPS protocol and blocks loopback, link-local, and private network ranges.
+   * Enforces HTTPS protocol, standard port 443, and blocks loopback, link-local, IPv6 and private ranges.
    */
   public static isSafeWebhookUrl(rawUrl: string): boolean {
     if (!rawUrl || typeof rawUrl !== 'string') return false;
     try {
       const parsed = new URL(rawUrl.trim());
       if (parsed.protocol !== 'https:') return false;
+      // Disallow non-standard ports (e.g. internal admin :8080, redis :6379)
+      if (parsed.port && parsed.port !== '443') return false;
 
-      const hostname = parsed.hostname.toLowerCase();
+      const rawHostname = parsed.hostname.toLowerCase();
+      const hostname = rawHostname.replace(/^\[|\]$/g, '');
+
+      // Block local/internal hostnames
       if (
         hostname === 'localhost' ||
         hostname === '0.0.0.0' ||
-        hostname === '[::1]' ||
         hostname.endsWith('.local') ||
         hostname.endsWith('.internal')
+      ) {
+        return false;
+      }
+
+      // Block integer / octal / hex encoded IPs (e.g. 2130706433, 0177.0.0.1, 0x7f000001)
+      if (/^\d+$/.test(hostname) || /^0x[0-9a-f]+$/i.test(hostname)) {
+        return false;
+      }
+
+      // Block IPv6 loopback, link-local, unique-local, and IPv4-mapped IPv6
+      if (
+        hostname === '::1' ||
+        hostname === '::' ||
+        hostname.startsWith('fe80:') ||
+        hostname.startsWith('fc00:') ||
+        hostname.startsWith('fd00:') ||
+        hostname.startsWith('::ffff:')
       ) {
         return false;
       }
@@ -65,6 +88,7 @@ export class SecurityService {
       // Block private, loopback, and cloud metadata IPv4 ranges
       if (
         /^127\./.test(hostname) ||
+        /^0\./.test(hostname) ||
         /^10\./.test(hostname) ||
         /^192\.168\./.test(hostname) ||
         /^169\.254\./.test(hostname) ||
@@ -77,6 +101,43 @@ export class SecurityService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Constant-time comparison to prevent timing side-channel attacks on secret tokens
+   */
+  public static timingSafeEqual(a: string, b: string): boolean {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const aBytes = new TextEncoder().encode(a);
+    const bBytes = new TextEncoder().encode(b);
+    if (aBytes.byteLength !== bBytes.byteLength) return false;
+    let diff = 0;
+    for (let i = 0; i < aBytes.byteLength; i++) {
+      diff |= aBytes[i] ^ bBytes[i];
+    }
+    return diff === 0;
+  }
+
+  /**
+   * Single source of truth to resolve client network and geo metadata
+   */
+  public static resolveClientMeta(request: Request): {
+    ip: string;
+    country: string;
+    city: string;
+    userAgent: string;
+  } {
+    const ip =
+      request.headers.get('cf-connecting-ip') ||
+      request.headers.get('x-real-ip') ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      '';
+    const country =
+      this.resolveCountry(request) ||
+      (request.headers.get('cf-ipcountry') || (request as any).cf?.country || '').trim().toUpperCase();
+    const city = (request as any).cf?.city || request.headers.get('cf-ipcity') || '';
+    const userAgent = request.headers.get('user-agent') || '';
+    return { ip, country, city, userAgent };
   }
 
   /**
@@ -138,14 +199,10 @@ export class SecurityService {
     const currentHost = currentUrl?.hostname?.toLowerCase() || '';
     const rootDomain = currentHost ? this.extractRootDomain(currentHost) : '';
 
-    const getEnv = (key: string): string | undefined =>
-      (typeof process !== 'undefined' && process.env && (process.env as any)[key]) ||
-      (import.meta.env && (import.meta.env as any)[key]);
-
     const envConfiguredDomains = [
-      getEnv('ALLOWED_ORIGIN_DOMAINS'),
-      getEnv('SITE_DOMAIN'),
-      getEnv('TURNSTILE_HOSTNAMES'),
+      getRuntimeEnv('ALLOWED_ORIGIN_DOMAINS'),
+      getRuntimeEnv('SITE_DOMAIN'),
+      getRuntimeEnv('TURNSTILE_HOSTNAMES'),
     ]
       .filter(Boolean)
       .join(',')

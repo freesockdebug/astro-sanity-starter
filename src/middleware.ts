@@ -2,7 +2,8 @@
 import { defineMiddleware } from 'astro:middleware';
 import { env as cfEnv } from 'cloudflare:workers';
 import { SiteConfigService } from '@data/siteConfig';
-import { SESSION_COOKIE_NAME } from './utils/auth';
+import { SESSION_COOKIE_NAME, getCookieValue, getRuntimeEnv } from './utils/auth';
+import { SecurityService } from './utils/security';
 
 /**
  * Cloudflare Edge Cache Middleware for HTML Pages
@@ -68,7 +69,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isAccountPath = pathname === '/account' || pathname.startsWith('/account/') || pathname.includes('/account');
   const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.includes('/admin');
   const cookieHeader = request.headers.get('cookie') || '';
-  const hasUserSession = cookieHeader.includes(SESSION_COOKIE_NAME);
+  const hasUserSession = Boolean(getCookieValue(cookieHeader, SESSION_COOKIE_NAME));
 
   if (
     isOrdersPath ||
@@ -129,26 +130,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
   let isAuthorizedPurge = false;
   if (isPurgeParam) {
     const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    let cfSecret: string | undefined;
-    try {
-      if (typeof cfEnv !== 'undefined' && cfEnv) {
-        cfSecret = (cfEnv as any).REVALIDATE_SECRET;
-      }
-    } catch {
-      // Fallback
-    }
-    const purgeSecret =
-      cfSecret ||
-      (typeof process !== 'undefined' && process.env?.REVALIDATE_SECRET) ||
-      (import.meta.env && (import.meta.env as any).REVALIDATE_SECRET) ||
-      'itsasecret';
+    const isDev = Boolean(import.meta.env?.DEV);
+    const configuredSecret = getRuntimeEnv('REVALIDATE_SECRET', cfEnv) || getRuntimeEnv('SANITY_REVALIDATE_SECRET', cfEnv);
+    const purgeSecret = configuredSecret || (isDev || isLocalhost ? 'itsasecret' : '');
     const providedKey =
       url.searchParams.get('key') ||
       url.searchParams.get('secret') ||
       url.searchParams.get('token') ||
       request.headers.get('x-revalidate-secret') ||
-      request.headers.get('x-webhook-secret');
-    if (isLocalhost || (providedKey && providedKey === purgeSecret)) {
+      request.headers.get('x-webhook-secret') ||
+      '';
+    if (isLocalhost || (purgeSecret && providedKey && SecurityService.timingSafeEqual(providedKey, purgeSecret))) {
       isAuthorizedPurge = true;
     }
   }

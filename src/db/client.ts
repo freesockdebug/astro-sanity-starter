@@ -4,11 +4,10 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getRuntimeEnv } from '../utils/auth';
+import { getRuntimeEnv, getMergedAdminEmails } from '../utils/auth';
 
 export function getAdminEmailList(): string[] {
-  const raw = getRuntimeEnv('ADMIN_EMAILS') || '';
-  return raw.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
+  return getMergedAdminEmails();
 }
 
 export function generateOrderNo(prefix: string = 'ORD'): string {

@@ -10,6 +10,7 @@ import {
   type AuthUser,
 } from '@utils/auth';
 import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin, getSystemSettings } from '@utils/db';
+import { SecurityService } from '@utils/security';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -151,10 +152,7 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
 
   // 4.5. Record Login History (IP, Geo, Device) with 90-day retention
   try {
-    const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '';
-    const country = request.headers.get('cf-ipcountry') || '';
-    const city = request.headers.get('cf-ipcity') || '';
-    const userAgent = request.headers.get('user-agent') || '';
+    const { ip: clientIp, country, city, userAgent } = SecurityService.resolveClientMeta(request);
     await recordUserLogin({
       userId: authUser.id,
       email: authUser.email,
@@ -176,9 +174,10 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
   }
 
   // 6. Generate Tamper-Proof Session Cookie
+  const isHttps = reqUrl.protocol === 'https:';
   const sessionToken = await createSessionToken(authUser, undefined, cfEnv);
-  const sessionCookie = formatSessionCookie(sessionToken);
-  const clearStateCookie = 'logto_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
+  const sessionCookie = formatSessionCookie(sessionToken, undefined, isHttps);
+  const clearStateCookie = `logto_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${isHttps ? '; Secure' : ''}`;
 
   // Set natively through Astro Cookies API
   try {
@@ -186,7 +185,7 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       path: '/',
       maxAge: 7 * 24 * 3600,
       httpOnly: true,
-      secure: true,
+      secure: isHttps,
       sameSite: 'lax',
     });
     cookies.delete('logto_oauth_state', { path: '/' });
@@ -223,7 +222,7 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
           type: 'LOGTO_AUTH_SUCCESS',
           user: ${JSON.stringify(authUser)},
           claimedCount: ${claimedCount}
-        }, '*');
+        }, ${JSON.stringify(reqUrl.origin)});
       }
     } catch (e) {
       // ignore

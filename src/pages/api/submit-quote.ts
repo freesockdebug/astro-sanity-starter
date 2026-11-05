@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
 import { createClient } from '@sanity/client';
 import { SecurityService } from '@utils/security';
+import { dispatchWebhookMessage } from '@utils/webhook';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
-import { getSessionFromRequest } from '@utils/auth';
+import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
 import { kvGet, kvPut, kvDelete } from '@utils/kv';
 // @ts-ignore
@@ -151,7 +152,7 @@ function buildRfqEmailHtml(params: {
   items: ValidatedItem[];
 }): string {
   const { orderNo, brandName, safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeVisitorIp, safeDetectedCountry, safeInquiryType, safeMessage, items } = params;
-  const brand = brandName || DEFAULT_BRAND_TITLE;
+  const brand = SecurityService.escapeHtml(brandName || DEFAULT_BRAND_TITLE);
 
   const itemsRows = items
     .map(
@@ -223,14 +224,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const { buyerInfo, items, inquiryType, turnstileToken } = validation.data;
 
     // Extract real visitor IP & Cloudflare Geo details
-    const visitorIp =
-      request.headers.get('cf-connecting-ip') ||
-      request.headers.get('x-real-ip') ||
-      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-      clientAddress ||
-      '';
-
-    const cfCountryCode = SecurityService.resolveCountry(request);
+    const clientMeta = SecurityService.resolveClientMeta(request);
+    const visitorIp = clientMeta.ip || clientAddress || '';
+    const cfCountryCode = clientMeta.country;
     let detectedCountry = '';
     if (cfCountryCode) {
       try {
@@ -242,16 +238,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
     const resolvedDestination = buyerInfo.destination || detectedCountry || cfCountryCode || 'Unspecified';
 
-    // Environment resolution helper
-    const runtimeEnv = (cfEnv as Record<string, any> | undefined) || null;
-    const getVal = (key: string): string | undefined => {
-      return (
-        runtimeEnv?.[key] ||
-        (typeof process !== 'undefined' && process.env && (process.env as any)[key]) ||
-        (import.meta.env && (import.meta.env as any)[key]) ||
-        (globalThis as any)?.[key]
-      );
-    };
+    // Environment resolution helper backed by unified getRuntimeEnv
+    const getVal = (key: string): string | undefined => getRuntimeEnv(key, cfEnv);
 
     // Load Studio site configuration (cached) and D1 system settings
     const [siteConfig, systemSettings] = await Promise.all([
@@ -517,6 +505,11 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         const resolvedTo = toEmails.length > 0 ? toEmails : [DEFAULT_CONTACT_EMAIL];
         const subjectPrefix = systemSettings?.resend_subject_prefix || getVal('RESEND_SUBJECT_PREFIX')?.trim() || '[New B2B RFQ]';
 
+        const safeCompanyForSubject = (buyerInfo.company || buyerInfo.name || 'Anonymous Buyer')
+          .replace(/[\r\n]+/g, ' ')
+          .trim();
+        const cleanSubject = `${subjectPrefix} [${orderNo}] ${safeCompanyForSubject} - ${items.length} Style(s)`.replace(/[\r\n]+/g, ' ');
+
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -528,7 +521,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
             from: fromEmail,
             to: resolvedTo,
             reply_to: buyerInfo.email,
-            subject: `${subjectPrefix} [${orderNo}] ${safeCompany} - ${items.length} Style(s)`,
+            subject: cleanSubject,
             html: emailHtml,
           }),
         });
@@ -542,7 +535,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const enableWebhook = (systemSettings?.enable_webhook_notify !== false) && (siteConfig?.enableNotificationWebhook !== false);
 
     const webhookTask = (async () => {
-      if (!enableWebhook || !webhookUrl || !SecurityService.isSafeWebhookUrl(webhookUrl)) return;
+      if (!enableWebhook || !webhookUrl) return;
       try {
         const itemLines = items
           .map((item, idx) => `  ${idx + 1}. [${item.sku}] ${item.title} (${item.variant}) × ${item.quantity} pcs`)
@@ -551,38 +544,12 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
         const ipNotice = visitorIp ? `\n🌐 访客 IP：${visitorIp} ${detectedCountry ? `(${detectedCountry})` : ''}` : '';
         const plainText = `🔔 【${effectiveBrand} 收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n📦 订单号：${orderNo}\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${resolvedDestination}${ipNotice}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
+        const markdownText = `### 🔔 ${effectiveBrand} 收到新询价单\n\n- **订单号**：${orderNo}\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`;
 
-        let webhookBody: any;
-        if (webhookUrl.includes('qyapi.weixin.qq.com')) {
-          webhookBody = {
-            msgtype: 'markdown',
-            markdown: { content: plainText }
-          };
-        } else if (webhookUrl.includes('dingtalk.com')) {
-          webhookBody = {
-            msgtype: 'markdown',
-            markdown: {
-              title: `【新询盘】${buyerInfo.company || buyerInfo.name || '买手咨询'} [${orderNo}]`,
-              text: `### 🔔 ${effectiveBrand} 收到新询价单\n\n- **订单号**：${orderNo}\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`
-            }
-          };
-        } else if (webhookUrl.includes('feishu.cn') || webhookUrl.includes('larksuite.com')) {
-          webhookBody = {
-            msg_type: 'text',
-            content: { text: plainText }
-          };
-        } else {
-          webhookBody = {
-            text: plainText,
-            content: plainText
-          };
-        }
-
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(webhookBody),
-          signal: AbortSignal.timeout(6_000),
+        await dispatchWebhookMessage(webhookUrl, {
+          title: `【新询盘】${buyerInfo.company || buyerInfo.name || '买手咨询'} [${orderNo}]`,
+          markdownText,
+          plainText,
         });
       } catch (webhookErr) {
         console.warn('Webhook notification failed or timed out (skipping):', webhookErr);
