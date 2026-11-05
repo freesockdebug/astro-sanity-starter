@@ -1,5 +1,6 @@
 import { createClient, type ClientConfig, type SanityClient } from '@sanity/client';
 import { getRuntimeEnv } from './auth';
+import { getActiveProfiler } from './profiler';
 
 const SANITY_PROJECT_ID = getRuntimeEnv('SANITY_PROJECT_ID');
 if (!SANITY_PROJECT_ID) {
@@ -53,17 +54,25 @@ const publicFetch = publicClient.fetch.bind(publicClient);
     if (isDev) {
         console.log(`[SANITY API CALL #${apiCallCount}] [${endpointType}] ${querySummary}...`);
     }
-    if (usePublicFallback) {
-        return (publicFetch as any)(query, ...rest);
-    }
+
+    const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
     try {
-        return await (rawFetch as any)(query, ...rest);
-    } catch (err: any) {
-        if (err?.statusCode === 401 || err?.status === 401 || String(err?.message || '').includes('Unauthorized')) {
-            usePublicFallback = true;
+        if (usePublicFallback) {
             return await (publicFetch as any)(query, ...rest);
         }
-        throw err;
+        try {
+            return await (rawFetch as any)(query, ...rest);
+        } catch (err: any) {
+            if (err?.statusCode === 401 || err?.status === 401 || String(err?.message || '').includes('Unauthorized')) {
+                usePublicFallback = true;
+                return await (publicFetch as any)(query, ...rest);
+            }
+            throw err;
+        }
+    } finally {
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const dur = Math.max(0, Math.round(now - t0));
+        getActiveProfiler()?.addSpan('sanity', dur);
     }
 };
 

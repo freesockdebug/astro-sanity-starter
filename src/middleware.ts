@@ -378,9 +378,9 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
   // 5. Cache MISS: execute SSR page render
   const response = await next();
 
-  // 6. Only cache successful HTML responses (status 200) without module-level errors
+  // 6. Cache successful or 404 HTML responses without module-level errors
   const contentType = response.headers.get('content-type') || '';
-  if (cache && response.status === 200 && !response.headers.has('X-Section-Error') && contentType.includes('text/html')) {
+  if (cache && (response.status === 200 || response.status === 404) && !response.headers.has('X-Section-Error') && contentType.includes('text/html')) {
     try {
       const siteConfig = await SiteConfigService.getConfig();
       const edgeTtl = typeof siteConfig?.edgeCacheTtl === 'number' && siteConfig.edgeCacheTtl >= 0
