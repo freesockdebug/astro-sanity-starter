@@ -306,9 +306,11 @@ export function PageLivePreview(props: PageLivePreviewProps) {
 
   const [origin, setOrigin] = useState('')
   useEffect(() => {
-    const env = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
-    if (env.SANITY_STUDIO_SITE_URL) {
-      setOrigin(env.SANITY_STUDIO_SITE_URL.replace(/\/$/, ''))
+    const viteEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env || {} : {}
+    const procEnv = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
+    const resolvedSiteUrl = viteEnv.SANITY_STUDIO_SITE_URL || procEnv.SANITY_STUDIO_SITE_URL
+    if (resolvedSiteUrl) {
+      setOrigin(resolvedSiteUrl.replace(/\/$/, ''))
       return
     }
     if (typeof window !== 'undefined') {

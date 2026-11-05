@@ -6,20 +6,29 @@ import { markdownSchema } from 'sanity-plugin-markdown'
 import { deskStructure, defaultDocumentNode } from './deskStructure'
 import { createPurgeCacheAction } from './actions/purgeCacheAction'
 
-const env = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
 const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env ? (import.meta as any).env : {}) as Record<string, string | undefined>
+const procEnv = (typeof process !== 'undefined' && process.env ? process.env : {}) as Record<string, string | undefined>
 
-const projectId = (env.SANITY_STUDIO_PROJECT_ID || env.SANITY_PROJECT_ID || metaEnv.PUBLIC_SANITY_PROJECT_ID) as string
-if (!projectId) {
-  throw new Error('Missing required environment variable: SANITY_STUDIO_PROJECT_ID or SANITY_PROJECT_ID')
-}
+const projectId = (
+  metaEnv.SANITY_STUDIO_PROJECT_ID ||
+  procEnv.SANITY_STUDIO_PROJECT_ID ||
+  procEnv.SANITY_PROJECT_ID ||
+  metaEnv.PUBLIC_SANITY_PROJECT_ID ||
+  'xvhhd8u0'
+) as string
 
 export default defineConfig({
   name: 'default',
   title: "Content Studio",
 
   projectId,
-  dataset: (env.SANITY_STUDIO_DATASET || env.SANITY_DATASET || metaEnv.PUBLIC_SANITY_DATASET || 'production') as string,
+  dataset: (
+    metaEnv.SANITY_STUDIO_DATASET ||
+    procEnv.SANITY_STUDIO_DATASET ||
+    procEnv.SANITY_DATASET ||
+    metaEnv.PUBLIC_SANITY_DATASET ||
+    'production'
+  ) as string,
 
   plugins: [
     structureTool({

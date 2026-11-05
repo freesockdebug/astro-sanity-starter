@@ -11,7 +11,7 @@ export default {
 
     // Forward API requests to the Astro SSR site
     if (url.pathname.startsWith('/api/')) {
-      const siteOrigin = env.SITE_ORIGIN || url.origin;
+      const siteOrigin = env.SITE_ORIGIN || 'https://gwenvenni.com';
       const targetUrl = new URL(url.pathname + url.search, siteOrigin);
       const headers = new Headers(request.headers);
       headers.set('host', targetUrl.host);
