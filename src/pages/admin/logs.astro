@@ -293,6 +293,15 @@ const pageTitle = 'System Diagnostics & Logs';
         <div id="modal-spans-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono"></div>
       </div>
 
+      <!-- Navigation Trail Container -->
+      <div id="modal-breadcrumbs-container" class="hidden space-y-1.5 p-3 rounded-xl bg-purple-50/50 border border-purple-200/60">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] uppercase font-bold text-purple-900 tracking-wider">Navigation Breadcrumbs (Pre-error Trail)</span>
+          <span class="text-[10px] font-mono text-purple-700" id="modal-breadcrumbs-count"></span>
+        </div>
+        <div id="modal-breadcrumbs-list" class="space-y-1 text-xs font-mono max-h-48 overflow-y-auto"></div>
+      </div>
+
       <div class="space-y-1">
         <span class="text-[10px] uppercase font-bold text-[#86868b] tracking-wider">Context & Stack Trace</span>
         <pre id="modal-context" class="p-3 rounded-xl bg-[#1d1d1f] text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-64 whitespace-pre-wrap select-all"></pre>
@@ -393,6 +402,9 @@ const pageTitle = 'System Diagnostics & Logs';
     const modalGeo = document.getElementById('modal-geo');
     const modalSpansContainer = document.getElementById('modal-spans-container');
     const modalSpansList = document.getElementById('modal-spans-list');
+    const modalBreadcrumbsContainer = document.getElementById('modal-breadcrumbs-container');
+    const modalBreadcrumbsList = document.getElementById('modal-breadcrumbs-list');
+    const modalBreadcrumbsCount = document.getElementById('modal-breadcrumbs-count');
     const modalContext = document.getElementById('modal-context');
     const closeModalBtn = document.getElementById('close-modal-btn');
     const closeModalBottomBtn = document.getElementById('close-modal-bottom-btn');
@@ -767,6 +779,35 @@ const pageTitle = 'System Diagnostics & Logs';
         } else {
           modalSpansContainer.classList.add('hidden');
           modalSpansList.innerHTML = '';
+        }
+      }
+
+      // Render breadcrumbs pre-error navigation trail
+      const breadcrumbs = parsedContext?.breadcrumbs || parsedContext?.context?.breadcrumbs;
+      if (modalBreadcrumbsContainer && modalBreadcrumbsList) {
+        if (Array.isArray(breadcrumbs) && breadcrumbs.length > 0) {
+          modalBreadcrumbsContainer.classList.remove('hidden');
+          if (modalBreadcrumbsCount) modalBreadcrumbsCount.textContent = `${breadcrumbs.length} steps`;
+          modalBreadcrumbsList.innerHTML = breadcrumbs.map((b: any, idx: number) => {
+            const timeStr = b.ts ? formatTime(b.ts) : '';
+            const safeTrigger = escapeHtml(b.trigger || 'navigate');
+            const safeFrom = escapeHtml(b.from || 'direct');
+            const safeTo = escapeHtml(b.to || '/');
+            const isLast = idx === breadcrumbs.length - 1;
+            return `
+              <div class="p-1.5 rounded-lg ${isLast ? 'bg-purple-100/70 border border-purple-300 font-semibold' : 'bg-white/80 border border-black/5'} flex items-center gap-2">
+                <span class="text-[10px] text-purple-700 shrink-0">${timeStr}</span>
+                <span class="px-1 py-0.2 rounded text-[9px] bg-purple-200/80 text-purple-900 uppercase shrink-0">${safeTrigger}</span>
+                <span class="text-zinc-500 truncate max-w-[120px] sm:max-w-[160px]">${safeFrom}</span>
+                <span class="text-purple-600">→</span>
+                <span class="text-zinc-900 font-bold truncate flex-1">${safeTo}</span>
+                ${isLast ? '<span class="text-[9px] text-rose-600 font-bold shrink-0 ml-auto">(Triggered Error)</span>' : ''}
+              </div>
+            `;
+          }).join('');
+        } else {
+          modalBreadcrumbsContainer.classList.add('hidden');
+          modalBreadcrumbsList.innerHTML = '';
         }
       }
 

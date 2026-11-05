@@ -502,6 +502,11 @@ async function runSelfCheck() {
         colno: 12,
         path: '/orders',
         stack: 'ReferenceError: window.ApplePay is undefined at checkout.js:42:12',
+        breadcrumbs: [
+          { ts: '2026-11-05T15:00:00.000Z', trigger: 'pageload', from: '', to: '/' },
+          { ts: '2026-11-05T15:00:05.000Z', trigger: 'pushState', from: '/', to: '/products' },
+          { ts: '2026-11-05T15:00:10.000Z', trigger: 'pushState', from: '/products', to: '/orders' }
+        ]
       }),
     }),
     url: new URL('http://localhost/api/client-error'),
@@ -518,6 +523,41 @@ async function runSelfCheck() {
   assert.strictEqual(logsAfterIngest.logs[0].method, 'CLIENT');
   assert.strictEqual(logsAfterIngest.logs[0].path, '/orders');
   assert.strictEqual(logsAfterIngest.logs[0].message, 'ReferenceError: window.ApplePay is undefined');
+
+  // Verify breadcrumbs attached in context
+  const parsedCtx = JSON.parse(logsAfterIngest.logs[0].context_json);
+  const breadcrumbs = parsedCtx.breadcrumbs || parsedCtx.context?.breadcrumbs;
+  assert(Array.isArray(breadcrumbs));
+  assert.strictEqual(breadcrumbs.length, 3);
+  assert.strictEqual(breadcrumbs[1].to, '/products');
+
+  // Test 2.5: Navigation event handling under log_min_level: 'info'
+  await updateSystemSettings({ log_min_level: 'info' }, 'admin@test.com');
+  const navReqContext: any = {
+    request: new Request('http://localhost/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'origin': 'http://localhost' },
+      body: JSON.stringify({
+        type: 'navigation',
+        level: 'info',
+        message: 'Navigation [pushState]: / -> /products',
+        path: '/products',
+        trigger: 'pushState',
+        from: '/',
+        to: '/products',
+      }),
+    }),
+    url: new URL('http://localhost/api/client-error'),
+    locals: {},
+  };
+  const navResp = await clientErrorPost(navReqContext);
+  assert.strictEqual(navResp.status, 202);
+  const navBody = await navResp.json();
+  assert.strictEqual(navBody.ok, true);
+  assert.strictEqual(navBody.level, 'info');
+
+  const logsWithNav = await listErrorLogs({ level: 'info' });
+  assert(logsWithNav.logs.some(l => l.source === 'client/navigation'));
 
   // Test 3: Noisy errors (e.g. ResizeObserver) are ignored
   const noiseReqContext: any = {

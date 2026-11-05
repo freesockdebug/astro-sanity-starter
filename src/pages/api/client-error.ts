@@ -91,7 +91,50 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       ? body.path.slice(0, 200)
       : '/client';
 
-  // 5. Delegate to unified Logger (automatically respects enable_error_logging & log_authenticated_users)
+  // Clean client breadcrumbs trail (up to 15 items)
+  const rawBreadcrumbs = Array.isArray(body?.breadcrumbs) ? body.breadcrumbs.slice(-15) : undefined;
+  const sanitizedBreadcrumbs = rawBreadcrumbs
+    ? rawBreadcrumbs.map((b: any) => ({
+        ts: typeof b?.ts === 'string' ? b.ts.slice(0, 32) : undefined,
+        trigger: typeof b?.trigger === 'string' ? b.trigger.slice(0, 24) : undefined,
+        from: typeof b?.from === 'string' ? b.from.slice(0, 160) : null,
+        to: typeof b?.to === 'string' ? b.to.slice(0, 160) : '',
+      }))
+    : undefined;
+
+  const isNavigationEvent = body?.type === 'navigation' || body?.level === 'info';
+
+  // Branch A: Client Navigation Event -> logged as info level
+  if (isNavigationEvent) {
+    logger.info(
+      {
+        module: 'client/navigation',
+        event: 'CLIENT_NAVIGATION',
+        message,
+        path: pagePath,
+        method: 'CLIENT',
+        statusCode: 200,
+        rayId,
+        userId: sessionUser?.id,
+        userEmail: sessionUser?.email,
+        clientIp: clientMeta.ip,
+        country: clientMeta.country,
+        city: clientMeta.city,
+        context: {
+          trigger: typeof body?.trigger === 'string' ? body.trigger.slice(0, 24) : 'pageload',
+          from: typeof body?.from === 'string' ? body.from.slice(0, 200) : null,
+          to: typeof body?.to === 'string' ? body.to.slice(0, 200) : pagePath,
+          viewport: typeof body?.viewport === 'string' ? body.viewport.slice(0, 32) : undefined,
+          userAgent: clientMeta.userAgent?.slice(0, 300),
+        },
+      },
+      { cfEnv }
+    );
+
+    return jsonNoCache({ ok: true, rayId, level: 'info' }, 202);
+  }
+
+  // Branch B: Client Error Event -> logged as error level with attached breadcrumbs
   logger.error(
     {
       module: 'client/browser',
@@ -114,6 +157,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         viewport: typeof body?.viewport === 'string' ? body.viewport.slice(0, 32) : undefined,
         userAgent: clientMeta.userAgent?.slice(0, 300),
         href: typeof body?.href === 'string' ? body.href.slice(0, 300) : undefined,
+        breadcrumbs: sanitizedBreadcrumbs,
       },
     },
     { cfEnv }

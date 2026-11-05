@@ -65,6 +65,7 @@ const resolvedImage = imageSrc
 
 const systemSettings = await getSystemSettings(cfEnv).catch(() => null);
 const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_errors) : true;
+const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'warn') : 'warn';
 ---
 
 <!doctype html>
@@ -204,10 +205,16 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
           </div>
         </div>
 
-        <script is:inline define:vars={{ enableClientLogs }}>
+        <script is:inline define:vars={{ enableClientLogs, clientLogMinLevel }}>
           (function () {
             var isTelemetryEnabled = typeof enableClientLogs === 'boolean' ? enableClientLogs : true;
-            var hasActiveError = false;
+            var minLevel = typeof clientLogMinLevel === 'string' ? clientLogMinLevel : 'warn';
+            var shouldStreamInfoNav = isTelemetryEnabled && (minLevel === 'info' || minLevel === 'debug');
+
+            var STORAGE_KEY = '__gv_nav_breadcrumbs__';
+            var MAX_BREADCRUMBS = 15;
+            var navReportCount = 0;
+            var MAX_NAV_REPORTS_PER_PAGE = 10;
             var reportCount = 0;
             var MAX_REPORTS = 5;
             var reportedSignatures = {};
@@ -236,6 +243,79 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
               });
             }
 
+            // Read breadcrumbs from sessionStorage
+            function getBreadcrumbs() {
+              try {
+                var raw = sessionStorage.getItem(STORAGE_KEY);
+                var list = raw ? JSON.parse(raw) : [];
+                return Array.isArray(list) ? list : [];
+              } catch (e) {
+                return [];
+              }
+            }
+
+            // Low-level Beacon / Fetch dispatcher
+            function dispatchBeacon(payload) {
+              if (!isTelemetryEnabled) return;
+              if (location.pathname.indexOf('/admin/logs') === 0) return;
+              try {
+                var json = JSON.stringify(payload);
+                if (navigator.sendBeacon) {
+                  var blob = new Blob([json], { type: 'application/json' });
+                  navigator.sendBeacon('/api/client-error', blob);
+                } else if (window.fetch) {
+                  fetch('/api/client-error', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: json,
+                    keepalive: true,
+                  }).catch(function () {});
+                }
+              } catch (e) {}
+            }
+
+            // Record navigation into circular buffer & conditionally stream info log
+            function recordNavigation(trigger, fromPath, toPath) {
+              if (!toPath || toPath.indexOf('/admin/logs') === 0) return;
+
+              var crumbs = getBreadcrumbs();
+              var last = crumbs.length > 0 ? crumbs[crumbs.length - 1] : null;
+
+              if (last && last.to === toPath && last.trigger === trigger) return;
+
+              var entry = {
+                ts: new Date().toISOString(),
+                trigger: trigger,
+                from: fromPath || (last ? last.to : (document.referrer ? new URL(document.referrer, location.origin).pathname : null)),
+                to: toPath,
+              };
+
+              crumbs.push(entry);
+              if (crumbs.length > MAX_BREADCRUMBS) {
+                crumbs = crumbs.slice(crumbs.length - MAX_BREADCRUMBS);
+              }
+
+              try {
+                sessionStorage.setItem(STORAGE_KEY, JSON.stringify(crumbs));
+              } catch (e) {}
+
+              // Track B: If log_min_level allows info/debug, stream live info log
+              if (shouldStreamInfoNav && navReportCount < MAX_NAV_REPORTS_PER_PAGE) {
+                navReportCount++;
+                dispatchBeacon({
+                  type: 'navigation',
+                  level: 'info',
+                  message: 'Navigation [' + trigger + ']: ' + (entry.from || 'direct') + ' -> ' + entry.to,
+                  path: location.pathname,
+                  href: location.href,
+                  trigger: trigger,
+                  from: entry.from,
+                  to: entry.to,
+                  viewport: window.innerWidth + 'x' + window.innerHeight,
+                });
+              }
+            }
+
             function shouldIgnore(msgStr, srcStr) {
               if (!msgStr) return true;
               if (
@@ -261,11 +341,8 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
             }
 
             function sendErrorToBackend(payload) {
-              // 1. Governance check: when client logging is disabled in settings, do not send
               if (!isTelemetryEnabled) return;
-              // 2. Loop protection: avoid recursion when viewing admin logs
               if (location.pathname.indexOf('/admin/logs') === 0) return;
-              // 3. Per-page rate limit: max 5 reports
               if (reportCount >= MAX_REPORTS) return;
 
               var sig = [payload.type, payload.message, payload.source || '', payload.lineno || 0].join(':');
@@ -273,20 +350,9 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
               reportedSignatures[sig] = true;
               reportCount++;
 
-              try {
-                var json = JSON.stringify(payload);
-                if (navigator.sendBeacon) {
-                  var blob = new Blob([json], { type: 'application/json' });
-                  navigator.sendBeacon('/api/client-error', blob);
-                } else if (window.fetch) {
-                  fetch('/api/client-error', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: json,
-                    keepalive: true,
-                  }).catch(function () {});
-                }
-              } catch (e) {}
+              // Track A: Always attach recent breadcrumbs
+              payload.breadcrumbs = getBreadcrumbs();
+              dispatchBeacon(payload);
             }
 
             function handleRuntimeError(type, message, source, lineno, colno, errorObj) {
@@ -296,7 +362,6 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
 
               var stackStr = errorObj && errorObj.stack ? String(errorObj.stack) : '';
 
-              // 1. Report asynchronously to backend Logger -> D1
               sendErrorToBackend({
                 type: type,
                 message: msgStr.slice(0, 500),
@@ -309,7 +374,6 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
                 viewport: window.innerWidth + 'x' + window.innerHeight,
               });
 
-              // 2. Show non-intrusive fallback banner once
               if (hasActiveError) return;
               hasActiveError = true;
               console.warn('[ClientBoundary] Caught runtime exception:', msgStr, srcStr);
@@ -317,7 +381,55 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
               if (box) box.classList.remove('hidden');
             }
 
-            // 1. Global window.onerror handler
+            // 1. Wrap History API (pushState & replaceState)
+            function patchHistoryMethod(methodName) {
+              var original = history[methodName];
+              if (typeof original !== 'function') return;
+              history[methodName] = function () {
+                var prevPath = location.pathname + location.search + location.hash;
+                var result = original.apply(this, arguments);
+                var nextPath = location.pathname + location.search + location.hash;
+                if (prevPath !== nextPath) {
+                  recordNavigation(methodName, prevPath, nextPath);
+                }
+                return result;
+              };
+            }
+
+            patchHistoryMethod('pushState');
+            patchHistoryMethod('replaceState');
+
+            // 2. Listen to popstate & hashchange
+            var currentTrackedPath = location.pathname + location.search + location.hash;
+            window.addEventListener('popstate', function () {
+              var nextPath = location.pathname + location.search + location.hash;
+              recordNavigation('popstate', currentTrackedPath, nextPath);
+              currentTrackedPath = nextPath;
+            });
+
+            window.addEventListener('hashchange', function () {
+              var nextPath = location.pathname + location.search + location.hash;
+              recordNavigation('hashchange', currentTrackedPath, nextPath);
+              currentTrackedPath = nextPath;
+            });
+
+            // 3. Astro View Transitions & Initial MPA Pageload
+            document.addEventListener('astro:page-load', function () {
+              var nextPath = location.pathname + location.search + location.hash;
+              recordNavigation('astro:page-load', currentTrackedPath, nextPath);
+              currentTrackedPath = nextPath;
+            });
+
+            var initialFrom = '';
+            try {
+              if (document.referrer && document.referrer.indexOf(location.origin) === 0) {
+                var refUrl = new URL(document.referrer);
+                initialFrom = refUrl.pathname + refUrl.search + refUrl.hash;
+              }
+            } catch (e) {}
+            recordNavigation('pageload', initialFrom, currentTrackedPath);
+
+            // 4. Global window.onerror
             var prevOnError = window.onerror;
             window.onerror = function (message, source, lineno, colno, error) {
               handleRuntimeError('onerror', message, source, lineno, colno, error);
@@ -327,7 +439,7 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
               return false;
             };
 
-            // 2. Global unhandledrejection handler
+            // 5. Global unhandledrejection
             window.addEventListener('unhandledrejection', function (event) {
               var reason = event.reason;
               var msg = reason && (reason.message || String(reason));
@@ -335,7 +447,7 @@ const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_erro
               handleRuntimeError('unhandledrejection', msg, location.pathname, undefined, undefined, errObj);
             });
 
-            // 3. Expose imperative helper for caught client exceptions
+            // 6. Imperative helper
             window.__reportClientError = function (error, customSource) {
               var msg = error && (error.message || String(error));
               handleRuntimeError('manual', msg, customSource || location.pathname, undefined, undefined, error);
