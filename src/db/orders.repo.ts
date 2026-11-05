@@ -74,14 +74,17 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
     const safePhone = input.whatsapp?.trim() || '';
     if (safeCompany || safeCountry || safePhone) {
       try {
+        const targetId = input.userId ? input.userId.trim() : '';
+        const whereClause = targetId ? `id = ?` : `LOWER(email) = ?`;
+        const param = targetId || normalizedEmail;
         await db.execute(
           `UPDATE users
            SET company = CASE WHEN (company IS NULL OR company = '') AND ? != '' THEN ? ELSE company END,
                country = CASE WHEN (country IS NULL OR country = '') AND ? != '' THEN ? ELSE country END,
                phone   = CASE WHEN (phone IS NULL OR phone = '') AND ? != '' THEN ? ELSE phone END,
                updated_at = datetime('now')
-           WHERE (id = ? OR LOWER(email) = LOWER(?))`,
-          [safeCompany, safeCompany, safeCountry, safeCountry, safePhone, safePhone, input.userId || '', normalizedEmail]
+           WHERE ${whereClause}`,
+          [safeCompany, safeCompany, safeCountry, safeCountry, safePhone, safePhone, param]
         );
       } catch {
         // Non-blocking

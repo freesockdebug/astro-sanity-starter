@@ -24,19 +24,19 @@ export async function getUserByIdOrEmail(userId?: string | null, email?: string 
 
   try {
     return await executeWithAutoSchema(async (db: DbClient) => {
-      if (userId && normalizedEmail) {
-        return await db.first<UserRecord>(
-          `SELECT * FROM users WHERE id = ? OR LOWER(email) = LOWER(?) LIMIT 1`,
-          [userId, normalizedEmail]
-        );
-      } else if (userId) {
-        return await db.first<UserRecord>(
+      // 1. Fast path: Direct Primary Key lookup (1~3ms index seek)
+      if (userId) {
+        const userById = await db.first<UserRecord>(
           `SELECT * FROM users WHERE id = ? LIMIT 1`,
           [userId]
         );
-      } else if (normalizedEmail) {
+        if (userById) return userById;
+      }
+
+      // 2. Secondary fallback by email if ID not matched or not provided
+      if (normalizedEmail) {
         return await db.first<UserRecord>(
-          `SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`,
+          `SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1`,
           [normalizedEmail]
         );
       }
