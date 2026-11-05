@@ -2,6 +2,7 @@
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, getRuntimeEnv, getMergedAdminEmails, jsonNoCache } from '@utils/auth';
 import {
+  getUserById,
   getUserDetailsWithOrders,
   updateUserAdminMeta,
   getSystemSettings,
@@ -59,25 +60,28 @@ export const POST: APIRoute = async ({ request, params }) => {
     return jsonNoCache({ error: 'At least one field (tier, status, adminNotes) is required.' }, 400);
   }
 
-  // Self-lockout & Admin protection: Cannot block own account or admin whitelist
-  if (status === 'BLOCKED') {
-    if (userId === user.id) {
-      return jsonNoCache({ error: 'You cannot block your own admin account.' }, 400);
-    }
-    const [targetData, settings] = await Promise.all([
-      getUserDetailsWithOrders(userId),
-      getSystemSettings(cfEnv),
-    ]);
-    const targetEmail = targetData.user?.email?.toLowerCase().trim();
-    if (targetEmail) {
-      if (user.email && targetEmail === user.email.toLowerCase().trim()) {
-        return jsonNoCache({ error: 'You cannot block your own admin account.' }, 400);
-      }
-      const rootWhitelist = getMergedAdminEmails(settings?.co_admin_emails, cfEnv);
-      if (rootWhitelist.includes(targetEmail)) {
-        return jsonNoCache({ error: 'Super administrators and co-administrators cannot be blocked.' }, 403);
-      }
-    }
+  // Target user validation
+  const [existingUser, settings] = await Promise.all([
+    getUserById(userId),
+    getSystemSettings(cfEnv).catch(() => null),
+  ]);
+  if (!existingUser) {
+    return jsonNoCache({ error: 'User not found' }, 404);
+  }
+
+  // 1. Prevent any admin/co-admin from blocking their own active account
+  if (userId === user.id && status === 'BLOCKED') {
+    return jsonNoCache({ error: 'Operation denied: You cannot block your own admin account.' }, 400);
+  }
+
+  // 2. Prevent blocking root admins or configured co-admins
+  const adminEmails = getMergedAdminEmails(settings?.co_admin_emails, cfEnv);
+  const targetEmail = (existingUser.email || '').toLowerCase().trim();
+  if (adminEmails.includes(targetEmail) && status === 'BLOCKED') {
+    return jsonNoCache(
+      { error: 'Operation denied: Cannot block an active administrator account.' },
+      403
+    );
   }
 
   if (tier && !VALID_TIERS.has(tier)) {

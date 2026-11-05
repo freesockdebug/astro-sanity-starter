@@ -17,6 +17,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "paths": {
+      "cloudflare:workers": ["./src/shims/cloudflare-workers.ts"],
       "types": ["./types/index.ts"],
       "types/*": ["./types/*"],
       "@pages/*": ["./src/pages/*"],

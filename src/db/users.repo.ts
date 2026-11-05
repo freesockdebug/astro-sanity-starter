@@ -48,6 +48,8 @@ export async function getUserByIdOrEmail(userId?: string | null, email?: string 
   }
 }
 
+export const getUserById = (userId: string) => getUserByIdOrEmail(userId, null);
+
 /**
  * Upserts a user on login, syncing Logto sub, email, name, and roles.
  * Also backfills company, country, and phone from previous orders if empty.

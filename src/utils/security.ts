@@ -74,13 +74,19 @@ export class SecurityService {
       }
 
       // Block IPv6 loopback, link-local (fe80::/10), unique-local (fc00::/7), and IPv4-mapped IPv6
+      const rawIpv6 = hostname.startsWith('[') && hostname.endsWith(']')
+        ? hostname.slice(1, -1).toLowerCase()
+        : hostname.toLowerCase();
+
       if (
-        hostname === '::1' ||
-        hostname === '::' ||
-        /^fe[89ab][0-9a-f]:/i.test(hostname) ||
-        hostname.startsWith('fe80:') ||
-        /^f[cd][0-9a-f]{2}:/i.test(hostname) ||
-        hostname.startsWith('::ffff:')
+        rawIpv6 === '::1' ||
+        rawIpv6 === '::' ||
+        /^f[cd][0-9a-f]{2}:/i.test(rawIpv6) ||
+        /^fe[89ab][0-9a-f]:/i.test(rawIpv6) ||
+        rawIpv6.startsWith('::ffff:127.') ||
+        rawIpv6.startsWith('::ffff:10.') ||
+        rawIpv6.startsWith('::ffff:192.168.') ||
+        rawIpv6.startsWith('::ffff:169.254.')
       ) {
         return false;
       }
