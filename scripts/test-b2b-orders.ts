@@ -386,6 +386,37 @@ async function runSelfCheck() {
   assert(serverTiming.includes('d1;dur='));
   assert(serverTiming.includes('auth;dur=5'));
 
+  // Test logger.measure, appendTimingHeaders and withApiPerf
+  const { measure, appendTimingHeaders, withApiPerf } = await import('../src/utils/logger');
+  const measureResult = await logger.measure(
+    'd1.test.query',
+    async () => {
+      await new Promise((r) => setTimeout(r, 10));
+      return { count: 42 };
+    },
+    { module: 'test', path: '/api/measure-test' }
+  );
+  assert.strictEqual(measureResult.count, 42);
+
+  const rawResp = new Response(JSON.stringify({ ok: true }), { status: 200 });
+  const timedResp = appendTimingHeaders(rawResp, 45.5, { d1: 12.3 });
+  assert.strictEqual(timedResp.headers.get('X-Response-Time'), '45.5ms');
+  assert(timedResp.headers.get('Server-Timing')?.includes('total;dur=45.5'));
+  assert(timedResp.headers.get('Server-Timing')?.includes('d1;dur=12.3'));
+
+  const decoratedRoute = withApiPerf('test/api', async () => {
+    return new Response(JSON.stringify({ success: true }), { status: 200 });
+  });
+  const mockApiContext: any = {
+    request: new Request('http://localhost/api/test-route', { method: 'GET' }),
+    url: new URL('http://localhost/api/test-route'),
+    locals: {},
+  };
+  const apiRouteResp = await (decoratedRoute as any)(mockApiContext);
+  assert.strictEqual(apiRouteResp.status, 200);
+  assert.ok(apiRouteResp.headers.has('X-Response-Time'));
+  assert.ok(apiRouteResp.headers.has('Server-Timing'));
+
   // Test dynamic log level governance & latency profiling
   await updateSystemSettings({ log_min_level: 'warn', slow_request_threshold_ms: 1000 }, 'admin@test.com');
   // Info log below threshold should be skipped

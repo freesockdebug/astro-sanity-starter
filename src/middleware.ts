@@ -40,7 +40,7 @@ function safeSetHeader(response: Response, name: string, value: string): Respons
  * Cloudflare Edge Cache Middleware for HTML Pages with Observability & Slow-Request Diagnostics
  */
 export const onRequest = defineMiddleware(async (context, next) => {
-  const startTime = Date.now();
+  const startTime = performance.now();
   const profiler = new RequestProfiler();
   (context.locals as any).profiler = profiler;
 
@@ -68,11 +68,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     try {
       let response = await handleRequest(context, next, pathname, url, request);
-      const latencyMs = Date.now() - startTime;
+      const latencyMs = Math.round((performance.now() - startTime) * 10) / 10;
 
-      // Inject Server-Timing header for browser DevTools waterfall profiling
+      // Inject Server-Timing & X-Response-Time header for browser DevTools waterfall profiling
       response = safeSetHeaders(response, {
         'X-Request-Id': rayId,
+        'X-Response-Time': `${latencyMs}ms`,
         'Server-Timing': profiler.toServerTimingHeader(latencyMs),
       });
 
@@ -155,7 +156,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
       return response;
     } catch (err: any) {
-      const latencyMs = Date.now() - startTime;
+      const latencyMs = Math.round((performance.now() - startTime) * 10) / 10;
       const sessionUser = await getSessionUser().catch(() => null);
       logger.error(
         {

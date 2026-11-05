@@ -10,16 +10,17 @@ export interface SpanBreakdown {
 export class RequestProfiler {
   private spans = new Map<string, number>();
   private activeSpans = new Map<string, number>();
-  public readonly startTotal: number = Date.now();
+  public readonly startTotal: number = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
   startSpan(name: string): void {
-    this.activeSpans.set(name, Date.now());
+    this.activeSpans.set(name, typeof performance !== 'undefined' ? performance.now() : Date.now());
   }
 
   endSpan(name: string): number {
     const start = this.activeSpans.get(name);
-    if (!start) return 0;
-    const dur = Math.max(0, Date.now() - start);
+    if (start === undefined) return 0;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const dur = Math.max(0, Math.round(now - start));
     this.addSpan(name, dur);
     this.activeSpans.delete(name);
     return dur;
@@ -48,9 +49,10 @@ export class RequestProfiler {
   }
 
   toServerTimingHeader(totalMs: number): string {
-    const parts = [`total;dur=${totalMs}`];
+    const rounded = Math.round(totalMs * 10) / 10;
+    const parts = [`total;dur=${rounded}`];
     for (const [name, dur] of this.spans.entries()) {
-      parts.push(`${name};dur=${dur}`);
+      parts.push(`${name};dur=${Math.round(dur * 10) / 10}`);
     }
     return parts.join(', ');
   }

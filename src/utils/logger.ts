@@ -2,7 +2,11 @@
 // Cloudflare Observability Native Structured JSON Logger with D1 Integration & Data Sanitization
 
 import { waitUntil as cfWaitUntil, env as cfWorkerEnv } from 'cloudflare:workers';
+import type { APIRoute, APIContext } from 'astro';
 import { recordErrorLog, type RecordErrorLogInput } from '../db/logs.repo';
+import { getActiveProfiler } from './profiler';
+
+export { LOG_LEVEL_WEIGHT } from '../db/logs.repo';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
 
@@ -156,6 +160,228 @@ function emit(level: LogLevel, context: LogContext, options: { cfEnv?: any; ctx?
   );
 }
 
+export interface MeasureOptions {
+  module: string;
+  event?: string;
+  path?: string;
+  rayId?: string;
+  userId?: string;
+  userEmail?: string;
+  /** Automatically upgrade to warn if latency exceeds this threshold (default: 500ms) */
+  warnThresholdMs?: number;
+  /** Associated request-level span timings dictionary */
+  spans?: Record<string, number>;
+  cfEnv?: any;
+  ctx?: any;
+}
+
+/**
+ * Measures execution time of an operation with performance.now() and logs results.
+ */
+export async function measure<T>(
+  label: string,
+  fn: () => Promise<T> | T,
+  options: MeasureOptions
+): Promise<T> {
+  const start = performance.now();
+  try {
+    const result = await fn();
+    const latencyMs = Math.round((performance.now() - start) * 100) / 100;
+
+    if (options.spans) {
+      options.spans[label] = latencyMs;
+    }
+    const profiler = getActiveProfiler();
+    if (profiler) {
+      profiler.addSpan(label, latencyMs);
+    }
+
+    const warnThreshold = options.warnThresholdMs ?? 500;
+    const level: LogLevel = latencyMs >= warnThreshold ? 'warn' : 'debug';
+
+    emit(
+      level,
+      {
+        module: options.module,
+        event: options.event || (level === 'warn' ? 'SLOW_OPERATION' : 'OPERATION_TIMING'),
+        message: `${label} completed in ${latencyMs}ms`,
+        latencyMs,
+        path: options.path,
+        rayId: options.rayId,
+        userId: options.userId,
+        userEmail: options.userEmail,
+        context: { operation: label, latencyMs },
+      },
+      { cfEnv: options.cfEnv, ctx: options.ctx }
+    );
+    return result;
+  } catch (err: any) {
+    const latencyMs = Math.round((performance.now() - start) * 100) / 100;
+    if (options.spans) {
+      options.spans[`${label}_err`] = latencyMs;
+    }
+    const profiler = getActiveProfiler();
+    if (profiler) {
+      profiler.addSpan(`${label}_err`, latencyMs);
+    }
+    emit(
+      'error',
+      {
+        module: options.module,
+        event: options.event || 'OPERATION_FAILED',
+        message: `${label} failed after ${latencyMs}ms: ${err?.message || 'Unknown error'}`,
+        latencyMs,
+        path: options.path,
+        rayId: options.rayId,
+        userId: options.userId,
+        userEmail: options.userEmail,
+        error: err,
+        context: { operation: label, latencyMs },
+      },
+      { cfEnv: options.cfEnv, ctx: options.ctx }
+    );
+    throw err;
+  }
+}
+
+/**
+ * Injects X-Response-Time and Server-Timing headers into the Response for DevTools waterfall profiling.
+ */
+export function appendTimingHeaders(
+  response: Response,
+  latencyMs: number,
+  spans?: Record<string, number>
+): Response {
+  const roundedLatency = Math.round(latencyMs * 100) / 100;
+  const timingParts = [`total;dur=${roundedLatency}`];
+  if (spans) {
+    for (const [name, dur] of Object.entries(spans)) {
+      timingParts.push(`${name};dur=${Math.round(dur * 100) / 100}`);
+    }
+  }
+
+  const headersToSet: Record<string, string> = {
+    'X-Response-Time': `${roundedLatency}ms`,
+    'Server-Timing': timingParts.join(', '),
+  };
+
+  try {
+    for (const [k, v] of Object.entries(headersToSet)) {
+      response.headers.set(k, v);
+    }
+    return response;
+  } catch {
+    const newHeaders = new Headers(response.headers);
+    for (const [k, v] of Object.entries(headersToSet)) {
+      newHeaders.set(k, v);
+    }
+    const body = [204, 205, 304].includes(response.status) ? null : response.body;
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
+  }
+}
+
+export interface ApiPerfOptions {
+  slowThresholdMs?: number;
+  cfEnv?: any;
+}
+
+/**
+ * Decorator for Astro API routes that measures latency and injects timing headers & diagnostics.
+ */
+export function withApiPerf(
+  moduleName: string,
+  handler: APIRoute,
+  options: ApiPerfOptions = {}
+): APIRoute {
+  return async (context: APIContext) => {
+    const start = performance.now();
+    const spans: Record<string, number> = {};
+    (context.locals as any).perfSpans = spans;
+
+    const rayId =
+      (context.locals as any)?.rayId ||
+      context.request.headers.get('cf-ray') ||
+      crypto.randomUUID();
+    const pathname = context.url.pathname;
+    const method = context.request.method;
+    const cfEnv = options.cfEnv || (context.locals as any)?.runtime?.env || (globalThis as any).__CF_ENV__;
+    const runtimeCtx = (context.locals as any)?.cfContext;
+
+    try {
+      const response = await handler(context);
+      const latencyMs = Math.round((performance.now() - start) * 100) / 100;
+      const slowThreshold = options.slowThresholdMs ?? 800;
+
+      // Avoid infinite self-logging when querying /api/admin/logs
+      if (!pathname.startsWith('/api/admin/logs')) {
+        const level: LogLevel =
+          response.status >= 500
+            ? 'error'
+            : latencyMs >= slowThreshold
+            ? 'warn'
+            : 'info';
+
+        const activeProfiler = getActiveProfiler();
+        const activeSpans = activeProfiler ? activeProfiler.getSpans() : {};
+        const combinedSpans = { ...activeSpans, ...spans };
+
+        emit(
+          level,
+          {
+            module: moduleName,
+            event:
+              level === 'warn'
+                ? 'SLOW_API_CALL'
+                : level === 'error'
+                ? 'API_ERROR_RESPONSE'
+                : 'API_CALL_COMPLETED',
+            message: `${method} ${pathname} -> ${response.status} (${latencyMs}ms)`,
+            path: pathname,
+            method,
+            statusCode: response.status,
+            rayId,
+            latencyMs,
+            context: {
+              method,
+              statusCode: response.status,
+              latencyMs,
+              spans: Object.keys(combinedSpans).length > 0 ? combinedSpans : undefined,
+            },
+          },
+          { cfEnv, ctx: runtimeCtx }
+        );
+      }
+
+      const activeProfiler = getActiveProfiler();
+      const activeSpans = activeProfiler ? activeProfiler.getSpans() : {};
+      const combinedSpans = { ...activeSpans, ...spans };
+      return appendTimingHeaders(response, latencyMs, combinedSpans);
+    } catch (err: any) {
+      const latencyMs = Math.round((performance.now() - start) * 100) / 100;
+      emit(
+        'error',
+        {
+          module: moduleName,
+          event: 'API_UNHANDLED_EXCEPTION',
+          message: `${method} ${pathname} crashed after ${latencyMs}ms: ${err?.message || 'Error'}`,
+          path: pathname,
+          method,
+          rayId,
+          latencyMs,
+          error: err,
+          context: { method, latencyMs, spans },
+        },
+        { cfEnv, ctx: runtimeCtx }
+      );
+      throw err;
+    }
+  };
+}
+
 export const logger = {
   debug(context: LogContext, options?: { cfEnv?: any; ctx?: any }) {
     emit('debug', context, options);
@@ -172,5 +398,6 @@ export const logger = {
   critical(context: LogContext, options?: { cfEnv?: any; ctx?: any }) {
     emit('critical', context, options);
   },
+  measure,
 };
 
