@@ -336,7 +336,7 @@ const pageTitle = 'System Diagnostics & Logs';
     const cancelClearBtn = document.getElementById('cancel-clear-btn');
     const confirmClearBtn = document.getElementById('confirm-clear-btn');
 
-    function syncUrl() {
+    function syncUrl(push = true) {
       const url = new URL(window.location.href);
       if (currentLevel && currentLevel !== 'ALL') url.searchParams.set('level', currentLevel);
       else url.searchParams.delete('level');
@@ -347,7 +347,13 @@ const pageTitle = 'System Diagnostics & Logs';
       if (currentPage > 1) url.searchParams.set('page', String(currentPage));
       else url.searchParams.delete('page');
 
-      window.history.replaceState({}, '', url.toString());
+      if (url.toString() !== window.location.href) {
+        if (push) {
+          window.history.pushState({ level: currentLevel, search: currentSearch, page: currentPage }, '', url.toString());
+        } else {
+          window.history.replaceState({ level: currentLevel, search: currentSearch, page: currentPage }, '', url.toString());
+        }
+      }
     }
 
     function updateTabsUi() {

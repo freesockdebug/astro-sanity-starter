@@ -51,12 +51,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const cookieHeader = request.headers.get('cookie') || '';
   const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
-  const sessionUser = sessionToken ? await verifySessionToken(sessionToken) : null;
+  let lazySessionUser: Promise<any> | null = null;
+  const getSessionUser = () => {
+    if (!sessionToken) return Promise.resolve(null);
+    if (!lazySessionUser) lazySessionUser = verifySessionToken(sessionToken, cfEnv);
+    return lazySessionUser;
+  };
 
   try {
     let response = await handleRequest(context, next, pathname, url, request);
     const latencyMs = Date.now() - startTime;
     if (latencyMs > 2000 && !pathname.startsWith('/_astro/')) {
+      const sessionUser = await getSessionUser();
       logger.warn(
         {
           module: 'middleware',
@@ -73,6 +79,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
 
     if (response.status >= 500 && !pathname.startsWith('/api/') && !response.headers.has('X-Logged-Error')) {
+      const sessionUser = await getSessionUser();
       logger.error(
         {
           module: 'ssr',
@@ -92,6 +99,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return response;
   } catch (err: any) {
     const latencyMs = Date.now() - startTime;
+    const sessionUser = await getSessionUser().catch(() => null);
     logger.error(
       {
         module: 'middleware',

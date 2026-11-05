@@ -28,7 +28,7 @@ if (rayId) {
 
 const cookieHeader = Astro.request.headers.get('cookie') || '';
 const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
-const sessionUser = sessionToken ? verifySessionToken(sessionToken) : null;
+const sessionUser = sessionToken ? await verifySessionToken(sessionToken, cfEnv) : null;
 
 logger.error(
   {
