@@ -227,17 +227,15 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                 <span class="text-[10px] text-[#52525b] font-mono">{item.leadTime || '15-20d'}</span>
               </div>
 
-              <!-- 3. Title: Relative em-metric 2-line clamp ensuring resilience to user font-scaling -->
-              <div class="shrink-0 min-h-[2.5em] mt-0.5 px-0.5">
+              <!-- 3. Merged Title & Composition Block -->
+              <div class="shrink-0 min-h-[3.6em] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
                 <a href={getLocalizedPath(`/products/${item.slug}`, currentLang)} class="block">
                   <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug" title={getLocalizedValue(item.title, currentLang)}>
                     {getLocalizedValue(item.shortTitle || item.title, currentLang)}
                   </h3>
                 </a>
+                <p class="text-[10px] text-[#52525b] line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
               </div>
-
-              <!-- 4. Composition subtitle -->
-              <p class="text-[10px] text-[#52525b] px-0.5 mt-0.5 line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
             </div>
 
             <!-- 5. Wholesale Price & Action Bottom Row -->
@@ -297,13 +295,12 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               <span class="card-lead text-[10px] text-[#52525b] font-mono">15-20d</span>
             </div>
 
-            <div class="shrink-0 min-h-[2.5em] mt-0.5 px-0.5">
+            <div class="shrink-0 min-h-[3.6em] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
               <a href="" class="card-link-title block">
                 <h3 class="card-title text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-snug"></h3>
               </a>
+              <p class="card-comp text-[10px] text-[#52525b] line-clamp-1 truncate"></p>
             </div>
-
-            <p class="card-comp text-[10px] text-[#52525b] px-0.5 mt-0.5 line-clamp-1 truncate"></p>
           </div>
 
           <div class="shrink-0 mt-2 pt-1.5 border-t border-black/5 flex items-center justify-between px-0.5">
