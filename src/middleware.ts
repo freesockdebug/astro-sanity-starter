@@ -2,7 +2,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { env as cfEnv } from 'cloudflare:workers';
 import { SiteConfigService } from '@data/siteConfig';
-import { SESSION_COOKIE_NAME, getCookieValue, getRuntimeEnv } from './utils/auth';
+import { SESSION_COOKIE_NAME, getCookieValue, getRuntimeEnv, verifySessionToken } from './utils/auth';
 import { SecurityService } from './utils/security';
 import { logger } from './utils/logger';
 
@@ -48,9 +48,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
     (globalThis as any).__CF_ENV__ = cfEnv;
   }
   const runtimeCtx = (context.locals as any)?.cfContext;
-  if (runtimeCtx && typeof globalThis !== 'undefined') {
-    (globalThis as any).__CF_CTX__ = runtimeCtx;
-  }
+
+  const cookieHeader = request.headers.get('cookie') || '';
+  const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
+  const sessionUser = sessionToken ? await verifySessionToken(sessionToken) : null;
 
   try {
     let response = await handleRequest(context, next, pathname, url, request);
@@ -64,10 +65,29 @@ export const onRequest = defineMiddleware(async (context, next) => {
           path: pathname,
           rayId,
           latencyMs,
+          userId: sessionUser?.id,
+          userEmail: sessionUser?.email,
         },
         { cfEnv, ctx: runtimeCtx }
       );
     }
+
+    if (response.status >= 500 && !pathname.startsWith('/api/') && !response.headers.has('X-Logged-Error')) {
+      logger.error(
+        {
+          module: 'ssr',
+          event: 'SSR_500_RESPONSE',
+          message: `Server returned ${response.status} status on ${pathname}`,
+          path: pathname,
+          rayId,
+          latencyMs,
+          userId: sessionUser?.id,
+          userEmail: sessionUser?.email,
+        },
+        { cfEnv, ctx: runtimeCtx }
+      );
+    }
+
     response = safeSetHeader(response, 'X-Request-Id', rayId);
     return response;
   } catch (err: any) {
@@ -81,6 +101,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         rayId,
         latencyMs,
         error: err,
+        userId: sessionUser?.id,
+        userEmail: sessionUser?.email,
       },
       { cfEnv, ctx: runtimeCtx }
     );

@@ -1,6 +1,7 @@
 // src/utils/logger.ts
 // Cloudflare Observability Native Structured JSON Logger with D1 Integration & Data Sanitization
 
+import { waitUntil as cfWaitUntil, env as cfWorkerEnv } from 'cloudflare:workers';
 import { recordErrorLog, type RecordErrorLogInput } from '../db/logs.repo';
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'critical';
@@ -65,16 +66,30 @@ function sanitizeData(data: any, depth = 0): any {
 }
 
 /**
- * Dispatches async persistence to D1 via ExecutionContext.waitUntil if available.
+ * Dispatches async persistence to D1 via Cloudflare Workers native waitUntil.
  */
 function persistToD1Async(input: RecordErrorLogInput, customEnv?: any, ctx?: any) {
-  const env = customEnv || (typeof globalThis !== 'undefined' ? (globalThis as any).__CF_ENV__ : undefined);
-  const executionCtx = ctx || (typeof globalThis !== 'undefined' ? (globalThis as any).__CF_CTX__ : undefined);
-
+  const env = customEnv || cfWorkerEnv || (typeof globalThis !== 'undefined' ? (globalThis as any).__CF_ENV__ : undefined);
   const writePromise = recordErrorLog(input, env).catch(() => false);
 
-  if (executionCtx && typeof executionCtx.waitUntil === 'function') {
-    executionCtx.waitUntil(writePromise);
+  // 1. Prioritize Cloudflare Workers native waitUntil (automatically bound to current request context)
+  if (typeof cfWaitUntil === 'function') {
+    try {
+      cfWaitUntil(writePromise);
+      return;
+    } catch {
+      // Fallback if called outside active request context
+    }
+  }
+
+  // 2. Fallback to passed ExecutionContext if present
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    try {
+      ctx.waitUntil(writePromise);
+      return;
+    } catch {
+      // Non-blocking
+    }
   }
 }
 
@@ -101,8 +116,9 @@ function emit(level: LogLevel, context: LogContext, options: { cfEnv?: any; ctx?
     ...sanitizeData(context),
   };
 
-  if (formattedError) payload.error = formattedError;
-  if (formattedStack && !payload.stack) payload.stack = formattedStack.slice(0, 1500);
+  // Preserve sanitized error object if already generated; fallback to formattedError
+  if (!payload.error && formattedError) payload.error = formattedError;
+  if (!payload.stack && formattedStack) payload.stack = formattedStack.slice(0, 1500);
 
   // Cloudflare Workers Observability natively parses JSON stdout
   const jsonStr = JSON.stringify(payload);

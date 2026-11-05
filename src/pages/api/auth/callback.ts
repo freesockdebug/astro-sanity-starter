@@ -176,7 +176,7 @@ export const GET: APIRoute = async ({ request, url, cookies }) => {
       country,
       city,
       userAgent,
-    });
+    }, cfEnv);
   } catch (logErr) {
     logger.warn({
       module: 'auth/callback',

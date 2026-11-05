@@ -4,19 +4,24 @@
 import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import type { LoginRecord } from './types';
+import { getSystemSettings } from './settings.repo';
 
 /**
  * Records a successful user login with IP, Geo location, and Device information.
  * Automatically retains logs for 90 days by purging records older than 90 days.
+ * Respects log_authenticated_users toggle in system_settings.
  */
-export async function recordUserLogin(input: {
-  userId: string;
-  email: string;
-  ip?: string;
-  country?: string;
-  city?: string;
-  userAgent?: string;
-}): Promise<boolean> {
+export async function recordUserLogin(
+  input: {
+    userId: string;
+    email: string;
+    ip?: string;
+    country?: string;
+    city?: string;
+    userAgent?: string;
+  },
+  customEnv?: any
+): Promise<boolean> {
   if (!input.userId || !input.email) return false;
 
   const safeIp = input.ip?.trim() || '';
@@ -26,6 +31,11 @@ export async function recordUserLogin(input: {
   const normalizedEmail = input.email.toLowerCase().trim();
 
   try {
+    const settings = await getSystemSettings(customEnv).catch(() => null);
+    if (settings && !settings.log_authenticated_users) {
+      return false;
+    }
+
     return await executeWithAutoSchema(async (db: DbClient) => {
       await db.execute(
         `INSERT INTO user_logins (user_id, email, ip, country, city, user_agent, created_at)

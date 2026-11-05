@@ -2,6 +2,10 @@
 // src/pages/500.astro
 import Layout from '@layouts/Layout.astro';
 import { getLangFromUrl, getLocalizedPath } from '@i18n';
+import { logger } from '@utils/logger';
+import { SESSION_COOKIE_NAME, getCookieValue, verifySessionToken } from '@utils/auth';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 Astro.response.status = 500;
@@ -14,12 +18,32 @@ const { error } = Astro.props;
 const currentLang = getLangFromUrl(Astro.url);
 const homeUrl = getLocalizedPath('/', currentLang);
 const errMessage = error instanceof Error ? error.message : 'Unexpected server runtime error';
-const rayId = (Astro.locals as any)?.rayId || Astro.request.headers.get('cf-ray') || '';
+const rayId = (Astro.locals as any)?.rayId || Astro.request.headers.get('cf-ray') || crypto.randomUUID();
 if (rayId) {
   try {
     Astro.response.headers.set('X-Request-Id', rayId);
+    Astro.response.headers.set('X-Logged-Error', '1');
   } catch {}
 }
+
+const cookieHeader = Astro.request.headers.get('cookie') || '';
+const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
+const sessionUser = sessionToken ? verifySessionToken(sessionToken) : null;
+
+logger.error(
+  {
+    module: 'ssr',
+    event: 'PAGE_RENDER_CRASH',
+    message: errMessage,
+    error,
+    path: Astro.url.pathname,
+    rayId,
+    userId: sessionUser?.id,
+    userEmail: sessionUser?.email,
+  },
+  { cfEnv }
+);
+
 console.error('[SSR:500] Unhandled page render exception:', errMessage, error);
 
 const COPY: Record<string, {

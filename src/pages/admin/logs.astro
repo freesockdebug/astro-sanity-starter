@@ -18,6 +18,7 @@ if (redirectResponse) return redirectResponse;
 
 const initialLevel = Astro.url.searchParams.get('level') || 'ALL';
 const initialSearch = (Astro.url.searchParams.get('search') || '').trim();
+const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
 const pageTitle = 'System Diagnostics & Logs';
 ---
@@ -162,6 +163,30 @@ const pageTitle = 'System Diagnostics & Logs';
     <!-- Populated by JavaScript -->
   </div>
 
+  <!-- Pagination Container -->
+  <div id="pagination-container" class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b] hidden">
+    <div id="pagination-summary"></div>
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        id="pagination-prev"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+      >
+        ← Previous
+      </button>
+      <span id="pagination-current" class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">
+        1 / 1
+      </span>
+      <button
+        type="button"
+        id="pagination-next"
+        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+      >
+        Next →
+      </button>
+    </div>
+  </div>
+
   <!-- Empty State -->
   <div id="logs-empty" class="hidden rounded-2xl bg-white border border-black/5 p-12 text-center shadow-2xs">
     <div class="w-12 h-12 rounded-2xl bg-[#f5f5f7] flex items-center justify-center mx-auto mb-3 text-emerald-600">
@@ -230,30 +255,71 @@ const pageTitle = 'System Diagnostics & Logs';
       </div>
     </div>
   </dialog>
+
+  <!-- Clear Confirmation Dialog -->
+  <dialog id="clear-confirm-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-6 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+    <div class="space-y-4 text-center">
+      <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-[#1d1d1f]">Clear Diagnostic Logs?</h3>
+        <p class="text-xs text-[#86868b] mt-1">This will permanently delete all logged errors and warnings from D1. This action cannot be undone.</p>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button
+          type="button"
+          id="cancel-clear-btn"
+          class="flex-1 py-2 rounded-xl text-xs font-medium bg-[#f5f5f7] hover:bg-black/5 text-[#1d1d1f] transition-all cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          id="confirm-clear-btn"
+          class="flex-1 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer shadow-xs"
+        >
+          Delete All
+        </button>
+      </div>
+    </div>
+  </dialog>
 </AdminLayout>
 
 <script>
   import { clientCache } from '@utils/clientCache';
 
   (function () {
-    let logsList = [];
-    let currentLevel = 'ALL';
-    let currentSearch = '';
+    let logsList: any[] = [];
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentLevel = urlParams.get('level') || 'ALL';
+    let currentSearch = (urlParams.get('search') || '').trim();
+    let currentPage = Math.max(1, parseInt(urlParams.get('page') || '1', 10));
+    let currentTotalPages = 1;
+    const limit = 50;
 
     const skeletonEl = document.getElementById('logs-skeleton');
     const contentEl = document.getElementById('logs-content');
     const emptyEl = document.getElementById('logs-empty');
-    const searchInput = document.getElementById('logs-search-input');
+    const searchInput = document.getElementById('logs-search-input') as HTMLInputElement | null;
     const clearSearchBtn = document.getElementById('clear-search-btn');
     const refreshBtn = document.getElementById('refresh-logs-btn');
     const clearLogsBtn = document.getElementById('clear-logs-btn');
+
+    const paginationContainer = document.getElementById('pagination-container');
+    const paginationSummary = document.getElementById('pagination-summary');
+    const paginationPrev = document.getElementById('pagination-prev') as HTMLButtonElement | null;
+    const paginationNext = document.getElementById('pagination-next') as HTMLButtonElement | null;
+    const paginationCurrent = document.getElementById('pagination-current');
 
     const metricTotal = document.getElementById('metric-total');
     const metricErrors = document.getElementById('metric-errors');
     const metricWarns = document.getElementById('metric-warns');
     const metricCritical = document.getElementById('metric-critical');
 
-    const detailModal = document.getElementById('log-detail-modal');
+    const detailModal = document.getElementById('log-detail-modal') as HTMLDialogElement | null;
     const modalLevelBadge = document.getElementById('modal-level-badge');
     const modalSource = document.getElementById('modal-source');
     const modalMessage = document.getElementById('modal-message');
@@ -266,7 +332,36 @@ const pageTitle = 'System Diagnostics & Logs';
     const closeModalBtn = document.getElementById('close-modal-btn');
     const closeModalBottomBtn = document.getElementById('close-modal-bottom-btn');
 
-    function escapeHtml(str) {
+    const clearConfirmModal = document.getElementById('clear-confirm-modal') as HTMLDialogElement | null;
+    const cancelClearBtn = document.getElementById('cancel-clear-btn');
+    const confirmClearBtn = document.getElementById('confirm-clear-btn');
+
+    function syncUrl() {
+      const url = new URL(window.location.href);
+      if (currentLevel && currentLevel !== 'ALL') url.searchParams.set('level', currentLevel);
+      else url.searchParams.delete('level');
+
+      if (currentSearch) url.searchParams.set('search', currentSearch);
+      else url.searchParams.delete('search');
+
+      if (currentPage > 1) url.searchParams.set('page', String(currentPage));
+      else url.searchParams.delete('page');
+
+      window.history.replaceState({}, '', url.toString());
+    }
+
+    function updateTabsUi() {
+      document.querySelectorAll('.level-tab-btn').forEach((b) => {
+        const isActive = b.getAttribute('data-level') === currentLevel;
+        if (isActive) {
+          b.className = 'level-tab-btn px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer bg-[#1d1d1f] text-white border-black shadow-xs';
+        } else {
+          b.className = 'level-tab-btn px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border cursor-pointer bg-white text-[#52525b] border-black/5 hover:border-black/20 hover:text-black';
+        }
+      });
+    }
+
+    function escapeHtml(str: any) {
       if (str === null || str === undefined) return '';
       return String(str)
         .replace(/&/g, '&amp;')
@@ -276,9 +371,15 @@ const pageTitle = 'System Diagnostics & Logs';
         .replace(/'/g, '&#039;');
     }
 
-    function formatTime(dt) {
+    function formatTime(dt: any) {
       if (!dt) return '—';
-      const d = new Date(dt);
+      let str = String(dt);
+      // SQLite datetime('now') produces "YYYY-MM-DD HH:MM:SS" without timezone.
+      // Append 'Z' to treat as UTC in browser Date parser, avoiding timezone offset bugs.
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) {
+        str = str.replace(' ', 'T') + 'Z';
+      }
+      const d = new Date(str);
       if (isNaN(d.getTime())) return String(dt);
       return d.toLocaleString(undefined, {
         month: 'short',
@@ -289,7 +390,7 @@ const pageTitle = 'System Diagnostics & Logs';
       });
     }
 
-    function renderLevelBadge(lvl) {
+    function renderLevelBadge(lvl: string) {
       const level = (lvl || 'error').toUpperCase();
       if (level === 'CRITICAL') {
         return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">CRITICAL</span>';
@@ -303,11 +404,38 @@ const pageTitle = 'System Diagnostics & Logs';
       return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">INFO</span>';
     }
 
-    function renderRows(logs) {
+    function renderPagination(page: number, totalPages: number, total: number) {
+      if (!paginationContainer || totalPages <= 1) {
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        return;
+      }
+
+      paginationContainer.classList.remove('hidden');
+      currentTotalPages = totalPages;
+
+      const start = (page - 1) * limit + 1;
+      const end = Math.min(page * limit, total);
+      if (paginationSummary) {
+        paginationSummary.innerHTML = `Showing <strong class="text-[#1d1d1f] font-mono">${start}–${end}</strong> of <strong class="text-[#1d1d1f] font-mono">${total}</strong> logs`;
+      }
+
+      if (paginationPrev) {
+        paginationPrev.disabled = page <= 1;
+      }
+      if (paginationNext) {
+        paginationNext.disabled = page >= totalPages;
+      }
+      if (paginationCurrent) {
+        paginationCurrent.textContent = `${page} / ${totalPages}`;
+      }
+    }
+
+    function renderRows(logs: any[]) {
       if (!contentEl) return;
 
       if (!logs || logs.length === 0) {
         contentEl.classList.add('hidden');
+        if (paginationContainer) paginationContainer.classList.add('hidden');
         if (emptyEl) emptyEl.classList.remove('hidden');
         return;
       }
@@ -417,7 +545,7 @@ const pageTitle = 'System Diagnostics & Logs';
       });
     }
 
-    function openDetailModal(log) {
+    function openDetailModal(log: any) {
       if (!detailModal) return;
 
       if (modalLevelBadge) modalLevelBadge.innerHTML = renderLevelBadge(log.level);
@@ -444,13 +572,15 @@ const pageTitle = 'System Diagnostics & Logs';
     if (closeModalBtn) closeModalBtn.addEventListener('click', () => detailModal && detailModal.close());
     if (closeModalBottomBtn) closeModalBottomBtn.addEventListener('click', () => detailModal && detailModal.close());
 
-    async function loadLogs() {
-      const cacheKey = `admin:logs:${currentLevel}:${currentSearch}`;
+    async function loadLogs(updateUrl = true) {
+      if (updateUrl) syncUrl();
+      const cacheKey = `admin:logs:${currentLevel}:${currentSearch}:${currentPage}`;
       try {
         const query = new URLSearchParams();
         if (currentLevel && currentLevel !== 'ALL') query.set('level', currentLevel);
         if (currentSearch) query.set('search', currentSearch);
-        query.set('limit', '50');
+        query.set('limit', String(limit));
+        query.set('page', String(currentPage));
 
         await clientCache.fetchWithCache(
           cacheKey,
@@ -467,6 +597,7 @@ const pageTitle = 'System Diagnostics & Logs';
 
               if (skeletonEl) skeletonEl.classList.add('hidden');
               renderRows(logsList);
+              renderPagination(data.page || currentPage, data.totalPages || 1, data.total ?? logsList.length);
             },
           }
         );
@@ -477,31 +608,43 @@ const pageTitle = 'System Diagnostics & Logs';
       }
     }
 
+    // Pagination events
+    if (paginationPrev) {
+      paginationPrev.addEventListener('click', () => {
+        if (currentPage > 1) {
+          currentPage--;
+          loadLogs();
+        }
+      });
+    }
+
+    if (paginationNext) {
+      paginationNext.addEventListener('click', () => {
+        if (currentPage < currentTotalPages) {
+          currentPage++;
+          loadLogs();
+        }
+      });
+    }
+
     // Level tabs
     document.querySelectorAll('.level-tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const lvl = btn.getAttribute('data-level');
         if (!lvl || lvl === currentLevel) return;
         currentLevel = lvl;
-
-        document.querySelectorAll('.level-tab-btn').forEach((b) => {
-          const isActive = b.getAttribute('data-level') === currentLevel;
-          if (isActive) {
-            b.className = 'level-tab-btn px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer bg-[#1d1d1f] text-white border-black shadow-xs';
-          } else {
-            b.className = 'level-tab-btn px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border cursor-pointer bg-white text-[#52525b] border-black/5 hover:border-black/20 hover:text-black';
-          }
-        });
-
+        currentPage = 1;
+        updateTabsUi();
         loadLogs();
       });
     });
 
     // Search input
-    let searchTimer = null;
+    let searchTimer: any = null;
     if (searchInput) {
       searchInput.addEventListener('input', () => {
         currentSearch = searchInput.value.trim();
+        currentPage = 1;
         if (clearSearchBtn) {
           if (currentSearch) clearSearchBtn.classList.remove('hidden');
           else clearSearchBtn.classList.add('hidden');
@@ -517,6 +660,7 @@ const pageTitle = 'System Diagnostics & Logs';
       clearSearchBtn.addEventListener('click', () => {
         if (searchInput) searchInput.value = '';
         currentSearch = '';
+        currentPage = 1;
         clearSearchBtn.classList.add('hidden');
         loadLogs();
       });
@@ -528,26 +672,63 @@ const pageTitle = 'System Diagnostics & Logs';
       });
     }
 
-    if (clearLogsBtn) {
-      clearLogsBtn.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to permanently clear all diagnostic logs?')) return;
+    // Clear logs modal logic
+    if (clearLogsBtn && clearConfirmModal) {
+      clearLogsBtn.addEventListener('click', () => {
+        clearConfirmModal.showModal();
+      });
+    }
+
+    if (cancelClearBtn && clearConfirmModal) {
+      cancelClearBtn.addEventListener('click', () => {
+        clearConfirmModal.close();
+      });
+    }
+
+    if (confirmClearBtn && clearConfirmModal) {
+      confirmClearBtn.addEventListener('click', async () => {
+        confirmClearBtn.textContent = 'Clearing...';
+        confirmClearBtn.setAttribute('disabled', 'true');
         try {
           const res = await fetch('/api/admin/logs', { method: 'DELETE' });
           const data = await res.json();
           if (data.success) {
             await clientCache.invalidatePrefix('admin:logs:');
+            clearConfirmModal.close();
+            currentPage = 1;
             loadLogs();
           } else {
-            alert(data.error || 'Failed to clear logs');
+            console.error('Failed to clear logs:', data.error);
           }
         } catch (e) {
-          alert('Network failure');
+          console.error('Network failure clearing logs:', e);
+        } finally {
+          confirmClearBtn.textContent = 'Delete All';
+          confirmClearBtn.removeAttribute('disabled');
+          clearConfirmModal.close();
         }
       });
     }
 
+    // Popstate handling
+    window.addEventListener('popstate', () => {
+      const url = new URL(window.location.href);
+      currentLevel = url.searchParams.get('level') || 'ALL';
+      currentSearch = (url.searchParams.get('search') || '').trim();
+      currentPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+
+      if (searchInput) searchInput.value = currentSearch;
+      if (clearSearchBtn) {
+        if (currentSearch) clearSearchBtn.classList.remove('hidden');
+        else clearSearchBtn.classList.add('hidden');
+      }
+      updateTabsUi();
+      loadLogs(false);
+    });
+
     // Initial load
-    loadLogs();
+    updateTabsUi();
+    loadLogs(false);
   })();
 </script>
 

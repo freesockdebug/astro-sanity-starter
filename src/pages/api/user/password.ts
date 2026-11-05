@@ -48,7 +48,7 @@ export const POST: APIRoute = async ({ request }) => {
       country: country || 'Security Action',
       city,
       userAgent: 'Password Changed (Self-Service Modal)',
-    });
+    }, cfEnv);
   } catch (auditErr) {
     console.warn('[User Password] Failed to record audit log:', auditErr);
   }
