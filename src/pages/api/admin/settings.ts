@@ -171,6 +171,34 @@ export const POST: APIRoute = async ({ request }) => {
       updates.log_retention_days = days;
     }
 
+    // Validate Minimum Log Level
+    if (rawUpdates.log_min_level !== undefined) {
+      const lvl = String(rawUpdates.log_min_level).trim().toLowerCase();
+      if (!['debug', 'info', 'warn', 'error', 'critical'].includes(lvl)) {
+        return jsonNoCache(
+          {
+            error: 'Log Minimum Level must be one of: debug, info, warn, error, critical.',
+          },
+          400
+        );
+      }
+      updates.log_min_level = lvl;
+    }
+
+    // Validate Slow Request Threshold
+    if (rawUpdates.slow_request_threshold_ms !== undefined) {
+      const ms = parseInt(rawUpdates.slow_request_threshold_ms, 10);
+      if (isNaN(ms) || ms < 50 || ms > 30000) {
+        return jsonNoCache(
+          {
+            error: 'Slow Request Threshold must be between 50ms and 30000ms.',
+          },
+          400
+        );
+      }
+      updates.slow_request_threshold_ms = ms;
+    }
+
     // Pass through string and boolean fields safely
     const stringKeys = [
       'brand_name',

@@ -553,6 +553,50 @@ const pageTitle = 'Workspace Settings';
           </div>
           <p class="text-[11px] text-[#86868b] mt-1">Automatic rolling prune threshold (1 to 365 days).</p>
         </div>
+
+        <!-- Minimum Log Persistence Level -->
+        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col justify-between">
+          <div>
+            <label for="log_min_level" class="block text-xs font-bold text-[#1d1d1f] mb-1">
+              Minimum Log Level to D1
+            </label>
+            <select
+              id="log_min_level"
+              name="log_min_level"
+              class="w-full px-3 py-1.5 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] font-mono font-semibold"
+            >
+              <option value="debug" selected={settings.log_min_level === 'debug'}>debug (Verbose + SQL timings)</option>
+              <option value="info" selected={settings.log_min_level === 'info'}>info (All completed requests & events)</option>
+              <option value="warn" selected={settings.log_min_level === 'warn'}>warn (Default: Slow requests & warnings)</option>
+              <option value="error" selected={settings.log_min_level === 'error'}>error (Errors & critical only)</option>
+              <option value="critical" selected={settings.log_min_level === 'critical'}>critical (Critical incidents only)</option>
+            </select>
+          </div>
+          <p class="text-[11px] text-[#86868b] mt-1">Controls D1 write volume. Info/Debug capture full request profiling.</p>
+        </div>
+
+        <!-- Slow Request Threshold -->
+        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col justify-between md:col-span-2">
+          <div>
+            <label for="slow_request_threshold_ms" class="block text-xs font-bold text-[#1d1d1f] mb-1">
+              Slow Request Warning Threshold (ms)
+            </label>
+            <div class="flex items-center gap-2">
+              <input
+                type="number"
+                id="slow_request_threshold_ms"
+                name="slow_request_threshold_ms"
+                value={settings.slow_request_threshold_ms || 1000}
+                min="50"
+                max="30000"
+                step="50"
+                class="w-36 px-3 py-1.5 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] font-mono font-bold"
+              />
+              <span class="text-xs text-[#86868b]">ms (Default: 1000ms)</span>
+            </div>
+          </div>
+          <p class="text-[11px] text-[#86868b] mt-1">Requests exceeding this threshold are automatically captured as performance warnings even in warn/error mode.</p>
+        </div>
       </div>
     </div>
 
@@ -630,6 +674,8 @@ const pageTitle = 'Workspace Settings';
           enable_error_logging: form.querySelector('#enable_error_logging') ? form.querySelector('#enable_error_logging').checked : true,
           log_authenticated_users: form.querySelector('#log_authenticated_users') ? form.querySelector('#log_authenticated_users').checked : true,
           log_retention_days: parseInt(formData.get('log_retention_days') || '30', 10),
+          log_min_level: (formData.get('log_min_level') || 'warn').toString().trim().toLowerCase(),
+          slow_request_threshold_ms: parseInt(formData.get('slow_request_threshold_ms') || '1000', 10),
         };
         return updates;
       }

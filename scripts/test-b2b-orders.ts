@@ -374,11 +374,55 @@ async function runSelfCheck() {
   });
   assert.strictEqual(userLogAllowed, true);
 
+  // Test RequestProfiler & Server-Timing header
+  const { RequestProfiler } = await import('../src/utils/profiler');
+  const profiler = new RequestProfiler();
+  profiler.startSpan('d1');
+  await new Promise((r) => setTimeout(r, 10));
+  profiler.endSpan('d1');
+  profiler.addSpan('auth', 5);
+  const serverTiming = profiler.toServerTimingHeader(50);
+  assert(serverTiming.includes('total;dur=50'));
+  assert(serverTiming.includes('d1;dur='));
+  assert(serverTiming.includes('auth;dur=5'));
+
+  // Test dynamic log level governance & latency profiling
+  await updateSystemSettings({ log_min_level: 'warn', slow_request_threshold_ms: 1000 }, 'admin@test.com');
+  // Info log below threshold should be skipped
+  const infoFastSkipped = await recordErrorLog({
+    level: 'info',
+    source: 'test-profiler',
+    message: 'Fast completed request',
+    path: '/api/fast',
+    latencyMs: 150,
+  });
+  assert.strictEqual(infoFastSkipped, false);
+
+  // Info log exceeding slow threshold should be captured
+  const infoSlowCaptured = await recordErrorLog({
+    level: 'info',
+    source: 'test-profiler',
+    message: 'Slow completed request',
+    path: '/api/slow-endpoint',
+    latencyMs: 1250,
+    method: 'POST',
+    statusCode: 200,
+  });
+  assert.strictEqual(infoSlowCaptured, true);
+
+  // Query bottlenecks & slowest sorting
+  const bottleneckRes = await listErrorLogs({ sort: 'slowest' });
+  assert(bottleneckRes.logs.length >= 1);
+  assert.strictEqual(bottleneckRes.logs[0].path, '/api/slow-endpoint');
+  assert.strictEqual(bottleneckRes.logs[0].latency_ms, 1250);
+  assert(bottleneckRes.bottlenecks.length >= 1);
+  assert.strictEqual(bottleneckRes.bottlenecks[0].path, '/api/slow-endpoint');
+
   // Test clearErrorLogs
   await clearErrorLogs();
   const clearedLogsRes = await listErrorLogs();
   assert.strictEqual(clearedLogsRes.total, 0);
-  console.log('✔ [PASS] System Error & Diagnostics Logging with User Toggle Control verified');
+  console.log('✔ [PASS] System Error, Performance Profiling & Log Level Governance verified');
 
   // 22. Client-Side Persistent Cache Layer (TTL, SWR & Invalidation)
   const { clientCache } = await import('../src/utils/clientCache');

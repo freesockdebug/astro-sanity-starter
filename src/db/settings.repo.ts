@@ -6,6 +6,8 @@ import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
 import { kvGet, kvPut, kvDelete } from '../utils/kv';
 
+export type LogMinLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
+
 export interface SystemSettings {
   // 1. Brand & Buyer Concierge
   brand_name: string;
@@ -36,6 +38,8 @@ export interface SystemSettings {
   enable_error_logging: boolean;
   log_authenticated_users: boolean;
   log_retention_days: number;
+  log_min_level: LogMinLevel;
+  slow_request_threshold_ms: number;
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -59,6 +63,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   enable_error_logging: true,
   log_authenticated_users: true,
   log_retention_days: 30,
+  log_min_level: 'warn',
+  slow_request_threshold_ms: 1000,
 };
 
 export const KV_SETTINGS_KEY = 'sys:settings:v1';
@@ -185,6 +191,8 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
     enable_error_logging: resolveBool('enable_error_logging', 'ENABLE_ERROR_LOGGING', DEFAULT_SYSTEM_SETTINGS.enable_error_logging),
     log_authenticated_users: resolveBool('log_authenticated_users', 'LOG_AUTHENTICATED_USERS', DEFAULT_SYSTEM_SETTINGS.log_authenticated_users),
     log_retention_days: resolveNum('log_retention_days', 'LOG_RETENTION_DAYS', DEFAULT_SYSTEM_SETTINGS.log_retention_days),
+    log_min_level: (resolveStr('log_min_level', 'LOG_MIN_LEVEL', DEFAULT_SYSTEM_SETTINGS.log_min_level).toLowerCase() as LogMinLevel),
+    slow_request_threshold_ms: resolveNum('slow_request_threshold_ms', 'SLOW_REQUEST_THRESHOLD_MS', DEFAULT_SYSTEM_SETTINGS.slow_request_threshold_ms),
   };
 
   cachedSettings = settings;

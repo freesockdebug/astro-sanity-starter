@@ -81,6 +81,9 @@ export const DDL_STATEMENTS = [
   user_email TEXT,
   ray_id TEXT,
   path TEXT,
+  latency_ms INTEGER,
+  method TEXT,
+  status_code INTEGER,
   created_at TEXT DEFAULT (datetime('now'))
 )`,
   `INSERT OR IGNORE INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init')`,
@@ -97,13 +100,15 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_error_logs_level ON system_error_logs(level)`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_source ON system_error_logs(source)`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_ray_id ON system_error_logs(ray_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON system_error_logs(created_at)`
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON system_error_logs(created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_latency ON system_error_logs(latency_ms)`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_path ON system_error_logs(path)`
 ];
 
 export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
 
 /**
- * Ensures database tables and indexes exist
+ * Ensures database tables, columns and indexes exist
  */
 export async function ensureSchema(rawOrClient?: any) {
   let target = rawOrClient;
@@ -115,15 +120,35 @@ export async function ensureSchema(rawOrClient?: any) {
   }
   if (!target) return;
 
+  // 1. Ensure core tables exist first
   if (target.batch && target.prepare) {
     try {
       await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
-      return;
-    } catch (batchErr) {
-      console.warn('[DB] ensureSchema batch notice, falling back to sequential:', batchErr);
+    } catch {
+      // Sequential fallback
     }
   }
 
+  // 2. Idempotent column migrations for existing databases before indexes
+  const columnMigrations = [
+    'ALTER TABLE system_error_logs ADD COLUMN latency_ms INTEGER DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN method TEXT DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN status_code INTEGER DEFAULT NULL',
+  ];
+
+  for (const m of columnMigrations) {
+    try {
+      if (target.prepare) {
+        await target.prepare(m).run();
+      } else if (target.exec) {
+        await target.exec(m);
+      }
+    } catch {
+      // Column already exists or table not yet initialized
+    }
+  }
+
+  // 3. Sequential execution for statements and indexes
   for (const sql of DDL_STATEMENTS) {
     try {
       if (target.prepare) {
@@ -131,8 +156,8 @@ export async function ensureSchema(rawOrClient?: any) {
       } else if (target.exec) {
         await target.exec(sql);
       }
-    } catch (err) {
-      console.warn('[DB] ensureSchema statement notice:', err);
+    } catch {
+      // Already exists
     }
   }
 }
@@ -156,8 +181,8 @@ export async function executeWithAutoSchema<T>(
       return await fn();
     } catch (err: any) {
       const errMsg = (err?.message || String(err)).toLowerCase();
-      if (isD1 && rawDb && errMsg.includes('no such table')) {
-        console.warn('[DB] "no such table" detected; triggering lazy schema initialization...');
+      if (isD1 && rawDb && (errMsg.includes('no such table') || errMsg.includes('no such column') || errMsg.includes('has no column named'))) {
+        console.warn('[DB] Schema discrepancy detected; triggering lazy schema migration...');
         await ensureSchema(rawDb);
         return await fn();
       }
@@ -172,8 +197,8 @@ export async function executeWithAutoSchema<T>(
     return await fn(db);
   } catch (err: any) {
     const errMsg = (err?.message || String(err)).toLowerCase();
-    if (errMsg.includes('no such table')) {
-      console.warn('[DB] "no such table" detected; triggering lazy schema initialization...');
+    if (errMsg.includes('no such table') || errMsg.includes('no such column') || errMsg.includes('has no column named')) {
+      console.warn('[DB] Schema discrepancy detected; triggering lazy schema migration...');
       await ensureSchema(db.raw);
       return await fn(db);
     }

@@ -5,6 +5,8 @@ import { SiteConfigService } from '@data/siteConfig';
 import { SESSION_COOKIE_NAME, getCookieValue, getRuntimeEnv, verifySessionToken } from './utils/auth';
 import { SecurityService } from './utils/security';
 import { logger } from './utils/logger';
+import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
+import { getSystemSettings } from './db/settings.repo';
 
 /**
  * Safely mutates headers on a Response, cloning into a new Response if headers are immutable
@@ -39,100 +41,161 @@ function safeSetHeader(response: Response, name: string, value: string): Respons
  */
 export const onRequest = defineMiddleware(async (context, next) => {
   const startTime = Date.now();
-  const { request, url } = context;
-  const pathname = url.pathname;
-  const rayId = request.headers.get('cf-ray') || crypto.randomUUID();
-  (context.locals as any).rayId = rayId;
+  const profiler = new RequestProfiler();
+  (context.locals as any).profiler = profiler;
 
-  if (cfEnv && typeof globalThis !== 'undefined') {
-    (globalThis as any).__CF_ENV__ = cfEnv;
-  }
-  const runtimeCtx = (context.locals as any)?.cfContext;
+  return await requestProfilerStorage.run(profiler, async () => {
+    const { request, url } = context;
+    const pathname = url.pathname;
+    const rayId = request.headers.get('cf-ray') || crypto.randomUUID();
+    (context.locals as any).rayId = rayId;
 
-  const cookieHeader = request.headers.get('cookie') || '';
-  const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
-  let lazySessionUser: Promise<any> | null = null;
-  const getSessionUser = () => {
-    if (!sessionToken) return Promise.resolve(null);
-    if (!lazySessionUser) lazySessionUser = verifySessionToken(sessionToken, cfEnv);
-    return lazySessionUser;
-  };
-
-  try {
-    let response = await handleRequest(context, next, pathname, url, request);
-    const latencyMs = Date.now() - startTime;
-    if (latencyMs > 2000 && !pathname.startsWith('/_astro/')) {
-      const sessionUser = await getSessionUser();
-      logger.warn(
-        {
-          module: 'middleware',
-          event: 'SLOW_REQUEST',
-          message: `Slow request detected (${latencyMs}ms)`,
-          path: pathname,
-          rayId,
-          latencyMs,
-          userId: sessionUser?.id,
-          userEmail: sessionUser?.email,
-        },
-        { cfEnv, ctx: runtimeCtx }
-      );
+    if (cfEnv && typeof globalThis !== 'undefined') {
+      (globalThis as any).__CF_ENV__ = cfEnv;
     }
+    const runtimeCtx = (context.locals as any)?.cfContext;
 
-    if (response.status >= 500 && !pathname.startsWith('/api/') && !response.headers.has('X-Logged-Error')) {
-      const sessionUser = await getSessionUser();
+    const cookieHeader = request.headers.get('cookie') || '';
+    const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
+    let lazySessionUser: Promise<any> | null = null;
+    const getSessionUser = () => {
+      if (!sessionToken) return Promise.resolve(null);
+      if (!lazySessionUser) {
+        lazySessionUser = profiler.time('auth', () => verifySessionToken(sessionToken, cfEnv));
+      }
+      return lazySessionUser;
+    };
+
+    try {
+      let response = await handleRequest(context, next, pathname, url, request);
+      const latencyMs = Date.now() - startTime;
+
+      // Inject Server-Timing header for browser DevTools waterfall profiling
+      response = safeSetHeaders(response, {
+        'X-Request-Id': rayId,
+        'Server-Timing': profiler.toServerTimingHeader(latencyMs),
+      });
+
+      // Filter out static assets and internal logging workbench to avoid loops
+      const isStaticOrLogSelf =
+        pathname.startsWith('/_astro/') ||
+        pathname.startsWith('/api/admin/logs') ||
+        pathname.startsWith('/admin/logs') ||
+        pathname.startsWith('/favicon') ||
+        pathname.endsWith('.png') ||
+        pathname.endsWith('.jpg') ||
+        pathname.endsWith('.svg') ||
+        pathname.endsWith('.ico') ||
+        pathname.endsWith('.css') ||
+        pathname.endsWith('.js');
+
+      if (!isStaticOrLogSelf) {
+        const settings = await getSystemSettings(cfEnv).catch(() => null);
+        const slowThreshold = settings?.slow_request_threshold_ms || 1000;
+        const spans = profiler.getSpans();
+
+        if (latencyMs >= slowThreshold) {
+          const sessionUser = await getSessionUser();
+          logger.warn(
+            {
+              module: 'api/perf',
+              event: 'SLOW_REQUEST',
+              message: `Slow request detected (${latencyMs}ms >= ${slowThreshold}ms)`,
+              path: pathname,
+              method: request.method,
+              statusCode: response.status,
+              rayId,
+              latencyMs,
+              userId: sessionUser?.id,
+              userEmail: sessionUser?.email,
+              context: { spans, query: url.search },
+            },
+            { cfEnv, ctx: runtimeCtx }
+          );
+        } else if (settings && (settings.log_min_level === 'info' || settings.log_min_level === 'debug')) {
+          const sessionUser = await getSessionUser();
+          logger.info(
+            {
+              module: 'api/perf',
+              event: 'REQUEST_COMPLETED',
+              message: `${request.method} ${pathname} (${response.status}) in ${latencyMs}ms`,
+              path: pathname,
+              method: request.method,
+              statusCode: response.status,
+              rayId,
+              latencyMs,
+              userId: sessionUser?.id,
+              userEmail: sessionUser?.email,
+              context: { spans, query: url.search },
+            },
+            { cfEnv, ctx: runtimeCtx }
+          );
+        }
+      }
+
+      if (response.status >= 500 && !pathname.startsWith('/api/') && !response.headers.has('X-Logged-Error')) {
+        const sessionUser = await getSessionUser();
+        logger.error(
+          {
+            module: 'ssr',
+            event: 'SSR_500_RESPONSE',
+            message: `Server returned ${response.status} status on ${pathname}`,
+            path: pathname,
+            method: request.method,
+            statusCode: response.status,
+            rayId,
+            latencyMs,
+            userId: sessionUser?.id,
+            userEmail: sessionUser?.email,
+            context: { spans: profiler.getSpans() },
+          },
+          { cfEnv, ctx: runtimeCtx }
+        );
+      }
+
+      return response;
+    } catch (err: any) {
+      const latencyMs = Date.now() - startTime;
+      const sessionUser = await getSessionUser().catch(() => null);
       logger.error(
         {
-          module: 'ssr',
-          event: 'SSR_500_RESPONSE',
-          message: `Server returned ${response.status} status on ${pathname}`,
+          module: 'middleware',
+          event: 'UNHANDLED_EXCEPTION',
+          message: err?.message || 'Unhandled server exception',
           path: pathname,
+          method: request.method,
+          statusCode: 500,
           rayId,
           latencyMs,
+          error: err,
           userId: sessionUser?.id,
           userEmail: sessionUser?.email,
+          context: { spans: profiler.getSpans() },
         },
         { cfEnv, ctx: runtimeCtx }
       );
-    }
 
-    response = safeSetHeader(response, 'X-Request-Id', rayId);
-    return response;
-  } catch (err: any) {
-    const latencyMs = Date.now() - startTime;
-    const sessionUser = await getSessionUser().catch(() => null);
-    logger.error(
-      {
-        module: 'middleware',
-        event: 'UNHANDLED_EXCEPTION',
-        message: err?.message || 'Unhandled server exception',
-        path: pathname,
-        rayId,
-        latencyMs,
-        error: err,
-        userId: sessionUser?.id,
-        userEmail: sessionUser?.email,
-      },
-      { cfEnv, ctx: runtimeCtx }
-    );
+      if (pathname.startsWith('/api/')) {
+        return new Response(
+          JSON.stringify({
+            error: 'Internal Server Error',
+            requestId: rayId,
+          }),
+          {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Request-Id': rayId,
+              'Server-Timing': profiler.toServerTimingHeader(latencyMs),
+              'Cache-Control': 'no-store, no-cache, must-revalidate',
+            },
+          }
+        );
+      }
 
-    if (pathname.startsWith('/api/')) {
-      return new Response(
-        JSON.stringify({
-          error: 'Internal Server Error',
-          requestId: rayId,
-        }),
-        {
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Request-Id': rayId,
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-          },
-        }
-      );
+      throw err;
     }
-    throw err;
-  }
+  });
 });
 
 async function handleRequest(context: any, next: any, pathname: string, url: URL, request: Request): Promise<Response> {

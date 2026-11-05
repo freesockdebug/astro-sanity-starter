@@ -16,6 +16,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   const level = url.searchParams.get('level') || 'ALL';
   const source = url.searchParams.get('source') || 'ALL';
   const search = url.searchParams.get('search') || '';
+  const sort = (url.searchParams.get('sort') === 'slowest' ? 'slowest' : 'newest') as 'newest' | 'slowest';
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
 
@@ -24,6 +25,7 @@ export const GET: APIRoute = async ({ request, url }) => {
       level,
       source,
       search,
+      sort,
       page,
       limit,
     },

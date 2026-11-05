@@ -5,6 +5,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getRuntimeEnv, getMergedAdminEmails } from '../utils/auth';
+import { getActiveProfiler } from '../utils/profiler';
 
 export function getAdminEmailList(): string[] {
   return getMergedAdminEmails();
@@ -78,36 +79,69 @@ class D1ClientAdapter implements DbClient {
   constructor(public readonly raw: any) {}
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
-    const stmt = this.raw.prepare(sql);
-    const bound = params.length > 0 ? stmt.bind(...params) : stmt;
-    const res = await bound.all();
-    return (res?.results || []) as T[];
+    const t0 = Date.now();
+    try {
+      const stmt = this.raw.prepare(sql);
+      const bound = params.length > 0 ? stmt.bind(...params) : stmt;
+      const res = await bound.all();
+      return (res?.results || []) as T[];
+    } finally {
+      const dur = Date.now() - t0;
+      getActiveProfiler()?.addSpan('d1', dur);
+      if (dur > 200 && !sql.includes('system_error_logs')) {
+        console.warn(`[DB Slow SQL] query (${dur}ms): ${sql.slice(0, 160)}`);
+      }
+    }
   }
 
   async first<T = any>(sql: string, params: any[] = []): Promise<T | null> {
-    const stmt = this.raw.prepare(sql);
-    const bound = params.length > 0 ? stmt.bind(...params) : stmt;
-    const res = await bound.first();
-    return (res || null) as T | null;
+    const t0 = Date.now();
+    try {
+      const stmt = this.raw.prepare(sql);
+      const bound = params.length > 0 ? stmt.bind(...params) : stmt;
+      const res = await bound.first();
+      return (res || null) as T | null;
+    } finally {
+      const dur = Date.now() - t0;
+      getActiveProfiler()?.addSpan('d1', dur);
+      if (dur > 200 && !sql.includes('system_error_logs')) {
+        console.warn(`[DB Slow SQL] first (${dur}ms): ${sql.slice(0, 160)}`);
+      }
+    }
   }
 
   async execute(sql: string, params: any[] = []): Promise<{ changes: number; lastInsertId?: number | string }> {
-    const stmt = this.raw.prepare(sql);
-    const bound = params.length > 0 ? stmt.bind(...params) : stmt;
-    const res = await bound.run();
-    return {
-      changes: res?.meta?.changes ?? 0,
-      lastInsertId: res?.meta?.last_row_id,
-    };
+    const t0 = Date.now();
+    try {
+      const stmt = this.raw.prepare(sql);
+      const bound = params.length > 0 ? stmt.bind(...params) : stmt;
+      const res = await bound.run();
+      return {
+        changes: res?.meta?.changes ?? 0,
+        lastInsertId: res?.meta?.last_row_id,
+      };
+    } finally {
+      const dur = Date.now() - t0;
+      getActiveProfiler()?.addSpan('d1', dur);
+      if (dur > 200 && !sql.includes('system_error_logs')) {
+        console.warn(`[DB Slow SQL] execute (${dur}ms): ${sql.slice(0, 160)}`);
+      }
+    }
   }
 
   async batch(operations: { sql: string; params?: any[] }[]): Promise<void> {
     if (!this.raw || !operations || operations.length === 0) return;
-    const d1Stmts = operations.map((op) => {
-      const stmt = this.raw.prepare(op.sql);
-      return op.params && op.params.length > 0 ? stmt.bind(...op.params) : stmt;
-    });
-    await this.raw.batch(d1Stmts);
+    const t0 = Date.now();
+    try {
+      const d1Stmts = operations.map((op) => {
+        const stmt = this.raw.prepare(op.sql);
+        return op.params && op.params.length > 0 ? stmt.bind(...op.params) : stmt;
+      });
+      await this.raw.batch(d1Stmts);
+    } finally {
+      const dur = Date.now() - t0;
+      getActiveProfiler()?.addSpan('d1', dur);
+    }
   }
 }
 
@@ -117,26 +151,41 @@ class SQLiteClientAdapter implements DbClient {
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
     if (!this.raw) return [];
-    const stmt = this.raw.prepare(sql);
-    const rows = stmt.all(...params);
-    return (rows || []) as T[];
+    const t0 = Date.now();
+    try {
+      const stmt = this.raw.prepare(sql);
+      const rows = stmt.all(...params);
+      return (rows || []) as T[];
+    } finally {
+      getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+    }
   }
 
   async first<T = any>(sql: string, params: any[] = []): Promise<T | null> {
     if (!this.raw) return null;
-    const stmt = this.raw.prepare(sql);
-    const row = stmt.get(...params);
-    return (row || null) as T | null;
+    const t0 = Date.now();
+    try {
+      const stmt = this.raw.prepare(sql);
+      const row = stmt.get(...params);
+      return (row || null) as T | null;
+    } finally {
+      getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+    }
   }
 
   async execute(sql: string, params: any[] = []): Promise<{ changes: number; lastInsertId?: number | string }> {
     if (!this.raw) return { changes: 0 };
-    const stmt = this.raw.prepare(sql);
-    const info = stmt.run(...params);
-    return {
-      changes: Number(info?.changes ?? 0),
-      lastInsertId: info?.lastInsertRowid ? String(info.lastInsertRowid) : undefined,
-    };
+    const t0 = Date.now();
+    try {
+      const stmt = this.raw.prepare(sql);
+      const info = stmt.run(...params);
+      return {
+        changes: Number(info?.changes ?? 0),
+        lastInsertId: info?.lastInsertRowid ? String(info.lastInsertRowid) : undefined,
+      };
+    } finally {
+      getActiveProfiler()?.addSpan('d1', Date.now() - t0);
+    }
   }
 
   async batch(operations: { sql: string; params?: any[] }[]): Promise<void> {

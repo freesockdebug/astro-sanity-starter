@@ -4,7 +4,7 @@
 import { waitUntil as cfWaitUntil, env as cfWorkerEnv } from 'cloudflare:workers';
 import { recordErrorLog, type RecordErrorLogInput } from '../db/logs.repo';
 
-export type LogLevel = 'info' | 'warn' | 'error' | 'critical';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
 
 export interface LogContext {
   module: string;
@@ -12,6 +12,8 @@ export interface LogContext {
   message: string;
   rayId?: string;
   path?: string;
+  method?: string;
+  statusCode?: number;
   userId?: string;
   userEmail?: string;
   latencyMs?: number;
@@ -127,31 +129,37 @@ function emit(level: LogLevel, context: LogContext, options: { cfEnv?: any; ctx?
     console.error(jsonStr);
   } else if (level === 'warn') {
     console.warn(jsonStr);
-  } else {
+  } else if (level === 'info') {
     console.log(jsonStr);
+  } else {
+    console.debug ? console.debug(jsonStr) : console.log(jsonStr);
   }
 
-  // Persist warn / error / critical to D1 system_error_logs
-  if (level === 'warn' || level === 'error' || level === 'critical') {
-    persistToD1Async(
-      {
-        level,
-        source: context.module || 'system',
-        errorCode: context.event || null,
-        message: context.message || '',
-        context: payload,
-        userId: context.userId || null,
-        userEmail: context.userEmail || null,
-        rayId: context.rayId || null,
-        path: context.path || null,
-      },
-      options.cfEnv,
-      options.ctx
-    );
-  }
+  // Persist asynchronously (filtering by level weight and slow threshold is handled in recordErrorLog)
+  persistToD1Async(
+    {
+      level,
+      source: context.module || 'system',
+      errorCode: context.event || null,
+      message: context.message || '',
+      context: payload,
+      userId: context.userId || null,
+      userEmail: context.userEmail || null,
+      rayId: context.rayId || null,
+      path: context.path || null,
+      latencyMs: context.latencyMs ?? null,
+      method: context.method || null,
+      statusCode: context.statusCode ?? null,
+    },
+    options.cfEnv,
+    options.ctx
+  );
 }
 
 export const logger = {
+  debug(context: LogContext, options?: { cfEnv?: any; ctx?: any }) {
+    emit('debug', context, options);
+  },
   info(context: LogContext, options?: { cfEnv?: any; ctx?: any }) {
     emit('info', context, options);
   },
