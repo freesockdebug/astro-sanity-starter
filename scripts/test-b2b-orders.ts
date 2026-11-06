@@ -627,6 +627,19 @@ async function runSelfCheck() {
 
   console.log('✔ [PASS] Client-Side Cache Layer (TTL, SWR, In-Flight Deduplication & Prefix Invalidation) verified');
 
+  // 23. Global UI Toast Store (Queue, Deduplication & Dismissal)
+  const { toastsStore, showToast, dismissToast } = await import('../src/stores/uiStore');
+  const tId = showToast('Settings saved', true, 0);
+  assert.strictEqual(toastsStore.get().length, 1);
+  assert.strictEqual(toastsStore.get()[0].type, 'success');
+  // Duplicate message debouncing check: reusing same message replaces old entry and returns new id
+  const tId2 = showToast('Settings saved', true, 0);
+  assert.strictEqual(toastsStore.get().length, 1);
+  dismissToast(tId2);
+  assert.strictEqual(toastsStore.get().length, 0);
+
+  console.log('✔ [PASS] Global UI Toast Store (nanostores queue & deduplication) verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 

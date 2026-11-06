@@ -61,16 +61,6 @@ const pageTitle = 'Workspace Settings';
     </div>
   </div>
 
-  <!-- Toast Notification Bar (Sticky) -->
-  <div
-    id="toast-notification"
-    class="fixed top-5 right-5 z-50 hidden max-w-md p-3.5 rounded-2xl shadow-lg border text-xs font-medium transition-all duration-300 transform translate-y-2 opacity-0 flex items-center gap-2.5"
-    role="alert"
-  >
-    <span id="toast-icon" class="text-base"></span>
-    <span id="toast-message" class="flex-1"></span>
-  </div>
-
   <!-- Infrastructure Health Status Grid -->
   <div class="mb-6 p-4 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-3">
     <div class="flex items-center justify-between">
@@ -645,28 +635,9 @@ const pageTitle = 'Workspace Settings';
       var saveBottom = document.getElementById('save-settings-btn-bottom');
       var testBtn = document.getElementById('test-webhook-btn');
       var webhookStatus = document.getElementById('webhook-test-status');
-      var toast = document.getElementById('toast-notification');
-      var toastIcon = document.getElementById('toast-icon');
-      var toastMsg = document.getElementById('toast-message');
 
-      var toastTimer = null;
       function showToast(message, isSuccess) {
-        if (!toast || !toastMsg || !toastIcon) return;
-        clearTimeout(toastTimer);
-        toast.className = 'fixed top-5 right-5 z-50 p-3.5 rounded-2xl shadow-lg border text-xs font-medium transition-all duration-300 flex items-center gap-2.5 ' +
-          (isSuccess ? 'bg-emerald-50 text-emerald-950 border-emerald-200' : 'bg-rose-50 text-rose-950 border-rose-200');
-        toastIcon.textContent = isSuccess ? '✔' : '✖';
-        toastMsg.textContent = message;
-        toast.classList.remove('hidden');
-        requestAnimationFrame(function() {
-          toast.classList.remove('opacity-0', 'translate-y-2');
-          toast.classList.add('opacity-100', 'translate-y-0');
-        });
-        toastTimer = setTimeout(function() {
-          toast.classList.remove('opacity-100', 'translate-y-0');
-          toast.classList.add('opacity-0', 'translate-y-2');
-          setTimeout(function() { toast.classList.add('hidden'); }, 300);
-        }, 4000);
+        if (window.__showToast) window.__showToast(message, isSuccess);
       }
 
       function getFormUpdates() {

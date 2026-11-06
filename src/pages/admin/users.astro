@@ -884,14 +884,9 @@ const pageTitle = 'Customer & Access Management';
       if (res.ok) {
         await clientCache.del(`admin:user:${id}`);
         await clientCache.invalidatePrefix('admin:users:');
-        if (feedbackEl) {
-          feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 block';
-          feedbackEl.textContent = '✓ Changes saved successfully.';
-        }
-        setTimeout(() => {
-          hideDrawer();
-          loadUsers(false);
-        }, 500);
+        (window as any).__showToast?.('Customer tier & status updated', 'success');
+        hideDrawer();
+        loadUsers(false);
       } else {
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';

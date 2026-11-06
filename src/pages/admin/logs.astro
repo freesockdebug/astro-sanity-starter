@@ -722,6 +722,7 @@ const pageTitle = 'System Diagnostics & Logs';
           if (!text) return;
           try {
             await navigator.clipboard.writeText(text);
+            (window as any).__showToast?.('Diagnostic context copied', 'success', 2000);
             const icon = btn.querySelector('.copy-icon');
             if (icon) {
               icon.textContent = '✓';
@@ -961,6 +962,7 @@ const pageTitle = 'System Diagnostics & Logs';
           const res = await fetch('/api/admin/logs', { method: 'DELETE' });
           const data = await res.json();
           if (data.success) {
+            (window as any).__showToast?.('All diagnostic logs cleared', 'info');
             await clientCache.invalidatePrefix('admin:logs:');
             clearConfirmModal.close();
             currentPage = 1;

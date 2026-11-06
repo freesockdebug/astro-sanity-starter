@@ -849,6 +849,7 @@ const i18nClient = {
           if (!text) return;
           try {
             await navigator.clipboard.writeText(text);
+            (window as any).__showToast?.('Copied to clipboard', 'success', 2000);
             const originalHtml = btn.innerHTML;
             btn.innerHTML = '<span style="color:#10b981;font-size:10px;">✓</span>';
             setTimeout(() => {
@@ -885,6 +886,7 @@ const i18nClient = {
             if (window.openQuoteDrawer) {
               window.openQuoteDrawer();
             }
+            (window as any).__showToast?.('Items added to your quote cart', 'success');
           } catch (e) {
             console.warn('Reorder failed:', e);
           }

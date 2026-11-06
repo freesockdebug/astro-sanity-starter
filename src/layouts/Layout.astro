@@ -151,9 +151,10 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             </SectionBoundary>
         )}
 
-        <!-- 2. Idle + Viewport Shimmer Hook: Pooled IntersectionObserver with idle scheduling -->
+        <!-- 2. Idle + Viewport Shimmer Hook & Global Toast Notification Stack -->
         <script>
             import { useIntersectionShimmer } from '@utils/useIntersectionShimmer';
+            import { toastsStore, showToast, dismissToast, copyToClipboard } from '@stores/uiStore';
 
             const shimmerController = useIntersectionShimmer(
                 '.apple-skeleton, .apple-skeleton-warm, .apple-skeleton-surface, .apple-shimmer-wave',
@@ -165,7 +166,54 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             win.__shimmerController = shimmerController;
             win.__observeAppleShimmer = (target?: any, scope?: ParentNode) => shimmerController.observe(target || document, scope);
             win.__unobserveAppleShimmer = (el?: any) => shimmerController.unobserve(el);
+            win.__showToast = showToast;
+            win.__dismissToast = dismissToast;
+            win.__copyToClipboard = copyToClipboard;
+
+            const toastStackEl = document.getElementById('global-toast-stack');
+            if (toastStackEl) {
+                toastsStore.subscribe((toasts) => {
+                    toastStackEl.innerHTML = toasts
+                        .map((t) => {
+                            const styleClass =
+                                t.type === 'success'
+                                    ? 'bg-emerald-950/95 text-emerald-50 border-emerald-700/50 shadow-emerald-950/20'
+                                    : t.type === 'error'
+                                    ? 'bg-rose-950/95 text-rose-50 border-rose-700/50 shadow-rose-950/20'
+                                    : 'bg-[#1d1d1f]/95 text-white border-white/10 shadow-black/20';
+                            const icon = t.type === 'success' ? '✔' : t.type === 'error' ? '✖' : 'ℹ';
+                            const safeMsg = t.message
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;');
+                            return `
+                                <div
+                                  data-toast-id="${t.id}"
+                                  class="pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-lg text-xs font-medium transition-all duration-200 cursor-pointer ${styleClass}"
+                                >
+                                  <span class="text-sm leading-none shrink-0">${icon}</span>
+                                  <span class="flex-1 leading-snug break-words">${safeMsg}</span>
+                                </div>
+                            `;
+                        })
+                        .join('');
+                });
+
+                toastStackEl.addEventListener('click', (e) => {
+                    const card = (e.target as Element)?.closest?.('[data-toast-id]');
+                    const id = card?.getAttribute('data-toast-id');
+                    if (id) dismissToast(id);
+                });
+            }
         </script>
+
+        <!-- Global Toast Notification Stack (Apple Glassmorphism Aesthetic) -->
+        <div
+          id="global-toast-stack"
+          aria-live="polite"
+          aria-atomic="true"
+          class="fixed top-5 right-5 z-[100] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"
+        ></div>
 
         <!-- 3. Client-side Global Runtime Resilience Boundary (Centered Apple Aesthetic) -->
         <div

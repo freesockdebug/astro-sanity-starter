@@ -1183,6 +1183,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       });
       if (res.ok) {
         hideApproveModal();
+        (window as any).__showToast?.('Order approved successfully', 'success');
         await clientCache.invalidatePrefix('admin:orders');
         await clientCache.invalidatePrefix('buyer:orders');
         fetchOrders(false);
@@ -1239,6 +1240,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       });
       if (res.ok) {
         hideRejectModal();
+        (window as any).__showToast?.('Order rejected', 'info');
         await clientCache.invalidatePrefix('admin:orders');
         await clientCache.invalidatePrefix('buyer:orders');
         fetchOrders(false);
@@ -1298,6 +1300,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
 
       if (res.ok) {
         hideShipModal();
+        (window as any).__showToast?.('Shipment dispatched & tracking updated', 'success');
         await clientCache.invalidatePrefix('admin:orders');
         await clientCache.invalidatePrefix('buyer:orders');
         fetchOrders(false);
