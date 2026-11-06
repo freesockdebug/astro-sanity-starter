@@ -244,6 +244,16 @@ export async function recordErrorLogsBatch(
   try {
     return await executeWithAutoSchema(async (db: DbClient) => {
       await db.batch(validOps);
+
+      // Probabilistic retention cleanup (5% sampling)
+      if (Math.random() < 0.05) {
+        const retentionDays = settings?.log_retention_days || 30;
+        await db.execute(
+          `DELETE FROM system_error_logs WHERE created_at < datetime('now', ?)`,
+          [`-${retentionDays} days`]
+        ).catch(() => {});
+      }
+
       return true;
     });
   } catch {
@@ -290,21 +300,9 @@ export async function listErrorLogs(
       }
 
       if (options.search && options.search.trim()) {
-        const term = options.search.trim();
-        const q = `%${term.toLowerCase()}%`;
-        if (term.includes('@')) {
-          conditions.push('LOWER(user_email) LIKE ?');
-          params.push(q);
-        } else if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(term)) {
-          conditions.push('ray_id = ?');
-          params.push(term);
-        } else if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(term)) {
-          conditions.push('client_ip = ?');
-          params.push(term);
-        } else {
-          conditions.push('(LOWER(message) LIKE ? OR LOWER(source) LIKE ? OR LOWER(path) LIKE ? OR LOWER(city) LIKE ? OR LOWER(country) LIKE ?)');
-          params.push(q, q, q, q, q);
-        }
+        const q = `%${options.search.trim().toLowerCase()}%`;
+        conditions.push('(LOWER(message) LIKE ? OR LOWER(source) LIKE ? OR LOWER(ray_id) LIKE ? OR LOWER(user_email) LIKE ? OR LOWER(path) LIKE ? OR LOWER(client_ip) LIKE ? OR LOWER(country) LIKE ? OR LOWER(city) LIKE ?)');
+        params.push(q, q, q, q, q, q, q, q);
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -333,7 +331,8 @@ export async function listErrorLogs(
              SUM(CASE WHEN level = 'warn' THEN 1 ELSE 0 END) as warns,
              SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as errors,
              SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) as critical
-           FROM system_error_logs`
+           FROM system_error_logs
+           WHERE created_at >= datetime('now', '-30 days')`
         ),
         db.query<EndpointBottleneck>(
           `SELECT

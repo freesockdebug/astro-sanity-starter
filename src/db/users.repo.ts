@@ -64,10 +64,20 @@ export async function getUserByIdOrEmail(userId?: string | null, email?: string 
       }
 
       if (found) {
+        if (userStatusCache.size > 1000) {
+          const now = Date.now();
+          for (const [k, v] of userStatusCache.entries()) {
+            if (now > v.exp) userStatusCache.delete(k);
+          }
+          if (userStatusCache.size > 1000) {
+            userStatusCache.clear();
+          }
+        }
         const exp = Date.now() + 30_000;
-        userStatusCache.set(`id:${found.id}`, { record: found, exp });
+        const shallowCopy = { ...found };
+        userStatusCache.set(`id:${found.id}`, { record: shallowCopy, exp });
         if (found.email) {
-          userStatusCache.set(`email:${found.email.toLowerCase()}`, { record: found, exp });
+          userStatusCache.set(`email:${found.email.toLowerCase()}`, { record: shallowCopy, exp });
         }
       }
 

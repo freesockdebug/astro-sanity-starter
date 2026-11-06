@@ -130,6 +130,8 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
           to: typeof body?.to === 'string' ? body.to.slice(0, 200) : pagePath,
           viewport: typeof body?.viewport === 'string' ? body.viewport.slice(0, 32) : undefined,
           userAgent: clientMeta.userAgent?.slice(0, 300),
+          platform: clientMeta.platform || undefined,
+          deviceType: clientMeta.deviceType || undefined,
         },
       },
       { cfEnv }
@@ -160,6 +162,8 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         colno: typeof body?.colno === 'number' ? body.colno : undefined,
         viewport: typeof body?.viewport === 'string' ? body.viewport.slice(0, 32) : undefined,
         userAgent: clientMeta.userAgent?.slice(0, 300),
+        platform: clientMeta.platform || undefined,
+        deviceType: clientMeta.deviceType || undefined,
         href: typeof body?.href === 'string' ? body.href.slice(0, 300) : undefined,
         breadcrumbs: sanitizedBreadcrumbs,
       },

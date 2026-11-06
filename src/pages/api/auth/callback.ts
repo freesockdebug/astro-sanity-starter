@@ -202,13 +202,14 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
   // 4.5. Record Login History (IP, Geo, Device) with 90-day retention
   // Dispatched asynchronously via Cloudflare Workers waitUntil to avoid blocking user 302 redirect
   const clientMeta = SecurityService.resolveClientMeta(request);
+  const deviceTag = clientMeta.platform ? ` [${clientMeta.platform}${clientMeta.deviceType ? ` / ${clientMeta.deviceType}` : ''}]` : '';
   const loginAuditPromise = recordUserLogin({
     userId: authUser.id,
     email: authUser.email,
     ip: clientMeta.ip,
     country: clientMeta.country,
     city: clientMeta.city,
-    userAgent: clientMeta.userAgent,
+    userAgent: (clientMeta.userAgent ? clientMeta.userAgent + deviceTag : deviceTag).slice(0, 500),
   }, cfEnv).catch((logErr) => {
     logger.warn({
       module: 'auth/callback',

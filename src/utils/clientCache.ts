@@ -28,13 +28,20 @@ if (cacheSyncChannel) {
   } catch {}
   cacheSyncChannel.onmessage = (event) => {
     try {
-      const { type, prefix } = event.data || {};
-      if (type === 'INVALIDATE_PREFIX' && prefix) {
+      const { type, prefix, key } = event.data || {};
+      if (type === 'DEL' && key) {
+        memoryFallback.delete(key);
+        inFlightNetwork.delete(key);
+      } else if (type === 'INVALIDATE_PREFIX' && prefix) {
         for (const k of memoryFallback.keys()) {
           if (k.startsWith(prefix)) memoryFallback.delete(k);
         }
+        for (const k of inFlightNetwork.keys()) {
+          if (k.startsWith(prefix)) inFlightNetwork.delete(k);
+        }
       } else if (type === 'CLEAR') {
         memoryFallback.clear();
+        inFlightNetwork.clear();
       }
     } catch {}
   };
@@ -168,6 +175,10 @@ export const clientCache = {
    * Deletes a specific key from IndexedDB.
    */
   async del(key: string): Promise<void> {
+    try {
+      cacheSyncChannel?.postMessage({ type: 'DEL', key });
+    } catch {}
+
     const db = await getIDB();
     if (!db) {
       memoryFallback.delete(key);

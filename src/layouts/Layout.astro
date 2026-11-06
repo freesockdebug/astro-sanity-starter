@@ -277,17 +277,26 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
 
             // Record navigation into circular buffer & conditionally stream info log
             function recordNavigation(trigger, fromPath, toPath) {
-              if (!toPath || toPath.indexOf('/admin/logs') === 0) return;
+              if (!toPath || toPath.indexOf('/admin/logs') === 0 || (fromPath && fromPath.indexOf('/admin/logs') === 0) || location.pathname.indexOf('/admin/logs') === 0) return;
 
               var crumbs = getBreadcrumbs();
               var last = crumbs.length > 0 ? crumbs[crumbs.length - 1] : null;
 
               if (last && last.to === toPath && last.trigger === trigger) return;
 
+              // Find the last real URL navigation (ignoring UI element descriptors from ui.click)
+              var lastNavCrumb = null;
+              for (var i = crumbs.length - 1; i >= 0; i--) {
+                if (crumbs[i].trigger !== 'ui.click') {
+                  lastNavCrumb = crumbs[i];
+                  break;
+                }
+              }
+
               var entry = {
                 ts: new Date().toISOString(),
                 trigger: trigger,
-                from: fromPath || (last ? last.to : (document.referrer ? new URL(document.referrer, location.origin).pathname : null)),
+                from: fromPath || (lastNavCrumb ? lastNavCrumb.to : (document.referrer ? new URL(document.referrer, location.origin).pathname : null)),
                 to: toPath,
               };
 

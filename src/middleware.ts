@@ -402,72 +402,71 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     }
   }
 
-  const renderPromise = (async () => {
-    return await next();
-  })();
-  inFlightEdgeRenders.set(canonicalKeyStr, renderPromise);
-  let response: Response;
-  try {
-    response = (await renderPromise).clone();
-  } finally {
-    inFlightEdgeRenders.delete(canonicalKeyStr);
-  }
+  const renderPromise = (async (): Promise<Response> => {
+    const response = await next();
+    const contentType = response.headers.get('content-type') || '';
 
-  // 6. Cache successful or 404 HTML responses without module-level errors
-  const contentType = response.headers.get('content-type') || '';
-  if (cache && (response.status === 200 || response.status === 404) && !response.headers.has('X-Section-Error') && contentType.includes('text/html')) {
-    try {
-      const siteConfig = await SiteConfigService.getConfig();
-      const edgeTtl = typeof siteConfig?.edgeCacheTtl === 'number' && siteConfig.edgeCacheTtl >= 0
-        ? siteConfig.edgeCacheTtl
-        : 300;
+    // Cache successful or 404 HTML responses without module-level errors
+    if (cache && (response.status === 200 || response.status === 404) && !response.headers.has('X-Section-Error') && contentType.includes('text/html')) {
+      try {
+        const siteConfig = await SiteConfigService.getConfig();
+        const edgeTtl = typeof siteConfig?.edgeCacheTtl === 'number' && siteConfig.edgeCacheTtl >= 0
+          ? siteConfig.edgeCacheTtl
+          : 300;
 
-      if (edgeTtl === 0) {
-        const bypassHeaders = new Headers(response.headers);
-        bypassHeaders.set('Cache-Control', 'public, max-age=0, no-cache, no-store, must-revalidate');
-        bypassHeaders.set('X-Edge-Cache', 'BYPASS');
+        if (edgeTtl === 0) {
+          const bypassHeaders = new Headers(response.headers);
+          bypassHeaders.set('Cache-Control', 'public, max-age=0, no-cache, no-store, must-revalidate');
+          bypassHeaders.set('X-Edge-Cache', 'BYPASS');
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: bypassHeaders,
+          });
+        }
+
+        const swr = Math.max(edgeTtl * 10, 3600);
+        const cloned = response.clone();
+        const edgeHeaders = new Headers(cloned.headers);
+
+        edgeHeaders.set('Cache-Control', `public, max-age=0, s-maxage=${edgeTtl}, stale-while-revalidate=${swr}`);
+        edgeHeaders.delete('Cloudflare-CDN-Cache-Control');
+        edgeHeaders.delete('CDN-Cache-Control');
+        edgeHeaders.set('X-Edge-Cache', 'MISS');
+
+        const responseToCache = new Response(cloned.body, {
+          status: cloned.status,
+          statusText: cloned.statusText,
+          headers: edgeHeaders,
+        });
+
+        const cfCtx = (context.locals as any)?.cfContext;
+        if (cfCtx?.waitUntil) {
+          cfCtx.waitUntil(cache.put(cacheKey, responseToCache));
+        } else {
+          cache.put(cacheKey, responseToCache).catch((err: any) => {
+            logger.warn({ module: 'middleware', event: 'ASYNC_CACHE_PUT_ERROR', message: 'Async cache put error', error: err });
+          });
+        }
+
         return new Response(response.body, {
           status: response.status,
           statusText: response.statusText,
-          headers: bypassHeaders,
+          headers: edgeHeaders,
         });
+      } catch (err) {
+        logger.warn({ module: 'middleware', event: 'CACHE_WRITE_ERROR', message: 'Error writing cache', error: err });
       }
-
-      const swr = Math.max(edgeTtl * 10, 3600);
-      const cloned = response.clone();
-      const edgeHeaders = new Headers(cloned.headers);
-
-      edgeHeaders.set('Cache-Control', `public, max-age=0, s-maxage=${edgeTtl}, stale-while-revalidate=${swr}`);
-      edgeHeaders.delete('Cloudflare-CDN-Cache-Control');
-      edgeHeaders.delete('CDN-Cache-Control');
-      edgeHeaders.set('X-Edge-Cache', 'MISS');
-
-      const responseToCache = new Response(cloned.body, {
-        status: cloned.status,
-        statusText: cloned.statusText,
-        headers: edgeHeaders,
-      });
-
-      const cfCtx = (context.locals as any)?.cfContext;
-      if (cfCtx?.waitUntil) {
-        cfCtx.waitUntil(cache.put(cacheKey, responseToCache));
-      } else {
-        cache.put(cacheKey, responseToCache).catch((err: any) => {
-          logger.warn({ module: 'middleware', event: 'ASYNC_CACHE_PUT_ERROR', message: 'Async cache put error', error: err });
-        });
-      }
-
-      const returnedResponse = new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: edgeHeaders,
-      });
-      return returnedResponse;
-    } catch (err) {
-      logger.warn({ module: 'middleware', event: 'CACHE_WRITE_ERROR', message: 'Error writing cache', error: err });
     }
-  }
+    return response;
+  })();
 
-  return response;
+  inFlightEdgeRenders.set(canonicalKeyStr, renderPromise);
+  try {
+    const finalResponse = await renderPromise;
+    return finalResponse.clone();
+  } finally {
+    inFlightEdgeRenders.delete(canonicalKeyStr);
+  }
 }
 

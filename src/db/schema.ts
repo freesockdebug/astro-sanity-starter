@@ -207,6 +207,12 @@ export async function executeWithAutoSchema<T>(
   // Modern signature: executeWithAutoSchema((db: DbClient) => Promise<T>)
   const fn = arg1 as (db: DbClient) => Promise<T>;
   const db = await getDb();
+
+  // On isolate cold start, trigger non-blocking schema check so new incremental indexes apply automatically
+  if (!isSchemaVerifiedInIsolate) {
+    ensureSchema(db).catch(() => {});
+  }
+
   try {
     return await fn(db);
   } catch (err: any) {

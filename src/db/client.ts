@@ -170,14 +170,30 @@ class D1ClientAdapter implements DbClient {
 
 class SQLiteClientAdapter implements DbClient {
   readonly isD1 = false;
+  private readonly statementCache = new Map<string, any>();
+
   constructor(public readonly raw: any) {}
+
+  private getStatement(sql: string) {
+    if (!this.raw) return null;
+    let stmt = this.statementCache.get(sql);
+    if (!stmt) {
+      stmt = this.raw.prepare(sql);
+      if (this.statementCache.size > 200) {
+        const firstKey = this.statementCache.keys().next().value;
+        if (firstKey) this.statementCache.delete(firstKey);
+      }
+      this.statementCache.set(sql, stmt);
+    }
+    return stmt;
+  }
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
     if (!this.raw) return [];
     const t0 = Date.now();
     try {
-      const stmt = this.raw.prepare(sql);
-      const rows = stmt.all(...params);
+      const stmt = this.getStatement(sql);
+      const rows = stmt ? stmt.all(...params) : [];
       return (rows || []) as T[];
     } finally {
       if (!sql.includes('system_error_logs')) {
@@ -190,8 +206,8 @@ class SQLiteClientAdapter implements DbClient {
     if (!this.raw) return null;
     const t0 = Date.now();
     try {
-      const stmt = this.raw.prepare(sql);
-      const row = stmt.get(...params);
+      const stmt = this.getStatement(sql);
+      const row = stmt ? stmt.get(...params) : null;
       return (row || null) as T | null;
     } finally {
       if (!sql.includes('system_error_logs')) {
@@ -204,8 +220,8 @@ class SQLiteClientAdapter implements DbClient {
     if (!this.raw) return { changes: 0 };
     const t0 = Date.now();
     try {
-      const stmt = this.raw.prepare(sql);
-      const info = stmt.run(...params);
+      const stmt = this.getStatement(sql);
+      const info = stmt ? stmt.run(...params) : { changes: 0 };
       return {
         changes: Number(info?.changes ?? 0),
         lastInsertId: info?.lastInsertRowid ? String(info.lastInsertRowid) : undefined,
@@ -222,8 +238,8 @@ class SQLiteClientAdapter implements DbClient {
     this.raw.exec('BEGIN');
     try {
       for (const op of operations) {
-        const stmt = this.raw.prepare(op.sql);
-        stmt.run(...(op.params || []));
+        const stmt = this.getStatement(op.sql);
+        if (stmt) stmt.run(...(op.params || []));
       }
       this.raw.exec('COMMIT');
     } catch (err) {
@@ -237,13 +253,29 @@ class SQLiteClientAdapter implements DbClient {
   }
 }
 
+let localSQLiteAdapterInstance: SQLiteClientAdapter | null = null;
+function getLocalSQLiteAdapter(rawDb: any): SQLiteClientAdapter {
+  if (!localSQLiteAdapterInstance || localSQLiteAdapterInstance.raw !== rawDb) {
+    localSQLiteAdapterInstance = new SQLiteClientAdapter(rawDb);
+  }
+  return localSQLiteAdapterInstance;
+}
+
 export async function getDb(): Promise<DbClient> {
   const runtimeD1 = await getRuntimeD1();
   if (runtimeD1) {
+    // If running in an active request with Profiler context, reuse the D1ClientAdapter so all queries in the same request share the same D1 session bookmark (Read-Your-Writes)
+    const activeProfiler = getActiveProfiler() as any;
+    if (activeProfiler) {
+      if (!activeProfiler._d1Client) {
+        activeProfiler._d1Client = new D1ClientAdapter(runtimeD1);
+      }
+      return activeProfiler._d1Client;
+    }
     return new D1ClientAdapter(runtimeD1);
   }
   const localDb = getLocalNodeDb();
-  return new SQLiteClientAdapter(localDb);
+  return getLocalSQLiteAdapter(localDb);
 }
 
 // Backward-compatible handle resolver for existing callers
