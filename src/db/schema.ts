@@ -115,12 +115,15 @@ export const DDL_STATEMENTS = [
 export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
 
 let isSchemaVerifiedInIsolate = false;
+let schemaInitPromise: Promise<void> | null = null;
 
 /**
  * Ensures database tables, columns and indexes exist
  */
-export async function ensureSchema(rawOrClient?: any) {
+export async function ensureSchema(rawOrClient?: any): Promise<void> {
   if (isSchemaVerifiedInIsolate) return;
+  if (schemaInitPromise) return schemaInitPromise;
+
   let target = rawOrClient;
   if (!target) {
     const client = await getDb();
@@ -130,50 +133,58 @@ export async function ensureSchema(rawOrClient?: any) {
   }
   if (!target) return;
 
-  // 1. Ensure core tables exist first
-  if (target.batch && target.prepare) {
-    try {
-      await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
-    } catch {
-      // Sequential fallback
-    }
-  }
-
-  // 2. Idempotent column migrations for existing databases before indexes
-  const columnMigrations = [
-    'ALTER TABLE system_error_logs ADD COLUMN latency_ms INTEGER DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN method TEXT DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN status_code INTEGER DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN client_ip TEXT DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN country TEXT DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN city TEXT DEFAULT NULL',
-  ];
-
-  for (const m of columnMigrations) {
-    try {
-      if (target.prepare) {
-        await target.prepare(m).run();
-      } else if (target.exec) {
-        await target.exec(m);
-      }
-    } catch {
-      // Column already exists or table not yet initialized
-    }
-  }
-
-  // 3. Sequential execution for statements and indexes
-  for (const sql of DDL_STATEMENTS) {
-    try {
-      if (target.prepare) {
-        await target.prepare(sql).run();
-      } else if (target.exec) {
-        await target.exec(sql);
-      }
-    } catch {
-      // Already exists
-    }
-  }
+  // Immediately set verified flag to prevent concurrent Promise.all queries from firing duplicate DDL batches
   isSchemaVerifiedInIsolate = true;
+
+  schemaInitPromise = (async () => {
+    // 1. Ensure core tables exist first
+    if (target.batch && target.prepare) {
+      try {
+        await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
+      } catch {
+        // Sequential fallback
+      }
+    }
+
+    // 2. Idempotent column migrations for existing databases before indexes
+    const columnMigrations = [
+      'ALTER TABLE system_error_logs ADD COLUMN latency_ms INTEGER DEFAULT NULL',
+      'ALTER TABLE system_error_logs ADD COLUMN method TEXT DEFAULT NULL',
+      'ALTER TABLE system_error_logs ADD COLUMN status_code INTEGER DEFAULT NULL',
+      'ALTER TABLE system_error_logs ADD COLUMN client_ip TEXT DEFAULT NULL',
+      'ALTER TABLE system_error_logs ADD COLUMN country TEXT DEFAULT NULL',
+      'ALTER TABLE system_error_logs ADD COLUMN city TEXT DEFAULT NULL',
+    ];
+
+    for (const m of columnMigrations) {
+      try {
+        if (target.prepare) {
+          await target.prepare(m).run();
+        } else if (target.exec) {
+          await target.exec(m);
+        }
+      } catch {
+        // Column already exists or table not yet initialized
+      }
+    }
+
+    // 3. Sequential execution for statements and indexes
+    for (const sql of DDL_STATEMENTS) {
+      try {
+        if (target.prepare) {
+          await target.prepare(sql).run();
+        } else if (target.exec) {
+          await target.exec(sql);
+        }
+      } catch {
+        // Already exists
+      }
+    }
+  })().finally(() => {
+    schemaInitPromise = null;
+  });
+
+  return schemaInitPromise;
 }
 
 /**

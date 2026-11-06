@@ -341,8 +341,8 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
   }
 
   // 4. Safely check for Cloudflare Cache API (available in Cloudflare Workers production)
-  const cache = typeof caches !== 'undefined' && (caches as any).default 
-    ? (caches as any).default 
+  const cache = typeof caches !== 'undefined' && (caches as any).default
+    ? (caches as any).default
     : null;
 
   const canonicalUrl = new URL(pathname, url.origin);
