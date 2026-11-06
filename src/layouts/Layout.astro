@@ -300,8 +300,8 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
                 sessionStorage.setItem(STORAGE_KEY, JSON.stringify(crumbs));
               } catch (e) {}
 
-              // Track B: If log_min_level allows info/debug, stream live info log
-              if (shouldStreamInfoNav && navReportCount < MAX_NAV_REPORTS_PER_PAGE) {
+              // Track B: If log_min_level allows info/debug, stream live info log (exclude UI clicks from streaming to conserve beacon budget)
+              if (trigger !== 'ui.click' && shouldStreamInfoNav && navReportCount < MAX_NAV_REPORTS_PER_PAGE) {
                 navReportCount++;
                 dispatchBeacon({
                   type: 'navigation',
@@ -432,7 +432,20 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             } catch (e) {}
             recordNavigation('pageload', initialFrom, currentTrackedPath);
 
-            // 4. Global window.onerror
+            // 4. UI Click Instrumentation (passive capture phase event delegation for crash breadcrumbs)
+            document.addEventListener('click', function (e) {
+              try {
+                var target = e.target && e.target.closest ? e.target.closest('button, a, [role="button"], input[type="submit"]') : null;
+                if (!target) return;
+                var tag = target.tagName.toLowerCase();
+                var id = target.id ? '#' + target.id : '';
+                var label = (target.getAttribute('aria-label') || target.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 32);
+                var descriptor = tag + id + (label ? ' ("' + label + '")' : '');
+                recordNavigation('ui.click', location.pathname, descriptor);
+              } catch (err) {}
+            }, true);
+
+            // 5. Global window.onerror
             var prevOnError = window.onerror;
             window.onerror = function (message, source, lineno, colno, error) {
               handleRuntimeError('onerror', message, source, lineno, colno, error);
@@ -442,7 +455,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
               return false;
             };
 
-            // 5. Global unhandledrejection
+            // 6. Global unhandledrejection
             window.addEventListener('unhandledrejection', function (event) {
               var reason = event.reason;
               var msg = reason && (reason.message || String(reason));
@@ -450,7 +463,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
               handleRuntimeError('unhandledrejection', msg, location.pathname, undefined, undefined, errObj);
             });
 
-            // 6. Imperative helper
+            // 7. Imperative helper
             window.__reportClientError = function (error, customSource) {
               var msg = error && (error.message || String(error));
               handleRuntimeError('manual', msg, customSource || location.pathname, undefined, undefined, error);

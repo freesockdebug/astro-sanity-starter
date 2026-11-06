@@ -67,6 +67,14 @@ function getLocalNodeDb(): any {
     }
     const dbPath = path.join(dbDir, 'local-dev.sqlite');
     localNodeDbInstance = new DatabaseSync(dbPath);
+    try {
+      localNodeDbInstance.exec(`
+        PRAGMA journal_mode = WAL;
+        PRAGMA synchronous = NORMAL;
+        PRAGMA busy_timeout = 5000;
+        PRAGMA foreign_keys = ON;
+      `);
+    } catch {}
     return localNodeDbInstance;
   } catch (err) {
     console.warn('[DB] node:sqlite initialization failed:', err);
@@ -76,12 +84,19 @@ function getLocalNodeDb(): any {
 
 class D1ClientAdapter implements DbClient {
   readonly isD1 = true;
-  constructor(public readonly raw: any) {}
+  private readonly target: any;
+
+  constructor(public readonly raw: any, sessionConstraint: string = 'first-unconstrained') {
+    // If Cloudflare D1 Read Replication Sessions API is available, route reads to nearest replica while maintaining read-your-writes
+    this.target = typeof raw?.withSession === 'function'
+      ? raw.withSession(sessionConstraint)
+      : raw;
+  }
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
     const t0 = Date.now();
     try {
-      const stmt = this.raw.prepare(sql);
+      const stmt = this.target.prepare(sql);
       const bound = params.length > 0 ? stmt.bind(...params) : stmt;
       const res = await bound.all();
       return (res?.results || []) as T[];
@@ -99,7 +114,7 @@ class D1ClientAdapter implements DbClient {
   async first<T = any>(sql: string, params: any[] = []): Promise<T | null> {
     const t0 = Date.now();
     try {
-      const stmt = this.raw.prepare(sql);
+      const stmt = this.target.prepare(sql);
       const bound = params.length > 0 ? stmt.bind(...params) : stmt;
       const res = await bound.first();
       return (res || null) as T | null;
@@ -117,7 +132,7 @@ class D1ClientAdapter implements DbClient {
   async execute(sql: string, params: any[] = []): Promise<{ changes: number; lastInsertId?: number | string }> {
     const t0 = Date.now();
     try {
-      const stmt = this.raw.prepare(sql);
+      const stmt = this.target.prepare(sql);
       const bound = params.length > 0 ? stmt.bind(...params) : stmt;
       const res = await bound.run();
       return {
@@ -136,14 +151,14 @@ class D1ClientAdapter implements DbClient {
   }
 
   async batch(operations: { sql: string; params?: any[] }[]): Promise<void> {
-    if (!this.raw || !operations || operations.length === 0) return;
+    if (!this.target || !operations || operations.length === 0) return;
     const t0 = Date.now();
     try {
       const d1Stmts = operations.map((op) => {
-        const stmt = this.raw.prepare(op.sql);
+        const stmt = this.target.prepare(op.sql);
         return op.params && op.params.length > 0 ? stmt.bind(...op.params) : stmt;
       });
-      await this.raw.batch(d1Stmts);
+      await this.target.batch(d1Stmts);
     } finally {
       const dur = Date.now() - t0;
       if (!operations.some((op) => op.sql.includes('system_error_logs'))) {
