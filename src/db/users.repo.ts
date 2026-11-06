@@ -19,8 +19,15 @@ import type {
 const userStatusCache = new Map<string, { record: UserRecord; exp: number }>();
 
 export function invalidateUserStatusCache(userId?: string | null, email?: string | null) {
+  const normEmail = email ? email.trim().toLowerCase() : null;
   if (userId) userStatusCache.delete(`id:${userId}`);
-  if (email) userStatusCache.delete(`email:${email.trim().toLowerCase()}`);
+  if (normEmail) userStatusCache.delete(`email:${normEmail}`);
+
+  for (const [k, v] of userStatusCache.entries()) {
+    if ((userId && v.record.id === userId) || (normEmail && v.record.email?.toLowerCase() === normEmail)) {
+      userStatusCache.delete(k);
+    }
+  }
 }
 
 /**

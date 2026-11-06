@@ -181,7 +181,12 @@ export async function recordErrorLogsBatch(
   if (inputs.length === 1) return recordErrorLog(inputs[0], customEnv);
 
   const settings = await getSystemSettings(customEnv).catch(() => null);
+  if (settings && !settings.enable_error_logging) {
+    return false;
+  }
+
   const minWeight = LOG_LEVEL_WEIGHT[settings?.log_min_level || 'warn'] ?? LOG_LEVEL_WEIGHT.warn;
+  const slowThreshold = settings?.slow_request_threshold_ms || 1000;
 
   const validOps: { sql: string; params: any[] }[] = [];
   const insertSql = `INSERT INTO system_error_logs (
@@ -189,9 +194,19 @@ export async function recordErrorLogsBatch(
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
 
   for (const input of inputs) {
+    // Privacy boundary for authenticated users
+    const isAuthenticatedUser = Boolean(input.userId || input.userEmail);
+    if (isAuthenticatedUser && settings && !settings.log_authenticated_users) {
+      continue;
+    }
+
     const level = (input.level?.toLowerCase() || 'error') as DiagnosticLogLevel;
-    const weight = LOG_LEVEL_WEIGHT[level] ?? LOG_LEVEL_WEIGHT.error;
-    if (weight < minWeight) continue;
+    const currentWeight = LOG_LEVEL_WEIGHT[level] ?? LOG_LEVEL_WEIGHT.error;
+    const isSlow = typeof input.latencyMs === 'number' && input.latencyMs >= slowThreshold;
+
+    if (currentWeight < minWeight && !isSlow) {
+      continue;
+    }
 
     const source = (input.source || 'system').slice(0, 100);
     const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;

@@ -408,7 +408,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
   inFlightEdgeRenders.set(canonicalKeyStr, renderPromise);
   let response: Response;
   try {
-    response = await renderPromise;
+    response = (await renderPromise).clone();
   } finally {
     inFlightEdgeRenders.delete(canonicalKeyStr);
   }

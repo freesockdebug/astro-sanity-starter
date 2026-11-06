@@ -107,7 +107,7 @@ export function createSwrCache<T>(
         if (age < ttlMs) return value;
         // 2. Stale window: instant return + non-blocking background revalidation
         if (age < staleTtlMs) {
-          runInBackground(revalidate(true));
+          runInBackground(revalidate(false));
           return value;
         }
       }

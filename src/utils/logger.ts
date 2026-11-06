@@ -78,23 +78,17 @@ function sanitizeData(data: any, depth = 0): any {
 const isolateLogBuffer: RecordErrorLogInput[] = [];
 let isolateFlushTimer: any = null;
 
-function flushBufferedLogs(env: any, ctx?: any) {
-  if (isolateLogBuffer.length === 0) return;
+function flushBufferedLogs(env: any, ctx?: any): Promise<any> {
+  if (isolateLogBuffer.length === 0) return Promise.resolve(true);
   const batch = isolateLogBuffer.splice(0, isolateLogBuffer.length);
   const writePromise = recordErrorLogsBatch(batch, env).catch(() => false);
 
   if (typeof cfWaitUntil === 'function') {
-    try {
-      cfWaitUntil(writePromise);
-      return;
-    } catch {}
+    try { cfWaitUntil(writePromise); } catch {}
+  } else if (ctx && typeof ctx.waitUntil === 'function') {
+    try { ctx.waitUntil(writePromise); } catch {}
   }
-  if (ctx && typeof ctx.waitUntil === 'function') {
-    try {
-      ctx.waitUntil(writePromise);
-      return;
-    } catch {}
-  }
+  return writePromise;
 }
 
 /**
@@ -121,23 +115,20 @@ function persistToD1Async(input: RecordErrorLogInput, customEnv?: any, ctx?: any
     return;
   }
 
-  // Otherwise schedule micro-batch flush within 200ms
+  // Otherwise schedule micro-batch flush within 200ms using a single waitUntil-protected promise
   if (!isolateFlushTimer) {
-    isolateFlushTimer = setTimeout(() => {
-      isolateFlushTimer = null;
-      flushBufferedLogs(env, ctx);
-    }, 200);
-  }
+    const delayedFlush = new Promise<void>((resolve) => {
+      isolateFlushTimer = setTimeout(() => {
+        isolateFlushTimer = null;
+        flushBufferedLogs(env, ctx).finally(() => resolve());
+      }, 200);
+    });
 
-  // Bind active request waitUntil to ensure Worker isolate does not terminate before flush completes
-  if (typeof cfWaitUntil === 'function') {
-    try {
-      cfWaitUntil(new Promise((resolve) => setTimeout(resolve, 250)).then(() => flushBufferedLogs(env, ctx)));
-    } catch {}
-  } else if (ctx && typeof ctx.waitUntil === 'function') {
-    try {
-      ctx.waitUntil(new Promise((resolve) => setTimeout(resolve, 250)).then(() => flushBufferedLogs(env, ctx)));
-    } catch {}
+    if (typeof cfWaitUntil === 'function') {
+      try { cfWaitUntil(delayedFlush); } catch {}
+    } else if (ctx && typeof ctx.waitUntil === 'function') {
+      try { ctx.waitUntil(delayedFlush); } catch {}
+    }
   }
 }
 
