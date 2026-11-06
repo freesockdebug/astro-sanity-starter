@@ -14,14 +14,14 @@ export interface FetchWithCacheOptions<T = any> {
   onData?: (data: T, isFromCache: boolean) => void;
 }
 
-const DB_NAME = 'gw_client_cache_v1';
+const DB_NAME = 'b2b_client_cache_v1';
 const STORE_NAME = 'keyval';
 let dbInstance: IDBDatabase | null = null;
 const memoryFallback = new Map<string, CacheEnvelope>();
 const inFlightNetwork = new Map<string, Promise<any>>();
 
 // Cross-tab broadcast synchronization (TanStack Query pattern)
-const cacheSyncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('gv_cache_sync') : null;
+const cacheSyncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('b2b_cache_sync') : null;
 if (cacheSyncChannel) {
   try {
     (cacheSyncChannel as any).unref?.();

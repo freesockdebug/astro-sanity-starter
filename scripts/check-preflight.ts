@@ -379,6 +379,9 @@ class InvariantEngine {
         const newScope = new Set<string>();
         if (isFunctionScope) {
           const fn = node as ts.FunctionLikeDeclaration;
+          if (!ts.isArrowFunction(node)) {
+            newScope.add('arguments');
+          }
           if (fn.name && ts.isIdentifier(fn.name)) {
             newScope.add(fn.name.text);
           }
@@ -1883,12 +1886,13 @@ async function main() {
   logPass(`[Pitfall 16] 商品币种独立字段、阶梯价单位与 MOQ 阶梯优先机制校验通过`);
 
   // 2.16 [Pitfall 17]: Bento 展台胶囊徽章防溢出与矮视口自适应
-  const sockSpecMatrixFile = path.join(SRC_DIR, 'components', 'SockSpecMatrix.astro');
+  const bentoSpecFile = path.join(SRC_DIR, 'components', 'BentoSpecMatrix.astro');
+  const sockSpecMatrixFile = fs.existsSync(bentoSpecFile) ? bentoSpecFile : path.join(SRC_DIR, 'components', 'SockSpecMatrix.astro');
   if (fs.existsSync(sockSpecMatrixFile)) {
     const content = fs.readFileSync(sockSpecMatrixFile, 'utf-8');
     if (!content.includes('specs-section') || !content.includes('min-w-0') || !content.includes('truncate')) {
       logFail(
-        `src/components/SockSpecMatrix.astro: [Pitfall 17] Bento 展台胶囊标签缺少 min-w-0 / truncate 等防御性弹性排版！`
+        `src/components/BentoSpecMatrix.astro: [Pitfall 17] Bento 展台胶囊标签缺少 min-w-0 / truncate 等防御性弹性排版！`
       );
     }
   }
