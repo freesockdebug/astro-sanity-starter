@@ -121,9 +121,9 @@ let schemaInitPromise: Promise<void> | null = null;
  * Ensures database tables, columns and indexes exist
  */
 export async function ensureSchema(rawOrClient?: any): Promise<void> {
-  if (isSchemaVerifiedInIsolate) return;
-  if (schemaInitPromise) return schemaInitPromise;
 
+  if (schemaInitPromise) return schemaInitPromise;
+  if (isSchemaVerifiedInIsolate) return;
   let target = rawOrClient;
   if (!target) {
     const client = await getDb();
@@ -221,7 +221,7 @@ export async function executeWithAutoSchema<T>(
 
   // On isolate cold start, trigger non-blocking schema check so new incremental indexes apply automatically
   if (!isSchemaVerifiedInIsolate) {
-    ensureSchema(db).catch(() => {});
+    ensureSchema(db).catch(() => { });
   }
 
   try {
