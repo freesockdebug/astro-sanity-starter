@@ -3,6 +3,7 @@
 
 import { getDb, generateOrderNo, generateUuid, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
+import { invalidateUserStatusCache } from './users.repo';
 import type {
   OrderRecord,
   OrderItem,
@@ -86,6 +87,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
            WHERE ${whereClause}`,
           [safeCompany, safeCompany, safeCountry, safeCountry, safePhone, safePhone, param]
         );
+        invalidateUserStatusCache(input.userId, normalizedEmail);
       } catch {
         // Non-blocking
       }

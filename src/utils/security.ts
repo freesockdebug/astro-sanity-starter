@@ -1,5 +1,7 @@
 import { getRuntimeEnv } from './auth';
 
+const isolateRateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
 /**
  * Security utilities and sanitizers for user inputs
  */
@@ -120,12 +122,15 @@ export class SecurityService {
 
   /**
    * Single source of truth to resolve client network and geo metadata
+   * Uses native Client Hints (Sec-CH-UA-*) & Cloudflare headers with 0 KB runtime overhead
    */
   public static resolveClientMeta(request: Request): {
     ip: string;
     country: string;
     city: string;
     userAgent: string;
+    platform: string;
+    deviceType: string;
   } {
     const ip =
       request.headers.get('cf-connecting-ip') ||
@@ -137,7 +142,41 @@ export class SecurityService {
       (request.headers.get('cf-ipcountry') || (request as any).cf?.country || '').trim().toUpperCase();
     const city = (request as any).cf?.city || request.headers.get('cf-ipcity') || '';
     const userAgent = request.headers.get('user-agent') || '';
-    return { ip, country, city, userAgent };
+    const platform = (request.headers.get('sec-ch-ua-platform') || '').replace(/\"/g, '').trim();
+    const isMobile = request.headers.get('sec-ch-ua-mobile') === '?1';
+    const deviceType = request.headers.get('cf-device-type') || (isMobile ? 'mobile' : 'desktop');
+    return { ip, country, city, userAgent, platform, deviceType };
+  }
+
+  /**
+   * Zero-I/O in-memory sliding window rate limiter for edge isolates
+   */
+  public static checkRateLimit(
+    key: string,
+    limit: number,
+    windowSec = 60
+  ): { allowed: boolean; remaining: number; reset: number } {
+    const now = Date.now();
+    const bucket = isolateRateLimitBuckets.get(key);
+
+    if (!bucket || now > bucket.resetAt) {
+      isolateRateLimitBuckets.set(key, { count: 1, resetAt: now + windowSec * 1000 });
+      if (isolateRateLimitBuckets.size > 2000) {
+        for (const [k, v] of isolateRateLimitBuckets.entries()) {
+          if (now > v.resetAt) isolateRateLimitBuckets.delete(k);
+        }
+      }
+      return { allowed: true, remaining: limit - 1, reset: windowSec };
+    }
+
+    if (bucket.count >= limit) {
+      const reset = Math.ceil((bucket.resetAt - now) / 1000);
+      return { allowed: false, remaining: 0, reset };
+    }
+
+    bucket.count++;
+    const reset = Math.ceil((bucket.resetAt - now) / 1000);
+    return { allowed: true, remaining: limit - bucket.count, reset };
   }
 
   /**

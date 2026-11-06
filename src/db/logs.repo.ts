@@ -171,6 +171,72 @@ export async function recordErrorLog(
 }
 
 /**
+ * Micro-batch log processor: writes multiple log entries in a single D1 transaction via db.batch()
+ */
+export async function recordErrorLogsBatch(
+  inputs: RecordErrorLogInput[],
+  customEnv?: any
+): Promise<boolean> {
+  if (!inputs || inputs.length === 0) return true;
+  if (inputs.length === 1) return recordErrorLog(inputs[0], customEnv);
+
+  const settings = await getSystemSettings(customEnv).catch(() => null);
+  const minWeight = LOG_LEVEL_WEIGHT[settings?.log_min_level || 'warn'] ?? LOG_LEVEL_WEIGHT.warn;
+
+  const validOps: { sql: string; params: any[] }[] = [];
+  const insertSql = `INSERT INTO system_error_logs (
+    level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
+
+  for (const input of inputs) {
+    const level = (input.level?.toLowerCase() || 'error') as DiagnosticLogLevel;
+    const weight = LOG_LEVEL_WEIGHT[level] ?? LOG_LEVEL_WEIGHT.error;
+    if (weight < minWeight) continue;
+
+    const source = (input.source || 'system').slice(0, 100);
+    const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;
+    const message = (input.message || '').slice(0, 1000);
+    const userId = input.userId ? input.userId.slice(0, 100) : null;
+    const userEmail = input.userEmail ? input.userEmail.slice(0, 120).toLowerCase().trim() : null;
+    const rayId = input.rayId ? input.rayId.slice(0, 100) : null;
+    const path = input.path ? input.path.slice(0, 200) : null;
+    const latencyMs = typeof input.latencyMs === 'number' && !isNaN(input.latencyMs) ? Math.max(0, Math.round(input.latencyMs)) : null;
+    const method = input.method ? input.method.toUpperCase().slice(0, 10) : null;
+    const statusCode = typeof input.statusCode === 'number' && !isNaN(input.statusCode) ? input.statusCode : null;
+    const clientIp = input.clientIp ? input.clientIp.slice(0, 50) : null;
+    const country = input.country ? input.country.toUpperCase().slice(0, 10) : null;
+    const city = input.city ? input.city.slice(0, 50) : null;
+
+    let contextJson: string | null = null;
+    if (input.context !== undefined && input.context !== null) {
+      try {
+        contextJson = typeof input.context === 'string'
+          ? input.context.slice(0, 4000)
+          : JSON.stringify(input.context).slice(0, 4000);
+      } catch {
+        contextJson = String(input.context).slice(0, 1000);
+      }
+    }
+
+    validOps.push({
+      sql: insertSql,
+      params: [level, source, errorCode, message, contextJson, userId, userEmail, rayId, path, latencyMs, method, statusCode, clientIp, country, city],
+    });
+  }
+
+  if (validOps.length === 0) return true;
+
+  try {
+    return await executeWithAutoSchema(async (db: DbClient) => {
+      await db.batch(validOps);
+      return true;
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Lists error logs with pagination, level filter, search, sorting and bottleneck profiling.
  */
 export async function listErrorLogs(
@@ -209,9 +275,21 @@ export async function listErrorLogs(
       }
 
       if (options.search && options.search.trim()) {
-        const q = `%${options.search.trim().toLowerCase()}%`;
-        conditions.push('(LOWER(message) LIKE ? OR LOWER(source) LIKE ? OR LOWER(ray_id) LIKE ? OR LOWER(user_email) LIKE ? OR LOWER(path) LIKE ? OR LOWER(client_ip) LIKE ? OR LOWER(country) LIKE ? OR LOWER(city) LIKE ?)');
-        params.push(q, q, q, q, q, q, q, q);
+        const term = options.search.trim();
+        const q = `%${term.toLowerCase()}%`;
+        if (term.includes('@')) {
+          conditions.push('LOWER(user_email) LIKE ?');
+          params.push(q);
+        } else if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(term)) {
+          conditions.push('ray_id = ?');
+          params.push(term);
+        } else if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(term)) {
+          conditions.push('client_ip = ?');
+          params.push(term);
+        } else {
+          conditions.push('(LOWER(message) LIKE ? OR LOWER(source) LIKE ? OR LOWER(path) LIKE ? OR LOWER(city) LIKE ? OR LOWER(country) LIKE ?)');
+          params.push(q, q, q, q, q);
+        }
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -251,7 +329,7 @@ export async function listErrorLogs(
              MAX(latency_ms) as max_latency,
              SUM(CASE WHEN latency_ms >= 500 THEN 1 ELSE 0 END) as slow_count
            FROM system_error_logs
-           WHERE latency_ms IS NOT NULL AND path IS NOT NULL AND path != ''
+           WHERE latency_ms IS NOT NULL AND path IS NOT NULL AND path != '' AND created_at >= datetime('now', '-7 days')
            GROUP BY path, method
            ORDER BY avg_latency DESC
            LIMIT 8`

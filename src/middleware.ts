@@ -51,6 +51,9 @@ function sanitizeQuery(search: string): string {
   }
 }
 
+// Single-Flight Request Coalescing (Collapses edge cache stampedes on isolate)
+const inFlightEdgeRenders = new Map<string, Promise<Response>>();
+
 /**
  * Cloudflare Edge Cache Middleware for HTML Pages with Observability & Slow-Request Diagnostics
  */
@@ -387,8 +390,28 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     }
   }
 
-  // 5. Cache MISS: execute SSR page render
-  const response = await next();
+  // 5. Cache MISS: Single-Flight Request Coalescing (collapses concurrent cache-miss bursts into 1 render)
+  const canonicalKeyStr = canonicalUrl.toString();
+  const existingRender = inFlightEdgeRenders.get(canonicalKeyStr);
+  if (existingRender) {
+    try {
+      const coalescedRes = await existingRender;
+      return coalescedRes.clone();
+    } catch {
+      // Fallback to normal execution if joined promise failed
+    }
+  }
+
+  const renderPromise = (async () => {
+    return await next();
+  })();
+  inFlightEdgeRenders.set(canonicalKeyStr, renderPromise);
+  let response: Response;
+  try {
+    response = await renderPromise;
+  } finally {
+    inFlightEdgeRenders.delete(canonicalKeyStr);
+  }
 
   // 6. Cache successful or 404 HTML responses without module-level errors
   const contentType = response.headers.get('content-type') || '';

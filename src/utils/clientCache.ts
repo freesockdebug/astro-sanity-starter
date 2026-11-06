@@ -20,6 +20,26 @@ let dbInstance: IDBDatabase | null = null;
 const memoryFallback = new Map<string, CacheEnvelope>();
 const inFlightNetwork = new Map<string, Promise<any>>();
 
+// Cross-tab broadcast synchronization (TanStack Query pattern)
+const cacheSyncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('gv_cache_sync') : null;
+if (cacheSyncChannel) {
+  try {
+    (cacheSyncChannel as any).unref?.();
+  } catch {}
+  cacheSyncChannel.onmessage = (event) => {
+    try {
+      const { type, prefix } = event.data || {};
+      if (type === 'INVALIDATE_PREFIX' && prefix) {
+        for (const k of memoryFallback.keys()) {
+          if (k.startsWith(prefix)) memoryFallback.delete(k);
+        }
+      } else if (type === 'CLEAR') {
+        memoryFallback.clear();
+      }
+    } catch {}
+  };
+}
+
 async function doFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const timeoutSignal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
     ? AbortSignal.timeout(6000)
@@ -170,6 +190,10 @@ export const clientCache = {
    * Invalidates all keys beginning with a specific prefix (e.g. 'admin:orders' or 'buyer:orders').
    */
   async invalidatePrefix(prefix: string): Promise<void> {
+    try {
+      cacheSyncChannel?.postMessage({ type: 'INVALIDATE_PREFIX', prefix });
+    } catch {}
+
     const db = await getIDB();
     if (!db) {
       for (const k of memoryFallback.keys()) {
@@ -206,6 +230,10 @@ export const clientCache = {
    * Clears the entire cache store.
    */
   async clear(): Promise<void> {
+    try {
+      cacheSyncChannel?.postMessage({ type: 'CLEAR' });
+    } catch {}
+
     const db = await getIDB();
     if (!db) {
       memoryFallback.clear();

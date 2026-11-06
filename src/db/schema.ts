@@ -114,10 +114,13 @@ export const DDL_STATEMENTS = [
 
 export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
 
+let isSchemaVerifiedInIsolate = false;
+
 /**
  * Ensures database tables, columns and indexes exist
  */
 export async function ensureSchema(rawOrClient?: any) {
+  if (isSchemaVerifiedInIsolate) return;
   let target = rawOrClient;
   if (!target) {
     const client = await getDb();
@@ -170,6 +173,7 @@ export async function ensureSchema(rawOrClient?: any) {
       // Already exists
     }
   }
+  isSchemaVerifiedInIsolate = true;
 }
 
 /**

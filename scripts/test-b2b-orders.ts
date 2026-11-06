@@ -630,7 +630,9 @@ async function runSelfCheck() {
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 
-runSelfCheck().catch((err) => {
+runSelfCheck().then(() => {
+  process.exit(0);
+}).catch((err) => {
   console.error('❌ Self-check failed:', err);
   process.exit(1);
 });

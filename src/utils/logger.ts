@@ -3,7 +3,7 @@
 
 import { waitUntil as cfWaitUntil, env as cfWorkerEnv } from 'cloudflare:workers';
 import type { APIRoute, APIContext } from 'astro';
-import { recordErrorLog, type RecordErrorLogInput } from '../db/logs.repo';
+import { recordErrorLog, recordErrorLogsBatch, type RecordErrorLogInput } from '../db/logs.repo';
 import { getActiveProfiler } from './profiler';
 import { SecurityService } from './security';
 
@@ -75,31 +75,69 @@ function sanitizeData(data: any, depth = 0): any {
   return data;
 }
 
-/**
- * Dispatches async persistence to D1 via Cloudflare Workers native waitUntil.
- */
-function persistToD1Async(input: RecordErrorLogInput, customEnv?: any, ctx?: any) {
-  const env = customEnv || cfWorkerEnv || (typeof globalThis !== 'undefined' ? (globalThis as any).__CF_ENV__ : undefined);
-  const writePromise = recordErrorLog(input, env).catch(() => false);
+const isolateLogBuffer: RecordErrorLogInput[] = [];
+let isolateFlushTimer: any = null;
 
-  // 1. Prioritize Cloudflare Workers native waitUntil (automatically bound to current request context)
+function flushBufferedLogs(env: any, ctx?: any) {
+  if (isolateLogBuffer.length === 0) return;
+  const batch = isolateLogBuffer.splice(0, isolateLogBuffer.length);
+  const writePromise = recordErrorLogsBatch(batch, env).catch(() => false);
+
   if (typeof cfWaitUntil === 'function') {
     try {
       cfWaitUntil(writePromise);
       return;
-    } catch {
-      // Fallback if called outside active request context
-    }
+    } catch {}
   }
-
-  // 2. Fallback to passed ExecutionContext if present
   if (ctx && typeof ctx.waitUntil === 'function') {
     try {
       ctx.waitUntil(writePromise);
       return;
-    } catch {
-      // Non-blocking
+    } catch {}
+  }
+}
+
+/**
+ * Dispatches async persistence to D1 via Isolate micro-batching and Cloudflare Workers native waitUntil.
+ */
+function persistToD1Async(input: RecordErrorLogInput, customEnv?: any, ctx?: any) {
+  const env = customEnv || cfWorkerEnv || (typeof globalThis !== 'undefined' ? (globalThis as any).__CF_ENV__ : undefined);
+
+  // In local Node.js test/CLI environment without native Edge Worker runtime, write immediately to prevent test race conditions
+  if (typeof (globalThis as any).caches === 'undefined' && !ctx?.waitUntil) {
+    recordErrorLog(input, env).catch(() => false);
+    return;
+  }
+
+  isolateLogBuffer.push(input);
+
+  // If buffer reaches 10 items, flush immediately via single db.batch()
+  if (isolateLogBuffer.length >= 10) {
+    if (isolateFlushTimer) {
+      clearTimeout(isolateFlushTimer);
+      isolateFlushTimer = null;
     }
+    flushBufferedLogs(env, ctx);
+    return;
+  }
+
+  // Otherwise schedule micro-batch flush within 200ms
+  if (!isolateFlushTimer) {
+    isolateFlushTimer = setTimeout(() => {
+      isolateFlushTimer = null;
+      flushBufferedLogs(env, ctx);
+    }, 200);
+  }
+
+  // Bind active request waitUntil to ensure Worker isolate does not terminate before flush completes
+  if (typeof cfWaitUntil === 'function') {
+    try {
+      cfWaitUntil(new Promise((resolve) => setTimeout(resolve, 250)).then(() => flushBufferedLogs(env, ctx)));
+    } catch {}
+  } else if (ctx && typeof ctx.waitUntil === 'function') {
+    try {
+      ctx.waitUntil(new Promise((resolve) => setTimeout(resolve, 250)).then(() => flushBufferedLogs(env, ctx)));
+    } catch {}
   }
 }
 

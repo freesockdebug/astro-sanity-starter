@@ -15,32 +15,56 @@ import type {
   ListAdminUsersResult,
 } from './types';
 
+// 30-second Isolate cache for user status & tier (Hybrid Stateless-Stateful Auth)
+const userStatusCache = new Map<string, { record: UserRecord; exp: number }>();
+
+export function invalidateUserStatusCache(userId?: string | null, email?: string | null) {
+  if (userId) userStatusCache.delete(`id:${userId}`);
+  if (email) userStatusCache.delete(`email:${email.trim().toLowerCase()}`);
+}
+
 /**
  * Retrieves a user record by user ID or email
  */
 export async function getUserByIdOrEmail(userId?: string | null, email?: string | null): Promise<UserRecord | null> {
   if (!userId && !email) return null;
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
+  const cacheKey = userId ? `id:${userId}` : `email:${normalizedEmail}`;
+
+  const cached = userStatusCache.get(cacheKey);
+  if (cached && Date.now() < cached.exp) {
+    return cached.record;
+  }
 
   try {
     return await executeWithAutoSchema(async (db: DbClient) => {
+      let found: UserRecord | null = null;
+
       // 1. Fast path: Direct Primary Key lookup (1~3ms index seek)
       if (userId) {
-        const userById = await db.first<UserRecord>(
+        found = await db.first<UserRecord>(
           `SELECT * FROM users WHERE id = ? LIMIT 1`,
           [userId]
         );
-        if (userById) return userById;
       }
 
       // 2. Secondary fallback by email if ID not matched or not provided
-      if (normalizedEmail) {
-        return await db.first<UserRecord>(
+      if (!found && normalizedEmail) {
+        found = await db.first<UserRecord>(
           `SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1`,
           [normalizedEmail]
         );
       }
-      return null;
+
+      if (found) {
+        const exp = Date.now() + 30_000;
+        userStatusCache.set(`id:${found.id}`, { record: found, exp });
+        if (found.email) {
+          userStatusCache.set(`email:${found.email.toLowerCase()}`, { record: found, exp });
+        }
+      }
+
+      return found;
     });
   } catch (err) {
     console.warn('[DB] getUserByIdOrEmail non-fatal fallback:', err);
@@ -116,6 +140,7 @@ export async function upsertUserOnLogin(user: {
       [user.id, normalizedEmail, user.id, normalizedEmail, user.id, normalizedEmail, user.id]
     );
 
+    invalidateUserStatusCache(user.id, normalizedEmail);
     return await getUserByIdOrEmail(user.id, normalizedEmail);
   });
 }
@@ -234,7 +259,9 @@ export async function updateUserAdminMeta(
        WHERE id = ?`,
       [input.tier || null, input.status || null, input.adminNotes !== undefined ? input.adminNotes.trim() : null, userId]
     );
-    return res.changes > 0;
+    const success = res.changes > 0;
+    if (success) invalidateUserStatusCache(userId);
+    return success;
   });
 }
 
@@ -264,7 +291,9 @@ export async function updateUserProfile(
         userId,
       ]
     );
-    return res.changes > 0;
+    const success = res.changes > 0;
+    if (success) invalidateUserStatusCache(userId);
+    return success;
   });
 }
 

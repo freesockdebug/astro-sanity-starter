@@ -76,8 +76,12 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     return jsonNoCache({ ok: true, skipped: true });
   }
 
-  // 4. Resolve client IP/Geo and authenticated user session
+  // 4. Resolve client IP/Geo and check zero-I/O rate limit (Max 30 reports/min per IP)
   const clientMeta = (locals as any)?.clientMeta || SecurityService.resolveClientMeta(request);
+  const rateLimit = SecurityService.checkRateLimit(`client-error:${clientMeta.ip || 'unknown'}`, 30, 60);
+  if (!rateLimit.allowed) {
+    return jsonNoCache({ error: 'Too Many Requests' }, 429, { 'Retry-After': String(rateLimit.reset) });
+  }
   const rayId = (locals as any)?.rayId || request.headers.get('cf-ray') || crypto.randomUUID();
 
   const cookieHeader = request.headers.get('cookie') || '';
