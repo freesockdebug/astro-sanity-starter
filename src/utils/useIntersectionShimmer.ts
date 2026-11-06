@@ -145,6 +145,14 @@ export function useIntersectionShimmer(
   const registerElements = (elements: Element[]) => {
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
+      // 若容器内包含已从浏览器缓存加载完成的 <img>，直接标记为 loaded 并跳过观察
+      const childImg = el.querySelector('img') as HTMLImageElement | null;
+      if (childImg && childImg.complete && childImg.naturalWidth > 0) {
+        el.classList.add(loadedClass);
+        el.classList.remove(activeClass);
+        continue;
+      }
+
       if (el.classList.contains(loadedClass)) {
         el.classList.remove(activeClass);
         continue;
