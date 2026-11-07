@@ -128,13 +128,13 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
   function updateSyncBadge(status: 'synced' | 'syncing' | 'offline' | 'restored') {
     if (!options.syncStatusEl) return;
     if (status === 'syncing') {
-      options.syncStatusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>Syncing...</span>`;
+      options.syncStatusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-amber-700 font-medium"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>Syncing...</span>`;
     } else if (status === 'synced') {
-      options.syncStatusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">☁ Synced</span>`;
+      options.syncStatusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-700 font-medium">☁ Synced</span>`;
     } else if (status === 'restored') {
-      options.syncStatusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">☁ Cloud Restored</span>`;
+      options.syncStatusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-blue-700 font-medium">☁ Cloud Restored</span>`;
     } else {
-      options.syncStatusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-[#86868b]">Local only</span>`;
+      options.syncStatusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-[#52525b]">Local only</span>`;
     }
   }
 
@@ -203,10 +203,10 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
           <th
             data-col-id="${col.id}"
             style="width: ${col.defaultWidth}px;"
-            class="py-2.5 px-3 ${isRight ? 'text-right' : 'text-left'} text-[11px] font-semibold text-[#86868b] tracking-tight relative select-none truncate"
+            class="py-2.5 px-3 ${isRight ? 'text-right' : 'text-left'} text-[11px] font-semibold text-[#3f3f46] tracking-tight relative select-none truncate"
           >
             <span>${col.label}</span>
-            ${!isPinned ? `<span class="col-resizer absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/20 dark:hover:bg-white/20 transition-colors"></span>` : ''}
+            ${!isPinned ? `<span class="col-resizer absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/20 transition-colors"></span>` : ''}
           </th>
         `;
       })
@@ -275,7 +275,7 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
 
         return `
           <div
-            class="column-item flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-xs select-none transition-colors ${isPinned ? 'opacity-90' : 'cursor-grab active:cursor-grabbing'}"
+            class="column-item flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#f5f5f7] text-xs select-none transition-colors ${isPinned ? 'opacity-90' : 'cursor-grab active:cursor-grabbing'}"
             data-col-id="${col.id}"
             data-index="${index}"
             draggable="${!isPinned}"
@@ -285,19 +285,19 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
               <label class="flex items-center gap-2 truncate cursor-pointer">
                 <input
                   type="checkbox"
-                  class="col-visibility-chk accent-[#1d1d1f] dark:accent-white rounded cursor-pointer"
+                  class="col-visibility-chk accent-[#1d1d1f] rounded cursor-pointer"
                   data-col-id="${col.id}"
                   ${isVisible ? 'checked' : ''}
                   ${!canHide ? 'disabled title="This column is required"' : ''}
                 />
-                <span class="truncate text-[#1d1d1f] dark:text-zinc-100 font-medium ${!canHide ? 'opacity-80' : ''}">${col.label}</span>
+                <span class="truncate text-[#1d1d1f] font-semibold ${!canHide ? 'text-[#3f3f46]' : ''}">${col.label}</span>
               </label>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-              ${isPinned ? '<span class="text-[10px] text-[#86868b] px-1 bg-black/5 rounded">Pinned</span>' : `
+              ${isPinned ? '<span class="text-[10px] text-[#52525b] px-1 bg-black/5 rounded font-medium">Pinned</span>' : `
                 <button
                   type="button"
-                  class="move-col-btn p-1 text-[11px] rounded hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-20 disabled:pointer-events-none"
+                  class="move-col-btn p-1 text-[11px] text-[#1d1d1f] rounded hover:bg-black/10 disabled:opacity-20 disabled:pointer-events-none"
                   data-col-id="${col.id}"
                   data-dir="up"
                   ${!canMoveUp ? 'disabled' : ''}
@@ -305,7 +305,7 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
                 >↑</button>
                 <button
                   type="button"
-                  class="move-col-btn p-1 text-[11px] rounded hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-20 disabled:pointer-events-none"
+                  class="move-col-btn p-1 text-[11px] text-[#1d1d1f] rounded hover:bg-black/10 disabled:opacity-20 disabled:pointer-events-none"
                   data-col-id="${col.id}"
                   data-dir="down"
                   ${!canMoveDown ? 'disabled' : ''}

@@ -252,11 +252,11 @@ const sectionId = elementId || sectionAnchor || 'custom';
                   </span>
                 )}
                 {match ? (
-                  <h2 class={`${sizeClass} font-semibold tracking-tight text-[#1d1d1f] dark:text-white`}>
+                  <h2 class={`${sizeClass} font-semibold tracking-tight ${isDark ? 'text-white' : 'text-[#1d1d1f]'}`}>
                     <span>{match[1]}</span> <span class={titleMutedClass}>{match[2]}</span>
                   </h2>
                 ) : (
-                  <h2 class={`${sizeClass} font-semibold tracking-tight text-[#1d1d1f] dark:text-white`}>
+                  <h2 class={`${sizeClass} font-semibold tracking-tight ${isDark ? 'text-white' : 'text-[#1d1d1f]'}`}>
                     {rawHeadline}
                   </h2>
                 )}
@@ -296,10 +296,10 @@ const sectionId = elementId || sectionAnchor || 'custom';
               return (
                 <div class={`w-full ${isScreenFit ? 'flex-1 min-h-0 flex flex-col justify-center items-center my-auto overflow-hidden' : 'flex flex-col items-center justify-center'}`}>
                   <div class={`grid grid-cols-2 gap-3.5 sm:gap-6 w-full ${stageWidthClass} ${isScreenFit ? 'h-full max-h-[500px]' : ''} justify-center items-center`}>
-                    <div class={`apple-skeleton-surface relative overflow-hidden ${dualAspect} ${rounded} ${shadow} w-full ${isScreenFit ? 'h-full max-h-[500px]' : ''} ${isDark ? 'border border-zinc-800' : 'border border-black/5'} bg-[#f5f5f7] dark:bg-zinc-900 group`}>
+                    <div class={`apple-skeleton-surface relative overflow-hidden ${dualAspect} ${rounded} ${shadow} w-full ${isScreenFit ? 'h-full max-h-[500px]' : ''} ${isDark ? 'border border-zinc-800 bg-zinc-900' : 'border border-black/5 bg-[#f5f5f7]'} group`}>
                       <img src={img1} alt="Comparison 1" loading="lazy" decoding="async" onload={shimmerOnLoad} class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105" />
                     </div>
-                    <div class={`apple-skeleton-surface relative overflow-hidden ${dualAspect} ${rounded} ${shadow} w-full ${isScreenFit ? 'h-full max-h-[500px]' : ''} ${isDark ? 'border border-zinc-800' : 'border border-black/5'} bg-[#f5f5f7] dark:bg-zinc-900 group`}>
+                    <div class={`apple-skeleton-surface relative overflow-hidden ${dualAspect} ${rounded} ${shadow} w-full ${isScreenFit ? 'h-full max-h-[500px]' : ''} ${isDark ? 'border border-zinc-800 bg-zinc-900' : 'border border-black/5 bg-[#f5f5f7]'} group`}>
                       <img src={img2} alt="Comparison 2" loading="lazy" decoding="async" onload={shimmerOnLoad} class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105" />
                     </div>
                   </div>
@@ -331,7 +331,7 @@ const sectionId = elementId || sectionAnchor || 'custom';
               const imgSrcSet = SanityImageService.srcSet(block.image, [480, 800, 1200, 1600]);
               return (
                 <div class={`w-full ${isScreenFit ? 'flex-1 min-h-0 flex flex-col justify-center items-center my-auto overflow-hidden' : 'flex flex-col items-center justify-center'}`}>
-                  <div class={`apple-skeleton-surface relative overflow-hidden ${singleAspect} ${rounded} ${shadow} ${isScreenFit ? 'h-full max-h-[520px]' : ''} ${singleMaxWidth} w-full mx-auto ${isDark ? 'border border-zinc-800' : 'border border-black/5'} bg-[#f5f5f7] dark:bg-zinc-900 group`}>
+                  <div class={`apple-skeleton-surface relative overflow-hidden ${singleAspect} ${rounded} ${shadow} ${isScreenFit ? 'h-full max-h-[520px]' : ''} ${singleMaxWidth} w-full mx-auto ${isDark ? 'border border-zinc-800 bg-zinc-900' : 'border border-black/5 bg-[#f5f5f7]'} group`}>
                     <img src={imgUrl} srcset={imgSrcSet || undefined} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1200px" alt={block.caption || 'Illustration'} loading="lazy" decoding="async" onload={shimmerOnLoad} class="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105" />
                   </div>
                   {block.caption && <p class={`mt-2 text-xs text-center shrink-0 ${subtitleClass}`}>{block.caption}</p>}
@@ -384,10 +384,10 @@ const sectionId = elementId || sectionAnchor || 'custom';
           if (block._type === 'metricGridBlock' && block.metrics && block.metrics.length > 0) {
             const cols = block.columns === 2 ? 'grid-cols-1 sm:grid-cols-2' : block.columns === 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3';
             return (
-              <div class={`grid ${cols} gap-3 sm:gap-6 w-full ${stageWidthClass} shrink-0 ${isScreenFit ? 'pt-2 lg:pt-3 border-t border-black/5 dark:border-zinc-800' : 'py-6 border-y border-black/5 dark:border-zinc-800'}`}>
+              <div class={`grid ${cols} gap-3 sm:gap-6 w-full ${stageWidthClass} shrink-0 ${isScreenFit ? 'pt-2 lg:pt-3 border-t' : 'py-6 border-y'} ${isDark ? 'border-zinc-800' : 'border-black/5'}`}>
                 {block.metrics.map((m) => (
                   <div class="flex flex-col text-center sm:text-left">
-                    <span class="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight font-mono text-[#1d1d1f] dark:text-white mb-0.5">{m.value}</span>
+                    <span class={`text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight font-mono mb-0.5 ${isDark ? 'text-white' : 'text-[#1d1d1f]'}`}>{m.value}</span>
                     <span class="text-[10px] sm:text-xs font-mono uppercase tracking-wider font-semibold text-[#86868b] mb-0.5">{m.label}</span>
                     {m.desc && <span class={`text-xs leading-relaxed ${isScreenFit ? 'line-clamp-1' : ''} ${subtitleClass}`}>{m.desc}</span>}
                   </div>
@@ -416,7 +416,7 @@ const sectionId = elementId || sectionAnchor || 'custom';
                         {card.desc && <p class={`text-sm leading-relaxed ${subtitleClass}`}>{card.desc}</p>}
                       </div>
                       {cardImg && (
-                        <div class="apple-skeleton-surface relative mt-6 overflow-hidden rounded-xl aspect-[16/10] border border-zinc-200/40 dark:border-zinc-800">
+                        <div class={`apple-skeleton-surface relative mt-6 overflow-hidden rounded-xl aspect-[16/10] border ${isDark ? 'border-zinc-800' : 'border-zinc-200/40'}`}>
                           <img src={cardImg} alt={card.title} loading="lazy" onload={shimmerOnLoad} class="w-full h-full object-cover" />
                         </div>
                       )}
@@ -437,7 +437,7 @@ const sectionId = elementId || sectionAnchor || 'custom';
                   {block.quote}
                 </blockquote>
                 <div class="flex items-center gap-4">
-                  {avatarUrl && <img src={avatarUrl} alt={block.author || 'Avatar'} class="w-12 h-12 rounded-full object-cover border border-zinc-300 dark:border-zinc-700" />}
+                  {avatarUrl && <img src={avatarUrl} alt={block.author || 'Avatar'} class={`w-12 h-12 rounded-full object-cover border ${isDark ? 'border-zinc-700' : 'border-zinc-300'}`} />}
                   <div>
                     {block.author && <div class="font-semibold text-sm">{block.author}</div>}
                     {block.company && <div class={`text-xs ${subtitleClass}`}>{block.company}</div>}
@@ -451,7 +451,7 @@ const sectionId = elementId || sectionAnchor || 'custom';
           if (block._type === 'dividerBlock') {
             const hClass = block.height === 'small' ? 'h-6' : block.height === 'large' ? 'h-24' : 'h-12';
             if (block.style === 'spacer') return <div class={hClass} />;
-            if (block.style === 'glow') return <div class={`w-full h-px my-4 bg-gradient-to-r from-transparent via-zinc-400 dark:via-zinc-600 to-transparent`} />;
+            if (block.style === 'glow') return <div class={`w-full h-px my-4 bg-gradient-to-r from-transparent ${isDark ? 'via-zinc-600' : 'via-zinc-400'} to-transparent`} />;
             return <hr class={`w-full border-t my-4 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`} />;
           }
 
@@ -521,7 +521,7 @@ const sectionId = elementId || sectionAnchor || 'custom';
                 </div>
               )}
               {block._type === 'metricGridBlock' && block.metrics && (
-                <div class="grid grid-cols-2 gap-6 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                <div class={`grid grid-cols-2 gap-6 pt-4 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
                   {block.metrics.map((m) => (
                     <div>
                       <div class="text-3xl sm:text-4xl font-semibold">{m.value}</div>

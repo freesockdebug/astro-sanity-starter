@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+}
+
 /* ==========================================================================
    Clean Native Sliding Drawer (zero-dependency, replaces 180KB DaisyUI library)
    ========================================================================== */
