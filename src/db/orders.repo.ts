@@ -236,7 +236,7 @@ async function getOrderItems(orderId: string): Promise<OrderItem[]> {
  * Lists orders for admin workspace with counts & filters
  */
 export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promise<ListAdminOrdersResult> {
-  const { status, search, page = 1, limit = 20 } = filter;
+  const { status, search, timeWindow, page = 1, limit = 20 } = filter;
   const offset = (page - 1) * limit;
 
   return executeWithAutoSchema(async (db: DbClient) => {
@@ -246,6 +246,18 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
     if (status && status !== 'ALL') {
       whereClauses.push('status = ?');
       params.push(status);
+    }
+
+    if (timeWindow && timeWindow !== 'ALL') {
+      const windowMap: Record<string, string> = {
+        '24h': '-24 hours',
+        '7d': '-7 days',
+        '30d': '-30 days',
+      };
+      if (windowMap[timeWindow]) {
+        whereClauses.push(`created_at >= datetime('now', ?)`);
+        params.push(windowMap[timeWindow]);
+      }
     }
 
     if (search && search.trim()) {

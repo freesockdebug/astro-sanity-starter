@@ -4,6 +4,7 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import TableColumnController from '@components/admin/TableColumnController.astro';
+import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -20,6 +21,7 @@ const carrierOptions = systemSettings?.shipping_carriers
 
 const initialStatus = Astro.url.searchParams.get('status') || 'ALL';
 const initialSearch = Astro.url.searchParams.get('search') || '';
+const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
 const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
 const pageTitle = 'B2B Admin Fulfillment Workspace';
@@ -90,6 +92,12 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
         <span class="hidden xl:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#f5f5f7] border border-black/5 text-[11px] font-mono text-[#52525b]">
           Total: <strong id="total-orders-count" class="text-[#1d1d1f] font-semibold">-</strong>
         </span>
+
+        <!-- Quick Time Window Filter -->
+        <TableFilter
+          timeSelectId="orders-timewindow-select"
+          initialTimeWindow={initialTimeWindow}
+        />
 
         <!-- Search Form -->
         <AdminSearchInput
@@ -327,6 +335,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   let currentOrdersList: any[] = [];
   let currentStatus = 'ALL';
   let currentSearch = '';
+  let currentTimeWindow = 'ALL';
   let currentPage = 1;
   let currentLimit = 50;
   let currentTotalPages = 1;
@@ -917,23 +926,30 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
         url.searchParams.delete('search');
       }
 
+      if (currentTimeWindow && currentTimeWindow !== 'ALL') {
+        url.searchParams.set('timeWindow', currentTimeWindow);
+      } else {
+        url.searchParams.delete('timeWindow');
+      }
+
       if (currentPage > 1) {
         url.searchParams.set('page', String(currentPage));
       } else {
         url.searchParams.delete('page');
       }
 
-      window.history.pushState({ status: currentStatus, search: currentSearch, page: currentPage }, '', url.toString());
+      window.history.pushState({ status: currentStatus, search: currentSearch, timeWindow: currentTimeWindow, page: currentPage }, '', url.toString());
     }
 
     try {
       const qs = new URLSearchParams();
       if (currentStatus && currentStatus !== 'ALL') qs.set('status', currentStatus);
       if (currentSearch) qs.set('search', currentSearch);
+      if (currentTimeWindow && currentTimeWindow !== 'ALL') qs.set('timeWindow', currentTimeWindow);
       qs.set('page', String(currentPage));
       qs.set('limit', String(currentLimit));
 
-      const cacheKey = `admin:orders:${currentStatus}:${currentSearch}:${currentPage}:${currentLimit}`;
+      const cacheKey = `admin:orders:${currentStatus}:${currentSearch}:${currentTimeWindow}:${currentPage}:${currentLimit}`;
       await clientCache.fetchWithCache(
         cacheKey,
         `/api/admin/orders?${qs.toString()}`,
@@ -1113,8 +1129,11 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
     const url = new URL(window.location.href);
     currentStatus = url.searchParams.get('status') || 'ALL';
     currentSearch = url.searchParams.get('search') || '';
+    currentTimeWindow = url.searchParams.get('timeWindow') || 'ALL';
     currentPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
     if (searchInput) searchInput.value = currentSearch;
+    const timeSelect = document.getElementById('orders-timewindow-select') as HTMLSelectElement | null;
+    if (timeSelect) timeSelect.value = currentTimeWindow;
     if (clearSearchBtn) {
       if (currentSearch) clearSearchBtn.classList.remove('hidden');
       else clearSearchBtn.classList.add('hidden');
@@ -1292,7 +1311,18 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   const initialUrl = new URL(window.location.href);
   currentStatus = initialUrl.searchParams.get('status') || 'ALL';
   currentSearch = initialUrl.searchParams.get('search') || '';
+  currentTimeWindow = initialUrl.searchParams.get('timeWindow') || 'ALL';
   currentPage = Math.max(1, parseInt(initialUrl.searchParams.get('page') || '1', 10));
+
+  const timeSelect = document.getElementById('orders-timewindow-select') as HTMLSelectElement | null;
+  if (timeSelect) {
+    timeSelect.value = currentTimeWindow;
+    timeSelect.addEventListener('change', () => {
+      currentTimeWindow = timeSelect.value || 'ALL';
+      currentPage = 1;
+      fetchOrders();
+    });
+  }
 
   fetchOrders(false);
 </script>

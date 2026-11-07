@@ -99,6 +99,7 @@ export interface CreateOrderInput {
 export interface ListAdminOrdersFilter {
   search?: string;
   status?: string;
+  timeWindow?: string;
   page?: number;
   limit?: number;
 }
@@ -129,6 +130,7 @@ export interface ListAdminUsersFilter {
   search?: string;
   tier?: string;
   status?: string;
+  timeWindow?: string;
   page?: number;
   limit?: number;
 }

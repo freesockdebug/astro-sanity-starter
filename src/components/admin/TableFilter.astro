@@ -1,0 +1,102 @@
+---
+// src/components/admin/TableFilter.astro
+// Unified URLSearchParams-driven Quick Time Window & Status Filter Component
+
+export interface StatusTabItem {
+  key: string;
+  label: string;
+  href?: string;
+  countField?: string;
+  tabType?: string;
+}
+
+interface Props {
+  timeSelectId: string;
+  initialTimeWindow?: string;
+  includeOneHour?: boolean;
+  timeAllLabel?: string;
+  statusTabs?: StatusTabItem[];
+  activeStatusKey?: string;
+  tabsContainerId?: string;
+  tabButtonClass?: string;
+  class?: string;
+}
+
+const {
+  timeSelectId,
+  initialTimeWindow = 'ALL',
+  includeOneHour = false,
+  timeAllLabel = '🕒 All Time',
+  statusTabs = [],
+  activeStatusKey = 'ALL',
+  tabsContainerId,
+  tabButtonClass = 'status-tab',
+  class: className = '',
+} = Astro.props;
+---
+
+{
+  statusTabs.length > 0 && (
+    <div
+      id={tabsContainerId}
+      class="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-0.5 sm:pb-0 no-scrollbar"
+    >
+      {statusTabs.map((tab) => {
+        const isActive = activeStatusKey === tab.key;
+        const commonClass = `${tabButtonClass} px-2 xl:px-2.5 py-1 rounded-xl text-[11px] xl:text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 cursor-pointer ${
+          isActive
+            ? 'bg-[#1d1d1f] text-white border-black shadow-xs font-semibold'
+            : 'bg-[#f5f5f7] text-[#52525b] border-black/5 hover:border-black/20 hover:text-black'
+        }`;
+
+        return tab.href ? (
+          <a href={tab.href} data-tab-status={tab.key} class={commonClass}>
+            <span>{tab.label}</span>
+            {tab.countField && (
+              <span
+                data-tab-field={tab.countField}
+                class={`font-mono text-[10px] px-1.5 py-0.2 rounded-md ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-black/5 text-[#1d1d1f]'
+                }`}
+              >
+                -
+              </span>
+            )}
+          </a>
+        ) : (
+          <button
+            type="button"
+            data-tab-type={tab.tabType}
+            data-tab-key={tab.key}
+            class={commonClass}
+          >
+            <span>{tab.label}</span>
+            {tab.countField && (
+              <span
+                data-tab-count={tab.countField}
+                class={`font-mono text-[10px] px-1.5 py-0.2 rounded-md ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-black/5 text-[#1d1d1f]'
+                }`}
+              >
+                -
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  )
+}
+
+<select
+  id={timeSelectId}
+  aria-label="Filter by time window"
+  class={`h-7 px-2 rounded-xl bg-[#f5f5f7] border border-black/5 hover:border-black/15 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer shrink-0 transition-colors ${className}`}
+>
+  <option value="ALL" selected={initialTimeWindow === 'ALL'}>{timeAllLabel}</option>
+  {includeOneHour && <option value="1h" selected={initialTimeWindow === '1h'}>Past 1h</option>}
+  <option value="24h" selected={initialTimeWindow === '24h'}>Today (24h)</option>
+  <option value="7d" selected={initialTimeWindow === '7d'}>Past 7d</option>
+  <option value="30d" selected={initialTimeWindow === '30d'}>Past 30d</option>
+</select>
+

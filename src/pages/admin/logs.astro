@@ -5,6 +5,7 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import TableColumnController from '@components/admin/TableColumnController.astro';
+import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -237,16 +238,12 @@ const pageTitle = 'System Diagnostics & Performance';
         </select>
 
         <!-- Time Window Filter -->
-        <select
-          id="filter-timewindow-select"
-          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer"
-        >
-          <option value="ALL">Time: Past 30d</option>
-          <option value="1h">Past 1 Hour</option>
-          <option value="24h">Past 24 Hours</option>
-          <option value="7d">Past 7 Days</option>
-          <option value="30d">Past 30 Days</option>
-        </select>
+        <TableFilter
+          timeSelectId="filter-timewindow-select"
+          includeOneHour={true}
+          timeAllLabel="Time: Past 30d"
+          initialTimeWindow={initialTimeWindow}
+        />
       </div>
 
       <!-- Search & Sort Controls -->
@@ -1263,7 +1260,14 @@ const pageTitle = 'System Diagnostics & Performance';
       loadLogs(false);
     });
 
-    // Initial setup
+    // Initial setup - echo dropdown UI state to match initial URL parameters
+    if (levelSelect) levelSelect.value = currentLevel;
+    if (eventSelect) eventSelect.value = currentEventCode;
+    if (healthSelect) healthSelect.value = currentHealth;
+    if (timewindowSelect) timewindowSelect.value = currentTimeWindow;
+    if (searchInput) searchInput.value = currentSearch;
+    if (sortSelect) sortSelect.value = currentSort;
+
     tableSettings.renderHeader();
     tableSettings.renderMenu();
     loadLogs(false);

@@ -166,7 +166,7 @@ export async function upsertUserOnLogin(user: {
  * Lists customers/users with order metrics, search, and tier filters
  */
 export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise<ListAdminUsersResult> {
-  const { search, tier, status, page = 1, limit = 20 } = filter;
+  const { search, tier, status, timeWindow, page = 1, limit = 20 } = filter;
   const offset = (page - 1) * limit;
 
   return executeWithAutoSchema(async (db: DbClient) => {
@@ -181,6 +181,18 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     if (status && status !== 'ALL') {
       whereClauses.push('u.status = ?');
       params.push(status);
+    }
+
+    if (timeWindow && timeWindow !== 'ALL') {
+      const windowMap: Record<string, string> = {
+        '24h': '-24 hours',
+        '7d': '-7 days',
+        '30d': '-30 days',
+      };
+      if (windowMap[timeWindow]) {
+        whereClauses.push(`(u.last_login_at >= datetime('now', ?) OR u.created_at >= datetime('now', ?))`);
+        params.push(windowMap[timeWindow], windowMap[timeWindow]);
+      }
     }
 
     if (search && search.trim()) {

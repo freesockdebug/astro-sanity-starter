@@ -4,6 +4,7 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import TableColumnController from '@components/admin/TableColumnController.astro';
+import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -16,6 +17,7 @@ if (redirectResponse) return redirectResponse;
 const initialSearch = Astro.url.searchParams.get('search') || '';
 const initialTier = Astro.url.searchParams.get('tier') || 'ALL';
 const initialStatus = Astro.url.searchParams.get('status') || 'ALL';
+const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
 const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
 const pageTitle = 'Customer & Access Management';
@@ -86,6 +88,12 @@ const pageTitle = 'Customer & Access Management';
         <span class="hidden xl:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#f5f5f7] border border-black/5 text-[11px] font-mono text-[#52525b]">
           Total: <strong id="total-users-count" class="text-[#1d1d1f] font-semibold">-</strong>
         </span>
+
+        <!-- Quick Time Window Filter -->
+        <TableFilter
+          timeSelectId="users-timewindow-select"
+          initialTimeWindow={initialTimeWindow}
+        />
 
         <!-- Search Form -->
         <AdminSearchInput
@@ -277,6 +285,7 @@ const pageTitle = 'Customer & Access Management';
   let currentSearch = '';
   let currentTier = 'ALL';
   let currentStatus = 'ALL';
+  let currentTimeWindow = 'ALL';
   let currentPage = 1;
   let currentLimit = 30;
   let currentTotalPages = 1;
@@ -643,6 +652,9 @@ const pageTitle = 'Customer & Access Management';
       if (currentSearch) url.searchParams.set('search', currentSearch);
       else url.searchParams.delete('search');
 
+      if (currentTimeWindow && currentTimeWindow !== 'ALL') url.searchParams.set('timeWindow', currentTimeWindow);
+      else url.searchParams.delete('timeWindow');
+
       if (currentPage > 1) url.searchParams.set('page', String(currentPage));
       else url.searchParams.delete('page');
 
@@ -654,10 +666,11 @@ const pageTitle = 'Customer & Access Management';
       if (currentTier && currentTier !== 'ALL') qs.set('tier', currentTier);
       if (currentStatus && currentStatus !== 'ALL') qs.set('status', currentStatus);
       if (currentSearch) qs.set('search', currentSearch);
+      if (currentTimeWindow && currentTimeWindow !== 'ALL') qs.set('timeWindow', currentTimeWindow);
       qs.set('page', String(currentPage));
       qs.set('limit', String(currentLimit));
 
-      const cacheKey = `admin:users:${currentTier}:${currentStatus}:${currentSearch}:${currentPage}:${currentLimit}`;
+      const cacheKey = `admin:users:${currentTier}:${currentStatus}:${currentTimeWindow}:${currentSearch}:${currentPage}:${currentLimit}`;
       await clientCache.fetchWithCache(
         cacheKey,
         `/api/admin/users?${qs.toString()}`,
@@ -969,9 +982,13 @@ const pageTitle = 'Customer & Access Management';
     currentTier = url.searchParams.get('tier') || 'ALL';
     currentStatus = url.searchParams.get('status') || 'ALL';
     currentSearch = url.searchParams.get('search') || '';
+    currentTimeWindow = url.searchParams.get('timeWindow') || 'ALL';
     currentPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
 
     if (searchInput) searchInput.value = currentSearch;
+    const timeSelect = document.getElementById('users-timewindow-select') as HTMLSelectElement | null;
+    if (timeSelect) timeSelect.value = currentTimeWindow;
+
     if (clearBtn) {
       if (currentSearch) clearBtn.classList.remove('hidden');
       else clearBtn.classList.add('hidden');
@@ -985,7 +1002,18 @@ const pageTitle = 'Customer & Access Management';
   currentTier = initialUrl.searchParams.get('tier') || 'ALL';
   currentStatus = initialUrl.searchParams.get('status') || 'ALL';
   currentSearch = initialUrl.searchParams.get('search') || '';
+  currentTimeWindow = initialUrl.searchParams.get('timeWindow') || 'ALL';
   currentPage = Math.max(1, parseInt(initialUrl.searchParams.get('page') || '1', 10));
+
+  const timeSelect = document.getElementById('users-timewindow-select') as HTMLSelectElement | null;
+  if (timeSelect) {
+    timeSelect.value = currentTimeWindow;
+    timeSelect.addEventListener('change', () => {
+      currentTimeWindow = timeSelect.value || 'ALL';
+      currentPage = 1;
+      loadUsers();
+    });
+  }
 
   loadUsers(false);
 </script>

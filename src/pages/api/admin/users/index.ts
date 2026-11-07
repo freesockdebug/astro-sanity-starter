@@ -16,6 +16,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   const search = url.searchParams.get('search') || '';
   const tier = url.searchParams.get('tier') || 'ALL';
   const status = url.searchParams.get('status') || 'ALL';
+  const timeWindow = url.searchParams.get('timeWindow') || 'ALL';
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '30', 10)));
 
@@ -24,6 +25,7 @@ export const GET: APIRoute = async ({ request, url }) => {
       search,
       tier,
       status,
+      timeWindow,
       page,
       limit,
     }),

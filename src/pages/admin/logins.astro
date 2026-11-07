@@ -5,6 +5,7 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import TableColumnController from '@components/admin/TableColumnController.astro';
+import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -16,6 +17,7 @@ if (redirectResponse) return redirectResponse;
 
 const retentionDays = systemSettings?.login_retention_days || 90;
 const initialSearch = Astro.url.searchParams.get('search')?.trim() || '';
+const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
 
 const pageTitle = 'Login Audit Logs';
 ---
@@ -70,6 +72,12 @@ const pageTitle = 'Login Audit Logs';
       <div class="flex items-center gap-2 ml-auto shrink-0">
         <span id="log-count-summary" class="hidden xl:inline font-mono text-[11px] text-[#86868b]">(Loading...)</span>
 
+        <!-- Quick Time Window Filter -->
+        <TableFilter
+          timeSelectId="logins-timewindow-select"
+          initialTimeWindow={initialTimeWindow}
+        />
+
         <AdminSearchInput
           id="logins-search-input"
           clearBtnId="clear-logins-search"
@@ -120,6 +128,7 @@ const pageTitle = 'Login Audit Logs';
 
   let allLogins: any[] = [];
   let currentSearch = '';
+  let currentTimeWindow = 'ALL';
 
   const tableSettings = useTableSettings({
     tableKey: 'logins',
@@ -299,18 +308,43 @@ const pageTitle = 'Login Audit Logs';
     }
   }
 
+  function syncUrl() {
+    const url = new URL(window.location.href);
+    if (currentSearch) url.searchParams.set('search', currentSearch);
+    else url.searchParams.delete('search');
+
+    if (currentTimeWindow && currentTimeWindow !== 'ALL') url.searchParams.set('timeWindow', currentTimeWindow);
+    else url.searchParams.delete('timeWindow');
+
+    window.history.replaceState({}, '', url.toString());
+  }
+
   function filterAndRender() {
     const searchLower = currentSearch.toLowerCase();
-    const filtered = searchLower
-      ? allLogins.filter((l) =>
-          (l.email || '').toLowerCase().includes(searchLower) ||
-          (l.user_id || '').toLowerCase().includes(searchLower) ||
-          (l.ip || '').toLowerCase().includes(searchLower) ||
-          (l.city || '').toLowerCase().includes(searchLower) ||
-          (l.country || '').toLowerCase().includes(searchLower)
-        )
-      : allLogins;
+    const now = Date.now();
+    let windowMs = 0;
+    if (currentTimeWindow === '24h') windowMs = 24 * 60 * 60 * 1000;
+    else if (currentTimeWindow === '7d') windowMs = 7 * 24 * 60 * 60 * 1000;
+    else if (currentTimeWindow === '30d') windowMs = 30 * 24 * 60 * 60 * 1000;
 
+    const filtered = allLogins.filter((l) => {
+      if (windowMs > 0 && l.created_at) {
+        const raw = String(l.created_at).trim();
+        const utcStr = raw.endsWith('Z') ? raw : `${raw.replace(' ', 'T')}Z`;
+        const itemTime = new Date(utcStr).getTime();
+        if (!isNaN(itemTime) && now - itemTime > windowMs) return false;
+      }
+      if (!searchLower) return true;
+      return (
+        (l.email || '').toLowerCase().includes(searchLower) ||
+        (l.user_id || '').toLowerCase().includes(searchLower) ||
+        (l.ip || '').toLowerCase().includes(searchLower) ||
+        (l.city || '').toLowerCase().includes(searchLower) ||
+        (l.country || '').toLowerCase().includes(searchLower)
+      );
+    });
+
+    updateMetrics(filtered);
     renderTable(filtered);
   }
 
@@ -353,12 +387,7 @@ const pageTitle = 'Login Audit Logs';
       if (currentSearch) clearBtn.classList.remove('hidden');
       else clearBtn.classList.add('hidden');
     }
-
-    const url = new URL(window.location.href);
-    if (currentSearch) url.searchParams.set('search', currentSearch);
-    else url.searchParams.delete('search');
-    window.history.replaceState({}, '', url.toString());
-
+    syncUrl();
     filterAndRender();
   });
 
@@ -366,11 +395,22 @@ const pageTitle = 'Login Audit Logs';
     if (searchInput) searchInput.value = '';
     currentSearch = '';
     clearBtn.classList.add('hidden');
+    syncUrl();
+    filterAndRender();
+  });
 
+  // Browser navigation support
+  window.addEventListener('popstate', () => {
     const url = new URL(window.location.href);
-    url.searchParams.delete('search');
-    window.history.replaceState({}, '', url.toString());
-
+    currentSearch = url.searchParams.get('search')?.trim() || '';
+    currentTimeWindow = url.searchParams.get('timeWindow') || 'ALL';
+    if (searchInput) searchInput.value = currentSearch;
+    if (clearBtn) {
+      if (currentSearch) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+    }
+    const timeSelect = document.getElementById('logins-timewindow-select') as HTMLSelectElement | null;
+    if (timeSelect) timeSelect.value = currentTimeWindow;
     filterAndRender();
   });
 
@@ -378,5 +418,17 @@ const pageTitle = 'Login Audit Logs';
   tableSettings.renderMenu();
   const initialUrl = new URL(window.location.href);
   currentSearch = initialUrl.searchParams.get('search')?.trim() || '';
+  currentTimeWindow = initialUrl.searchParams.get('timeWindow') || 'ALL';
+
+  const timeSelect = document.getElementById('logins-timewindow-select') as HTMLSelectElement | null;
+  if (timeSelect) {
+    timeSelect.value = currentTimeWindow;
+    timeSelect.addEventListener('change', () => {
+      currentTimeWindow = timeSelect.value || 'ALL';
+      syncUrl();
+      filterAndRender();
+    });
+  }
+
   loadLogins();
 </script>
