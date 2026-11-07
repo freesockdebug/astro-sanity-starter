@@ -1,5 +1,5 @@
 import { client } from '@utils/sanity-client';
-import { createSwrCache } from '@utils/cache';
+import { createSwrCache, runInBackground } from '@utils/cache';
 import { kvGet, kvPut } from '@utils/kv';
 import { SECTIONS } from './blocks';
 import type { Page } from 'types';
@@ -35,7 +35,8 @@ const homePageCache = createSwrCache<Page | null>(
  * Service for fetching and resolving CMS Pages from Sanity
  */
 export class PageService {
-  private static pageSlugCache = new Map<string, { data: Page; timestamp: number }>();
+  private static pageSlugCache = new Map<string, { data: Page | null; timestamp: number }>();
+  private static inflightPage = new Map<string, Promise<Page[]>>();
 
   /**
    * Multi-tier cached retrieval of the homepage content (L1 isolate memory -> L2 Cloudflare KV -> L3 Sanity)
@@ -78,7 +79,10 @@ export class PageService {
   }
 
   /**
-   * Fetch a page by URL slug using multi-tier caching (L1 memory -> L2 KV -> L3 Sanity)
+   * Fetch a page by URL slug using multi-tier SWR caching (L1 memory -> L2 KV -> L3 Sanity)
+   * Fresh window: 60s (0ms instant memory return)
+   * Stale window: 1h (0ms instant memory return + non-blocking background revalidation)
+   * Negative caching: 1h KV & memory cache for 404 non-existent slugs (prevents cache penetration)
    */
   public static async getBySlug(slug?: string | null, customEnv?: any, forceRefresh = false): Promise<Page[]> {
     const formattedSlug = !slug || slug === '/' ? '/' : (slug.startsWith('/') ? slug : `/${slug}`);
@@ -88,33 +92,78 @@ export class PageService {
 
     if (!forceRefresh) {
       const memHit = this.pageSlugCache.get(cacheKey);
-      if (memHit && now - memHit.timestamp < 10_000) {
-        return [structuredClone(memHit.data)];
+      if (memHit) {
+        const age = now - memHit.timestamp;
+        // 1. Fresh window (60s): 0ms instant memory return (whether null or page)
+        if (age < 60_000) {
+          return memHit.data ? [structuredClone(memHit.data)] : [];
+        }
+        // 2. Stale tolerance window (1 hour): instant memory return + non-blocking background revalidate
+        if (age < 3_600_000) {
+          runInBackground(this.revalidateSlug(formattedSlug, unslashed, cacheKey, customEnv));
+          return memHit.data ? [structuredClone(memHit.data)] : [];
+        }
       }
+    }
 
+    return this.revalidateSlug(formattedSlug, unslashed, cacheKey, customEnv);
+  }
+
+  private static async revalidateSlug(
+    formattedSlug: string,
+    unslashed: string,
+    cacheKey: string,
+    customEnv?: any
+  ): Promise<Page[]> {
+    const existing = this.inflightPage.get(cacheKey);
+    if (existing) return existing;
+
+    const task = (async () => {
+      const now = Date.now();
+      // 1. Check L2 KV on cold boot
       try {
-        const kvHit = await kvGet<Page>(cacheKey, customEnv);
+        const kvHit = await kvGet<any>(cacheKey, customEnv);
         if (kvHit) {
+          if (kvHit.notFound) {
+            this.pageSlugCache.set(cacheKey, { data: null, timestamp: now });
+            return [];
+          }
           this.pageSlugCache.set(cacheKey, { data: kvHit, timestamp: now });
           return [structuredClone(kvHit)];
         }
       } catch {}
-    }
 
-    try {
-      const data = await client.fetch<Page[]>(
-        `*[_type == "page" && (slug.current == $formattedSlug || slug.current == $unslashed)] ${PAGE_QUERY_OBJ}`,
-        { formattedSlug, unslashed }
-      );
-      const res = data || [];
-      if (res.length > 0) {
-        this.pageSlugCache.set(cacheKey, { data: res[0], timestamp: now });
-        await kvPut(cacheKey, res[0], { expirationTtl: 86400 }, customEnv).catch(() => {});
+      // 2. Upstream Sanity fetch with PAGE_QUERY_OBJ
+      try {
+        const data = await client.fetch<Page[]>(
+          `*[_type == "page" && (slug.current == $formattedSlug || slug.current == $unslashed)] ${PAGE_QUERY_OBJ}`,
+          { formattedSlug, unslashed }
+        );
+        const res = data || [];
+        if (res.length > 0) {
+          const page = res[0];
+          this.pageSlugCache.set(cacheKey, { data: page, timestamp: now });
+          runInBackground(kvPut(cacheKey, page, { expirationTtl: 86400 }, customEnv));
+          return [structuredClone(page)];
+        } else {
+          // Negative cache for 1 hour to prevent 404 cache penetration attacks
+          this.pageSlugCache.set(cacheKey, { data: null, timestamp: now });
+          runInBackground(kvPut(cacheKey, { notFound: true }, { expirationTtl: 3600 }, customEnv));
+          return [];
+        }
+      } catch (err: any) {
+        console.error(`PageService.getBySlug failed for slug ${formattedSlug}:`, err?.message);
+        // Fallback to stale memory if available during upstream outage
+        const stale = this.pageSlugCache.get(cacheKey);
+        return stale && stale.data ? [structuredClone(stale.data)] : [];
       }
-      return res.map((p) => structuredClone(p));
-    } catch (err: any) {
-      console.error(`PageService.getBySlug failed for slug ${slug}:`, err?.message);
-      return [];
+    })();
+
+    this.inflightPage.set(cacheKey, task);
+    try {
+      return await task;
+    } finally {
+      this.inflightPage.delete(cacheKey);
     }
   }
 }

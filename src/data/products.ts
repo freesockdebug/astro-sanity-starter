@@ -274,7 +274,7 @@ const storySettingsCache = createSwrCache<any | null>(
  * Service class handling Product querying, caching, and fallback resolution
  */
 export class ProductService {
-  private static productSlugCache = new Map<string, { data: Product; timestamp: number }>();
+  private static productSlugCache = new Map<string, { data: Product | null; timestamp: number }>();
   private static inflightSlug = new Map<string, Promise<Product | null>>();
 
   public static seed(data: { products?: Product[]; categories?: any[]; catalogSettings?: any; productStorySettings?: any }): void {
@@ -401,12 +401,12 @@ export class ProductService {
       const age = now - memHit.timestamp;
       // 1. Fresh window (60s): 0ms instant memory return
       if (age < 60_000) {
-        return structuredClone(memHit.data);
+        return memHit.data ? structuredClone(memHit.data) : null;
       }
       // 2. Stale tolerance window (1 hour): instant memory return + non-blocking background revalidate
       if (age < 3_600_000) {
         runInBackground(this.revalidateSlug(slug, cacheKey, customEnv));
-        return structuredClone(memHit.data);
+        return memHit.data ? structuredClone(memHit.data) : null;
       }
     }
 
@@ -422,8 +422,12 @@ export class ProductService {
       const now = Date.now();
       // 1. Check L2 KV on cold boot
       try {
-        const kvHit = await kvGet<Product>(cacheKey, customEnv);
+        const kvHit = await kvGet<any>(cacheKey, customEnv);
         if (kvHit) {
+          if (kvHit.notFound) {
+            this.productSlugCache.set(slug, { data: null, timestamp: now });
+            return null;
+          }
           this.productSlugCache.set(slug, { data: kvHit, timestamp: now });
           return structuredClone(kvHit);
         }
@@ -440,13 +444,17 @@ export class ProductService {
           // Non-blocking L2 KV write in background (cuts 150-300ms off SSR blocking response time)
           runInBackground(kvPut(cacheKey, data, { expirationTtl: 86400 }, customEnv));
           return structuredClone(data);
+        } else {
+          // Negative cache for 1 hour to prevent 404 cache penetration attacks
+          this.productSlugCache.set(slug, { data: null, timestamp: now });
+          runInBackground(kvPut(cacheKey, { notFound: true }, { expirationTtl: 3600 }, customEnv));
+          return null;
         }
-        return null;
       } catch (err: any) {
         console.error(`ProductService.getBySlug failed for ${slug}:`, err?.message);
         // Fallback to stale memory if available during upstream outage
         const stale = this.productSlugCache.get(slug);
-        return stale ? structuredClone(stale.data) : null;
+        return stale && stale.data ? structuredClone(stale.data) : null;
       }
     })();
 

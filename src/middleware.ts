@@ -235,6 +235,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
 });
 
 async function handleRequest(context: any, next: any, pathname: string, url: URL, request: Request): Promise<Response> {
+  // Fast 404 interception for vulnerability scanners & bot probes (0ms edge shield, bypasses SSR & CMS)
+  const SCANNER_EXTENSIONS = /\.(php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do)$/i;
+  const SCANNER_PREFIXES = [
+    '/wp-', '/wordpress', '/phpmyadmin', '/pma', '/mysql', '/actuator',
+    '/.env', '/.git', '/vendor/', '/cgi-bin/', '/eval-stdin'
+  ];
+  const lowerPath = pathname.toLowerCase();
+  if (SCANNER_EXTENSIONS.test(pathname) || SCANNER_PREFIXES.some((p) => lowerPath.startsWith(p))) {
+    return new Response('Not Found', {
+      status: 404,
+      statusText: 'Not Found',
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'public, max-age=300, s-maxage=300',
+        'X-Robots-Tag': 'noindex, nofollow',
+      },
+    });
+  }
+
   // Fast canonical redirect for root admin path to primary orders console
   if (pathname === '/admin' || pathname === '/admin/') {
     return new Response(null, {

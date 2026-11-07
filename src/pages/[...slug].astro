@@ -30,9 +30,16 @@ if (rawSlug === 'admin' || rawSlug === '/admin' || rawSlug.startsWith('admin/') 
   return Astro.redirect('/admin/orders');
 }
 
-// Fast 404 for static asset extensions to prevent unnecessary CMS roundtrips or MIME confusion
-if (rawSlug && /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml|json)$/i.test(rawSlug)) {
-  return new Response(null, { status: 404, statusText: 'Not Found' });
+// Fast 404 for static asset extensions or vulnerability probes to prevent unnecessary CMS roundtrips
+if (rawSlug && (
+  /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml|json|php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|ini|log|ya?ml)$/i.test(rawSlug) ||
+  rawSlug.startsWith('wp-') || rawSlug.startsWith('.env') || rawSlug.startsWith('.git') || rawSlug.startsWith('phpmyadmin')
+)) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not Found',
+    headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' },
+  });
 }
 
 const formattedSlug = !rawSlug || rawSlug === '/' ? '/' : (rawSlug.startsWith('/') ? rawSlug : `/${rawSlug}`);
@@ -48,7 +55,7 @@ const page = pages && pages.length > 0 ? pages[0] : null;
 
 if (!page) {
   Astro.response.status = 404;
-  Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate');
+  Astro.response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600');
 } else {
   Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 }

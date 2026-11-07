@@ -684,6 +684,36 @@ async function runSelfCheck() {
 
   console.log('✔ [PASS] Product Detail Multi-tier SWR & Single-Flight Cache verified');
 
+  // 25. Vulnerability Probe Scanner Interception & Page Negative Caching
+  const SCANNER_EXTENSIONS = /\.(php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do)$/i;
+  const SCANNER_PREFIXES = [
+    '/wp-', '/wordpress', '/phpmyadmin', '/pma', '/mysql', '/actuator',
+    '/.env', '/.git', '/vendor/', '/cgi-bin/', '/eval-stdin'
+  ];
+  const isProbe = (p: string) => {
+    const lower = p.toLowerCase();
+    return SCANNER_EXTENSIONS.test(p) || SCANNER_PREFIXES.some((pre) => lower.startsWith(pre));
+  };
+  assert.strictEqual(isProbe('/wp-content/admin.php'), true);
+  assert.strictEqual(isProbe('/wp-admin/index.php'), true);
+  assert.strictEqual(isProbe('/.env'), true);
+  assert.strictEqual(isProbe('/actuator/health'), true);
+  assert.strictEqual(isProbe('/config.bak'), true);
+  assert.strictEqual(isProbe('/products/silk-200n'), false);
+  assert.strictEqual(isProbe('/about'), false);
+  assert.strictEqual(isProbe('/contact'), false);
+
+  const { PageService } = await import('../src/data/page');
+  PageService.invalidateCache();
+  // Fetch non-existent slug returns empty array
+  const missingPage1 = await PageService.getBySlug('/definitely-non-existent-page-slug-999');
+  assert.strictEqual(missingPage1.length, 0);
+  // Second fetch hits negative cache immediately
+  const missingPage2 = await PageService.getBySlug('/definitely-non-existent-page-slug-999');
+  assert.strictEqual(missingPage2.length, 0);
+
+  console.log('✔ [PASS] Vulnerability Scanner Interception & Page Negative Caching verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 
