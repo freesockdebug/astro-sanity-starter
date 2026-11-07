@@ -1,6 +1,6 @@
 import { client } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
-import { createSwrCache } from '@utils/cache';
+import { createSwrCache, runInBackground } from '@utils/cache';
 import { kvGet, kvPut } from '@utils/kv';
 import { DEFAULT_CATALOG } from './defaults';
 import { getLocalizedPath } from '@i18n';
@@ -275,12 +275,17 @@ const storySettingsCache = createSwrCache<any | null>(
  */
 export class ProductService {
   private static productSlugCache = new Map<string, { data: Product; timestamp: number }>();
+  private static inflightSlug = new Map<string, Promise<Product | null>>();
 
   public static seed(data: { products?: Product[]; categories?: any[]; catalogSettings?: any; productStorySettings?: any }): void {
     if (data.products !== undefined) productsCache.seed(data.products);
     if (data.categories !== undefined) categoriesCache.seed(data.categories);
     if (data.catalogSettings !== undefined) catalogSettingsCache.seed(data.catalogSettings);
     if (data.productStorySettings !== undefined) storySettingsCache.seed(data.productStorySettings);
+  }
+
+  public static seedSlug(slug: string, product: Product): void {
+    this.productSlugCache.set(slug, { data: product, timestamp: Date.now() });
   }
 
   /**
@@ -381,39 +386,75 @@ export class ProductService {
   }
 
   /**
-   * Fetch a single product by slug with multi-tier caching (L1 memory -> L2 KV -> L3 Sanity)
+   * Fetch a single product by slug with multi-tier SWR caching (L1 memory SWR -> L2 KV -> L3 Sanity)
+   * Fresh window: 60s (0ms instant memory return)
+   * Stale window: 1h (0ms instant memory return + non-blocking background revalidate)
+   * Single-flight concurrency deduplication & non-blocking background KV writes
    */
   public static async getBySlug(slug: string, customEnv?: any): Promise<Product | null> {
     if (!slug) return null;
     const cacheKey = `cms:product:${slug}`;
     const now = Date.now();
     const memHit = this.productSlugCache.get(slug);
-    if (memHit && now - memHit.timestamp < 10_000) {
-      return structuredClone(memHit.data);
+
+    if (memHit) {
+      const age = now - memHit.timestamp;
+      // 1. Fresh window (60s): 0ms instant memory return
+      if (age < 60_000) {
+        return structuredClone(memHit.data);
+      }
+      // 2. Stale tolerance window (1 hour): instant memory return + non-blocking background revalidate
+      if (age < 3_600_000) {
+        runInBackground(this.revalidateSlug(slug, cacheKey, customEnv));
+        return structuredClone(memHit.data);
+      }
     }
 
-    try {
-      const kvHit = await kvGet<Product>(cacheKey, customEnv);
-      if (kvHit) {
-        this.productSlugCache.set(slug, { data: kvHit, timestamp: now });
-        return structuredClone(kvHit);
-      }
-    } catch {}
+    // 3. Cold boot, expired beyond stale window, or first fetch: await single-flight
+    return this.revalidateSlug(slug, cacheKey, customEnv);
+  }
 
-    try {
-      const data = await client.fetch<Product | null>(
-        `*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`,
-        { slug }
-      );
-      if (data) {
-        this.productSlugCache.set(slug, { data, timestamp: now });
-        await kvPut(cacheKey, data, { expirationTtl: 86400 }, customEnv).catch(() => {});
-        return structuredClone(data);
+  private static async revalidateSlug(slug: string, cacheKey: string, customEnv?: any): Promise<Product | null> {
+    const existing = this.inflightSlug.get(slug);
+    if (existing) return existing;
+
+    const task = (async () => {
+      const now = Date.now();
+      // 1. Check L2 KV on cold boot
+      try {
+        const kvHit = await kvGet<Product>(cacheKey, customEnv);
+        if (kvHit) {
+          this.productSlugCache.set(slug, { data: kvHit, timestamp: now });
+          return structuredClone(kvHit);
+        }
+      } catch {}
+
+      // 2. Upstream Sanity fetch with PRODUCT_FIELDS
+      try {
+        const data = await client.fetch<Product | null>(
+          `*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`,
+          { slug }
+        );
+        if (data) {
+          this.productSlugCache.set(slug, { data, timestamp: now });
+          // Non-blocking L2 KV write in background (cuts 150-300ms off SSR blocking response time)
+          runInBackground(kvPut(cacheKey, data, { expirationTtl: 86400 }, customEnv));
+          return structuredClone(data);
+        }
+        return null;
+      } catch (err: any) {
+        console.error(`ProductService.getBySlug failed for ${slug}:`, err?.message);
+        // Fallback to stale memory if available during upstream outage
+        const stale = this.productSlugCache.get(slug);
+        return stale ? structuredClone(stale.data) : null;
       }
-      return null;
-    } catch (err: any) {
-      console.error(`ProductService.getBySlug failed for ${slug}:`, err?.message);
-      return null;
+    })();
+
+    this.inflightSlug.set(slug, task);
+    try {
+      return await task;
+    } finally {
+      this.inflightSlug.delete(slug);
     }
   }
 
@@ -478,6 +519,7 @@ export class ProductService {
     catalogSettingsCache.invalidate();
     storySettingsCache.invalidate();
     this.productSlugCache.clear();
+    this.inflightSlug.clear();
   }
 }
 

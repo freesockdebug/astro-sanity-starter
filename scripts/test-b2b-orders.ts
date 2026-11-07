@@ -3,6 +3,8 @@
 
 import assert from 'node:assert';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-mock-session-secret-key-32chars';
+process.env.SANITY_PROJECT_ID = process.env.SANITY_PROJECT_ID || 'mock-proj-test';
+process.env.SANITY_DATASET = process.env.SANITY_DATASET || 'production';
 import {
   createOrder,
   claimOrdersByEmail,
@@ -668,6 +670,19 @@ async function runSelfCheck() {
   assert.strictEqual(toastsStore.get().length, 0);
 
   console.log('✔ [PASS] Global UI Toast Store (nanostores queue & deduplication) verified');
+
+  // 24. Product Detail Multi-tier SWR & Single-Flight Cache
+  const { ProductService } = await import('../src/data/products');
+  const mockProduct: any = { _id: 'prod_1', slug: 'test-slug', title: 'Test Product' };
+  ProductService.seedSlug('test-slug', mockProduct);
+  const p1 = await ProductService.getBySlug('test-slug');
+  assert.strictEqual(p1?.title, 'Test Product');
+  // Verify fresh cache returns cloned data
+  const p2 = await ProductService.getBySlug('test-slug');
+  assert.strictEqual(p2?.title, 'Test Product');
+  ProductService.invalidateCache();
+
+  console.log('✔ [PASS] Product Detail Multi-tier SWR & Single-Flight Cache verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

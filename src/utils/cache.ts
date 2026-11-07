@@ -1,7 +1,7 @@
 import { waitUntil as cfWaitUntil } from 'cloudflare:workers';
 import { kvGet, kvPut } from './kv';
 
-function runInBackground(promise: Promise<any>) {
+export function runInBackground(promise: Promise<any>) {
   if (typeof cfWaitUntil === 'function') {
     try {
       cfWaitUntil(promise);

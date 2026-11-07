@@ -281,18 +281,14 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     return next();
   }
 
-  // 3. Bypass cache for APIs, Sanity Studio admin, Orders, Account, dynamic auth, and static asset chunks
+  // 3. Bypass cache for APIs, Sanity Studio admin, private user routes (Orders, Account, Admin), and static asset chunks
   const isOrdersPath = pathname === '/orders' || pathname.startsWith('/orders/') || pathname.includes('/orders');
   const isAccountPath = pathname === '/account' || pathname.startsWith('/account/') || pathname.includes('/account');
   const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.includes('/admin');
-  const cookieHeader = request.headers.get('cookie') || '';
-  const hasUserSession = Boolean(getCookieValue(cookieHeader, SESSION_COOKIE_NAME));
+  const isPrivateUserPath = isOrdersPath || isAccountPath || isAdminPath;
 
   if (
-    isOrdersPath ||
-    isAccountPath ||
-    isAdminPath ||
-    hasUserSession ||
+    isPrivateUserPath ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/studio') ||
     pathname.startsWith('/cdn-image/') ||
@@ -301,7 +297,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     pathname === '/sitemap-index.xml'
   ) {
     // Actively evict any stale cache entry for dynamic order/account/admin views
-    if ((isOrdersPath || isAccountPath || isAdminPath) && typeof caches !== 'undefined' && (caches as any).default) {
+    if (isPrivateUserPath && typeof caches !== 'undefined' && (caches as any).default) {
       try {
         const canonicalUrl = new URL(pathname, url.origin);
         await (caches as any).default.delete(new Request(canonicalUrl.toString(), { method: 'GET' }));
@@ -322,7 +318,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
       pathname.endsWith('.jpg') ||
       pathname.endsWith('.svg');
 
-    if ((isOrdersPath || isAccountPath || isAdminPath || hasUserSession) && !isStaticAsset) {
+    if (isPrivateUserPath && !isStaticAsset) {
       response = safeSetHeaders(response, {
         'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
         'Cloudflare-CDN-Cache-Control': 'no-store',
