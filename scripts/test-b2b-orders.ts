@@ -574,6 +574,35 @@ async function runSelfCheck() {
   const noiseBody = await noiseResp.json();
   assert.strictEqual(noiseBody.skipped, true);
 
+  // Test 4: RUM Web Vitals metric reporting
+  const vitalsReqContext: any = {
+    request: new Request('http://localhost/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'origin': 'http://localhost' },
+      body: JSON.stringify({
+        type: 'web-vitals',
+        message: 'Web Vitals: LCP 1250ms, CLS 0.02, INP 80ms, TTFB 140ms (good)',
+        path: '/products',
+        latencyMs: 1250,
+        lcp: 1250,
+        cls: 0.02,
+        inp: 80,
+        ttfb: 140,
+        rating: 'good',
+      }),
+    }),
+    url: new URL('http://localhost/api/client-error'),
+    locals: {},
+  };
+  const vitalsResp = await clientErrorPost(vitalsReqContext);
+  assert.strictEqual(vitalsResp.status, 202);
+  const vitalsBody = await vitalsResp.json();
+  assert.strictEqual(vitalsBody.ok, true);
+  assert.strictEqual(vitalsBody.level, 'info');
+
+  const logsWithVitals = await listErrorLogs({ level: 'info' });
+  assert(logsWithVitals.logs.some(l => l.source === 'client/web-vitals'));
+
   console.log('✔ [PASS] System Error, Performance Profiling & Log Level Governance verified');
 
   // 22. Client-Side Persistent Cache Layer (TTL, SWR & Invalidation)

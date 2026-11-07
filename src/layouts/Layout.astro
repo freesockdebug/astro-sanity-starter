@@ -525,6 +525,96 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
               var msg = error && (error.message || String(error));
               handleRuntimeError('manual', msg, customSource || location.pathname, undefined, undefined, error);
             };
+
+            // 8. RUM Web Vitals (LCP, CLS, INP, TTFB, FCP) via native PerformanceObserver
+            var lcpVal = 0;
+            var clsVal = 0;
+            var inpVal = 0;
+            if (typeof PerformanceObserver !== 'undefined') {
+              try {
+                var lcpObs = new PerformanceObserver(function (entryList) {
+                  var entries = entryList.getEntries();
+                  if (entries.length > 0) {
+                    lcpVal = Math.round(entries[entries.length - 1].startTime);
+                  }
+                });
+                lcpObs.observe({ type: 'largest-contentful-paint', buffered: true });
+              } catch (e) {}
+
+              try {
+                var clsObs = new PerformanceObserver(function (entryList) {
+                  var entries = entryList.getEntries();
+                  for (var i = 0; i < entries.length; i++) {
+                    var entry = entries[i];
+                    if (!entry.hadRecentInput) {
+                      clsVal += entry.value;
+                    }
+                  }
+                });
+                clsObs.observe({ type: 'layout-shift', buffered: true });
+              } catch (e) {}
+
+              try {
+                var inpObs = new PerformanceObserver(function (entryList) {
+                  var entries = entryList.getEntries();
+                  for (var i = 0; i < entries.length; i++) {
+                    var dur = Math.round(entries[i].duration);
+                    if (dur > inpVal) inpVal = dur;
+                  }
+                });
+                inpObs.observe({ type: 'first-input', buffered: true });
+              } catch (e) {}
+            }
+
+            var hasReportedVitals = false;
+            function sendWebVitals() {
+              if (hasReportedVitals || !isTelemetryEnabled || location.pathname.indexOf('/admin/logs') === 0) return;
+              hasReportedVitals = true;
+
+              var navTiming = typeof performance !== 'undefined' && performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+              var ttfbVal = navTiming ? Math.round(navTiming.responseStart) : 0;
+              var fcpVal = 0;
+              if (typeof performance !== 'undefined' && performance.getEntriesByType) {
+                var paints = performance.getEntriesByType('paint');
+                for (var i = 0; i < paints.length; i++) {
+                  if (paints[i].name === 'first-contentful-paint') {
+                    fcpVal = Math.round(paints[i].startTime);
+                    break;
+                  }
+                }
+              }
+
+              var roundedCls = Math.round(clsVal * 1000) / 1000;
+              var rating = (lcpVal > 4000 || roundedCls > 0.25 || inpVal > 500)
+                ? 'poor'
+                : (lcpVal > 2500 || roundedCls > 0.1 || inpVal > 200)
+                ? 'needs-improvement'
+                : 'good';
+
+              if (lcpVal > 0 || ttfbVal > 0) {
+                dispatchBeacon({
+                  type: 'web-vitals',
+                  message: 'Web Vitals: LCP ' + lcpVal + 'ms, CLS ' + roundedCls + ', INP ' + inpVal + 'ms, TTFB ' + ttfbVal + 'ms (' + rating + ')',
+                  path: location.pathname,
+                  latencyMs: lcpVal || ttfbVal,
+                  metric: 'ALL',
+                  lcp: lcpVal,
+                  cls: roundedCls,
+                  inp: inpVal,
+                  ttfb: ttfbVal,
+                  fcp: fcpVal,
+                  rating: rating,
+                  viewport: window.innerWidth + 'x' + window.innerHeight,
+                });
+              }
+            }
+
+            document.addEventListener('visibilitychange', function () {
+              if (document.visibilityState === 'hidden') {
+                sendWebVitals();
+              }
+            });
+            window.addEventListener('pagehide', sendWebVitals);
           })();
         </script>
     </body>

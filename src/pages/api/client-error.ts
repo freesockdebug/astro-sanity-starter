@@ -107,8 +107,47 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     : undefined;
 
   const isNavigationEvent = body?.type === 'navigation' || body?.level === 'info';
+  const isWebVitalsEvent = body?.type === 'web-vitals';
 
-  // Branch A: Client Navigation Event -> logged as info level
+  // Branch A1: Client Web Vitals Performance Metric
+  if (isWebVitalsEvent) {
+    const latencyMs = typeof body?.latencyMs === 'number' ? Math.round(body.latencyMs) : undefined;
+    logger.info(
+      {
+        module: 'client/web-vitals',
+        event: 'WEB_VITALS',
+        message,
+        path: pagePath,
+        method: 'CLIENT',
+        statusCode: 200,
+        rayId,
+        latencyMs,
+        userId: sessionUser?.id,
+        userEmail: sessionUser?.email,
+        clientIp: clientMeta.ip,
+        country: clientMeta.country,
+        city: clientMeta.city,
+        context: {
+          metric: typeof body?.metric === 'string' ? body.metric.slice(0, 32) : 'ALL',
+          lcp: typeof body?.lcp === 'number' ? body.lcp : undefined,
+          cls: typeof body?.cls === 'number' ? body.cls : undefined,
+          inp: typeof body?.inp === 'number' ? body.inp : undefined,
+          ttfb: typeof body?.ttfb === 'number' ? body.ttfb : undefined,
+          fcp: typeof body?.fcp === 'number' ? body.fcp : undefined,
+          rating: typeof body?.rating === 'string' ? body.rating.slice(0, 32) : undefined,
+          viewport: typeof body?.viewport === 'string' ? body.viewport.slice(0, 32) : undefined,
+          userAgent: clientMeta.userAgent?.slice(0, 300),
+          platform: clientMeta.platform || undefined,
+          deviceType: clientMeta.deviceType || undefined,
+        },
+      },
+      { cfEnv }
+    );
+
+    return jsonNoCache({ ok: true, rayId, level: 'info' }, 202);
+  }
+
+  // Branch A2: Client Navigation Event -> logged as info level
   if (isNavigationEvent) {
     logger.info(
       {

@@ -3,9 +3,11 @@ import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import sanity from '@sanity/astro';
 import cloudflare from '@astrojs/cloudflare';
+import { visualizer } from 'rollup-plugin-visualizer';
 import { sanityConfig } from './src/utils/sanity-client';
 
 const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('build');
+const isAnalyze = process.env.ANALYZE === 'true';
 
 // https://astro.build/config
 export default defineConfig({
@@ -29,7 +31,19 @@ export default defineConfig({
     },
     integrations: [sanity(sanityConfig)],
     vite: {
-        plugins: [tailwindcss()],
+        plugins: [
+            tailwindcss(),
+            ...(isAnalyze
+                ? [
+                    visualizer({
+                        filename: 'dist/stats.html',
+                        gzipSize: true,
+                        brotliSize: true,
+                        open: false,
+                    }),
+                  ]
+                : []),
+        ],
         server: {
             hmr: { path: '/vite-hmr/' },
             allowedHosts: true

@@ -5,6 +5,7 @@
     "dev": "node ./astro-cli.mjs dev --host 0.0.0.0 --port 3000",
     "start": "node ./astro-cli.mjs dev --host 0.0.0.0 --port 3000",
     "build": "node ./astro-cli.mjs build && node ./scripts/ensure-asset-aliases.cjs",
+    "build:analyze": "ANALYZE=true node ./astro-cli.mjs build && node ./scripts/ensure-asset-aliases.cjs",
     "check": "npx tsx scripts/check-preflight.ts",
     "check:fast": "npx tsx scripts/check-preflight.ts --fast",
     "check:full": "npx tsx scripts/check-preflight.ts --full",
@@ -43,7 +44,7 @@
     "@sanity/import": "^3.37.4",
     "@types/node": "^22.0.0",
     "configstore": "7.0.0",
-    "daisyui": "^5.0.0",
+    "rollup-plugin-visualizer": "^7.1.2",
     "typescript": "5.8.2",
     "vite": "^8.3.4"
   }
