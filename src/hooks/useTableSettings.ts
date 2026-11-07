@@ -440,8 +440,20 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
   }
 
   async function resetToDefaults() {
+    if (localSaveTimer) {
+      clearTimeout(localSaveTimer);
+      localSaveTimer = null;
+    }
+    if (cloudSaveTimer) {
+      clearTimeout(cloudSaveTimer);
+      cloudSaveTimer = null;
+    }
+
     columnsState = defaultColumns.map((c) => ({ ...c }));
     densityState = options.defaultDensity || 'cozy';
+    if (options.densityLabelEl) {
+      options.densityLabelEl.textContent = densityState === 'compact' ? 'Compact' : 'Cozy';
+    }
     localUpdatedAt = Date.now();
 
     try {
@@ -460,8 +472,11 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
       updateSyncBadge('offline');
     }
 
-    options.onDensityChange?.(densityState);
-    options.onSettingsChange?.();
+    if (options.onSettingsChange) {
+      options.onSettingsChange();
+    } else {
+      options.onDensityChange?.(densityState);
+    }
   }
 
   // Background Cloud Hydration (pull cross-device preferences)
@@ -482,6 +497,9 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
         columnsState = mergeSavedColumns(defaultColumns, cloudSettings.columns);
         if (cloudSettings.density === 'compact' || cloudSettings.density === 'cozy') {
           densityState = cloudSettings.density;
+          if (options.densityLabelEl) {
+            options.densityLabelEl.textContent = densityState === 'compact' ? 'Compact' : 'Cozy';
+          }
         }
         localUpdatedAt = cloudSettings.updatedAt;
 
@@ -492,8 +510,11 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
 
         renderHeader();
         renderMenu();
-        options.onDensityChange?.(densityState);
-        options.onSettingsChange?.();
+        if (options.onSettingsChange) {
+          options.onSettingsChange();
+        } else {
+          options.onDensityChange?.(densityState);
+        }
         updateSyncBadge('restored');
       } else {
         updateSyncBadge('synced');

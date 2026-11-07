@@ -89,6 +89,7 @@ const pageTitle = 'Login Audit Logs';
           densityBtnId="logins-density-btn"
           densityLabelId="logins-density-label"
           showDensityToggle={true}
+          class="hidden md:inline-flex"
         />
       </div>
     </header>
@@ -133,10 +134,10 @@ const pageTitle = 'Login Audit Logs';
     densityBtnEl: document.getElementById('logins-density-btn'),
     densityLabelEl: document.getElementById('logins-density-label'),
     onSettingsChange: () => {
-      filterAndRender();
+      if (allLogins && allLogins.length > 0) filterAndRender();
     },
     onDensityChange: () => {
-      filterAndRender();
+      if (allLogins && allLogins.length > 0) filterAndRender();
     },
   });
 

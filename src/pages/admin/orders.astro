@@ -112,6 +112,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
           densityBtnId="orders-density-btn"
           densityLabelId="orders-density-label"
           showDensityToggle={true}
+          class="hidden md:inline-flex"
         />
       </div>
     </header>
@@ -623,6 +624,14 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       return;
     }
 
+    // Preserve expanded detail rows across column reorder, resize, or density toggle
+    const expandedDesktopIds = new Set(
+      Array.from(document.querySelectorAll('tr.order-detail-row:not(.hidden)')).map((el) => el.id)
+    );
+    const expandedMobileIds = new Set(
+      Array.from(document.querySelectorAll('div[id^="detail-m-"]:not(.hidden)')).map((el) => el.id)
+    );
+
     // 1. Mobile Cards Layout (< md)
     const mobileCardsHtml = `
       <div class="block md:hidden divide-y divide-black/5">
@@ -636,6 +645,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
           const itemCount = order.items?.length || 0;
           const totalQty = Number(order.total_quantity || 0);
           const totalStyles = Number(order.total_styles || 0);
+          const isMobileExpanded = expandedMobileIds.has(`detail-m-${safeId}`);
 
           return `
             <div class="p-3.5 space-y-2.5 bg-white">
@@ -670,7 +680,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
                   title="Toggle order breakdown and line items"
                 >
                   <span>Items (${itemCount})</span>
-                  <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" style="${isMobileExpanded ? 'transform: rotate(180deg);' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
@@ -679,7 +689,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
                 </div>
               </div>
 
-              <div id="detail-m-${safeId}" class="hidden pt-2 border-t border-black/5 space-y-2.5">
+              <div id="detail-m-${safeId}" class="${isMobileExpanded ? '' : 'hidden '}pt-2 border-t border-black/5 space-y-2.5">
                 <div class="space-y-1.5">
                   <div class="flex items-center justify-between text-[11px] font-semibold text-[#1d1d1f]">
                     <span>Ordered Styles</span>
@@ -718,6 +728,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       const totalQty = Number(order.total_quantity || 0);
       const totalStyles = Number(order.total_styles || 0);
       const itemCount = order.items?.length || 0;
+      const isDesktopExpanded = expandedDesktopIds.has(`detail-${safeId}`);
 
       const cells = visibleCols.map((col) => {
         switch (col.id) {
@@ -763,7 +774,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
                     title="Toggle line items and customer details"
                   >
                     <span>Details</span>
-                    <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="w-3.5 h-3.5 transition-transform duration-200 chevron-icon" style="${isDesktopExpanded ? 'transform: rotate(180deg);' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
@@ -778,7 +789,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
 
       return `
         <tr class="hover:bg-[#fbfbfd] transition-colors">${cells}</tr>
-        <tr id="detail-${safeId}" class="order-detail-row hidden bg-[#fafafa] border-b border-black/5">
+        <tr id="detail-${safeId}" class="order-detail-row ${isDesktopExpanded ? '' : 'hidden '}bg-[#fafafa] border-b border-black/5">
           <td colspan="${visibleCols.length}" class="p-4 sm:p-6">
             <div class="space-y-4">
               <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-black/5 gap-2">
