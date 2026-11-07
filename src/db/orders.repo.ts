@@ -248,16 +248,15 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
       params.push(status);
     }
 
-    if (timeWindow && timeWindow !== 'ALL') {
-      const windowMap: Record<string, string> = {
-        '24h': '-24 hours',
-        '7d': '-7 days',
-        '30d': '-30 days',
-      };
-      if (windowMap[timeWindow]) {
-        whereClauses.push(`created_at >= datetime('now', ?)`);
-        params.push(windowMap[timeWindow]);
-      }
+    const windowMap: Record<string, string> = {
+      '24h': '-24 hours',
+      '7d': '-7 days',
+      '30d': '-30 days',
+    };
+
+    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
+      whereClauses.push(`created_at >= datetime('now', ?)`);
+      params.push(windowMap[timeWindow]);
     }
 
     if (search && search.trim()) {
@@ -267,6 +266,23 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Status capsules stats query: apply timeWindow and search, but exclude status so each tab shows its count for the filtered window
+    const statsWhereClauses: string[] = [];
+    const statsParams: any[] = [];
+
+    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
+      statsWhereClauses.push(`created_at >= datetime('now', ?)`);
+      statsParams.push(windowMap[timeWindow]);
+    }
+
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      statsWhereClauses.push('(order_no LIKE ? OR buyer_email LIKE ? OR company_name LIKE ?)');
+      statsParams.push(term, term, term);
+    }
+
+    const statsWhereSql = statsWhereClauses.length > 0 ? `WHERE ${statsWhereClauses.join(' AND ')}` : '';
 
     // 1, 2 & 3. Concurrently fetch filtered orders, total count, and status statistics (collapse 3 RTTs into 1)
     const [orders, countRow, statsRow] = await Promise.all([
@@ -285,7 +301,8 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
           SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as total_approved,
           SUM(CASE WHEN status = 'SHIPPED' THEN 1 ELSE 0 END) as total_shipped,
           SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as total_rejected
-        FROM orders`
+        FROM orders ${statsWhereSql}`,
+        statsParams
       ),
     ]);
 

@@ -183,16 +183,15 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       params.push(status);
     }
 
-    if (timeWindow && timeWindow !== 'ALL') {
-      const windowMap: Record<string, string> = {
-        '24h': '-24 hours',
-        '7d': '-7 days',
-        '30d': '-30 days',
-      };
-      if (windowMap[timeWindow]) {
-        whereClauses.push(`(u.last_login_at >= datetime('now', ?) OR u.created_at >= datetime('now', ?))`);
-        params.push(windowMap[timeWindow], windowMap[timeWindow]);
-      }
+    const windowMap: Record<string, string> = {
+      '24h': '-24 hours',
+      '7d': '-7 days',
+      '30d': '-30 days',
+    };
+
+    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
+      whereClauses.push(`(u.last_login_at >= datetime('now', ?) OR u.created_at >= datetime('now', ?))`);
+      params.push(windowMap[timeWindow], windowMap[timeWindow]);
     }
 
     if (search && search.trim()) {
@@ -202,6 +201,23 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Status/Tier capsules stats query: apply timeWindow and search, but exclude tier/status so each tab shows its count for the filtered window
+    const statsWhereClauses: string[] = [];
+    const statsParams: any[] = [];
+
+    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
+      statsWhereClauses.push(`(last_login_at >= datetime('now', ?) OR created_at >= datetime('now', ?))`);
+      statsParams.push(windowMap[timeWindow], windowMap[timeWindow]);
+    }
+
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      statsWhereClauses.push('(email LIKE ? OR name LIKE ? OR company LIKE ? OR country LIKE ?)');
+      statsParams.push(term, term, term, term);
+    }
+
+    const statsWhereSql = statsWhereClauses.length > 0 ? `WHERE ${statsWhereClauses.join(' AND ')}` : '';
 
     const querySql = `
       SELECT 
@@ -239,16 +255,21 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       SUM(CASE WHEN tier = 'STANDARD' THEN 1 ELSE 0 END) as total_standard,
       SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) as total_blocked,
       SUM(CASE WHEN (logto_roles LIKE '%admin%'${adminEmailsClause}) THEN 1 ELSE 0 END) as total_admins
-    FROM users`;
+    FROM users ${statsWhereSql}`;
 
-    const unclaimedSql = `SELECT COUNT(*) as unclaimed FROM orders WHERE user_id IS NULL OR user_id = ''`;
+    let unclaimedSql = `SELECT COUNT(*) as unclaimed FROM orders WHERE user_id IS NULL OR user_id = ''`;
+    const unclaimedParams: any[] = [];
+    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
+      unclaimedSql += ` AND created_at >= datetime('now', ?)`;
+      unclaimedParams.push(windowMap[timeWindow]);
+    }
 
     // Concurrently execute users query, count, tier distribution stats, and unclaimed orders count (1 RTT)
     const [users, countRow, statsRow, unclaimedRow] = await Promise.all([
       db.query<UserRecord>(querySql, [...params, limit, offset]),
       db.first<{ cnt: number }>(countSql, params),
-      db.first<any>(statsSql),
-      db.first<{ unclaimed: number }>(unclaimedSql),
+      db.first<any>(statsSql, statsParams),
+      db.first<{ unclaimed: number }>(unclaimedSql, unclaimedParams),
     ]);
 
     const total = Number(countRow?.cnt || 0);
