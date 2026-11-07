@@ -37,13 +37,12 @@ export const GET: APIRoute = async ({ params, request, url }) => {
     return new Response('Forbidden: Invalid Sanity image path', { status: 403 });
   }
 
-  // Construct format-aware cache key so AVIF and WebP clients don't cross-contaminate
+  // Construct format-aware cache key so WebP and legacy clients don't cross-contaminate.
+  // Note: Sanity CDN supports "jpg", "pjpg", "png", "webp", "gif" (does not support "avif").
   const acceptHeader = request.headers.get('Accept') || '';
   let formatVariant = 'orig';
   if (url.searchParams.get('auto')?.includes('format')) {
-    if (acceptHeader.includes('image/avif')) {
-      formatVariant = 'avif';
-    } else if (acceptHeader.includes('image/webp')) {
+    if (acceptHeader.includes('image/webp') || acceptHeader.includes('image/avif')) {
       formatVariant = 'webp';
     }
   }
@@ -76,12 +75,12 @@ export const GET: APIRoute = async ({ params, request, url }) => {
     }
   }
 
-  // Avoid Cloudflare subrequest cache poisoning by locking the upstream format (fm=avif/fm=webp)
-  // instead of auto=format when client supports modern image codecs
+  // Avoid Cloudflare subrequest cache poisoning by locking the upstream format (fm=webp)
+  // instead of auto=format when client supports modern WebP encoding
   const targetParams = new URLSearchParams(url.searchParams);
-  if (formatVariant === 'avif' || formatVariant === 'webp') {
+  if (formatVariant === 'webp') {
     targetParams.delete('auto');
-    targetParams.set('fm', formatVariant);
+    targetParams.set('fm', 'webp');
   }
   const queryString = targetParams.toString();
   const targetUrl = `https://cdn.sanity.io/${cleanPath}${queryString ? `?${queryString}` : ''}`;
