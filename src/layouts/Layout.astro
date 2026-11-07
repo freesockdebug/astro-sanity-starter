@@ -76,6 +76,24 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta name="generator" content={Astro.generator} />
 
+        <!-- High-priority Responsive LCP Image Preload (Avoids downloading mismatched 1200px on mobile) -->
+        {preloadHeroImage && (
+            typeof preloadHeroImage === 'object' ? (
+                <link
+                    rel="preload"
+                    as="image"
+                    href={preloadHeroImage.src}
+                    imagesrcset={preloadHeroImage.srcset}
+                    imagesizes={preloadHeroImage.sizes}
+                    fetchpriority="high"
+                />
+            ) : (
+                resolvedImage?.src && (
+                    <link rel="preload" as="image" href={resolvedImage.src} fetchpriority="high" />
+                )
+            )
+        )}
+
         <!-- Reusable Sanity & Astro SEO Component (Title, Canonical, OpenGraph, Twitter Cards) -->
         <SEO
             title={title}
@@ -96,24 +114,6 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
         {hreflangAlternates.map((alt) => (
             <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
         ))}
-
-        <!-- High-priority Responsive LCP Image Preload (Avoids downloading mismatched 1200px on mobile) -->
-        {preloadHeroImage && (
-            typeof preloadHeroImage === 'object' ? (
-                <link
-                    rel="preload"
-                    as="image"
-                    href={preloadHeroImage.src}
-                    imagesrcset={preloadHeroImage.srcset}
-                    imagesizes={preloadHeroImage.sizes}
-                    fetchpriority="high"
-                />
-            ) : (
-                resolvedImage?.src && (
-                    <link rel="preload" as="image" href={resolvedImage.src} fetchpriority="high" />
-                )
-            )
-        )}
 
         <!-- Low Priority Global Metadata -->
         <link rel="icon" type="image/svg+xml" href={configData?.favicon?.src || "/favicon.svg"} />

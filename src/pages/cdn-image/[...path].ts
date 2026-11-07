@@ -76,7 +76,15 @@ export const GET: APIRoute = async ({ params, request, url }) => {
     }
   }
 
-  const targetUrl = `https://cdn.sanity.io/${cleanPath}${url.search}`;
+  // Avoid Cloudflare subrequest cache poisoning by locking the upstream format (fm=avif/fm=webp)
+  // instead of auto=format when client supports modern image codecs
+  const targetParams = new URLSearchParams(url.searchParams);
+  if (formatVariant === 'avif' || formatVariant === 'webp') {
+    targetParams.delete('auto');
+    targetParams.set('fm', formatVariant);
+  }
+  const queryString = targetParams.toString();
+  const targetUrl = `https://cdn.sanity.io/${cleanPath}${queryString ? `?${queryString}` : ''}`;
 
   try {
     const upstreamRes = await fetch(targetUrl, {
@@ -100,14 +108,14 @@ export const GET: APIRoute = async ({ params, request, url }) => {
       return new Response('Forbidden: Upstream asset is not a valid image resource', { status: 403 });
     }
 
-    const imageBytes = await upstreamRes.arrayBuffer();
-
     const headers = new Headers();
     headers.set('Content-Type', contentType);
     headers.set('X-Content-Type-Options', 'nosniff');
     headers.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     headers.set('Vary', 'Accept');
-    headers.set('Content-Length', String(imageBytes.byteLength));
+
+    const contentLength = upstreamRes.headers.get('Content-Length');
+    if (contentLength) headers.set('Content-Length', contentLength);
 
     const etag = upstreamRes.headers.get('ETag');
     if (etag) headers.set('ETag', etag);
@@ -118,13 +126,15 @@ export const GET: APIRoute = async ({ params, request, url }) => {
     headers.set('CDN-Cache-Control', 'public, max-age=31536000, immutable');
     headers.set('X-Edge-Cache', 'MISS');
 
-    const finalResponse = new Response(imageBytes, {
-      status: upstreamRes.status,
-      headers
-    });
+    // Zero-Copy Streaming: split upstream stream for concurrent client delivery and background edge caching
+    const [streamForClient, streamForCache] = upstreamRes.body ? upstreamRes.body.tee() : [null, null];
 
-    if (cache) {
-      const cachePutPromise = cache.put(cacheKey, finalResponse.clone());
+    if (cache && streamForCache) {
+      const cacheResponse = new Response(streamForCache, {
+        status: upstreamRes.status,
+        headers
+      });
+      const cachePutPromise = cache.put(cacheKey, cacheResponse);
       try {
         cfWaitUntil(cachePutPromise);
       } catch {
@@ -132,7 +142,10 @@ export const GET: APIRoute = async ({ params, request, url }) => {
       }
     }
 
-    return finalResponse;
+    return new Response(streamForClient || upstreamRes.body, {
+      status: upstreamRes.status,
+      headers
+    });
   } catch (err: any) {
     return new Response(`Image Proxy Error: ${err?.message || 'Failed to fetch image'}`, { status: 502 });
   }

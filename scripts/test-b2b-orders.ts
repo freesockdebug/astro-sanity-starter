@@ -745,6 +745,30 @@ async function runSelfCheck() {
 
   console.log('✔ [PASS] Mobile/Tablet/Desktop & iOS/WeChat Device Type Extraction verified');
 
+  // 27. Image Optimization & Aspect-Ratio Cropping
+  const { SanityImageService } = await import('../src/utils/image');
+  const sampleSanityUrl = 'https://cdn.sanity.io/images/mock/prod/abc-896x1200.jpg';
+  const heroOpt = SanityImageService.hero(sampleSanityUrl, 1600);
+  assert(heroOpt.includes('w=1600'));
+  assert(heroOpt.includes('q=75'));
+
+  const macroOpt = SanityImageService.macro(sampleSanityUrl, 600, 400, 'crop');
+  assert(macroOpt.includes('w=600'));
+  assert(macroOpt.includes('h=400'));
+  assert(macroOpt.includes('fit=crop'));
+  assert(macroOpt.includes('q=72'));
+
+  const srcSetOpt = SanityImageService.srcSet(sampleSanityUrl, [360, 480, 600], { aspectRatio: 2 / 3, fit: 'crop', quality: 72 });
+  assert(srcSetOpt.includes('w=360&h=240'));
+  assert(srcSetOpt.includes('w=480&h=320'));
+  assert(srcSetOpt.includes('w=600&h=400'));
+
+  const preloadOpt = SanityImageService.resolveHeroPreload(sampleSanityUrl);
+  assert(preloadOpt?.src.includes('q=75'));
+  assert(preloadOpt?.srcset?.includes('q=75'));
+
+  console.log('✔ [PASS] Image Optimization, Crop Mode & Preload Alignment verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 

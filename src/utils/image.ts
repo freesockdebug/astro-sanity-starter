@@ -9,6 +9,7 @@
 export interface ImageOptimizationOptions {
   width?: number;
   height?: number;
+  aspectRatio?: number;
   quality?: number;
   format?: 'auto' | 'webp' | 'avif' | 'jpg';
   fit?: 'clip' | 'crop' | 'fill' | 'fillmax' | 'max' | 'scale' | 'min';
@@ -71,7 +72,8 @@ export class SanityImageService {
     const {
       width,
       height,
-      quality = 80,
+      aspectRatio,
+      quality = 75,
       format = 'auto',
       fit = 'max'
     } = options;
@@ -83,9 +85,14 @@ export class SanityImageService {
 
       const parsedUrl = new URL(fullUrl.startsWith('http') ? fullUrl : `https://cdn.sanity.io${fullUrl.startsWith('/') ? '' : '/'}${fullUrl}`);
       if (width) parsedUrl.searchParams.set('w', String(width));
-      if (height) parsedUrl.searchParams.set('h', String(height));
+      const targetHeight = height || (width && aspectRatio ? Math.round(width * aspectRatio) : undefined);
+      if (targetHeight) parsedUrl.searchParams.set('h', String(targetHeight));
       if (quality) parsedUrl.searchParams.set('q', String(quality));
-      if (format) parsedUrl.searchParams.set('auto', 'format');
+      if (format === 'auto') {
+        parsedUrl.searchParams.set('auto', 'format');
+      } else if (format) {
+        parsedUrl.searchParams.set('fm', format);
+      }
       if (fit) parsedUrl.searchParams.set('fit', fit);
 
       const optimizedUrl = parsedUrl.toString();
@@ -115,24 +122,29 @@ export class SanityImageService {
   }
 
   /**
-   * Helper to get high-performance card thumbnail image (e.g. 600px wide, 80% quality, auto-format WebP)
+   * Helper to get high-performance card thumbnail image (e.g. 600px wide, 72% quality, auto-format WebP)
    */
   public static thumbnail(url?: string | null, width: number = 600): string {
-    return this.optimize(url, { width, quality: 80, format: 'auto' });
+    return this.optimize(url, { width, quality: 72, format: 'auto' });
   }
 
   /**
-   * Helper to get hero or high-resolution banner image (e.g. 1600px wide)
+   * Helper to get hero or high-resolution banner image (e.g. 1600px wide, 75% quality)
    */
   public static hero(url?: string | null, width: number = 1600): string {
-    return this.optimize(url, { width, quality: 85, format: 'auto' });
+    return this.optimize(url, { width, quality: 75, format: 'auto' });
   }
 
   /**
-   * Helper to get macro texture / specification visual (e.g. 1200px wide)
+   * Helper to get macro texture / specification visual (e.g. 600-1200px, 72% quality)
    */
-  public static macro(url?: string | null, width: number = 1200): string {
-    return this.optimize(url, { width, quality: 85, format: 'auto' });
+  public static macro(
+    url?: string | null,
+    width: number = 1200,
+    height?: number,
+    fit: ImageOptimizationOptions['fit'] = 'max'
+  ): string {
+    return this.optimize(url, { width, height, quality: 72, format: 'auto', fit });
   }
 
   /**
@@ -155,7 +167,7 @@ export class SanityImageService {
    */
   public static srcSet(
     url?: string | null,
-    widths: number[] = [480, 800, 1200, 1600],
+    widths: number[] = [480, 640, 800, 1200, 1600],
     options: Omit<ImageOptimizationOptions, 'width'> = {}
   ): string {
     if (!url || typeof url !== 'string') {
@@ -184,7 +196,7 @@ export class SanityImageService {
    */
   public static resolveHeroPreload(
     url?: string | null,
-    widths: number[] = [480, 800, 1200, 1600],
+    widths: number[] = [480, 640, 800, 1200, 1600],
     sizes: string = '(max-width: 640px) 100vw, (max-width: 1024px) 95vw, 1520px'
   ): { src: string; srcset?: string; sizes?: string } | undefined {
     if (!url || typeof url !== 'string') {
@@ -204,7 +216,7 @@ export class SanityImageService {
     }
     return {
       src: this.hero(url, widths[widths.length - 1] || 1600),
-      srcset: this.srcSet(url, widths, { quality: 80 }),
+      srcset: this.srcSet(url, widths, { quality: 75 }),
       sizes,
     };
   }

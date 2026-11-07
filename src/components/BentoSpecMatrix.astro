@@ -119,8 +119,8 @@ const toText = (val: any, fallback = ''): string => {
 
 const rfqSettings = await fetchRfqSettings();
 const rawMacroImage = (typeof propMacroImage === 'string' ? propMacroImage.trim() : (propMacroImage?.asset?.url || DEFAULT_SPEC_MATRIX.macroImage));
-const macroImage = SanityImageService.macro(rawMacroImage, 1200);
-const macroSrcSet = SanityImageService.srcSet(rawMacroImage, [360, 600, 1000]);
+const macroImage = SanityImageService.macro(rawMacroImage, 600, 400, 'crop');
+const macroSrcSet = SanityImageService.srcSet(rawMacroImage, [360, 480, 600, 900], { aspectRatio: 2 / 3, fit: 'crop', quality: 72 });
 const primaryButtonText = toText(propPrimaryText) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
 const safeSecondaryText = toText(secondaryButtonText, DEFAULT_SPEC_MATRIX.secondaryButtonText);
 const resolvedSecondaryText = (safeSecondaryText && safeSecondaryText !== DEFAULT_SPEC_MATRIX.secondaryButtonText) ? safeSecondaryText : (currentLang !== 'en' ? t('hero.exploreLineSheets') : safeSecondaryText);
@@ -179,7 +179,7 @@ const sectionId = elementId || sectionAnchor || 'specs';
           <img
             src={macroImage}
             srcset={macroSrcSet || undefined}
-            sizes="(max-width: 640px) 82vw, 600px"
+            sizes="(max-width: 640px) 320px, (max-width: 1024px) 480px, 600px"
             width="600"
             height="400"
             alt="Macro ribbed textile texture"

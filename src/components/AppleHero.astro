@@ -54,7 +54,7 @@ const toText = (val: any, fallback = ''): string => {
 const rfqSettings = await fetchRfqSettings();
 const rawHeroImage = (typeof propHeroImage === 'string' ? propHeroImage.trim() : (propHeroImage?.asset?.url || DEFAULT_FALLBACK_IMAGE));
 const heroImage = SanityImageService.hero(rawHeroImage, 1600);
-const heroSrcSet = SanityImageService.srcSet(rawHeroImage, [480, 800, 1200, 1600], { quality: 80 });
+const heroSrcSet = SanityImageService.srcSet(rawHeroImage, [480, 640, 800, 1200, 1600], { quality: 75 });
 const primaryButtonText = toText(propPrimaryText) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
 const safeSecondaryText = toText(secondaryButtonText, DEFAULT_HERO.secondaryButtonText);
 const resolvedSecondaryText = (safeSecondaryText && safeSecondaryText !== DEFAULT_HERO.secondaryButtonText) ? safeSecondaryText : t('hero.exploreLineSheets');
@@ -155,7 +155,7 @@ const sectionId = elementId || sectionAnchor || 'hero';
   </div>
 
   <!-- Showcase Rail (up to 1520px): Full-width Immersive Product Macro Visual -->
-  <div class="apple-rail-showcase hero-showcase-box apple-skeleton-surface relative mt-3 sm:mt-4 rounded-2xl sm:rounded-3xl overflow-hidden bg-[#f5f5f7] border border-black/5 shadow-xl group flex-1 min-h-0 lg:max-h-[560px]">
+  <div class="apple-rail-showcase hero-showcase-box relative mt-3 sm:mt-4 rounded-2xl sm:rounded-3xl overflow-hidden bg-[#f5f5f7] border border-black/5 shadow-xl group flex-1 min-h-0 lg:max-h-[560px]">
     <img
       src={heroImage}
       srcset={heroSrcSet || undefined}
@@ -167,7 +167,6 @@ const sectionId = elementId || sectionAnchor || 'hero';
       loading="eager"
       fetchpriority="high"
       decoding="async"
-      onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
     />
   </div>
 </section>
