@@ -23,141 +23,128 @@ const pageTitle = 'Customer & Access Management';
   currentTab="users"
   sessionEmail={sessionUser?.email || ''}
   pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
 >
-  <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-6 border-b border-black/5 gap-3">
-    <div>
-      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Customers & Access</h1>
-      <p class="text-xs text-[#86868b] mt-0.5">Manage customer tiering, enterprise profiles, and security flags</p>
-    </div>
-    <div class="flex items-center gap-2 self-start sm:self-auto">
-      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
-        Total: <strong id="total-users-count" class="text-[#1d1d1f] font-semibold">-</strong> buyers
-      </span>
-    </div>
-  </div>
-
-  <!-- Metric Cards Header (Compact 4-grid on mobile, expanded on desktop) -->
-  <div class="grid grid-cols-4 gap-1.5 sm:gap-4 mb-4 sm:mb-6" id="users-metrics-container">
-    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Total</span>
-      <div class="flex items-baseline gap-1 sm:gap-2">
-        <span id="stat-total" class="text-base sm:text-2xl font-bold font-mono tracking-tight">-</span>
-        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Buyers</span>
-      </div>
-    </div>
-
-    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[9px] sm:text-[11px] text-amber-800 uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">VIPs</span>
-      <div class="flex items-baseline gap-1 sm:gap-2">
-        <span id="stat-vips" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-amber-700">-</span>
-        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">High-val</span>
-      </div>
-    </div>
-
-    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Guest</span>
-      <div class="flex items-baseline gap-1 sm:gap-2">
-        <span id="stat-guest" class="text-base sm:text-2xl font-bold font-mono tracking-tight">-</span>
-        <a href="/admin/orders" class="text-[9px] sm:text-xs text-blue-600 hover:underline hidden xs:inline">Orders →</a>
-      </div>
-    </div>
-
-    <div
-      id="stat-blocked-card"
-      class="p-2 sm:p-4 rounded-xl sm:rounded-2xl border shadow-2xs transition-all block bg-white border-black/5 hover:border-rose-200 cursor-pointer"
-    >
-      <span class="text-[9px] sm:text-[11px] text-rose-800 uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Blocked</span>
-      <div class="flex items-baseline gap-1 sm:gap-2">
-        <span id="stat-blocked" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-rose-700">-</span>
-        <span id="stat-blocked-label" class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Filter</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Sticky Toolbar (Filters & Search) -->
-  <div class="sticky top-14 lg:top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" id="user-tabs-container">
-      {[
-        { key: 'ALL', label: 'All Buyers', isBlocked: false },
-        { key: 'VIP', label: 'VIP', isBlocked: false },
-        { key: 'PARTNER', label: 'Partners', isBlocked: false },
-        { key: 'STANDARD', label: 'Standard', isBlocked: false },
-        { key: 'BLOCKED', label: 'Blocked', isBlocked: true },
-      ].map((tab) => (
-        <button
-          type="button"
-          data-tab-type={tab.isBlocked ? 'blocked' : 'tier'}
-          data-tab-key={tab.key}
-          class="user-tab px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5 bg-white text-[#52525b] border-black/5 hover:border-black/20 cursor-pointer"
-        >
-          <span>{tab.label}</span>
-          <span data-tab-count={tab.key} class="font-mono text-[10px] px-1.5 py-0.2 rounded-md bg-[#f5f5f7] text-[#1d1d1f]">
-            -
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- 1. Single-Line Command Bar (Fixed Header) -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+      <!-- Left: Title & Customer Tier Capsules -->
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div class="flex items-center gap-1.5 shrink-0">
+          <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Customers</h1>
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+            Access
           </span>
-        </button>
-      ))}
-    </div>
+        </div>
 
-    <!-- Search Form -->
-    <form id="users-search-form" class="relative flex items-center w-full sm:w-72">
-      <input
-        type="text"
-        id="users-search-input"
-        name="search"
-        value={initialSearch}
-        placeholder="Search email, name, company..."
-        class="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-white border border-black/10 focus:outline-none focus:border-black placeholder:text-[#86868b] transition-all shadow-2xs"
-      />
-      <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <button
-        type="button"
-        id="clear-users-search"
-        class={`absolute right-2.5 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
-      >
-        ✕
-      </button>
-    </form>
-  </div>
+        <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
 
-  <!-- Users Content Table & Cards -->
-  <div id="users-container" class="bg-white rounded-3xl border border-black/10 shadow-sm overflow-hidden min-h-[300px]">
-    <!-- Skeleton loader -->
-    <div id="users-skeleton" class="p-6 space-y-4 animate-pulse">
-      <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
-      <div class="space-y-3">
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <!-- Tier Tabs (Clickable Instant Filters) -->
+        <div class="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-0.5 sm:pb-0 scrollbar-none" id="user-tabs-container">
+          {[
+            { key: 'ALL', label: 'All Buyers', isBlocked: false },
+            { key: 'VIP', label: 'VIP', isBlocked: false },
+            { key: 'PARTNER', label: 'Partners', isBlocked: false },
+            { key: 'STANDARD', label: 'Standard', isBlocked: false },
+            { key: 'BLOCKED', label: 'Blocked', isBlocked: true },
+          ].map((tab) => {
+            const isActive = (tab.isBlocked ? initialStatus === 'BLOCKED' : initialTier === tab.key);
+            return (
+              <button
+                type="button"
+                data-tab-type={tab.isBlocked ? 'blocked' : 'tier'}
+                data-tab-key={tab.key}
+                class={`user-tab px-2.5 py-1 rounded-xl text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5 cursor-pointer ${
+                  isActive
+                    ? 'bg-[#1d1d1f] text-white border-black shadow-xs font-semibold'
+                    : 'bg-[#f5f5f7] text-[#52525b] border-black/5 hover:border-black/20 hover:text-black'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span data-tab-count={tab.key} class={`font-mono text-[10px] px-1.5 py-0.2 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-black/5 text-[#1d1d1f]'}`}>
+                  -
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <!-- Hidden container for JS selector compatibility -->
+        <div class="hidden" id="users-metrics-container" aria-hidden="true">
+          <span id="stat-total"></span>
+          <span id="stat-vips"></span>
+          <span id="stat-guest"></span>
+          <span id="stat-blocked-card"><span id="stat-blocked"></span><span id="stat-blocked-label"></span></span>
+        </div>
       </div>
-    </div>
 
-    <!-- Content injected here -->
-    <div id="users-content" class="hidden"></div>
-  </div>
+      <!-- Right: Search Form & Total Counter -->
+      <div class="flex items-center gap-2 ml-auto shrink-0">
+        <span class="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#f5f5f7] border border-black/5 text-[11px] font-mono text-[#52525b]">
+          Total: <strong id="total-users-count" class="text-[#1d1d1f] font-semibold">-</strong>
+        </span>
 
-  <!-- Pagination Controls -->
-  <div id="users-pagination-container" class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b] hidden">
-    <div id="users-pagination-summary"></div>
-    <div class="flex items-center gap-2">
-      <button
-        type="button"
-        id="users-pagination-prev"
-        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-      >
-        ← Previous
-      </button>
-      <span id="users-pagination-current" class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">1 / 1</span>
-      <button
-        type="button"
-        id="users-pagination-next"
-        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-      >
-        Next →
-      </button>
+        <!-- Search Form -->
+        <form id="users-search-form" class="relative flex items-center w-48 sm:w-64">
+          <input
+            type="text"
+            id="users-search-input"
+            name="search"
+            value={initialSearch}
+            placeholder="Search email, company..."
+            class="w-full pl-7 pr-6 py-1 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
+          />
+          <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <button
+            type="button"
+            id="clear-users-search"
+            class={`absolute right-2 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+          >
+            ✕
+          </button>
+        </form>
+      </div>
+    </header>
+
+    <!-- 2. Independent Scrolling Users Container -->
+    <div id="users-container" class="flex-1 min-h-0 min-w-0 bg-white rounded-2xl border border-black/5 shadow-2xs flex flex-col overflow-hidden relative">
+      <!-- Skeleton loader -->
+      <div id="users-skeleton" class="p-6 space-y-4 animate-pulse">
+        <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
+        <div class="space-y-3">
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+        </div>
+      </div>
+
+      <!-- Content injected here with Independent Scroll -->
+      <div id="users-content" class="flex-1 min-h-0 overflow-auto scrollbar-thin hidden"></div>
+
+      <!-- 3. Pinned Bottom Pagination Controls -->
+      <footer id="users-pagination-container" class="shrink-0 bg-white border-t border-black/5 px-3 py-2 flex items-center justify-between text-xs text-[#86868b] hidden">
+        <div id="users-pagination-summary" class="truncate font-mono text-[11px]"></div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            id="users-pagination-prev"
+            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+          >
+            ← Prev
+          </button>
+          <span id="users-pagination-current" class="px-2 py-0.5 text-[11px] font-mono text-[#1d1d1f]">1 / 1</span>
+          <button
+            type="button"
+            id="users-pagination-next"
+            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+          >
+            Next →
+          </button>
+        </div>
+      </footer>
     </div>
   </div>
 
@@ -489,9 +476,9 @@ const pageTitle = 'Customer & Access Management';
 
     // 2. Desktop table view
     const desktopHtml = `
-      <div class="hidden md:block overflow-x-auto">
+      <div class="hidden md:block overflow-x-auto h-full">
         <table class="w-full text-left text-xs text-[#1d1d1f]">
-          <thead class="bg-[#f5f5f7]/60 text-[#86868b] font-medium border-b border-black/5">
+          <thead class="sticky top-0 z-10 bg-[#f5f5f7]/95 backdrop-blur-xs text-[#86868b] font-medium border-b border-black/10 shadow-2xs">
             <tr>
               <th class="py-3 px-4">Customer Profile</th>
               <th class="py-3 px-4">Company & Location</th>

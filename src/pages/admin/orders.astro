@@ -27,155 +27,132 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   currentTab="orders"
   sessionEmail={sessionUser.email}
   pendingOrdersCount={0}
+  fullscreenWorkbench={true}
 >
-  <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-2 border-b border-black/5 gap-3">
-    <div>
-      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Orders & Fulfillment</h1>
-      <p class="text-xs text-[#86868b] mt-0.5">Review, approve, and track B2B purchase and sample orders</p>
-    </div>
-    <div class="flex items-center gap-2 self-start sm:self-auto">
-      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
-        Total: <strong id="total-orders-count" class="text-[#1d1d1f] font-semibold">-</strong> orders
-      </span>
-    </div>
-  </div>
-
-  <!-- Desktop Stats Summary Cards (>= sm) -->
-  <div class="hidden sm:grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-3 mb-4" id="stats-cards-container">
-    <a
-      href="/admin/orders"
-      data-status="ALL"
-      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-[#1d1d1f] text-white border-black shadow-xs cursor-pointer"
-    >
-      <span class="text-[11px] block opacity-75">All Orders</span>
-      <span data-stat-field="all" class="text-lg font-bold font-mono tabular-nums">-</span>
-    </a>
-
-    <a
-      href="/admin/orders?status=PENDING_APPROVAL"
-      data-status="PENDING_APPROVAL"
-      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-amber-900 border-black/5 hover:border-amber-300 cursor-pointer"
-    >
-      <span class="text-[11px] block opacity-75">Pending Approval</span>
-      <span data-stat-field="pending" class="text-lg font-bold font-mono tabular-nums text-amber-600">-</span>
-    </a>
-
-    <a
-      href="/admin/orders?status=APPROVED"
-      data-status="APPROVED"
-      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-blue-900 border-black/5 hover:border-blue-300 cursor-pointer"
-    >
-      <span class="text-[11px] block opacity-75">Approved (To Ship)</span>
-      <span data-stat-field="approved" class="text-lg font-bold font-mono tabular-nums text-blue-600">-</span>
-    </a>
-
-    <a
-      href="/admin/orders?status=SHIPPED"
-      data-status="SHIPPED"
-      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-emerald-900 border-black/5 hover:border-emerald-300 cursor-pointer"
-    >
-      <span class="text-[11px] block opacity-75">Shipped</span>
-      <span data-stat-field="shipped" class="text-lg font-bold font-mono tabular-nums text-emerald-600">-</span>
-    </a>
-
-    <a
-      href="/admin/orders?status=REJECTED"
-      data-status="REJECTED"
-      class="stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-zinc-700 border-black/5 hover:border-zinc-300 cursor-pointer"
-    >
-      <span class="text-[11px] block opacity-75">Rejected</span>
-      <span data-stat-field="rejected" class="text-lg font-bold font-mono tabular-nums text-[#1d1d1f]">-</span>
-    </a>
-  </div>
-
-  <!-- Sticky Toolbar (Filters & Search) -->
-  <div class="sticky top-14 lg:top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-    <!-- Status Segmented Pills -->
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" id="status-tabs-container">
-      {[
-        { key: 'ALL', label: 'All' },
-        { key: 'PENDING_APPROVAL', label: 'Pending' },
-        { key: 'APPROVED', label: 'Approved' },
-        { key: 'SHIPPED', label: 'Shipped' },
-        { key: 'REJECTED', label: 'Rejected' },
-      ].map((tab) => (
-        <a
-          href={tab.key === 'ALL' ? '/admin/orders' : `/admin/orders?status=${tab.key}`}
-          data-tab-status={tab.key}
-          class="status-tab px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 bg-white text-[#52525b] border-black/5 hover:border-black/20 cursor-pointer"
-        >
-          <span>{tab.label}</span>
-          <span data-tab-field={tab.key} class="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-[#f5f5f7] text-[#1d1d1f]">
-            -
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- 1. Single-Line Command Bar (Fixed Header) -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+      <!-- Left: Title & Status Filter Capsules -->
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div class="flex items-center gap-1.5 shrink-0">
+          <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Orders</h1>
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            Fulfillment
           </span>
-        </a>
-      ))}
-    </div>
+        </div>
 
-    <!-- Search Form -->
-    <form id="orders-search-form" class="relative flex items-center w-full sm:w-72">
-      <input
-        type="text"
-        id="orders-search-input"
-        name="search"
-        value={initialSearch}
-        placeholder="Search Order No, email, company..."
-        class="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] shadow-2xs"
-      />
-      <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <button
-        type="button"
-        id="clear-search-btn"
-        class={`absolute right-2.5 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
-        title="Clear search"
-      >
-        ✕
-      </button>
-    </form>
-  </div>
+        <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
 
-  <!-- Orders Container -->
-  <div id="orders-container" class="mt-4 sm:mt-6 bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden min-h-[300px]">
-    <!-- Skeleton loader rendered initially for 0 CLS -->
-    <div id="orders-skeleton" class="p-6 space-y-4 animate-pulse">
-      <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
-      <div class="space-y-3">
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-12 bg-[#f5f5f7] rounded-xl"></div>
+        <!-- Status Segmented Pills (Clickable Instant Filters) -->
+        <div class="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-0.5 sm:pb-0 scrollbar-none" id="status-tabs-container">
+          {[
+            { key: 'ALL', label: 'All', badgeBg: 'bg-zinc-100 text-zinc-800' },
+            { key: 'PENDING_APPROVAL', label: 'Pending', badgeBg: 'bg-amber-100 text-amber-900' },
+            { key: 'APPROVED', label: 'Approved', badgeBg: 'bg-blue-100 text-blue-900' },
+            { key: 'SHIPPED', label: 'Shipped', badgeBg: 'bg-emerald-100 text-emerald-900' },
+            { key: 'REJECTED', label: 'Rejected', badgeBg: 'bg-zinc-100 text-zinc-700' },
+          ].map((tab) => {
+            const isActive = initialStatus === tab.key;
+            return (
+              <a
+                href={tab.key === 'ALL' ? '/admin/orders' : `/admin/orders?status=${tab.key}`}
+                data-tab-status={tab.key}
+                class={`status-tab px-2.5 py-1 rounded-xl text-xs font-medium whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                  isActive
+                    ? 'bg-[#1d1d1f] text-white border-black shadow-xs font-semibold'
+                    : 'bg-[#f5f5f7] text-[#52525b] border-black/5 hover:border-black/20 hover:text-black'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span data-tab-field={tab.key} class={`font-mono text-[10px] px-1.5 py-0.2 rounded-md ${isActive ? 'bg-white/20 text-white' : 'bg-black/5 text-[#1d1d1f]'}`}>
+                  -
+                </span>
+              </a>
+            );
+          })}
+        </div>
+
+        <!-- Hidden container for JS selector compatibility -->
+        <div class="hidden" id="stats-cards-container" aria-hidden="true">
+          <span class="stat-card" data-status="ALL"><span data-stat-field="all"></span></span>
+          <span class="stat-card" data-status="PENDING_APPROVAL"><span data-stat-field="pending"></span></span>
+          <span class="stat-card" data-status="APPROVED"><span data-stat-field="approved"></span></span>
+          <span class="stat-card" data-status="SHIPPED"><span data-stat-field="shipped"></span></span>
+          <span class="stat-card" data-status="REJECTED"><span data-stat-field="rejected"></span></span>
+        </div>
       </div>
-    </div>
 
-    <!-- Dynamic Content injected here -->
-    <div id="orders-content" class="hidden"></div>
-  </div>
+      <!-- Right: Search Form & Total Counter -->
+      <div class="flex items-center gap-2 ml-auto shrink-0">
+        <span class="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#f5f5f7] border border-black/5 text-[11px] font-mono text-[#52525b]">
+          Total: <strong id="total-orders-count" class="text-[#1d1d1f] font-semibold">-</strong>
+        </span>
 
-  <!-- Pagination Container -->
-  <div id="pagination-container" class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b] hidden">
-    <div id="pagination-summary"></div>
-    <div class="flex items-center gap-2">
-      <button
-        type="button"
-        id="pagination-prev"
-        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-      >
-        ← Previous
-      </button>
-      <span id="pagination-current" class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">
-        1 / 1
-      </span>
-      <button
-        type="button"
-        id="pagination-next"
-        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-      >
-        Next →
-      </button>
+        <!-- Search Form -->
+        <form id="orders-search-form" class="relative flex items-center w-48 sm:w-64">
+          <input
+            type="text"
+            id="orders-search-input"
+            name="search"
+            value={initialSearch}
+            placeholder="Order No, email, company..."
+            class="w-full pl-7 pr-6 py-1 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
+          />
+          <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <button
+            type="button"
+            id="clear-search-btn"
+            class={`absolute right-2 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+            title="Clear search"
+          >
+            ✕
+          </button>
+        </form>
+      </div>
+    </header>
+
+    <!-- 2. Independent Scrolling Orders Table Container -->
+    <div id="orders-container" class="flex-1 min-h-0 min-w-0 bg-white rounded-2xl border border-black/5 shadow-2xs flex flex-col overflow-hidden relative">
+      <!-- Skeleton loader rendered initially for 0 CLS -->
+      <div id="orders-skeleton" class="p-6 space-y-4 animate-pulse">
+        <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
+        <div class="space-y-3">
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+        </div>
+      </div>
+
+      <!-- Dynamic Content injected here with Independent Scroll -->
+      <div id="orders-content" class="flex-1 min-h-0 overflow-auto scrollbar-thin hidden"></div>
+
+      <!-- 3. Pinned Bottom Pagination Container -->
+      <footer id="pagination-container" class="shrink-0 bg-white border-t border-black/5 px-3 py-2 flex items-center justify-between text-xs text-[#86868b] hidden">
+        <div id="pagination-summary" class="truncate font-mono text-[11px]"></div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            id="pagination-prev"
+            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+          >
+            ← Prev
+          </button>
+          <span id="pagination-current" class="px-2 py-0.5 text-[11px] font-mono text-[#1d1d1f]">
+            1 / 1
+          </span>
+          <button
+            type="button"
+            id="pagination-next"
+            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+          >
+            Next →
+          </button>
+        </div>
+      </footer>
     </div>
   </div>
 
@@ -725,10 +702,10 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
 
     // 2. Desktop Table Layout (>= md)
     const desktopTableHtml = `
-      <div class="hidden md:block overflow-x-auto">
+      <div class="hidden md:block overflow-x-auto h-full">
         <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="bg-[#fbfbfd] border-b border-black/5 text-[#86868b] font-medium">
+          <thead class="sticky top-0 z-10 bg-[#fbfbfd]/95 backdrop-blur-xs shadow-2xs">
+            <tr class="border-b border-black/10 text-[#86868b] font-medium">
               <th class="py-3 px-4">Order No / Date</th>
               <th class="py-3 px-4">Buyer / Company</th>
               <th class="py-3 px-4">Destination</th>

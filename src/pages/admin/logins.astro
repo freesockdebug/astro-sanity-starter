@@ -22,102 +22,92 @@ const pageTitle = 'Login Audit Logs';
   currentTab="logins"
   sessionEmail={sessionUser.email}
   pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
 >
-  <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
-    <div>
-      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Login & Security Audit</h1>
-      <p class="text-xs text-[#86868b] mt-0.5">Real-time audit log of authenticated user sessions and IP locations ({retentionDays}-day retention)</p>
-    </div>
-    <div class="flex items-center gap-2 self-start sm:self-auto">
-      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs font-mono text-[#52525b] shadow-2xs">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        Active Retention: {retentionDays} Days
-      </span>
-    </div>
-  </div>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- 1. Single-Line Command Bar (Fixed Header) -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+      <!-- Left: Title & Metric Capsules -->
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div class="flex items-center gap-1.5 shrink-0">
+          <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Login Audit</h1>
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            {retentionDays}d
+          </span>
+        </div>
 
-  <!-- KPI Metric Cards -->
-  <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-2 sm:gap-4 mb-4 sm:mb-6">
-    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Sessions</span>
-      <div class="flex items-baseline gap-1 sm:gap-2">
-        <span id="metric-sessions" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-[#1d1d1f]">-</span>
-        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Events</span>
+        <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
+
+        <!-- Metric Capsules -->
+        <div class="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+          <span class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-[#f5f5f7] text-[#52525b] border border-black/5 flex items-center gap-1">
+            <span>Sessions</span>
+            <strong id="metric-sessions" class="text-[#1d1d1f] font-bold">-</strong>
+          </span>
+
+          <span class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-[#f5f5f7] text-[#52525b] border border-black/5 flex items-center gap-1">
+            <span>Accounts</span>
+            <strong id="metric-accounts" class="text-[#1d1d1f] font-bold">-</strong>
+          </span>
+
+          <span class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-blue-50/80 text-blue-800 border border-blue-200/80 flex items-center gap-1">
+            <span>IPs</span>
+            <strong id="metric-ips" class="font-bold text-blue-700">-</strong>
+          </span>
+
+          <span class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-purple-50/80 text-purple-800 border border-purple-200/80 flex items-center gap-1">
+            <span>Countries</span>
+            <strong id="metric-countries" class="font-bold text-purple-700">-</strong>
+          </span>
+        </div>
       </div>
-    </div>
 
-    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Accounts</span>
-      <div class="flex items-baseline gap-1 sm:gap-2">
-        <span id="metric-accounts" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-[#1d1d1f]">-</span>
-        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Emails</span>
+      <!-- Right: Search Form & Log Counter -->
+      <div class="flex items-center gap-2 ml-auto shrink-0">
+        <span id="log-count-summary" class="hidden md:inline font-mono text-[11px] text-[#86868b]">(Loading...)</span>
+
+        <!-- Search Form -->
+        <div class="relative flex items-center w-48 sm:w-64">
+          <input
+            type="text"
+            id="logins-search-input"
+            value={initialSearch}
+            placeholder="Search email, IP, city..."
+            class="w-full pl-7 pr-6 py-1 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
+          />
+          <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <button
+            type="button"
+            id="clear-logins-search"
+            class={`absolute right-2 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+            title="Clear search"
+          >
+            ✕
+          </button>
+        </div>
       </div>
-    </div>
+    </header>
 
-    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Origin IPs</span>
-      <div class="flex items-baseline gap-1 sm:gap-2">
-        <span id="metric-ips" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-blue-700">-</span>
-        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">IPs</span>
+    <!-- 2. Independent Scrolling Container -->
+    <div id="logins-container" class="flex-1 min-h-0 min-w-0 bg-white rounded-2xl border border-black/5 shadow-2xs flex flex-col overflow-hidden relative">
+      <!-- Skeleton loader -->
+      <div id="logins-skeleton" class="p-6 space-y-4 animate-pulse">
+        <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
+        <div class="space-y-3">
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-black/5 shadow-2xs">
-      <span class="text-[9px] sm:text-[11px] text-[#86868b] uppercase tracking-wider font-semibold block mb-0.5 sm:mb-1 truncate">Span</span>
-      <div class="flex items-baseline gap-1 sm:gap-2">
-        <span id="metric-countries" class="text-base sm:text-2xl font-bold font-mono tracking-tight text-purple-700">-</span>
-        <span class="text-[9px] sm:text-xs text-[#86868b] hidden xs:inline">Countries</span>
-      </div>
+      <!-- Content injected here with Independent Scroll -->
+      <div id="logins-content" class="flex-1 min-h-0 overflow-auto scrollbar-thin hidden"></div>
     </div>
-  </div>
-
-  <!-- Sticky Toolbar: Filters & Search Form -->
-  <div class="sticky top-14 lg:top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-md pt-2 pb-3 mb-4 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-    <div class="flex items-center gap-2 text-xs">
-      <span class="font-semibold text-[#1d1d1f]">Session Log Stream</span>
-      <span id="log-count-summary" class="text-[#86868b]">(Loading...)</span>
-    </div>
-
-    <!-- Search Form -->
-    <div class="relative flex items-center w-full sm:w-80">
-      <input
-        type="text"
-        id="logins-search-input"
-        value={initialSearch}
-        placeholder="Search email, user ID, IP, city..."
-        class="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] shadow-2xs"
-      />
-      <svg class="w-4 h-4 text-[#86868b] absolute left-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <button
-        type="button"
-        id="clear-logins-search"
-        class={`absolute right-2.5 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
-        title="Clear search"
-      >
-        ✕
-      </button>
-    </div>
-  </div>
-
-  <!-- Audit Logs Container: Mobile Cards (< md) + Desktop Table (>= md) -->
-  <div id="logins-container" class="bg-white rounded-2xl border border-black/5 shadow-xs overflow-hidden min-h-[300px]">
-    <!-- Skeleton loader -->
-    <div id="logins-skeleton" class="p-6 space-y-4 animate-pulse">
-      <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
-      <div class="space-y-3">
-        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-        <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-      </div>
-    </div>
-
-    <!-- Content injected here -->
-    <div id="logins-content" class="hidden"></div>
   </div>
 </AdminLayout>
 
@@ -224,10 +214,10 @@ const pageTitle = 'Login Audit Logs';
 
     // 2. Desktop High-Density Table (>= md)
     const desktopTableHtml = `
-      <div class="hidden md:block overflow-x-auto">
+      <div class="hidden md:block overflow-x-auto h-full">
         <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="bg-[#fafafa] border-b border-black/5 text-[#86868b] font-medium text-[11px]">
+          <thead class="sticky top-0 z-10 bg-[#fafafa]/95 backdrop-blur-xs shadow-2xs">
+            <tr class="border-b border-black/10 text-[#86868b] font-medium text-[11px]">
               <th class="py-3 px-4">User Email & ID</th>
               <th class="py-3 px-4">IP Address</th>
               <th class="py-3 px-4">Location</th>
