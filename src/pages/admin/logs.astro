@@ -39,7 +39,7 @@ const pageTitle = 'System Diagnostics & Performance';
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
     <!-- 1. Single-Line Command Bar (Fixed Header) -->
-    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-2xs flex flex-wrap md:flex-nowrap items-center justify-between gap-2">
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-2xs flex flex-nowrap items-center justify-between gap-2">
       <!-- Left: Title & Metric Capsules -->
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-x-auto no-scrollbar">
         <div class="flex items-center gap-1.5 shrink-0">
@@ -57,7 +57,7 @@ const pageTitle = 'System Diagnostics & Performance';
           <button
             type="button"
             id="metric-capsule-total"
-            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-[#f5f5f7] hover:bg-black/10 text-[#52525b] border border-black/5 transition-all cursor-pointer flex items-center gap-1"
+            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-[#f5f5f7] hover:bg-black/10 text-[#52525b] border border-black/5 transition-all cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"
             title="Reset filters & show all"
           >
             <span>Total</span>
@@ -67,7 +67,7 @@ const pageTitle = 'System Diagnostics & Performance';
           <button
             type="button"
             id="metric-capsule-errors"
-            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-rose-50/80 hover:bg-rose-100 text-rose-700 border border-rose-200/80 transition-all cursor-pointer flex items-center gap-1"
+            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-rose-50/80 hover:bg-rose-100 text-rose-700 border border-rose-200/80 transition-all cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"
             title="Filter by Errors"
           >
             <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
@@ -78,7 +78,7 @@ const pageTitle = 'System Diagnostics & Performance';
           <button
             type="button"
             id="metric-capsule-warns"
-            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-amber-50/80 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-all cursor-pointer flex items-center gap-1"
+            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-amber-50/80 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-all cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"
             title="Filter by Warnings"
           >
             <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
@@ -89,7 +89,7 @@ const pageTitle = 'System Diagnostics & Performance';
           <button
             type="button"
             id="metric-capsule-slow"
-            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-orange-50/80 hover:bg-orange-100 text-orange-800 border border-orange-200/80 transition-all cursor-pointer flex items-center gap-1"
+            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-orange-50/80 hover:bg-orange-100 text-orange-800 border border-orange-200/80 transition-all cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"
             title="Filter by Slow SLA"
           >
             <span>🐢</span>
@@ -105,7 +105,7 @@ const pageTitle = 'System Diagnostics & Performance';
         <button
           type="button"
           id="poll-toggle-btn"
-          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] hover:border-black/15 transition-all cursor-pointer"
+          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] hover:border-black/15 transition-all cursor-pointer shrink-0 whitespace-nowrap"
           title="Toggle 10s auto-refresh"
         >
           <span id="poll-indicator" class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
@@ -116,7 +116,7 @@ const pageTitle = 'System Diagnostics & Performance';
         <button
           type="button"
           id="refresh-logs-btn"
-          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-white border border-black/10 text-[#1d1d1f] hover:bg-[#f5f5f7] shadow-2xs active:scale-95 transition-all cursor-pointer"
+          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-white border border-black/10 text-[#1d1d1f] hover:bg-[#f5f5f7] shadow-2xs active:scale-95 transition-all cursor-pointer shrink-0 whitespace-nowrap"
           title="Refresh logs (Shortcut: R)"
         >
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -143,7 +143,7 @@ const pageTitle = 'System Diagnostics & Performance';
         <button
           type="button"
           id="export-csv-btn"
-          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
+          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer shrink-0 whitespace-nowrap"
           title="Export visible logs as CSV"
         >
           <span>📥</span>
@@ -154,7 +154,7 @@ const pageTitle = 'System Diagnostics & Performance';
         <button
           type="button"
           id="clear-logs-btn"
-          class="inline-flex items-center gap-1 px-2 py-1 rounded-xl text-[11px] font-semibold bg-white hover:bg-rose-50 text-rose-600 border border-rose-200/80 shadow-2xs active:scale-95 transition-all cursor-pointer"
+          class="inline-flex items-center gap-1 px-2 py-1 rounded-xl text-[11px] font-semibold bg-white hover:bg-rose-50 text-rose-600 border border-rose-200/80 shadow-2xs active:scale-95 transition-all cursor-pointer shrink-0 whitespace-nowrap"
           title="Clear system diagnostic logs"
         >
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -193,7 +193,7 @@ const pageTitle = 'System Diagnostics & Performance';
     </div>
 
     <!-- 3. Multi-Dimensional Filter Toolbar (Compact single row) -->
-    <div class="shrink-0 bg-white border border-black/5 rounded-xl px-2.5 py-1.5 shadow-2xs flex flex-wrap md:flex-nowrap items-center justify-between gap-2 text-xs">
+    <div class="shrink-0 bg-white border border-black/5 rounded-xl px-2.5 py-1.5 shadow-2xs flex flex-nowrap items-center justify-between gap-2 text-xs">
       <!-- Filter Selects -->
       <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 flex-1">
         <!-- Event Type -->
