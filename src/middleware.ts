@@ -134,7 +134,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
         pathname.endsWith('.svg') ||
         pathname.endsWith('.ico') ||
         pathname.endsWith('.css') ||
-        pathname.endsWith('.js');
+        pathname.endsWith('.js') ||
+        pathname.endsWith('.xml') ||
+        pathname.endsWith('.txt');
 
       if (!isStaticOrLogSelf) {
         const settings = await getSystemSettings(cfEnv).catch(() => null);

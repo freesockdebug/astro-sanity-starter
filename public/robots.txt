@@ -1,10 +1,13 @@
 User-agent: *
 Allow: /
 Disallow: /admin/
+Disallow: /account/
+Disallow: /orders/
 Disallow: /api/
 Disallow: /studio/
 Disallow: /wp-
 Disallow: /*.php
 
 Sitemap: https://gwenvenni.com/sitemap-index.xml
+Sitemap: https://gwenvenni.com/sitemap.xml
 
