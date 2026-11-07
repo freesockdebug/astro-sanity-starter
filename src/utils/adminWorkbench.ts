@@ -228,11 +228,16 @@ export interface ColumnDefinition {
 export interface ColumnManagerConfig {
   storageKey: string;
   defaultColumns: ColumnDefinition[];
+  defaultDensity?: 'compact' | 'cozy';
+  densityStorageKey?: string;
   tableEl?: HTMLElement | null;
   headerRowEl?: HTMLElement | null;
+  menuBtnEl?: HTMLElement | null;
   menuPanelEl?: HTMLElement | null;
   checkboxListEl?: HTMLElement | null;
   countLabelEl?: HTMLElement | null;
+  resetBtnEl?: HTMLElement | null;
+  densityBtnEl?: HTMLElement | null;
   densityLabelEl?: HTMLElement | null;
   onColumnsChange?: () => void;
   onDensityChange?: (density: 'compact' | 'cozy') => void;
@@ -244,7 +249,19 @@ export interface ColumnManagerConfig {
 export function createColumnManager(cfg: ColumnManagerConfig) {
   // Defensive clone to prevent mutating DEFAULT_COLUMNS
   let columnsState: ColumnDefinition[] = cfg.defaultColumns.map((col) => ({ ...col }));
-  let densityState: 'compact' | 'cozy' = 'compact';
+
+  const densityKey = cfg.densityStorageKey || `${cfg.storageKey}_density`;
+  let densityState: 'compact' | 'cozy' = (() => {
+    try {
+      const stored = localStorage.getItem(densityKey);
+      if (stored === 'compact' || stored === 'cozy') return stored;
+    } catch {}
+    return cfg.defaultDensity || 'cozy';
+  })();
+
+  if (cfg.densityLabelEl) {
+    cfg.densityLabelEl.textContent = densityState === 'compact' ? 'Compact' : 'Cozy';
+  }
 
   // Load persisted columns
   try {
@@ -367,7 +384,7 @@ export function createColumnManager(cfg: ColumnManagerConfig) {
               ${col.visible ? 'checked' : ''}
               ${!col.canHide ? 'disabled' : ''}
             />
-            <span class="truncate">${col.label}</span>
+            <span class="truncate text-[#1d1d1f]">${col.label}</span>
           </label>
         `;
       })
@@ -399,14 +416,35 @@ export function createColumnManager(cfg: ColumnManagerConfig) {
 
   function toggleDensity() {
     densityState = densityState === 'compact' ? 'cozy' : 'compact';
+    try {
+      localStorage.setItem(densityKey, densityState);
+    } catch {}
     if (cfg.densityLabelEl) {
       cfg.densityLabelEl.textContent = densityState === 'compact' ? 'Compact' : 'Cozy';
     }
     cfg.onDensityChange?.(densityState);
   }
 
+  // Bind UI buttons if provided
+  cfg.resetBtnEl?.addEventListener('click', resetColumns);
+  cfg.densityBtnEl?.addEventListener('click', toggleDensity);
+
+  if (cfg.menuBtnEl && cfg.menuPanelEl) {
+    cfg.menuBtnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cfg.menuPanelEl?.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!cfg.menuPanelEl?.contains(e.target as Node) && !cfg.menuBtnEl?.contains(e.target as Node)) {
+        cfg.menuPanelEl?.classList.add('hidden');
+      }
+    });
+  }
+
   return {
     getColumns: () => columnsState,
+    getVisibleColumns: () => columnsState.filter((c) => c.visible),
     isColumnVisible: (id: string) => columnsState.find((c) => c.id === id)?.visible ?? true,
     getColumnWidth: (id: string) => columnsState.find((c) => c.id === id)?.defaultWidth ?? 100,
     getDensity: () => densityState,

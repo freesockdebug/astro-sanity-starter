@@ -449,20 +449,18 @@ const pageTitle = 'System Diagnostics & Performance';
 
 <script>
   import { clientCache } from '@utils/clientCache';
-  import { escapeHtml, formatAdminTime, createPaginationController, exportToCsv } from '@utils/adminWorkbench';
+  import {
+    escapeHtml,
+    formatAdminTime,
+    createPaginationController,
+    createColumnManager,
+    bindSearchAndRefresh,
+    exportToCsv,
+    type ColumnDefinition,
+  } from '@utils/adminWorkbench';
 
   (function () {
-    // Column definitions
-    interface ColumnDef {
-      id: string;
-      label: string;
-      defaultWidth: number;
-      minWidth: number;
-      visible: boolean;
-      canHide: boolean;
-    }
-
-    const DEFAULT_COLUMNS: ColumnDef[] = [
+    const DEFAULT_COLUMNS: ColumnDefinition[] = [
       { id: 'time', label: 'Time', defaultWidth: 115, minWidth: 90, visible: true, canHide: false },
       { id: 'level', label: 'Level', defaultWidth: 80, minWidth: 60, visible: true, canHide: true },
       { id: 'event', label: 'Event', defaultWidth: 110, minWidth: 80, visible: true, canHide: true },
@@ -475,28 +473,6 @@ const pageTitle = 'System Diagnostics & Performance';
       { id: 'ray_id', label: 'Ray ID', defaultWidth: 110, minWidth: 80, visible: true, canHide: true },
       { id: 'action', label: 'Action', defaultWidth: 70, minWidth: 60, visible: true, canHide: false },
     ];
-
-    let columnsState: ColumnDef[] = (() => {
-      try {
-        const stored = localStorage.getItem('admin_logs_columns_v2');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          return DEFAULT_COLUMNS.map((col) => {
-            const found = parsed.find((p: any) => p.id === col.id);
-            return found ? { ...col, visible: found.visible, defaultWidth: found.width || col.defaultWidth } : { ...col };
-          });
-        }
-      } catch {}
-      return DEFAULT_COLUMNS.map((col) => ({ ...col }));
-    })();
-
-    let densityState: 'compact' | 'cozy' = (() => {
-      try {
-        return (localStorage.getItem('admin_logs_density_v1') as any) || 'cozy';
-      } catch {
-        return 'cozy';
-      }
-    })();
 
     let autoPollTimer: any = null;
     let isAutoPolling = false;
@@ -561,6 +537,28 @@ const pageTitle = 'System Diagnostics & Performance';
       onPageChange: (newPage) => {
         currentPage = newPage;
         loadLogs();
+      },
+    });
+
+    const columnManager = createColumnManager({
+      storageKey: 'admin_logs_columns_v2',
+      defaultDensity: 'cozy',
+      densityStorageKey: 'admin_logs_density_v1',
+      defaultColumns: DEFAULT_COLUMNS,
+      tableEl: logsMainTable,
+      headerRowEl: tableHeaderRow,
+      menuBtnEl: columnsMenuBtn,
+      menuPanelEl: columnsMenuPanel,
+      checkboxListEl: columnsCheckboxList,
+      countLabelEl: columnsCountLabel,
+      resetBtnEl: resetColumnsBtn,
+      densityBtnEl: densityToggleBtn,
+      densityLabelEl: densityLabel,
+      onColumnsChange: () => {
+        if (logsList && logsList.length > 0) renderRows(logsList);
+      },
+      onDensityChange: () => {
+        if (logsList && logsList.length > 0) renderRows(logsList);
       },
     });
 
@@ -630,24 +628,6 @@ const pageTitle = 'System Diagnostics & Performance';
           window.history.replaceState({}, '', url.toString());
         }
       }
-    }
-
-    function saveColumnsState() {
-      try {
-        const payload = columnsState.map((c) => ({
-          id: c.id,
-          visible: c.visible,
-          width: c.defaultWidth,
-        }));
-        localStorage.setItem('admin_logs_columns_v2', JSON.stringify(payload));
-      } catch {}
-    }
-
-    function updateDensityUi() {
-      if (densityLabel) {
-        densityLabel.textContent = densityState === 'compact' ? 'Compact' : 'Cozy';
-      }
-      renderRows(logsList);
     }
 
     function renderLevelBadge(lvl: string) {
@@ -754,116 +734,6 @@ const pageTitle = 'System Diagnostics & Performance';
       }
     }
 
-    function syncTableMinWidth() {
-      if (!logsMainTable) return;
-      const totalWidth = columnsState
-        .filter((col) => col.visible)
-        .reduce((sum, col) => sum + col.defaultWidth, 0);
-      logsMainTable.style.minWidth = `${totalWidth}px`;
-    }
-
-    function renderHeader() {
-      if (!tableHeaderRow) return;
-
-      tableHeaderRow.innerHTML = columnsState
-        .filter((col) => col.visible)
-        .map((col) => {
-          const isRight = col.id === 'action';
-          return `
-            <th
-              data-col-id="${col.id}"
-              style="width: ${col.defaultWidth}px;"
-              class="py-2 px-2.5 ${isRight ? 'text-right' : 'text-left'} text-[11px] font-semibold text-[#86868b] tracking-tight relative select-none truncate"
-            >
-              <span>${col.label}</span>
-              ${col.id !== 'action' ? `<span class="col-resizer absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-black/20 transition-colors"></span>` : ''}
-            </th>
-          `;
-        })
-        .join('');
-
-      syncTableMinWidth();
-      initColumnResize();
-    }
-
-    function initColumnResize() {
-      if (!tableHeaderRow) return;
-      tableHeaderRow.querySelectorAll('.col-resizer').forEach((resizer) => {
-        const th = resizer.parentElement as HTMLTableCellElement;
-        const colId = th.getAttribute('data-col-id');
-        const col = columnsState.find((c) => c.id === colId);
-        if (!col) return;
-
-        let startX = 0;
-        let startWidth = 0;
-
-        function onMouseMove(e: MouseEvent) {
-          const delta = e.clientX - startX;
-          const newWidth = Math.max(col?.minWidth || 50, startWidth + delta);
-          th.style.width = `${newWidth}px`;
-          if (col) col.defaultWidth = newWidth;
-          syncTableMinWidth();
-        }
-
-        function onMouseUp() {
-          document.removeEventListener('mousemove', onMouseMove);
-          document.removeEventListener('mouseup', onMouseUp);
-          document.body.style.cursor = '';
-          saveColumnsState();
-          renderRows(logsList);
-        }
-
-        resizer.addEventListener('mousedown', (e: any) => {
-          e.preventDefault();
-          e.stopPropagation();
-          startX = e.clientX;
-          startWidth = th.offsetWidth;
-          document.body.style.cursor = 'col-resize';
-          document.addEventListener('mousemove', onMouseMove);
-          document.addEventListener('mouseup', onMouseUp);
-        });
-      });
-    }
-
-    function renderColumnsMenu() {
-      if (!columnsCheckboxList) return;
-      const visibleCount = columnsState.filter((c) => c.visible).length;
-      if (columnsCountLabel) {
-        columnsCountLabel.textContent = `Cols (${visibleCount}/${columnsState.length})`;
-      }
-
-      columnsCheckboxList.innerHTML = columnsState
-        .map((col) => {
-          return `
-            <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#f5f5f7] cursor-pointer text-xs select-none ${!col.canHide ? 'opacity-50 pointer-events-none' : ''}">
-              <input
-                type="checkbox"
-                class="col-visibility-toggle rounded text-black focus:ring-0"
-                data-col-id="${col.id}"
-                ${col.visible ? 'checked' : ''}
-                ${!col.canHide ? 'disabled' : ''}
-              />
-              <span class="text-[#1d1d1f]">${col.label}</span>
-            </label>
-          `;
-        })
-        .join('');
-
-      columnsCheckboxList.querySelectorAll('.col-visibility-toggle').forEach((chk) => {
-        chk.addEventListener('change', (e: any) => {
-          const id = e.target.getAttribute('data-col-id');
-          const col = columnsState.find((c) => c.id === id);
-          if (col && col.canHide) {
-            col.visible = e.target.checked;
-            saveColumnsState();
-            renderHeader();
-            renderRows(logsList);
-            renderColumnsMenu();
-          }
-        });
-      });
-    }
-
     function renderBottlenecks(bottlenecks: any[]) {
       if (!bottlenecksBar || !topBottleneckSummary) return;
 
@@ -936,10 +806,10 @@ const pageTitle = 'System Diagnostics & Performance';
       if (emptyEl) emptyEl.classList.add('hidden');
       if (tableScrollArea) tableScrollArea.classList.remove('hidden');
 
-      const isCompact = densityState === 'compact';
+      const isCompact = columnManager.getDensity() === 'compact';
       const cellPad = isCompact ? 'py-1 px-2 text-[11px]' : 'py-2 px-2.5 text-xs';
 
-      const visibleCols = columnsState.filter((c) => c.visible);
+      const visibleCols = columnManager.getVisibleColumns();
 
       tableBody.innerHTML = logs.map((log) => {
         const safeSource = escapeHtml(log.source || 'system');
@@ -1199,17 +1069,6 @@ const pageTitle = 'System Diagnostics & Performance';
       });
     }
 
-    // Density toggle
-    if (densityToggleBtn) {
-      densityToggleBtn.addEventListener('click', () => {
-        densityState = densityState === 'compact' ? 'cozy' : 'compact';
-        try {
-          localStorage.setItem('admin_logs_density_v1', densityState);
-        } catch {}
-        updateDensityUi();
-      });
-    }
-
     // Auto Polling
     function toggleAutoPoll() {
       isAutoPolling = !isAutoPolling;
@@ -1241,30 +1100,6 @@ const pageTitle = 'System Diagnostics & Performance';
     }
 
     if (pollToggleBtn) pollToggleBtn.addEventListener('click', toggleAutoPoll);
-
-    // Columns popover menu
-    if (columnsMenuBtn && columnsMenuPanel) {
-      columnsMenuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        columnsMenuPanel.classList.toggle('hidden');
-      });
-
-      document.addEventListener('click', (e) => {
-        if (!columnsMenuPanel.contains(e.target as Node) && !columnsMenuBtn.contains(e.target as Node)) {
-          columnsMenuPanel.classList.add('hidden');
-        }
-      });
-    }
-
-    if (resetColumnsBtn) {
-      resetColumnsBtn.addEventListener('click', () => {
-        columnsState = DEFAULT_COLUMNS.map((c) => ({ ...c }));
-        saveColumnsState();
-        renderHeader();
-        renderRows(logsList);
-        renderColumnsMenu();
-      });
-    }
 
     // Bottlenecks drawer expand/collapse
     if (toggleBottlenecksBtn && bottlenecksGrid && bottlenecksToggleText && bottlenecksToggleIcon) {
@@ -1369,48 +1204,20 @@ const pageTitle = 'System Diagnostics & Performance';
       });
     }
 
-    // Search input
-    let searchTimer: any = null;
-    if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        currentSearch = searchInput.value.trim();
+    // Search, clear & refresh bindings via adminWorkbench
+    bindSearchAndRefresh({
+      searchInputId: 'logs-search-input',
+      clearBtnId: 'clear-search-btn',
+      refreshBtnId: 'refresh-logs-btn',
+      debounceMs: 300,
+      onSearch: (val) => {
+        currentSearch = val;
         currentPage = 1;
-        if (clearSearchBtn) {
-          if (currentSearch) clearSearchBtn.classList.remove('hidden');
-          else clearSearchBtn.classList.add('hidden');
-        }
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(() => {
-          loadLogs();
-        }, 300);
-      });
-    }
-
-    if (clearSearchBtn) {
-      clearSearchBtn.addEventListener('click', () => {
-        if (searchInput) searchInput.value = '';
-        currentSearch = '';
-        currentPage = 1;
-        clearSearchBtn.classList.add('hidden');
         loadLogs();
-      });
-    }
-
-    // Refresh button & R key shortcut
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => {
+      },
+      onRefresh: () => {
         loadLogs();
-      });
-    }
-
-    document.addEventListener('keydown', (e) => {
-      if (
-        (e.key === 'r' || e.key === 'R') &&
-        !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
-      ) {
-        e.preventDefault();
-        loadLogs();
-      }
+      },
     });
 
     // Clear logs modal
@@ -1477,9 +1284,8 @@ const pageTitle = 'System Diagnostics & Performance';
     });
 
     // Initial setup
-    renderHeader();
-    renderColumnsMenu();
-    updateDensityUi();
+    columnManager.renderHeader();
+    columnManager.renderMenu();
     loadLogs(false);
   })();
 </script>

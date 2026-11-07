@@ -397,9 +397,9 @@ export async function listErrorLogs(
         ? `'-1 hour'`
         : options.timeWindow === '24h'
         ? `'-24 hours'`
-        : options.timeWindow === '30d'
-        ? `'-30 days'`
-        : `'-7 days'`;
+        : options.timeWindow === '7d'
+        ? `'-7 days'`
+        : `'-30 days'`;
 
       const [logs, countRes, statsRes, bottlenecks] = await Promise.all([
         db.query<ErrorLogRecord>(
