@@ -4,6 +4,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
+import TableColumnController from '@components/admin/TableColumnController.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -76,6 +77,19 @@ const pageTitle = 'Login Audit Logs';
           placeholder="Search email, IP, city..."
           class="relative flex items-center w-48 sm:w-64"
         />
+
+        <!-- Columns & Density Controller -->
+        <TableColumnController
+          controllerBtnId="logins-columns-btn"
+          controllerMenuId="logins-columns-menu"
+          columnsListId="logins-columns-list"
+          countBadgeId="logins-columns-count"
+          syncStatusId="logins-columns-sync"
+          resetBtnId="logins-columns-reset"
+          densityBtnId="logins-density-btn"
+          densityLabelId="logins-density-label"
+          showDensityToggle={true}
+        />
       </div>
     </header>
 
@@ -93,9 +107,38 @@ const pageTitle = 'Login Audit Logs';
 <script>
   import { clientCache } from '@utils/clientCache';
   import { escapeHtml, formatAdminTime } from '@utils/adminWorkbench';
+  import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
+
+  const DEFAULT_COLUMNS: ColumnConfig[] = [
+    { id: 'user', label: 'User Email & ID', defaultWidth: 220, minWidth: 160, visible: true, canHide: false },
+    { id: 'ip', label: 'IP Address', defaultWidth: 140, minWidth: 100, visible: true, canHide: true },
+    { id: 'location', label: 'Location', defaultWidth: 150, minWidth: 110, visible: true, canHide: true },
+    { id: 'user_agent', label: 'Client User-Agent', defaultWidth: 260, minWidth: 160, visible: true, canHide: true },
+    { id: 'timestamp', label: 'Login Timestamp', defaultWidth: 160, minWidth: 120, visible: true, canHide: false, pinRight: true, align: 'right' },
+  ];
 
   let allLogins: any[] = [];
   let currentSearch = '';
+
+  const tableSettings = useTableSettings({
+    tableKey: 'logins',
+    defaultColumns: DEFAULT_COLUMNS,
+    defaultDensity: 'cozy',
+    controllerBtnEl: document.getElementById('logins-columns-btn'),
+    controllerMenuEl: document.getElementById('logins-columns-menu'),
+    columnsListEl: document.getElementById('logins-columns-list'),
+    countBadgeEl: document.getElementById('logins-columns-count'),
+    syncStatusEl: document.getElementById('logins-columns-sync'),
+    resetBtnEl: document.getElementById('logins-columns-reset'),
+    densityBtnEl: document.getElementById('logins-density-btn'),
+    densityLabelEl: document.getElementById('logins-density-label'),
+    onSettingsChange: () => {
+      filterAndRender();
+    },
+    onDensityChange: () => {
+      filterAndRender();
+    },
+  });
 
   function updateMetrics(logins: any[]) {
     const sessionsEl = document.getElementById('metric-sessions');
@@ -175,52 +218,71 @@ const pageTitle = 'Login Audit Logs';
     `;
 
     // 2. Desktop High-Density Table (>= md)
+    const visibleCols = tableSettings.getVisibleColumns();
+    const isCompact = tableSettings.getDensity() === 'compact';
+    const cellPad = isCompact ? 'py-1.5 px-3' : 'py-3 px-4';
+
+    const desktopRowsHtml = displayLogins.map((entry) => {
+      const locationStr = escapeHtml([entry.city, entry.country].filter(Boolean).join(', ') || 'Global / Edge');
+      const safeEmail = escapeHtml(entry.email || '');
+      const safeUserId = escapeHtml(entry.user_id || '');
+      const safeIp = escapeHtml(entry.ip || '');
+      const safeAgent = escapeHtml(entry.user_agent || 'Unknown Client');
+      const dateStr = formatAdminTime(entry.created_at, 'full');
+
+      const cells = visibleCols.map((col) => {
+        switch (col.id) {
+          case 'user':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                <div class="font-medium text-[#1d1d1f] truncate">${safeEmail}</div>
+                <div class="text-[10px] font-mono text-[#86868b] truncate max-w-[200px]" title="${safeUserId}">
+                  ${safeUserId}
+                </div>
+              </td>
+            `;
+          case 'ip':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono text-[11px] text-[#1d1d1f]">
+                ${safeIp ? `<span class="px-2 py-0.5 rounded bg-[#f5f5f7] border border-black/5">${safeIp}</span>` : `<span class="text-[#86868b]">—</span>`}
+              </td>
+            `;
+          case 'location':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-zinc-100 text-[#1d1d1f] border border-black/5 truncate max-w-[140px]">
+                  📍 ${locationStr}
+                </span>
+              </td>
+            `;
+          case 'user_agent':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad} text-[11px] text-[#52525b] truncate max-w-xs" title="${safeAgent}">
+                ${safeAgent}
+              </td>
+            `;
+          case 'timestamp':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad} text-right whitespace-nowrap font-mono text-[11px]">
+                ${dateStr}
+              </td>
+            `;
+          default:
+            return `<td></td>`;
+        }
+      }).join('');
+
+      return `<tr class="hover:bg-[#f5f5f7]/60 transition-colors">${cells}</tr>`;
+    }).join('');
+
     const desktopTableHtml = `
       <div class="hidden md:block">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead class="sticky top-0 z-10 bg-[#fafafa]/95 backdrop-blur-xs shadow-2xs">
-            <tr class="border-b border-black/10 text-[#86868b] font-medium text-[11px]">
-              <th class="py-3 px-4">User Email & ID</th>
-              <th class="py-3 px-4">IP Address</th>
-              <th class="py-3 px-4">Location</th>
-              <th class="py-3 px-4">Client User-Agent</th>
-              <th class="py-3 px-4 text-right">Login Timestamp</th>
-            </tr>
+        <table id="logins-main-table" class="w-full text-left text-xs border-collapse table-fixed select-text">
+          <thead class="sticky top-0 z-10 bg-[#fafafa]/95 backdrop-blur-xs shadow-2xs border-b border-black/10">
+            <tr id="logins-header-row"></tr>
           </thead>
           <tbody class="divide-y divide-black/5">
-            ${displayLogins.map((entry) => {
-              const locationStr = escapeHtml([entry.city, entry.country].filter(Boolean).join(', ') || 'Global / Edge');
-              const safeEmail = escapeHtml(entry.email || '');
-              const safeUserId = escapeHtml(entry.user_id || '');
-              const safeIp = escapeHtml(entry.ip || '');
-              const safeAgent = escapeHtml(entry.user_agent || 'Unknown Client');
-              const dateStr = formatAdminTime(entry.created_at, 'full');
-
-              return `
-                <tr class="hover:bg-[#f5f5f7]/60 transition-colors">
-                  <td class="py-3 px-4">
-                    <div class="font-medium text-[#1d1d1f]">${safeEmail}</div>
-                    <div class="text-[10px] font-mono text-[#86868b] truncate max-w-[200px]" title="${safeUserId}">
-                      ${safeUserId}
-                    </div>
-                  </td>
-                  <td class="py-3 px-4 font-mono text-[11px] text-[#1d1d1f]">
-                    ${safeIp ? `<span class="px-2 py-0.5 rounded bg-[#f5f5f7] border border-black/5">${safeIp}</span>` : `<span class="text-[#86868b]">—</span>`}
-                  </td>
-                  <td class="py-3 px-4">
-                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-zinc-100 text-[#1d1d1f] border border-black/5">
-                      📍 ${locationStr}
-                    </span>
-                  </td>
-                  <td class="py-3 px-4 text-[11px] text-[#52525b] max-w-xs truncate" title="${safeAgent}">
-                    ${safeAgent}
-                  </td>
-                  <td class="py-3 px-4 text-right whitespace-nowrap font-mono text-[11px]">
-                    ${dateStr}
-                  </td>
-                </tr>
-              `;
-            }).join('')}
+            ${desktopRowsHtml}
           </tbody>
         </table>
       </div>
@@ -228,6 +290,12 @@ const pageTitle = 'Login Audit Logs';
 
     content.innerHTML = mobileCardsHtml + desktopTableHtml;
     content.classList.remove('hidden');
+
+    const loginsTable = document.getElementById('logins-main-table');
+    const loginsHeaderRow = document.getElementById('logins-header-row');
+    if (loginsTable && loginsHeaderRow) {
+      tableSettings.renderHeader(loginsHeaderRow, loginsTable);
+    }
   }
 
   function filterAndRender() {
@@ -306,6 +374,7 @@ const pageTitle = 'Login Audit Logs';
   });
 
   // Initial load
+  tableSettings.renderMenu();
   const initialUrl = new URL(window.location.href);
   currentSearch = initialUrl.searchParams.get('search')?.trim() || '';
   loadLogins();

@@ -57,7 +57,7 @@ const inFlightEdgeRenders = new Map<string, Promise<Response>>();
 // Fast 404 shield for vulnerability probes, scanner bots, and well-known paths
 // (Drops malicious probes at the worker edge in 0ms without DB queries, CMS trips, or telemetry loops)
 const SCANNER_EXTENSIONS = /\.(php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do)$/i;
-const SCANNER_PATTERN = /(^|\/)(wp-|wordpress|phpmyadmin|pma|mysql|actuator|\.env|\.git|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest)/i;
+const SCANNER_PATTERN = /(?:^|\/)(?:wp-[a-z0-9_-]+|wordpress|phpmyadmin|pma|mysql|actuator|\.env|\.git|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest)(?:\/|$|\.)/i;
 
 function isBlockedProbe(pathname: string): boolean {
   return pathname.startsWith('/.well-known/') || SCANNER_EXTENSIONS.test(pathname) || SCANNER_PATTERN.test(pathname);
@@ -129,8 +129,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
         pathname.startsWith('/api/client-error') ||
         pathname.startsWith('/admin/logs') ||
         pathname.startsWith('/favicon') ||
-        pathname.startsWith('/.well-known/') ||
-        isBlockedProbe(pathname) ||
         pathname.endsWith('.png') ||
         pathname.endsWith('.jpg') ||
         pathname.endsWith('.svg') ||
@@ -260,19 +258,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
 });
 
 async function handleRequest(context: any, next: any, pathname: string, url: URL, request: Request): Promise<Response> {
-  // Fast 404 interception for vulnerability scanners & bot probes (0ms edge shield, bypasses SSR & CMS)
-  if (isBlockedProbe(pathname)) {
-    return new Response('Not Found', {
-      status: 404,
-      statusText: 'Not Found',
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'public, max-age=300, s-maxage=300',
-        'X-Robots-Tag': 'noindex, nofollow',
-      },
-    });
-  }
-
   // Fast canonical redirect for root admin path to primary orders console
   if (pathname === '/admin' || pathname === '/admin/') {
     return new Response(null, {

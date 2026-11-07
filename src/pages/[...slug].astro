@@ -37,7 +37,7 @@ if (rawSlug && (
   rawSlug === '.well-known' ||
   rawSlug.startsWith('.well-known/') ||
   /\.(css|js|map|png|jpe?g|webp|avif|jxl|svg|woff2?|ttf|ico|txt|xml|json|php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|ini|log|ya?ml)$/i.test(rawSlug) ||
-  /(^|\/)(wp-|wordpress|phpmyadmin|pma|mysql|actuator|\.env|\.git|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest)/i.test(rawSlug)
+  /(?:^|\/)(?:wp-[a-z0-9_-]+|wordpress|phpmyadmin|pma|mysql|actuator|\.env|\.git|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest)(?:\/|$|\.)/i.test(rawSlug)
 )) {
   return new Response(null, {
     status: 404,

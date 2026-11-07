@@ -4,6 +4,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
+import TableColumnController from '@components/admin/TableColumnController.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -125,52 +126,18 @@ const pageTitle = 'System Diagnostics & Performance';
           <kbd class="hidden md:inline px-1 py-0.2 rounded bg-black/5 text-[9px] font-mono text-[#86868b]">R</kbd>
         </button>
 
-        <!-- Density Toggle -->
-        <button
-          type="button"
-          id="density-toggle-btn"
-          class="inline-flex items-center gap-1 px-2 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
-          title="Toggle Row Density"
-        >
-          <span id="density-icon">≡</span>
-          <span id="density-label" class="hidden sm:inline text-[11px]">Cozy</span>
-        </button>
-
-        <!-- Columns Selector Dropdown Popover -->
-        <div class="relative">
-          <button
-            type="button"
-            id="columns-menu-btn"
-            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
-            title="Configure Visible Columns"
-          >
-            <span>⚙️</span>
-            <span id="columns-count-label" class="hidden sm:inline">Cols</span>
-            <span class="text-[9px]">▾</span>
-          </button>
-
-          <!-- Columns Menu Panel -->
-          <div
-            id="columns-menu-panel"
-            class="hidden absolute right-0 top-full mt-1.5 w-48 bg-white border border-black/10 rounded-2xl shadow-xl p-2 z-50 text-xs space-y-1"
-          >
-            <div class="px-2 py-1 text-[10px] font-semibold text-[#86868b] uppercase tracking-wider border-b border-black/5">
-              Visible Columns
-            </div>
-            <div id="columns-checkbox-list" class="space-y-0.5 pt-1">
-              <!-- Rendered via JS -->
-            </div>
-            <div class="pt-1 border-t border-black/5 flex justify-end">
-              <button
-                type="button"
-                id="reset-columns-btn"
-                class="px-2 py-0.5 rounded text-[10px] font-medium text-[#86868b] hover:text-black cursor-pointer"
-              >
-                Reset Default
-              </button>
-            </div>
-          </div>
-        </div>
+        <!-- Density & Columns Controller -->
+        <TableColumnController
+          controllerBtnId="columns-menu-btn"
+          controllerMenuId="columns-menu-panel"
+          columnsListId="columns-checkbox-list"
+          countBadgeId="columns-count-label"
+          syncStatusId="columns-sync-status"
+          resetBtnId="reset-columns-btn"
+          densityBtnId="density-toggle-btn"
+          densityLabelId="density-label"
+          showDensityToggle={true}
+        />
 
         <!-- Export CSV Button -->
         <button
@@ -453,14 +420,13 @@ const pageTitle = 'System Diagnostics & Performance';
     escapeHtml,
     formatAdminTime,
     createPaginationController,
-    createColumnManager,
     bindSearchAndRefresh,
     exportToCsv,
-    type ColumnDefinition,
   } from '@utils/adminWorkbench';
+  import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
   (function () {
-    const DEFAULT_COLUMNS: ColumnDefinition[] = [
+    const DEFAULT_COLUMNS: ColumnConfig[] = [
       { id: 'time', label: 'Time', defaultWidth: 115, minWidth: 90, visible: true, canHide: false },
       { id: 'level', label: 'Level', defaultWidth: 80, minWidth: 60, visible: true, canHide: true },
       { id: 'event', label: 'Event', defaultWidth: 110, minWidth: 80, visible: true, canHide: true },
@@ -471,7 +437,7 @@ const pageTitle = 'System Diagnostics & Performance';
       { id: 'message', label: 'Message', defaultWidth: 260, minWidth: 160, visible: true, canHide: true },
       { id: 'client_geo', label: 'Client / Geo', defaultWidth: 150, minWidth: 100, visible: true, canHide: true },
       { id: 'ray_id', label: 'Ray ID', defaultWidth: 110, minWidth: 80, visible: true, canHide: true },
-      { id: 'action', label: 'Action', defaultWidth: 70, minWidth: 60, visible: true, canHide: false },
+      { id: 'action', label: 'Action', defaultWidth: 70, minWidth: 60, visible: true, canHide: false, pinRight: true, align: 'right' },
     ];
 
     let autoPollTimer: any = null;
@@ -540,21 +506,21 @@ const pageTitle = 'System Diagnostics & Performance';
       },
     });
 
-    const columnManager = createColumnManager({
-      storageKey: 'admin_logs_columns_v2',
-      defaultDensity: 'cozy',
-      densityStorageKey: 'admin_logs_density_v1',
+    const tableSettings = useTableSettings({
+      tableKey: 'logs',
       defaultColumns: DEFAULT_COLUMNS,
+      defaultDensity: 'cozy',
       tableEl: logsMainTable,
       headerRowEl: tableHeaderRow,
-      menuBtnEl: columnsMenuBtn,
-      menuPanelEl: columnsMenuPanel,
-      checkboxListEl: columnsCheckboxList,
-      countLabelEl: columnsCountLabel,
+      controllerBtnEl: columnsMenuBtn,
+      controllerMenuEl: columnsMenuPanel,
+      columnsListEl: columnsCheckboxList,
+      countBadgeEl: columnsCountLabel,
+      syncStatusEl: document.getElementById('columns-sync-status'),
       resetBtnEl: resetColumnsBtn,
       densityBtnEl: densityToggleBtn,
       densityLabelEl: densityLabel,
-      onColumnsChange: () => {
+      onSettingsChange: () => {
         if (logsList && logsList.length > 0) renderRows(logsList);
       },
       onDensityChange: () => {
@@ -806,10 +772,10 @@ const pageTitle = 'System Diagnostics & Performance';
       if (emptyEl) emptyEl.classList.add('hidden');
       if (tableScrollArea) tableScrollArea.classList.remove('hidden');
 
-      const isCompact = columnManager.getDensity() === 'compact';
+      const isCompact = tableSettings.getDensity() === 'compact';
       const cellPad = isCompact ? 'py-1 px-2 text-[11px]' : 'py-2 px-2.5 text-xs';
 
-      const visibleCols = columnManager.getVisibleColumns();
+      const visibleCols = tableSettings.getVisibleColumns();
 
       tableBody.innerHTML = logs.map((log) => {
         const safeSource = escapeHtml(log.source || 'system');
@@ -1048,21 +1014,43 @@ const pageTitle = 'System Diagnostics & Performance';
           return;
         }
 
-        const headers = ['ID', 'Timestamp', 'Level', 'Event Code', 'Method', 'Status', 'Path', 'Latency Ms', 'Message', 'Ray ID', 'Client IP', 'Country'];
-        const rows = logsList.map((log: any) => [
-          log.id,
-          formatAdminTime(log.created_at, 'full'),
-          log.level || '',
-          log.error_code || '',
-          log.method || '',
-          log.status_code || '',
-          log.path || '',
-          log.latency_ms ?? '',
-          log.message || '',
-          log.ray_id || '',
-          log.client_ip || '',
-          log.country || '',
-        ]);
+        const exportCols = tableSettings.getVisibleColumns().filter((c) => c.id !== 'action');
+        const headers = exportCols.map((c) => c.label);
+        const rows = logsList.map((log: any) =>
+          exportCols.map((col) => {
+            switch (col.id) {
+              case 'time':
+                return formatAdminTime(log.created_at, 'full');
+              case 'level':
+                return log.level || '';
+              case 'event':
+                return log.error_code || '';
+              case 'method_status':
+                return `${log.method || ''} ${log.status_code || ''}`.trim();
+              case 'path':
+                return log.path || '';
+              case 'latency':
+                return log.latency_ms ?? '';
+              case 'spans': {
+                try {
+                  const p = log.context_json ? JSON.parse(log.context_json) : null;
+                  const s = p?.spans || p?.context?.spans;
+                  return s ? JSON.stringify(s) : '';
+                } catch {
+                  return '';
+                }
+              }
+              case 'message':
+                return log.message || '';
+              case 'client_geo':
+                return [log.client_ip, log.country].filter(Boolean).join(' · ');
+              case 'ray_id':
+                return log.ray_id || '';
+              default:
+                return '';
+            }
+          })
+        );
 
         exportToCsv(`diagnostics-logs-${new Date().toISOString().slice(0, 10)}`, headers, rows);
         (window as any).__showToast?.(`Exported ${logsList.length} logs to CSV`, 'success');
@@ -1284,8 +1272,8 @@ const pageTitle = 'System Diagnostics & Performance';
     });
 
     // Initial setup
-    columnManager.renderHeader();
-    columnManager.renderMenu();
+    tableSettings.renderHeader();
+    tableSettings.renderMenu();
     loadLogs(false);
   })();
 </script>

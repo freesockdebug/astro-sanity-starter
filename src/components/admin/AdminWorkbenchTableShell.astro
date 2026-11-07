@@ -8,6 +8,9 @@ interface Props {
   contentId: string;
   contentHidden?: boolean;
   contentClass?: string;
+  tableId?: string;
+  headerRowId?: string;
+  tbodyId?: string;
   showPagination?: boolean;
   paginationId?: string;
   paginationHidden?: boolean;
@@ -25,6 +28,9 @@ const {
   contentId,
   contentHidden = false,
   contentClass = '',
+  tableId,
+  headerRowId,
+  tbodyId,
   showPagination = true,
   paginationId = 'pagination-container',
   paginationHidden = false,
@@ -56,7 +62,20 @@ const {
     id={contentId}
     class={`flex-1 min-h-0 overflow-auto scrollbar-thin ${contentHidden ? 'hidden' : ''} ${contentClass}`}
   >
-    <slot />
+    {
+      tableId ? (
+        <table id={tableId} class="w-full text-left border-collapse table-fixed select-text">
+          <thead class="sticky top-0 z-10 bg-[#fbfbfd]/95 backdrop-blur-xs border-b border-black/10 shadow-2xs">
+            <tr id={headerRowId}></tr>
+          </thead>
+          <tbody id={tbodyId} class="divide-y divide-black/5 font-mono text-[11px]">
+            <slot />
+          </tbody>
+        </table>
+      ) : (
+        <slot />
+      )
+    }
   </div>
 
   <!-- 3. Optional Empty State -->

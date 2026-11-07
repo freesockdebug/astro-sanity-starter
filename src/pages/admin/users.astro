@@ -3,6 +3,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
+import TableColumnController from '@components/admin/TableColumnController.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -94,6 +95,19 @@ const pageTitle = 'Customer & Access Management';
           initialValue={initialSearch}
           placeholder="Search email, company..."
           class="relative flex items-center w-48 sm:w-64"
+        />
+
+        <!-- Columns & Density Controller -->
+        <TableColumnController
+          controllerBtnId="users-columns-btn"
+          controllerMenuId="users-columns-menu"
+          columnsListId="users-columns-list"
+          countBadgeId="users-columns-count"
+          syncStatusId="users-columns-sync"
+          resetBtnId="users-columns-reset"
+          densityBtnId="users-density-btn"
+          densityLabelId="users-density-label"
+          showDensityToggle={true}
         />
       </div>
     </header>
@@ -247,7 +261,18 @@ const pageTitle = 'Customer & Access Management';
 <script>
   import { clientCache } from '@utils/clientCache';
   import { escapeHtml, formatAdminTime, createPaginationController } from '@utils/adminWorkbench';
+  import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
+  const DEFAULT_COLUMNS: ColumnConfig[] = [
+    { id: 'profile', label: 'Customer Profile', defaultWidth: 240, minWidth: 160, visible: true, canHide: false },
+    { id: 'company', label: 'Company & Location', defaultWidth: 180, minWidth: 120, visible: true, canHide: true },
+    { id: 'tier_status', label: 'Tier & Status', defaultWidth: 150, minWidth: 120, visible: true, canHide: true },
+    { id: 'orders', label: 'Orders & Inquiries', defaultWidth: 150, minWidth: 110, visible: true, canHide: true },
+    { id: 'last_active', label: 'Last Active', defaultWidth: 160, minWidth: 120, visible: true, canHide: true },
+    { id: 'action', label: 'Actions', defaultWidth: 120, minWidth: 100, visible: true, canHide: false, pinRight: true, align: 'right' },
+  ];
+
+  let currentUsersList: any[] = [];
   let currentSearch = '';
   let currentTier = 'ALL';
   let currentStatus = 'ALL';
@@ -255,6 +280,26 @@ const pageTitle = 'Customer & Access Management';
   let currentLimit = 30;
   let currentTotalPages = 1;
   let activeAbortController: AbortController | null = null;
+
+  const tableSettings = useTableSettings({
+    tableKey: 'users',
+    defaultColumns: DEFAULT_COLUMNS,
+    defaultDensity: 'cozy',
+    controllerBtnEl: document.getElementById('users-columns-btn'),
+    controllerMenuEl: document.getElementById('users-columns-menu'),
+    columnsListEl: document.getElementById('users-columns-list'),
+    countBadgeEl: document.getElementById('users-columns-count'),
+    syncStatusEl: document.getElementById('users-columns-sync'),
+    resetBtnEl: document.getElementById('users-columns-reset'),
+    densityBtnEl: document.getElementById('users-density-btn'),
+    densityLabelEl: document.getElementById('users-density-label'),
+    onSettingsChange: () => {
+      if (currentUsersList && currentUsersList.length > 0) renderUsers(currentUsersList);
+    },
+    onDensityChange: () => {
+      if (currentUsersList && currentUsersList.length > 0) renderUsers(currentUsersList);
+    },
+  });
 
   const pagination = createPaginationController({
     containerId: 'users-pagination-container',
@@ -351,6 +396,7 @@ const pageTitle = 'Customer & Access Management';
   }
 
   function renderUsers(users) {
+    currentUsersList = users || [];
     const container = document.getElementById('users-content');
     if (!container) return;
 
@@ -436,96 +482,125 @@ const pageTitle = 'Customer & Access Management';
     `;
 
     // 2. Desktop table view
+    const visibleCols = tableSettings.getVisibleColumns();
+    const isCompact = tableSettings.getDensity() === 'compact';
+    const cellPad = isCompact ? 'py-1.5 px-3' : 'py-3.5 px-4';
+
+    const desktopRowsHtml = users.map((u) => {
+      const safeId = escapeHtml(u.id);
+      const safeEmail = escapeHtml(u.email);
+      const safeName = escapeHtml(u.name || 'Unnamed Buyer');
+      const safeCompany = escapeHtml(u.company || '—');
+      const safeLocation = escapeHtml(u.country || u.phone || 'Direct Buyer');
+      const totalOrders = Number(u.total_orders || 0);
+      const pendingOrders = Number(u.pending_orders || 0);
+      const isBlocked = u.status === 'BLOCKED';
+      const lastActiveStr = formatAdminTime(u.last_login_at, 'full', 'Never');
+
+      const cells = visibleCols.map((col) => {
+        switch (col.id) {
+          case 'profile':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                    ${escapeHtml((u.name || u.email || 'B')[0])}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-semibold text-[#1d1d1f] truncate">${safeName}</span>
+                      ${u.is_admin ? '<span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200 shrink-0">Admin</span>' : ''}
+                    </div>
+                    <span class="text-[#86868b] font-mono text-[11px] block truncate">${safeEmail}</span>
+                  </div>
+                </div>
+              </td>
+            `;
+          case 'company':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                <span class="font-medium text-[#1d1d1f] block truncate">${safeCompany}</span>
+                <span class="text-[11px] text-[#86868b] block truncate">${safeLocation}</span>
+              </td>
+            `;
+          case 'tier_status':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  ${renderTierBadge(u.tier)}
+                  ${isBlocked
+                    ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>`
+                    : `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">ACTIVE</span>`}
+                </div>
+              </td>
+            `;
+          case 'orders':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                <a href="/admin/orders?search=${encodeURIComponent(u.email)}" class="inline-flex items-center gap-1.5 font-medium hover:text-blue-600 transition-colors group" title="Filter orders for this buyer">
+                  <span>${totalOrders} Orders</span>
+                  ${pendingOrders > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">${pendingOrders} pending</span>` : ''}
+                  <span class="text-[#86868b] group-hover:text-blue-600">→</span>
+                </a>
+              </td>
+            `;
+          case 'last_active':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad} text-[#86868b] text-[11px]">
+                <span class="block text-[#1d1d1f] truncate">${lastActiveStr}</span>
+                ${u.last_login_ip ? `<span class="text-[10px] text-[#86868b] font-mono block truncate">${escapeHtml(u.last_login_ip)} ${u.last_login_country ? `(${escapeHtml(u.last_login_country)})` : ''}</span>` : ''}
+              </td>
+            `;
+          case 'action':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad} text-right">
+                <button
+                  type="button"
+                  class="action-open-drawer-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-[#1d1d1f] hover:text-white transition-all cursor-pointer border border-black/5"
+                  data-id="${safeId}"
+                  data-email="${safeEmail}"
+                  data-name="${safeName}"
+                  data-company="${escapeHtml(u.company || '')}"
+                  data-tier="${escapeHtml(u.tier || 'STANDARD')}"
+                  data-status="${escapeHtml(u.status || 'ACTIVE')}"
+                  data-notes="${escapeHtml(u.admin_notes || '')}"
+                  data-roles="${escapeHtml(u.logto_roles || '[]')}"
+                >
+                  Edit & Notes
+                </button>
+              </td>
+            `;
+          default:
+            return `<td></td>`;
+        }
+      }).join('');
+
+      return `
+        <tr class="hover:bg-[#f5f5f7]/40 transition-colors">${cells}</tr>
+      `;
+    }).join('');
+
     const desktopHtml = `
       <div class="hidden md:block">
-        <table class="w-full text-left text-xs text-[#1d1d1f]">
-          <thead class="sticky top-0 z-10 bg-[#f5f5f7]/95 backdrop-blur-xs text-[#86868b] font-medium border-b border-black/10 shadow-2xs">
-            <tr>
-              <th class="py-3 px-4">Customer Profile</th>
-              <th class="py-3 px-4">Company & Location</th>
-              <th class="py-3 px-4">Tier & Status</th>
-              <th class="py-3 px-4">Orders & Inquiries</th>
-              <th class="py-3 px-4">Last Active</th>
-              <th class="py-3 px-4 text-right">Actions</th>
-            </tr>
+        <table id="users-main-table" class="w-full text-left text-xs text-[#1d1d1f] border-collapse table-fixed select-text">
+          <thead class="sticky top-0 z-10 bg-[#fbfbfd]/95 backdrop-blur-xs border-b border-black/10 shadow-2xs">
+            <tr id="users-header-row"></tr>
           </thead>
           <tbody class="divide-y divide-black/5">
-            ${users.map((u) => {
-              const safeId = escapeHtml(u.id);
-              const safeEmail = escapeHtml(u.email);
-              const safeName = escapeHtml(u.name || 'Unnamed Buyer');
-              const safeCompany = escapeHtml(u.company || '—');
-              const safeLocation = escapeHtml(u.country || u.phone || 'Direct Buyer');
-              const totalOrders = Number(u.total_orders || 0);
-              const pendingOrders = Number(u.pending_orders || 0);
-              const isBlocked = u.status === 'BLOCKED';
-              const lastActiveStr = formatAdminTime(u.last_login_at, 'full', 'Never');
-
-              return `
-                <tr class="hover:bg-[#f5f5f7]/40 transition-colors">
-                  <td class="py-3.5 px-4">
-                    <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                        ${escapeHtml((u.name || u.email || 'B')[0])}
-                      </div>
-                      <div>
-                        <div class="flex items-center gap-1.5">
-                          <span class="font-semibold text-[#1d1d1f]">${safeName}</span>
-                          ${u.is_admin ? '<span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">Admin</span>' : ''}
-                        </div>
-                        <span class="text-[#86868b] font-mono text-[11px] block">${safeEmail}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="py-3.5 px-4">
-                    <span class="font-medium text-[#1d1d1f] block">${safeCompany}</span>
-                    <span class="text-[11px] text-[#86868b]">${safeLocation}</span>
-                  </td>
-                  <td class="py-3.5 px-4">
-                    <div class="flex items-center gap-1.5">
-                      ${renderTierBadge(u.tier)}
-                      ${isBlocked
-                        ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>`
-                        : `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">ACTIVE</span>`}
-                    </div>
-                  </td>
-                  <td class="py-3.5 px-4">
-                    <a href="/admin/orders?search=${encodeURIComponent(u.email)}" class="inline-flex items-center gap-1.5 font-medium hover:text-blue-600 transition-colors group" title="Filter orders for this buyer">
-                      <span>${totalOrders} Orders</span>
-                      ${pendingOrders > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">${pendingOrders} pending</span>` : ''}
-                      <span class="text-[#86868b] group-hover:text-blue-600">→</span>
-                    </a>
-                  </td>
-                  <td class="py-3.5 px-4 text-[#86868b] text-[11px]">
-                    <span class="block text-[#1d1d1f]">${lastActiveStr}</span>
-                    ${u.last_login_ip ? `<span class="text-[10px] text-[#86868b] font-mono block">${escapeHtml(u.last_login_ip)} ${u.last_login_country ? `(${escapeHtml(u.last_login_country)})` : ''}</span>` : ''}
-                  </td>
-                  <td class="py-3.5 px-4 text-right">
-                    <button
-                      type="button"
-                      class="action-open-drawer-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-[#1d1d1f] hover:text-white transition-all cursor-pointer border border-black/5"
-                      data-id="${safeId}"
-                      data-email="${safeEmail}"
-                      data-name="${safeName}"
-                      data-company="${escapeHtml(u.company || '')}"
-                      data-tier="${escapeHtml(u.tier || 'STANDARD')}"
-                      data-status="${escapeHtml(u.status || 'ACTIVE')}"
-                      data-notes="${escapeHtml(u.admin_notes || '')}"
-                      data-roles="${escapeHtml(u.logto_roles || '[]')}"
-                    >
-                      Edit & Notes
-                    </button>
-                  </td>
-                </tr>
-              `;
-            }).join('')}
+            ${desktopRowsHtml}
           </tbody>
         </table>
       </div>
     `;
 
-    container.innerHTML = desktopHtml + mobileHtml;
+    container.innerHTML = mobileHtml + desktopHtml;
     container.classList.remove('hidden');
+
+    const usersTable = document.getElementById('users-main-table');
+    const usersHeaderRow = document.getElementById('users-header-row');
+    if (usersTable && usersHeaderRow) {
+      tableSettings.renderHeader(usersHeaderRow, usersTable);
+    }
   }
 
   async function loadUsers(updateUrl = true) {
@@ -904,6 +979,7 @@ const pageTitle = 'Customer & Access Management';
   });
 
   // Initial load
+  tableSettings.renderMenu();
   const initialUrl = new URL(window.location.href);
   currentTier = initialUrl.searchParams.get('tier') || 'ALL';
   currentStatus = initialUrl.searchParams.get('status') || 'ALL';

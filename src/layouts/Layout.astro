@@ -540,9 +540,9 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             let fcpMetric: any = null;
             let hasReported = false;
 
-            onLCP((m) => { lcpMetric = m; });
-            onCLS((m) => { clsMetric = m; });
-            onINP((m) => { inpMetric = m; });
+            onLCP((m) => { lcpMetric = m; }, { reportAllChanges: true });
+            onCLS((m) => { clsMetric = m; }, { reportAllChanges: true });
+            onINP((m) => { inpMetric = m; }, { reportAllChanges: true });
             onTTFB((m) => { ttfbMetric = m; });
             onFCP((m) => { fcpMetric = m; });
 
@@ -574,7 +574,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
               const attribution: Record<string, any> = {};
               if (lcpMetric?.attribution) {
                 attribution.lcp = {
-                  target: lcpMetric.attribution.element || undefined,
+                  target: lcpMetric.attribution.target || lcpMetric.attribution.element || undefined,
                   url: lcpMetric.attribution.url || undefined,
                   timeToFirstByte: Math.round(lcpMetric.attribution.timeToFirstByte || 0),
                   resourceLoadDelay: Math.round(lcpMetric.attribution.resourceLoadDelay || 0),
@@ -637,9 +637,13 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             }
 
             document.addEventListener('visibilitychange', () => {
-              if (document.visibilityState === 'hidden') sendWebVitalsReport();
+              if (document.visibilityState === 'hidden') {
+                setTimeout(sendWebVitalsReport, 0);
+              }
             });
-            window.addEventListener('pagehide', sendWebVitalsReport);
+            window.addEventListener('pagehide', () => {
+              setTimeout(sendWebVitalsReport, 0);
+            });
           }
         </script>
     </body>

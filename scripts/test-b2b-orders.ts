@@ -686,19 +686,19 @@ async function runSelfCheck() {
 
   // 25. Vulnerability Probe Scanner Interception & Page Negative Caching
   const SCANNER_EXTENSIONS = /\.(php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do)$/i;
-  const SCANNER_PREFIXES = [
-    '/wp-', '/wordpress', '/phpmyadmin', '/pma', '/mysql', '/actuator',
-    '/.env', '/.git', '/vendor/', '/cgi-bin/', '/eval-stdin'
-  ];
+  const SCANNER_PATTERN = /(?:^|\/)(?:wp-[a-z0-9_-]+|wordpress|phpmyadmin|pma|mysql|actuator|\.env|\.git|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest)(?:\/|$|\.)/i;
   const isProbe = (p: string) => {
-    const lower = p.toLowerCase();
-    return SCANNER_EXTENSIONS.test(p) || SCANNER_PREFIXES.some((pre) => lower.startsWith(pre));
+    return p.startsWith('/.well-known/') || SCANNER_EXTENSIONS.test(p) || SCANNER_PATTERN.test(p);
   };
   assert.strictEqual(isProbe('/wp-content/admin.php'), true);
   assert.strictEqual(isProbe('/wp-admin/index.php'), true);
   assert.strictEqual(isProbe('/.env'), true);
   assert.strictEqual(isProbe('/actuator/health'), true);
   assert.strictEqual(isProbe('/config.bak'), true);
+  assert.strictEqual(isProbe('/vendor/phpunit'), true);
+  assert.strictEqual(isProbe('/vendors'), false);
+  assert.strictEqual(isProbe('/vendor-guide'), false);
+  assert.strictEqual(isProbe('/products/pma-silk'), false);
   assert.strictEqual(isProbe('/products/silk-200n'), false);
   assert.strictEqual(isProbe('/about'), false);
   assert.strictEqual(isProbe('/contact'), false);
