@@ -142,9 +142,34 @@ export class SecurityService {
       (request.headers.get('cf-ipcountry') || (request as any).cf?.country || '').trim().toUpperCase();
     const city = (request as any).cf?.city || request.headers.get('cf-ipcity') || '';
     const userAgent = request.headers.get('user-agent') || '';
-    const platform = (request.headers.get('sec-ch-ua-platform') || '').replace(/\"/g, '').trim();
-    const isMobile = request.headers.get('sec-ch-ua-mobile') === '?1';
-    const deviceType = request.headers.get('cf-device-type') || (isMobile ? 'mobile' : 'desktop');
+    let platform = (request.headers.get('sec-ch-ua-platform') || '').replace(/\"/g, '').trim();
+    const chMobile = request.headers.get('sec-ch-ua-mobile');
+    let deviceType = (request.headers.get('cf-device-type') || (request as any).cf?.deviceType || '').toLowerCase();
+
+    // High-accuracy fallback detection via User-Agent for Safari, iOS, WebKit, WeChat, etc.
+    if (!platform || !deviceType) {
+      const uaLower = userAgent.toLowerCase();
+      if (!platform) {
+        if (/iphone|ipod/.test(uaLower)) platform = 'iOS';
+        else if (/ipad/.test(uaLower)) platform = 'iPadOS';
+        else if (/macintosh|mac os x/.test(uaLower)) platform = 'macOS';
+        else if (/android/.test(uaLower)) platform = 'Android';
+        else if (/windows/.test(uaLower)) platform = 'Windows';
+        else if (/linux/.test(uaLower)) platform = 'Linux';
+      }
+      if (!deviceType) {
+        if (chMobile === '?1') {
+          deviceType = 'mobile';
+        } else if (/ipad|tablet|(android(?!.*mobile))/.test(uaLower)) {
+          deviceType = 'tablet';
+        } else if (/iphone|ipod|mobile|android.*mobile|micromessenger/.test(uaLower)) {
+          deviceType = 'mobile';
+        } else {
+          deviceType = 'desktop';
+        }
+      }
+    }
+
     return { ip, country, city, userAgent, platform, deviceType };
   }
 

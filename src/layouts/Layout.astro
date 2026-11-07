@@ -530,6 +530,15 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             var lcpVal = 0;
             var clsVal = 0;
             var inpVal = 0;
+            var wasHiddenBeforePaint = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+            if (typeof document !== 'undefined' && document.addEventListener) {
+              document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'hidden' && lcpVal === 0) {
+                  wasHiddenBeforePaint = true;
+                }
+              }, { capture: true });
+            }
+
             if (typeof PerformanceObserver !== 'undefined') {
               try {
                 var lcpObs = new PerformanceObserver(function (entryList) {
@@ -576,7 +585,16 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
               hasReportedVitals = true;
 
               var navTiming = typeof performance !== 'undefined' && performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
-              var ttfbVal = navTiming ? Math.round(navTiming.responseStart) : 0;
+              var ttfbVal = 0;
+              if (navTiming && typeof navTiming.responseStart === 'number' && navTiming.responseStart > 0) {
+                ttfbVal = Math.round(navTiming.responseStart);
+              } else if (typeof performance !== 'undefined' && performance.timing) {
+                var pt = performance.timing;
+                if (pt.responseStart > 0 && pt.navigationStart > 0 && pt.responseStart >= pt.navigationStart) {
+                  ttfbVal = Math.round(pt.responseStart - pt.navigationStart);
+                }
+              }
+
               var fcpVal = 0;
               if (typeof performance !== 'undefined' && performance.getEntriesByType) {
                 var paints = performance.getEntriesByType('paint');
@@ -589,7 +607,10 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
               }
 
               var roundedCls = Math.round(clsVal * 1000) / 1000;
-              var rating = (lcpVal > 4000 || roundedCls > 0.25 || inpVal > 500)
+              var isBackgrounded = wasHiddenBeforePaint;
+              var rating = isBackgrounded
+                ? 'backgrounded'
+                : (lcpVal > 4000 || roundedCls > 0.25 || inpVal > 500)
                 ? 'poor'
                 : (lcpVal > 2500 || roundedCls > 0.1 || inpVal > 200)
                 ? 'needs-improvement'
@@ -608,6 +629,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
                   ttfb: ttfbVal,
                   fcp: fcpVal,
                   rating: rating,
+                  wasHidden: wasHiddenBeforePaint,
                   viewport: window.innerWidth + 'x' + window.innerHeight,
                 });
               }

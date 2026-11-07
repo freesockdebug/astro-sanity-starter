@@ -135,6 +135,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
           ttfb: typeof body?.ttfb === 'number' ? body.ttfb : undefined,
           fcp: typeof body?.fcp === 'number' ? body.fcp : undefined,
           rating: typeof body?.rating === 'string' ? body.rating.slice(0, 32) : undefined,
+          wasHidden: typeof body?.wasHidden === 'boolean' ? body.wasHidden : undefined,
           viewport: typeof body?.viewport === 'string' ? body.viewport.slice(0, 32) : undefined,
           userAgent: clientMeta.userAgent?.slice(0, 300),
           platform: clientMeta.platform || undefined,

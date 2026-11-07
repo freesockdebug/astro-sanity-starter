@@ -714,6 +714,37 @@ async function runSelfCheck() {
 
   console.log('✔ [PASS] Vulnerability Scanner Interception & Page Negative Caching verified');
 
+  // 26. iOS / WeChat WebView Device & Platform Detection & TTFB RUM Guards
+  const { SecurityService } = await import('../src/utils/security');
+  const wechatReq = new Request('https://gwenvenni.com/', {
+    headers: {
+      'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 27_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.80(0x1800502f) NetType/WIFI Language/zh_CN',
+    },
+  });
+  const wechatMeta = SecurityService.resolveClientMeta(wechatReq);
+  assert.strictEqual(wechatMeta.deviceType, 'mobile');
+  assert.strictEqual(wechatMeta.platform, 'iOS');
+
+  const ipadReq = new Request('https://gwenvenni.com/', {
+    headers: {
+      'user-agent': 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    },
+  });
+  const ipadMeta = SecurityService.resolveClientMeta(ipadReq);
+  assert.strictEqual(ipadMeta.deviceType, 'tablet');
+  assert.strictEqual(ipadMeta.platform, 'iPadOS');
+
+  const desktopReq = new Request('https://gwenvenni.com/', {
+    headers: {
+      'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+  });
+  const desktopMeta = SecurityService.resolveClientMeta(desktopReq);
+  assert.strictEqual(desktopMeta.deviceType, 'desktop');
+  assert.strictEqual(desktopMeta.platform, 'macOS');
+
+  console.log('✔ [PASS] Mobile/Tablet/Desktop & iOS/WeChat Device Type Extraction verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 
