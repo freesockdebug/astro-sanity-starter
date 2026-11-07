@@ -256,6 +256,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
         <script is:inline define:vars={{ enableClientLogs, clientLogMinLevel }}>
           (function () {
             var isTelemetryEnabled = typeof enableClientLogs === 'boolean' ? enableClientLogs : true;
+            window.__TELEMETRY_ENABLED__ = isTelemetryEnabled;
             var minLevel = typeof clientLogMinLevel === 'string' ? clientLogMinLevel : 'warn';
             var shouldStreamInfoNav = isTelemetryEnabled && (minLevel === 'info' || minLevel === 'debug');
             var hasActiveError = false;
@@ -525,123 +526,121 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
               var msg = error && (error.message || String(error));
               handleRuntimeError('manual', msg, customSource || location.pathname, undefined, undefined, error);
             };
+          })();
+        </script>
 
-            // 8. RUM Web Vitals (LCP, CLS, INP, TTFB, FCP) via native PerformanceObserver
-            var lcpVal = 0;
-            var clsVal = 0;
-            var inpVal = 0;
-            var wasHiddenBeforePaint = typeof document !== 'undefined' && document.visibilityState === 'hidden';
-            if (typeof document !== 'undefined' && document.addEventListener) {
-              document.addEventListener('visibilitychange', function () {
-                if (document.visibilityState === 'hidden' && lcpVal === 0) {
-                  wasHiddenBeforePaint = true;
-                }
-              }, { capture: true });
-            }
+        <script>
+          import { onLCP, onCLS, onINP, onTTFB, onFCP } from 'web-vitals/attribution';
 
-            if (typeof PerformanceObserver !== 'undefined') {
-              try {
-                var lcpObs = new PerformanceObserver(function (entryList) {
-                  var entries = entryList.getEntries();
-                  if (entries.length > 0) {
-                    lcpVal = Math.round(entries[entries.length - 1].startTime);
-                  }
-                });
-                lcpObs.observe({ type: 'largest-contentful-paint', buffered: true });
-              } catch (e) {}
+          if (typeof window !== 'undefined' && location.pathname.indexOf('/admin/logs') !== 0) {
+            let lcpMetric: any = null;
+            let clsMetric: any = null;
+            let inpMetric: any = null;
+            let ttfbMetric: any = null;
+            let fcpMetric: any = null;
+            let hasReported = false;
 
-              try {
-                var clsObs = new PerformanceObserver(function (entryList) {
-                  var entries = entryList.getEntries();
-                  for (var i = 0; i < entries.length; i++) {
-                    var entry = entries[i];
-                    if (!entry.hadRecentInput) {
-                      clsVal += entry.value;
-                    }
-                  }
-                });
-                clsObs.observe({ type: 'layout-shift', buffered: true });
-              } catch (e) {}
+            onLCP((m) => { lcpMetric = m; });
+            onCLS((m) => { clsMetric = m; });
+            onINP((m) => { inpMetric = m; });
+            onTTFB((m) => { ttfbMetric = m; });
+            onFCP((m) => { fcpMetric = m; });
 
-              try {
-                var inpObs = new PerformanceObserver(function (entryList) {
-                  var entries = entryList.getEntries();
-                  for (var i = 0; i < entries.length; i++) {
-                    var dur = Math.round(entries[i].duration);
-                    if (dur > inpVal) inpVal = dur;
-                  }
-                });
-                try {
-                  inpObs.observe({ type: 'event', buffered: true, durationThreshold: 40 });
-                } catch (err) {
-                  inpObs.observe({ type: 'first-input', buffered: true });
-                }
-              } catch (e) {}
-            }
+            function sendWebVitalsReport() {
+              if (hasReported) return;
+              if ((window as any).__TELEMETRY_ENABLED__ === false) return;
+              hasReported = true;
 
-            var hasReportedVitals = false;
-            function sendWebVitals() {
-              if (hasReportedVitals || !isTelemetryEnabled || location.pathname.indexOf('/admin/logs') === 0) return;
-              hasReportedVitals = true;
+              const lcpVal = lcpMetric ? Math.round(lcpMetric.value) : 0;
+              const clsVal = clsMetric ? Math.round(clsMetric.value * 1000) / 1000 : 0;
+              const inpVal = inpMetric ? Math.round(inpMetric.value) : 0;
+              const ttfbVal = ttfbMetric ? Math.round(ttfbMetric.value) : 0;
+              const fcpVal = fcpMetric ? Math.round(fcpMetric.value) : 0;
 
-              var navTiming = typeof performance !== 'undefined' && performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
-              var ttfbVal = 0;
-              if (navTiming && typeof navTiming.responseStart === 'number' && navTiming.responseStart > 0) {
-                ttfbVal = Math.round(navTiming.responseStart);
-              } else if (typeof performance !== 'undefined' && performance.timing) {
-                var pt = performance.timing;
-                if (pt.responseStart > 0 && pt.navigationStart > 0 && pt.responseStart >= pt.navigationStart) {
-                  ttfbVal = Math.round(pt.responseStart - pt.navigationStart);
-                }
-              }
+              if (lcpVal === 0 && ttfbVal === 0 && fcpVal === 0) return;
 
-              var fcpVal = 0;
-              if (typeof performance !== 'undefined' && performance.getEntriesByType) {
-                var paints = performance.getEntriesByType('paint');
-                for (var i = 0; i < paints.length; i++) {
-                  if (paints[i].name === 'first-contentful-paint') {
-                    fcpVal = Math.round(paints[i].startTime);
-                    break;
-                  }
-                }
-              }
-
-              var roundedCls = Math.round(clsVal * 1000) / 1000;
-              var isBackgrounded = wasHiddenBeforePaint;
-              var rating = isBackgrounded
-                ? 'backgrounded'
-                : (lcpVal > 4000 || roundedCls > 0.25 || inpVal > 500)
+              const ratings = [
+                lcpMetric?.rating,
+                clsMetric?.rating,
+                inpMetric?.rating,
+                ttfbMetric?.rating,
+              ].filter(Boolean);
+              const rating = ratings.includes('poor')
                 ? 'poor'
-                : (lcpVal > 2500 || roundedCls > 0.1 || inpVal > 200)
+                : ratings.includes('needs-improvement')
                 ? 'needs-improvement'
                 : 'good';
 
-              if (lcpVal > 0 || ttfbVal > 0) {
-                dispatchBeacon({
-                  type: 'web-vitals',
-                  message: 'Web Vitals: LCP ' + lcpVal + 'ms, CLS ' + roundedCls + ', INP ' + inpVal + 'ms, TTFB ' + ttfbVal + 'ms (' + rating + ')',
-                  path: location.pathname,
-                  latencyMs: lcpVal || ttfbVal,
-                  metric: 'ALL',
-                  lcp: lcpVal,
-                  cls: roundedCls,
-                  inp: inpVal,
-                  ttfb: ttfbVal,
-                  fcp: fcpVal,
-                  rating: rating,
-                  wasHidden: wasHiddenBeforePaint,
-                  viewport: window.innerWidth + 'x' + window.innerHeight,
-                });
+              const attribution: Record<string, any> = {};
+              if (lcpMetric?.attribution) {
+                attribution.lcp = {
+                  target: lcpMetric.attribution.element || undefined,
+                  url: lcpMetric.attribution.url || undefined,
+                  timeToFirstByte: Math.round(lcpMetric.attribution.timeToFirstByte || 0),
+                  resourceLoadDelay: Math.round(lcpMetric.attribution.resourceLoadDelay || 0),
+                  resourceLoadDuration: Math.round(lcpMetric.attribution.resourceLoadDuration || 0),
+                  elementRenderDelay: Math.round(lcpMetric.attribution.elementRenderDelay || 0),
+                };
+              }
+              if (clsMetric?.attribution) {
+                attribution.cls = {
+                  target: clsMetric.attribution.largestShiftTarget || undefined,
+                  value: clsMetric.attribution.largestShiftValue,
+                };
+              }
+              if (inpMetric?.attribution) {
+                attribution.inp = {
+                  target: inpMetric.attribution.interactionTarget || undefined,
+                  type: inpMetric.attribution.interactionType,
+                  inputDelay: Math.round(inpMetric.attribution.inputDelay || 0),
+                  processingDuration: Math.round(inpMetric.attribution.processingDuration || 0),
+                  presentationDelay: Math.round(inpMetric.attribution.presentationDelay || 0),
+                };
+              }
+              if (ttfbMetric?.attribution) {
+                attribution.ttfb = {
+                  waitingDuration: Math.round(ttfbMetric.attribution.waitingDuration || 0),
+                  dnsDuration: Math.round(ttfbMetric.attribution.dnsDuration || 0),
+                  connectionDuration: Math.round(ttfbMetric.attribution.connectionDuration || 0),
+                  requestDuration: Math.round(ttfbMetric.attribution.requestDuration || 0),
+                };
+              }
+
+              const payload = {
+                type: 'web-vitals',
+                message: `Web Vitals: LCP ${lcpVal}ms, CLS ${clsVal}, INP ${inpVal}ms, TTFB ${ttfbVal}ms (${rating})`,
+                path: location.pathname,
+                latencyMs: lcpVal || ttfbVal,
+                metric: 'ALL',
+                lcp: lcpVal,
+                cls: clsVal,
+                inp: inpVal,
+                ttfb: ttfbVal,
+                fcp: fcpVal,
+                rating,
+                attribution,
+                viewport: `${window.innerWidth}x${window.innerHeight}`,
+              };
+
+              const json = JSON.stringify(payload);
+              if (navigator.sendBeacon) {
+                const blob = new Blob([json], { type: 'application/json' });
+                navigator.sendBeacon('/api/client-error', blob);
+              } else if (window.fetch) {
+                fetch('/api/client-error', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: json,
+                  keepalive: true,
+                }).catch(() => {});
               }
             }
 
-            document.addEventListener('visibilitychange', function () {
-              if (document.visibilityState === 'hidden') {
-                sendWebVitals();
-              }
+            document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'hidden') sendWebVitalsReport();
             });
-            window.addEventListener('pagehide', sendWebVitals);
-          })();
+            window.addEventListener('pagehide', sendWebVitalsReport);
+          }
         </script>
     </body>
 </html>

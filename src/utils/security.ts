@@ -147,26 +147,29 @@ export class SecurityService {
     let deviceType = (request.headers.get('cf-device-type') || (request as any).cf?.deviceType || '').toLowerCase();
 
     // High-accuracy fallback detection via User-Agent for Safari, iOS, WebKit, WeChat, etc.
-    if (!platform || !deviceType) {
-      const uaLower = userAgent.toLowerCase();
-      if (!platform) {
-        if (/iphone|ipod/.test(uaLower)) platform = 'iOS';
-        else if (/ipad/.test(uaLower)) platform = 'iPadOS';
-        else if (/macintosh|mac os x/.test(uaLower)) platform = 'macOS';
-        else if (/android/.test(uaLower)) platform = 'Android';
-        else if (/windows/.test(uaLower)) platform = 'Windows';
-        else if (/linux/.test(uaLower)) platform = 'Linux';
-      }
-      if (!deviceType) {
-        if (chMobile === '?1') {
-          deviceType = 'mobile';
-        } else if (/ipad|tablet|(android(?!.*mobile))/.test(uaLower)) {
-          deviceType = 'tablet';
-        } else if (/iphone|ipod|mobile|android.*mobile|micromessenger/.test(uaLower)) {
-          deviceType = 'mobile';
-        } else {
-          deviceType = 'desktop';
-        }
+    const uaLower = userAgent.toLowerCase();
+    if (!platform) {
+      if (/iphone|ipod/.test(uaLower)) platform = 'iOS';
+      else if (/ipad/.test(uaLower)) platform = 'iPadOS';
+      else if (/macintosh|mac os x/.test(uaLower)) platform = 'macOS';
+      else if (/android/.test(uaLower)) platform = 'Android';
+      else if (/windows/.test(uaLower)) platform = 'Windows';
+      else if (/linux/.test(uaLower)) platform = 'Linux';
+    }
+
+    // Protect against Cloudflare headers misclassifying mobile devices (e.g. iPhone WeChat) as desktop
+    const isExplicitMobile = /iphone|ipod|mobile|android.*mobile|micromessenger/.test(uaLower);
+    const isExplicitTablet = /ipad|tablet|(android(?!.*mobile))/.test(uaLower);
+
+    if (isExplicitTablet) {
+      deviceType = 'tablet';
+    } else if (isExplicitMobile || platform === 'iOS') {
+      deviceType = 'mobile';
+    } else if (!deviceType) {
+      if (chMobile === '?1') {
+        deviceType = 'mobile';
+      } else {
+        deviceType = 'desktop';
       }
     }
 
