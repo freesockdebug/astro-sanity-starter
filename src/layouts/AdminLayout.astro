@@ -9,6 +9,7 @@ interface Props {
   currentTab: 'orders' | 'users' | 'logins' | 'logs' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
+  fullscreenWorkbench?: boolean;
 }
 
 const {
@@ -16,6 +17,7 @@ const {
   currentTab,
   sessionEmail,
   pendingOrdersCount = 0,
+  fullscreenWorkbench = false,
 } = Astro.props;
 
 const tabNames: Record<string, string> = {
@@ -36,7 +38,7 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
   nofollow={true}
   bodyClass="bg-[#f5f5f7] text-[#1d1d1f] font-sans antialiased selection:bg-zinc-900 selection:text-white min-h-screen"
 >
-  <div class="min-h-screen flex flex-col lg:flex-row">
+  <div class:list={['min-h-screen flex flex-col lg:flex-row', fullscreenWorkbench && 'lg:h-screen lg:overflow-hidden']}>
     <!-- 1. Left Grouped Vertical Sidebar (Fixed on Mobile/Tablet, Sticky on Desktop >= lg) -->
     <AdminSidebar
       currentTab={currentTab}
@@ -45,7 +47,7 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
     />
 
     <!-- 2. Right Main Canvas Area -->
-    <div class="flex-1 flex flex-col min-w-0">
+    <div class:list={['flex-1 flex flex-col min-w-0', fullscreenWorkbench && 'lg:h-screen lg:overflow-hidden']}>
       <!-- Mobile Top Sticky Bar (< lg): 56px (h-14) Compact Header -->
       <header class="lg:hidden h-14 flex items-center justify-between px-3.5 bg-white/95 backdrop-blur-md border-b border-black/10 sticky top-0 z-30 shadow-2xs">
         <div class="flex items-center gap-2">
@@ -105,7 +107,11 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
       </header>
 
       <!-- Main Dynamic Content Canvas: Bottom padded pb-20 on mobile to clear Bottom Tab Bar -->
-      <div class="flex-1 p-[clamp(1rem,0.4rem+2vw,2.25rem)] pb-20 lg:pb-8 max-w-[1700px] w-full mx-auto">
+      <div class:list={[
+        fullscreenWorkbench
+          ? 'flex-1 flex flex-col min-h-0 min-w-0 w-full p-2.5 sm:p-3 lg:p-4 overflow-hidden pb-16 lg:pb-3 max-w-[1920px] mx-auto'
+          : 'flex-1 p-[clamp(1rem,0.4rem+2vw,2.25rem)] pb-20 lg:pb-8 max-w-[1700px] w-full mx-auto'
+      ]}>
         <slot />
       </div>
     </div>

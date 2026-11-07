@@ -1,6 +1,6 @@
 ---
 // src/pages/admin/logs.astro
-// Unified System Diagnostics & Performance Profiling Workbench (App Shell + JSON Client Render)
+// Unified System Diagnostics & Performance Profiling Fixed-Viewport Workbench
 import AdminLayout from '@layouts/AdminLayout.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
@@ -17,11 +17,14 @@ const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdmin
 if (redirectResponse) return redirectResponse;
 
 const initialLevel = Astro.url.searchParams.get('level') || 'ALL';
+const initialEventCode = Astro.url.searchParams.get('eventCode') || 'ALL';
+const initialHealth = Astro.url.searchParams.get('health') || 'ALL';
+const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
 const initialSearch = (Astro.url.searchParams.get('search') || '').trim();
 const initialSort = Astro.url.searchParams.get('sort') || 'newest';
 const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
-const pageTitle = 'System Diagnostics & Logs';
+const pageTitle = 'System Diagnostics & Performance';
 ---
 
 <AdminLayout
@@ -29,211 +32,356 @@ const pageTitle = 'System Diagnostics & Logs';
   currentTab="logs"
   sessionEmail={sessionUser.email}
   pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
 >
-  <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
-    <div>
-      <div class="flex items-center gap-2">
-        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">System Diagnostics</h1>
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          Cloudflare D1 & Observability
-        </span>
-      </div>
-      <p class="text-xs text-[#86868b] mt-0.5">
-        Real-time edge execution logs, sub-step latency breakdown, slow query profiling, and business exception audit trail.
-      </p>
-    </div>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- 1. Single-Line Command Bar (Fixed Header) -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+      <!-- Left: Title & Metric Capsules -->
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div class="flex items-center gap-1.5 shrink-0">
+          <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Diagnostics</h1>
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Edge D1
+          </span>
+        </div>
 
-    <!-- Actions (Refresh & Clear Logs) -->
-    <div class="flex items-center gap-2 self-start sm:self-auto">
-      <button
-        id="refresh-logs-btn"
-        type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-black/10 text-[#1d1d1f] hover:bg-[#f5f5f7] shadow-2xs active:scale-95 transition-all cursor-pointer"
-      >
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        <span>Refresh</span>
-      </button>
+        <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
 
-      <button
-        id="clear-logs-btn"
-        type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 shadow-2xs active:scale-95 transition-all cursor-pointer"
-      >
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-        <span>Clear Logs</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- Metric Overview Cards -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-5">
-    <div class="p-3.5 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
-      <span class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider block">Total Events</span>
-      <span id="metric-total" class="text-xl sm:text-2xl font-bold font-mono text-[#1d1d1f]">-</span>
-    </div>
-
-    <div class="p-3.5 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
-      <span class="text-[11px] font-medium text-rose-600 uppercase tracking-wider block">Errors</span>
-      <span id="metric-errors" class="text-xl sm:text-2xl font-bold font-mono text-rose-600">-</span>
-    </div>
-
-    <div class="p-3.5 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
-      <span class="text-[11px] font-medium text-amber-600 uppercase tracking-wider block">Warnings & Slow</span>
-      <span id="metric-warns" class="text-xl sm:text-2xl font-bold font-mono text-amber-600">-</span>
-    </div>
-
-    <div class="p-3.5 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
-      <span class="text-[11px] font-medium text-blue-600 uppercase tracking-wider block">Info & Profiling</span>
-      <span id="metric-info" class="text-xl sm:text-2xl font-bold font-mono text-blue-600">-</span>
-    </div>
-
-    <div class="p-3.5 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-1">
-      <span class="text-[11px] font-medium text-purple-600 uppercase tracking-wider block">Critical</span>
-      <span id="metric-critical" class="text-xl sm:text-2xl font-bold font-mono text-purple-600">-</span>
-    </div>
-  </div>
-
-  <!-- Top Endpoint Bottlenecks Performance Board -->
-  <div id="bottlenecks-card" class="hidden mb-5 p-4 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-3">
-    <div class="flex items-center justify-between pb-2 border-b border-black/5">
-      <div class="flex items-center gap-2">
-        <span class="text-xs font-bold text-[#1d1d1f] tracking-tight">Endpoint Bottleneck Ranking</span>
-        <span class="text-[10px] px-2 py-0.5 rounded-full font-mono bg-amber-50 text-amber-800 border border-amber-200 font-semibold">
-          Latency Profiling
-        </span>
-      </div>
-      <span class="text-[11px] text-[#86868b]">Click any row to filter audit trail</span>
-    </div>
-    <div id="bottlenecks-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-      <!-- Populated via JavaScript -->
-    </div>
-  </div>
-
-  <!-- Filter & Search Bar -->
-  <div class="sticky top-14 lg:top-0 z-20 py-2.5 -my-2.5 bg-[#f5f5f7]/95 backdrop-blur-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs mb-4">
-    <!-- Level Tabs -->
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none" id="level-tabs">
-      {[
-        { key: 'ALL', label: 'All Levels' },
-        { key: 'DEBUG', label: 'Debug' },
-        { key: 'INFO', label: 'Info' },
-        { key: 'WARN', label: 'Warnings' },
-        { key: 'ERROR', label: 'Errors' },
-        { key: 'CRITICAL', label: 'Critical' },
-      ].map((tab) => {
-        const isActive = initialLevel === tab.key;
-        return (
+        <!-- Metric Capsules (Clickable Instant Filters) -->
+        <div class="flex items-center gap-1 sm:gap-1.5 flex-wrap">
           <button
             type="button"
-            data-level={tab.key}
-            class={`level-tab-btn px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border cursor-pointer ${
-              isActive
-                ? 'bg-[#1d1d1f] text-white border-black shadow-xs font-semibold'
-                : 'bg-white text-[#52525b] border-black/5 hover:border-black/20 hover:text-black'
-            }`}
+            id="metric-capsule-total"
+            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-[#f5f5f7] hover:bg-black/10 text-[#52525b] border border-black/5 transition-all cursor-pointer flex items-center gap-1"
+            title="Reset filters & show all"
           >
-            <span>{tab.label}</span>
+            <span>Total</span>
+            <strong id="metric-total" class="text-[#1d1d1f] font-bold">-</strong>
           </button>
-        );
-      })}
-    </div>
 
-    <!-- Controls (Sort & Search) -->
-    <div class="flex items-center gap-2 self-stretch md:self-auto">
-      <!-- Sort Toggle -->
-      <select
-        id="logs-sort-select"
-        class="h-8 px-2.5 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs font-medium text-[#1d1d1f] cursor-pointer"
-      >
-        <option value="newest" selected={initialSort === 'newest'}>⏱️ Newest First</option>
-        <option value="slowest" selected={initialSort === 'slowest'}>🐢 Slowest Latency</option>
-      </select>
+          <button
+            type="button"
+            id="metric-capsule-errors"
+            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-rose-50/80 hover:bg-rose-100 text-rose-700 border border-rose-200/80 transition-all cursor-pointer flex items-center gap-1"
+            title="Filter by Errors"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+            <span>Errors</span>
+            <strong id="metric-errors" class="font-bold">-</strong>
+          </button>
 
-      <!-- Search Input -->
-      <div class="relative flex-1 md:w-64">
-        <input
-          type="text"
-          id="logs-search-input"
-          value={initialSearch}
-          placeholder="Filter message, rayId, path, IP, country, email..."
-          class="w-full h-8 pl-8 pr-7 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs text-[#1d1d1f]"
-        />
-        <svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
+          <button
+            type="button"
+            id="metric-capsule-warns"
+            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-amber-50/80 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-all cursor-pointer flex items-center gap-1"
+            title="Filter by Warnings"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            <span>Warn</span>
+            <strong id="metric-warns" class="font-bold">-</strong>
+          </button>
+
+          <button
+            type="button"
+            id="metric-capsule-slow"
+            class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-orange-50/80 hover:bg-orange-100 text-orange-800 border border-orange-200/80 transition-all cursor-pointer flex items-center gap-1"
+            title="Filter by Slow SLA"
+          >
+            <span>🐢</span>
+            <span>Slow</span>
+            <strong id="metric-slow" class="font-bold">-</strong>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Action Controls (Auto-poll, Refresh, Density, Columns, CSV, Clear) -->
+      <div class="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+        <!-- Auto Polling Toggle -->
         <button
           type="button"
-          id="clear-search-btn"
-          class={`absolute right-2.5 top-2 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+          id="poll-toggle-btn"
+          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] hover:border-black/15 transition-all cursor-pointer"
+          title="Toggle 10s auto-refresh"
         >
-          ✕
+          <span id="poll-indicator" class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+          <span id="poll-label">Live: Off</span>
         </button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Skeletons (0-CLS Shimmer) -->
-  <div id="logs-skeleton" class="rounded-2xl bg-white border border-black/5 p-4 shadow-2xs space-y-3">
-    {[1, 2, 3, 4, 5].map(() => (
-      <div class="flex items-center justify-between py-2 border-b border-black/5 last:border-0 animate-pulse">
-        <div class="flex items-center gap-3">
-          <div class="h-6 w-16 bg-black/10 rounded-md"></div>
-          <div class="space-y-1">
-            <div class="h-4 w-48 bg-black/10 rounded-md"></div>
-            <div class="h-3 w-32 bg-black/5 rounded-md"></div>
+        <!-- Refresh Button -->
+        <button
+          type="button"
+          id="refresh-logs-btn"
+          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-white border border-black/10 text-[#1d1d1f] hover:bg-[#f5f5f7] shadow-2xs active:scale-95 transition-all cursor-pointer"
+          title="Refresh logs (Shortcut: R)"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span class="hidden sm:inline">Refresh</span>
+          <kbd class="hidden md:inline px-1 py-0.2 rounded bg-black/5 text-[9px] font-mono text-[#86868b]">R</kbd>
+        </button>
+
+        <!-- Density Toggle -->
+        <button
+          type="button"
+          id="density-toggle-btn"
+          class="inline-flex items-center gap-1 px-2 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
+          title="Toggle Row Density"
+        >
+          <span id="density-icon">≡</span>
+          <span id="density-label" class="hidden sm:inline text-[11px]">Cozy</span>
+        </button>
+
+        <!-- Columns Selector Dropdown Popover -->
+        <div class="relative">
+          <button
+            type="button"
+            id="columns-menu-btn"
+            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
+            title="Configure Visible Columns"
+          >
+            <span>⚙️</span>
+            <span id="columns-count-label" class="hidden sm:inline">Cols</span>
+            <span class="text-[9px]">▾</span>
+          </button>
+
+          <!-- Columns Menu Panel -->
+          <div
+            id="columns-menu-panel"
+            class="hidden absolute right-0 top-full mt-1.5 w-48 bg-white border border-black/10 rounded-2xl shadow-xl p-2 z-50 text-xs space-y-1"
+          >
+            <div class="px-2 py-1 text-[10px] font-semibold text-[#86868b] uppercase tracking-wider border-b border-black/5">
+              Visible Columns
+            </div>
+            <div id="columns-checkbox-list" class="space-y-0.5 pt-1">
+              <!-- Rendered via JS -->
+            </div>
+            <div class="pt-1 border-t border-black/5 flex justify-end">
+              <button
+                type="button"
+                id="reset-columns-btn"
+                class="px-2 py-0.5 rounded text-[10px] font-medium text-[#86868b] hover:text-black cursor-pointer"
+              >
+                Reset Default
+              </button>
+            </div>
           </div>
         </div>
-        <div class="h-4 w-24 bg-black/5 rounded-md"></div>
+
+        <!-- Export CSV Button -->
+        <button
+          type="button"
+          id="export-csv-btn"
+          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
+          title="Export visible logs as CSV"
+        >
+          <span>📥</span>
+          <span class="hidden sm:inline">CSV</span>
+        </button>
+
+        <!-- Clear Logs Button -->
+        <button
+          type="button"
+          id="clear-logs-btn"
+          class="inline-flex items-center gap-1 px-2 py-1 rounded-xl text-[11px] font-semibold bg-white hover:bg-rose-50 text-rose-600 border border-rose-200/80 shadow-2xs active:scale-95 transition-all cursor-pointer"
+          title="Clear system diagnostic logs"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
       </div>
-    ))}
-  </div>
+    </header>
 
-  <!-- Main Log List Container -->
-  <div id="logs-content" class="hidden rounded-2xl bg-white border border-black/5 shadow-2xs overflow-hidden">
-    <!-- Populated by JavaScript -->
-  </div>
+    <!-- 2. Collapsible 1-Line Top Bottleneck Drawer -->
+    <div id="bottlenecks-bar" class="hidden shrink-0 bg-white/90 backdrop-blur-xs border border-black/5 rounded-xl px-3 py-1.5 shadow-2xs transition-all">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 truncate text-xs">
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200 shrink-0">
+            🔥 Top Bottleneck
+          </span>
+          <span id="top-bottleneck-summary" class="font-mono text-xs text-[#1d1d1f] truncate font-medium">
+            <!-- Populated via JS -->
+          </span>
+        </div>
 
-  <!-- Pagination Container -->
-  <div id="pagination-container" class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-[#86868b] hidden">
-    <div id="pagination-summary"></div>
-    <div class="flex items-center gap-2">
-      <button
-        type="button"
-        id="pagination-prev"
-        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-      >
-        ← Previous
-      </button>
-      <span id="pagination-current" class="px-2 py-1 text-xs font-mono text-[#1d1d1f]">
-        1 / 1
-      </span>
-      <button
-        type="button"
-        id="pagination-next"
-        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-      >
-        Next →
-      </button>
+        <button
+          type="button"
+          id="toggle-bottlenecks-btn"
+          class="text-[11px] font-medium text-[#86868b] hover:text-[#1d1d1f] px-2 py-0.5 rounded hover:bg-black/5 transition-all shrink-0 flex items-center gap-1 cursor-pointer"
+        >
+          <span id="bottlenecks-toggle-text">Expand Top 8</span>
+          <span id="bottlenecks-toggle-icon" class="text-[9px]">▾</span>
+        </button>
+      </div>
+
+      <!-- Collapsible Grid (Hidden by default) -->
+      <div id="bottlenecks-grid" class="hidden pt-2 mt-2 border-t border-black/5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <!-- Populated via JS -->
+      </div>
     </div>
-  </div>
 
-  <!-- Empty State -->
-  <div id="logs-empty" class="hidden rounded-2xl bg-white border border-black/5 p-12 text-center shadow-2xs">
-    <div class="w-12 h-12 rounded-2xl bg-[#f5f5f7] flex items-center justify-center mx-auto mb-3 text-emerald-600">
-      <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+    <!-- 3. Multi-Dimensional Filter Toolbar (Compact single row) -->
+    <div class="shrink-0 bg-white border border-black/5 rounded-xl px-2.5 py-1.5 shadow-2xs flex flex-wrap items-center justify-between gap-2 text-xs">
+      <!-- Filter Selects -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <!-- Event Type -->
+        <select
+          id="filter-event-select"
+          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer"
+        >
+          <option value="ALL">🌐 All Events</option>
+          <option value="SERVER_ALL">⚡ Server APIs</option>
+          <option value="WEB_VITALS">📊 Web Vitals</option>
+          <option value="CLIENT_ERRORS">💥 Client Errors</option>
+          <option value="CLIENT_NAVIGATION">🧭 Navigation</option>
+          <option value="SLOW_REQUEST">🐢 Slow Server Requests</option>
+          <option value="AUTH_FAILED">🛡️ Auth Failed</option>
+        </select>
+
+        <!-- Level Select -->
+        <select
+          id="filter-level-select"
+          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer"
+        >
+          <option value="ALL">All Levels</option>
+          <option value="DEBUG">DEBUG</option>
+          <option value="INFO">INFO</option>
+          <option value="WARN">WARN</option>
+          <option value="ERROR">ERROR</option>
+          <option value="CRITICAL">CRITICAL</option>
+        </select>
+
+        <!-- Health / Latency Filter -->
+        <select
+          id="filter-health-select"
+          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer"
+        >
+          <option value="ALL">SLA Health: All</option>
+          <option value="slow_only">🐢 Slow Only (&ge;1s / Poor)</option>
+          <option value="500">&ge; 500ms</option>
+          <option value="1000">&ge; 1000ms</option>
+          <option value="2500">&ge; 2500ms</option>
+          <option value="exclude_backgrounded">Exclude Backgrounded Tabs</option>
+        </select>
+
+        <!-- Time Window Filter -->
+        <select
+          id="filter-timewindow-select"
+          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer"
+        >
+          <option value="ALL">Time: Past 30d</option>
+          <option value="1h">Past 1 Hour</option>
+          <option value="24h">Past 24 Hours</option>
+          <option value="7d">Past 7 Days</option>
+          <option value="30d">Past 30 Days</option>
+        </select>
+      </div>
+
+      <!-- Search & Sort Controls -->
+      <div class="flex items-center gap-1.5 ml-auto flex-1 sm:flex-initial min-w-[200px]">
+        <!-- Search Input -->
+        <div class="relative flex-1">
+          <input
+            type="text"
+            id="logs-search-input"
+            value={initialSearch}
+            placeholder="Search path, message, rayId, IP..."
+            class="w-full h-7 pl-7 pr-6 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] text-[#1d1d1f]"
+          />
+          <svg class="w-3.5 h-3.5 absolute left-2 top-1.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <button
+            type="button"
+            id="clear-search-btn"
+            class={`absolute right-2 top-1.5 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
+          >
+            ✕
+          </button>
+        </div>
+
+        <!-- Sort Select -->
+        <select
+          id="logs-sort-select"
+          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer shrink-0"
+        >
+          <option value="newest" selected={initialSort === 'newest'}>⏱️ Newest</option>
+          <option value="slowest" selected={initialSort === 'slowest'}>🐢 Slowest</option>
+        </select>
+      </div>
     </div>
-    <h3 class="text-sm font-semibold text-[#1d1d1f]">All Systems Nominal</h3>
-    <p class="text-xs text-[#86868b] mt-1 max-w-sm mx-auto">
-      No diagnostic errors or warnings found matching the active filter.
-    </p>
+
+    <!-- 4. Independent Scrolling Data Table (Flex-1 Min-H-0 Overflow-Auto) -->
+    <div id="table-workbench-wrapper" class="flex-1 min-h-0 min-w-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden relative">
+      <!-- Loading Skeleton Indicator -->
+      <div id="logs-skeleton" class="p-4 space-y-3 animate-pulse">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map(() => (
+          <div class="flex items-center justify-between py-2 border-b border-black/5 last:border-0">
+            <div class="flex items-center gap-3">
+              <div class="h-5 w-14 bg-black/10 rounded-md"></div>
+              <div class="h-4 w-48 bg-black/10 rounded-md"></div>
+            </div>
+            <div class="h-4 w-24 bg-black/5 rounded-md"></div>
+          </div>
+        ))}
+      </div>
+
+      <!-- Empty State -->
+      <div id="logs-empty" class="hidden flex-1 flex flex-col items-center justify-center p-8 text-center">
+        <div class="w-12 h-12 rounded-2xl bg-[#f5f5f7] flex items-center justify-center mb-3 text-emerald-600">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3 class="text-sm font-semibold text-[#1d1d1f]">All Systems Nominal</h3>
+        <p class="text-xs text-[#86868b] mt-1 max-w-sm">
+          No diagnostic logs or SLA violations found matching the active filter.
+        </p>
+      </div>
+
+      <!-- Real Data Table with Independent Scroll -->
+      <div id="table-scroll-area" class="flex-1 min-h-0 overflow-auto scrollbar-thin">
+        <table id="logs-main-table" class="w-full text-left border-collapse table-fixed select-text">
+          <thead class="sticky top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-xs border-b border-black/10 text-[#86868b] font-medium select-none shadow-2xs">
+            <tr id="table-header-row">
+              <!-- Dynamically populated or updated with resize handles via JS -->
+            </tr>
+          </thead>
+          <tbody id="logs-table-body" class="divide-y divide-black/5 text-[#1d1d1f]">
+            <!-- Injected via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 5. Pinned Bottom Pagination & Counter Bar -->
+      <footer id="pagination-container" class="shrink-0 bg-white border-t border-black/5 px-3 py-2 flex items-center justify-between text-xs text-[#86868b]">
+        <div id="pagination-summary" class="truncate font-mono text-[11px]">
+          <!-- Populated via JS -->
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            id="pagination-prev"
+            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+          >
+            ← Prev
+          </button>
+          <span id="pagination-current" class="px-2 py-0.5 text-[11px] font-mono text-[#1d1d1f]">
+            1 / 1
+          </span>
+          <button
+            type="button"
+            id="pagination-next"
+            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+          >
+            Next →
+          </button>
+        </div>
+      </footer>
+    </div>
   </div>
 
   <!-- Detail Dialog / Modal -->
@@ -242,108 +390,98 @@ const pageTitle = 'System Diagnostics & Logs';
       <div class="flex items-center justify-between pb-2 border-b border-black/5">
         <div class="flex items-center gap-2">
           <span id="modal-level-badge"></span>
+          <span id="modal-event-code" class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-800 border border-black/5"></span>
           <span id="modal-source" class="font-mono font-semibold text-xs text-[#1d1d1f]"></span>
         </div>
         <button id="close-modal-btn" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
       </div>
 
       <div class="space-y-1">
-        <span class="text-[10px] uppercase font-bold text-[#86868b] tracking-wider">Message</span>
-        <p id="modal-message" class="text-xs font-semibold text-[#1d1d1f]"></p>
+        <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Message</span>
+        <div id="modal-message" class="font-mono text-xs bg-[#f5f5f7] p-3 rounded-xl break-all select-all max-h-40 overflow-y-auto"></div>
       </div>
 
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 py-2 border-y border-black/5 text-[11px]">
-        <div>
-          <span class="text-[#86868b] block">Time</span>
-          <strong id="modal-time" class="font-mono text-[#1d1d1f]"></strong>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+          <span class="text-[10px] text-[#86868b] block">Timestamp</span>
+          <span id="modal-time" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
         </div>
-        <div>
-          <span class="text-[#86868b] block">CF Ray ID</span>
-          <strong id="modal-ray" class="font-mono text-[#1d1d1f] break-all"></strong>
+        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+          <span class="text-[10px] text-[#86868b] block">Ray ID</span>
+          <span id="modal-ray" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
         </div>
-        <div>
-          <span class="text-[#86868b] block">Request Path</span>
-          <strong id="modal-path" class="font-mono text-[#1d1d1f] break-all"></strong>
+        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+          <span class="text-[10px] text-[#86868b] block">Endpoint / Status</span>
+          <span id="modal-http" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
         </div>
-        <div>
-          <span class="text-[#86868b] block">Method & Status</span>
-          <strong id="modal-http" class="font-mono text-[#1d1d1f]"></strong>
+        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+          <span class="text-[10px] text-[#86868b] block">Path</span>
+          <span id="modal-path" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
         </div>
-        <div>
-          <span class="text-[#86868b] block">Total Latency</span>
-          <strong id="modal-latency" class="font-mono text-[#1d1d1f]"></strong>
+        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+          <span class="text-[10px] text-[#86868b] block">Latency SLA</span>
+          <span id="modal-latency" class="font-mono text-xs font-bold text-[#1d1d1f]"></span>
         </div>
-        <div>
-          <span class="text-[#86868b] block">User / Email</span>
-          <strong id="modal-user" class="font-mono text-[#1d1d1f]"></strong>
+        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+          <span class="text-[10px] text-[#86868b] block">User / Actor</span>
+          <span id="modal-user" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
         </div>
-        <div>
-          <span class="text-[#86868b] block">Client IP</span>
-          <strong id="modal-ip" class="font-mono text-[#1d1d1f]"></strong>
+        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+          <span class="text-[10px] text-[#86868b] block">Client IP</span>
+          <span id="modal-ip" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
         </div>
-        <div>
-          <span class="text-[#86868b] block">Country & City</span>
-          <strong id="modal-geo" class="font-mono text-[#1d1d1f]"></strong>
+        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5 col-span-2">
+          <span class="text-[10px] text-[#86868b] block">Geo Location</span>
+          <span id="modal-geo" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
         </div>
       </div>
 
-      <!-- Sub-step Spans Breakdown Container -->
-      <div id="modal-spans-container" class="hidden space-y-1.5 p-3 rounded-xl bg-[#f5f5f7] border border-black/5">
-        <span class="text-[10px] uppercase font-bold text-[#86868b] tracking-wider block">Sub-step Timing Profiler</span>
-        <div id="modal-spans-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono"></div>
+      <!-- Server Spans Breakdown -->
+      <div id="modal-spans-container" class="hidden space-y-1.5">
+        <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Sub-Step Latency Breakdown</span>
+        <div id="modal-spans-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs"></div>
       </div>
 
-      <!-- Navigation Trail Container -->
-      <div id="modal-breadcrumbs-container" class="hidden space-y-1.5 p-3 rounded-xl bg-purple-50/50 border border-purple-200/60">
+      <!-- Navigation Trail Breadcrumbs -->
+      <div id="modal-breadcrumbs-container" class="hidden space-y-1.5">
         <div class="flex items-center justify-between">
-          <span class="text-[10px] uppercase font-bold text-purple-900 tracking-wider">Navigation Breadcrumbs (Pre-error Trail)</span>
-          <span class="text-[10px] font-mono text-purple-700" id="modal-breadcrumbs-count"></span>
+          <span class="text-[10px] text-purple-700 uppercase tracking-wider font-semibold">Pre-Error Navigation Flow</span>
+          <span id="modal-breadcrumbs-count" class="text-[10px] font-mono text-purple-600"></span>
         </div>
-        <div id="modal-breadcrumbs-list" class="space-y-1 text-xs font-mono max-h-48 overflow-y-auto"></div>
+        <div id="modal-breadcrumbs-list" class="space-y-1 max-h-48 overflow-y-auto font-mono text-xs bg-purple-50/50 p-2 rounded-xl border border-purple-100"></div>
       </div>
 
+      <!-- Raw Context JSON -->
       <div class="space-y-1">
-        <span class="text-[10px] uppercase font-bold text-[#86868b] tracking-wider">Context & Stack Trace</span>
-        <pre id="modal-context" class="p-3 rounded-xl bg-[#1d1d1f] text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-64 whitespace-pre-wrap select-all"></pre>
+        <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Context JSON</span>
+        <pre id="modal-context" class="font-mono text-[11px] bg-[#1d1d1f] text-emerald-400 p-3 rounded-xl max-h-48 overflow-y-auto select-all whitespace-pre-wrap"></pre>
       </div>
 
       <div class="pt-2 flex justify-end">
-        <button
-          type="button"
-          id="close-modal-bottom-btn"
-          class="h-9 px-4 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all cursor-pointer"
-        >
-          Close
+        <button id="close-modal-bottom-btn" type="button" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer">
+          Done
         </button>
       </div>
     </div>
   </dialog>
 
-  <!-- Clear Confirmation Dialog -->
-  <dialog id="clear-confirm-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-6 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
-    <div class="space-y-4 text-center">
-      <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
+  <!-- Clear Confirm Modal -->
+  <dialog id="clear-confirm-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-6 rounded-3xl w-[calc(100vw-32px)] max-w-md mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+    <div class="space-y-4 text-xs text-[#1d1d1f]">
+      <div class="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center text-lg">
+        🗑️
       </div>
       <div>
-        <h3 class="text-sm font-bold text-[#1d1d1f]">Clear Diagnostic Logs?</h3>
-        <p class="text-xs text-[#86868b] mt-1">This will permanently delete all logged errors and warnings from D1. This action cannot be undone.</p>
+        <h3 class="text-sm font-bold text-[#1d1d1f]">Clear All Diagnostic Logs?</h3>
+        <p class="text-xs text-[#86868b] mt-1">
+          This will purge all audit logs and latency metrics from Cloudflare D1. This action cannot be undone.
+        </p>
       </div>
       <div class="flex items-center justify-end gap-2 pt-2">
-        <button
-          type="button"
-          id="cancel-clear-btn"
-          class="flex-1 py-2 rounded-xl text-xs font-medium bg-[#f5f5f7] hover:bg-black/5 text-[#1d1d1f] transition-all cursor-pointer"
-        >
+        <button id="cancel-clear-btn" type="button" class="px-3.5 py-1.5 rounded-xl border border-black/10 text-xs font-semibold text-[#52525b] hover:bg-[#f5f5f7] cursor-pointer">
           Cancel
         </button>
-        <button
-          type="button"
-          id="confirm-clear-btn"
-          class="flex-1 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer shadow-xs"
-        >
+        <button id="confirm-clear-btn" type="button" class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-all cursor-pointer">
           Delete All
         </button>
       </div>
@@ -355,26 +493,104 @@ const pageTitle = 'System Diagnostics & Logs';
   import { clientCache } from '@utils/clientCache';
 
   (function () {
+    // Column definitions
+    interface ColumnDef {
+      id: string;
+      label: string;
+      defaultWidth: number;
+      minWidth: number;
+      visible: boolean;
+      canHide: boolean;
+    }
+
+    const DEFAULT_COLUMNS: ColumnDef[] = [
+      { id: 'time', label: 'Time', defaultWidth: 100, minWidth: 80, visible: true, canHide: false },
+      { id: 'level', label: 'Level', defaultWidth: 80, minWidth: 60, visible: true, canHide: true },
+      { id: 'event', label: 'Event', defaultWidth: 110, minWidth: 80, visible: true, canHide: true },
+      { id: 'method_status', label: 'Method / Status', defaultWidth: 110, minWidth: 90, visible: true, canHide: true },
+      { id: 'path', label: 'Path', defaultWidth: 220, minWidth: 120, visible: true, canHide: true },
+      { id: 'latency', label: 'Latency / SLA', defaultWidth: 120, minWidth: 90, visible: true, canHide: true },
+      { id: 'spans', label: 'Spans', defaultWidth: 120, minWidth: 90, visible: true, canHide: true },
+      { id: 'message', label: 'Message', defaultWidth: 260, minWidth: 160, visible: true, canHide: true },
+      { id: 'client_geo', label: 'Client / Geo', defaultWidth: 150, minWidth: 100, visible: true, canHide: true },
+      { id: 'ray_id', label: 'Ray ID', defaultWidth: 110, minWidth: 80, visible: true, canHide: true },
+      { id: 'action', label: 'Action', defaultWidth: 70, minWidth: 60, visible: true, canHide: false },
+    ];
+
+    let columnsState: ColumnDef[] = (() => {
+      try {
+        const stored = localStorage.getItem('admin_logs_columns_v2');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return DEFAULT_COLUMNS.map((col) => {
+            const found = parsed.find((p: any) => p.id === col.id);
+            return found ? { ...col, visible: found.visible, defaultWidth: found.width || col.defaultWidth } : col;
+          });
+        }
+      } catch {}
+      return DEFAULT_COLUMNS;
+    })();
+
+    let densityState: 'compact' | 'cozy' = (() => {
+      try {
+        return (localStorage.getItem('admin_logs_density_v1') as any) || 'cozy';
+      } catch {
+        return 'cozy';
+      }
+    })();
+
+    let autoPollTimer: any = null;
+    let isAutoPolling = false;
+
     let logsList: any[] = [];
     const urlParams = new URLSearchParams(window.location.search);
     let currentLevel = urlParams.get('level') || 'ALL';
+    let currentEventCode = urlParams.get('eventCode') || 'ALL';
+    let currentHealth = urlParams.get('health') || 'ALL';
+    let currentTimeWindow = urlParams.get('timeWindow') || 'ALL';
     let currentSearch = (urlParams.get('search') || '').trim();
     let currentSort = urlParams.get('sort') || 'newest';
     let currentPage = Math.max(1, parseInt(urlParams.get('page') || '1', 10));
     let currentTotalPages = 1;
     const limit = 50;
 
+    // Elements
     const skeletonEl = document.getElementById('logs-skeleton');
-    const contentEl = document.getElementById('logs-content');
     const emptyEl = document.getElementById('logs-empty');
+    const tableScrollArea = document.getElementById('table-scroll-area');
+    const tableHeaderRow = document.getElementById('table-header-row');
+    const tableBody = document.getElementById('logs-table-body');
+    const logsMainTable = document.getElementById('logs-main-table');
+
     const searchInput = document.getElementById('logs-search-input') as HTMLInputElement | null;
     const clearSearchBtn = document.getElementById('clear-search-btn');
     const sortSelect = document.getElementById('logs-sort-select') as HTMLSelectElement | null;
+    const levelSelect = document.getElementById('filter-level-select') as HTMLSelectElement | null;
+    const eventSelect = document.getElementById('filter-event-select') as HTMLSelectElement | null;
+    const healthSelect = document.getElementById('filter-health-select') as HTMLSelectElement | null;
+    const timewindowSelect = document.getElementById('filter-timewindow-select') as HTMLSelectElement | null;
+
     const refreshBtn = document.getElementById('refresh-logs-btn');
     const clearLogsBtn = document.getElementById('clear-logs-btn');
+    const exportCsvBtn = document.getElementById('export-csv-btn');
+    const pollToggleBtn = document.getElementById('poll-toggle-btn');
+    const pollIndicator = document.getElementById('poll-indicator');
+    const pollLabel = document.getElementById('poll-label');
+    const densityToggleBtn = document.getElementById('density-toggle-btn');
+    const densityLabel = document.getElementById('density-label');
 
-    const bottlenecksCard = document.getElementById('bottlenecks-card');
-    const bottlenecksList = document.getElementById('bottlenecks-list');
+    const columnsMenuBtn = document.getElementById('columns-menu-btn');
+    const columnsMenuPanel = document.getElementById('columns-menu-panel');
+    const columnsCheckboxList = document.getElementById('columns-checkbox-list');
+    const resetColumnsBtn = document.getElementById('reset-columns-btn');
+    const columnsCountLabel = document.getElementById('columns-count-label');
+
+    const bottlenecksBar = document.getElementById('bottlenecks-bar');
+    const topBottleneckSummary = document.getElementById('top-bottleneck-summary');
+    const toggleBottlenecksBtn = document.getElementById('toggle-bottlenecks-btn');
+    const bottlenecksToggleText = document.getElementById('bottlenecks-toggle-text');
+    const bottlenecksToggleIcon = document.getElementById('bottlenecks-toggle-icon');
+    const bottlenecksGrid = document.getElementById('bottlenecks-grid');
 
     const paginationContainer = document.getElementById('pagination-container');
     const paginationSummary = document.getElementById('pagination-summary');
@@ -385,11 +601,16 @@ const pageTitle = 'System Diagnostics & Logs';
     const metricTotal = document.getElementById('metric-total');
     const metricErrors = document.getElementById('metric-errors');
     const metricWarns = document.getElementById('metric-warns');
-    const metricInfo = document.getElementById('metric-info');
-    const metricCritical = document.getElementById('metric-critical');
+    const metricSlow = document.getElementById('metric-slow');
+
+    const metricCapsuleTotal = document.getElementById('metric-capsule-total');
+    const metricCapsuleErrors = document.getElementById('metric-capsule-errors');
+    const metricCapsuleWarns = document.getElementById('metric-capsule-warns');
+    const metricCapsuleSlow = document.getElementById('metric-capsule-slow');
 
     const detailModal = document.getElementById('log-detail-modal') as HTMLDialogElement | null;
     const modalLevelBadge = document.getElementById('modal-level-badge');
+    const modalEventCode = document.getElementById('modal-event-code');
     const modalSource = document.getElementById('modal-source');
     const modalMessage = document.getElementById('modal-message');
     const modalTime = document.getElementById('modal-time');
@@ -418,6 +639,15 @@ const pageTitle = 'System Diagnostics & Logs';
       if (currentLevel && currentLevel !== 'ALL') url.searchParams.set('level', currentLevel);
       else url.searchParams.delete('level');
 
+      if (currentEventCode && currentEventCode !== 'ALL') url.searchParams.set('eventCode', currentEventCode);
+      else url.searchParams.delete('eventCode');
+
+      if (currentHealth && currentHealth !== 'ALL') url.searchParams.set('health', currentHealth);
+      else url.searchParams.delete('health');
+
+      if (currentTimeWindow && currentTimeWindow !== 'ALL') url.searchParams.set('timeWindow', currentTimeWindow);
+      else url.searchParams.delete('timeWindow');
+
       if (currentSearch) url.searchParams.set('search', currentSearch);
       else url.searchParams.delete('search');
 
@@ -429,22 +659,29 @@ const pageTitle = 'System Diagnostics & Logs';
 
       if (url.toString() !== window.location.href) {
         if (push) {
-          window.history.pushState({ level: currentLevel, search: currentSearch, sort: currentSort, page: currentPage }, '', url.toString());
+          window.history.pushState({}, '', url.toString());
         } else {
-          window.history.replaceState({ level: currentLevel, search: currentSearch, sort: currentSort, page: currentPage }, '', url.toString());
+          window.history.replaceState({}, '', url.toString());
         }
       }
     }
 
-    function updateTabsUi() {
-      document.querySelectorAll('.level-tab-btn').forEach((b) => {
-        const isActive = b.getAttribute('data-level') === currentLevel;
-        if (isActive) {
-          b.className = 'level-tab-btn px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer bg-[#1d1d1f] text-white border-black shadow-xs';
-        } else {
-          b.className = 'level-tab-btn px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border cursor-pointer bg-white text-[#52525b] border-black/5 hover:border-black/20 hover:text-black';
-        }
-      });
+    function saveColumnsState() {
+      try {
+        const payload = columnsState.map((c) => ({
+          id: c.id,
+          visible: c.visible,
+          width: c.defaultWidth,
+        }));
+        localStorage.setItem('admin_logs_columns_v2', JSON.stringify(payload));
+      } catch {}
+    }
+
+    function updateDensityUi() {
+      if (densityLabel) {
+        densityLabel.textContent = densityState === 'compact' ? 'Compact' : 'Cozy';
+      }
+      renderRows(logsList);
     }
 
     function escapeHtml(str: any) {
@@ -465,44 +702,29 @@ const pageTitle = 'System Diagnostics & Logs';
       }
       const d = new Date(str);
       if (isNaN(d.getTime())) return String(dt);
-      return d.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
+      return d.toLocaleTimeString(undefined, {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
+        hour12: false,
       });
     }
 
     function renderLevelBadge(lvl: string) {
       const level = (lvl || 'error').toUpperCase();
       if (level === 'CRITICAL') {
-        return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">CRITICAL</span>';
+        return '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">CRIT</span>';
       }
       if (level === 'ERROR') {
-        return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">ERROR</span>';
+        return '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">ERR</span>';
       }
       if (level === 'WARN') {
-        return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">WARN</span>';
+        return '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">WARN</span>';
       }
       if (level === 'INFO') {
-        return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">INFO</span>';
+        return '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">INFO</span>';
       }
-      return '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">DEBUG</span>';
-    }
-
-    function renderLatencyBadge(ms: number | null | undefined) {
-      if (ms === null || ms === undefined || isNaN(ms)) return '';
-      if (ms < 100) {
-        return `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">${ms}ms</span>`;
-      }
-      if (ms < 500) {
-        return `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">${ms}ms</span>`;
-      }
-      if (ms < 1000) {
-        return `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200">${ms}ms</span>`;
-      }
-      return `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200">${ms}ms</span>`;
+      return '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">DBG</span>';
     }
 
     function renderMethodBadge(method: string | null | undefined) {
@@ -518,44 +740,227 @@ const pageTitle = 'System Diagnostics & Logs';
       return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${colorClass}">${escapeHtml(m)}</span>`;
     }
 
+    // Event-Aware SLA Latency Badges
+    function renderEventAwareSla(log: any) {
+      const code = log.error_code || '';
+      const ms = log.latency_ms;
+
+      // 1. Web Vitals
+      if (code === 'WEB_VITALS') {
+        let parsed: any = null;
+        if (log.context_json) {
+          try { parsed = JSON.parse(log.context_json); } catch {}
+        }
+        const rating = parsed?.rating || '';
+        const wasHidden = Boolean(parsed?.wasHidden || rating === 'backgrounded');
+
+        if (wasHidden) {
+          return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-zinc-100 text-zinc-600 border border-zinc-200" title="Backgrounded tab">💤 Tab Idle</span>`;
+        }
+        if (rating === 'good') {
+          return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">🟢 Good (${ms ?? 0}ms)</span>`;
+        }
+        if (rating === 'needs-improvement') {
+          return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200">🟡 Fair (${ms ?? 0}ms)</span>`;
+        }
+        if (rating === 'poor') {
+          return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200">🔴 Poor (${ms ?? 0}ms)</span>`;
+        }
+        return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-zinc-100 text-zinc-700">${ms ?? 0}ms</span>`;
+      }
+
+      // 2. Client Navigation
+      if (code === 'CLIENT_NAVIGATION') {
+        return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">🧭 Nav</span>`;
+      }
+
+      // 3. Client Runtime Errors
+      if (code.startsWith('CLIENT_')) {
+        return `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-purple-50 text-purple-700 border border-purple-200">Browser</span>`;
+      }
+
+      // 4. Server API SLA Latency
+      if (typeof ms === 'number' && !isNaN(ms)) {
+        if (ms < 150) {
+          return `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">${ms}ms</span>`;
+        }
+        if (ms < 1000) {
+          return `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200">${ms}ms</span>`;
+        }
+        return `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200">${ms}ms</span>`;
+      }
+
+      return `<span class="text-[#86868b]">—</span>`;
+    }
+
+    function renderSpansMini(log: any) {
+      if (!log.context_json) return '<span class="text-[#86868b]">—</span>';
+      try {
+        const parsed = JSON.parse(log.context_json);
+        const spans = parsed?.spans || parsed?.context?.spans;
+        if (!spans || typeof spans !== 'object' || Object.keys(spans).length === 0) {
+          return '<span class="text-[#86868b]">—</span>';
+        }
+        return Object.entries(spans)
+          .slice(0, 2)
+          .map(([k, v]) => `
+            <span class="inline-flex items-center gap-1 px-1 py-0.2 rounded text-[9px] font-mono bg-zinc-100 text-zinc-700 border border-black/5" title="${escapeHtml(k)}: ${v}ms">
+              <span class="text-[#86868b]">${escapeHtml(k.slice(0, 6))}</span>
+              <strong>${v}ms</strong>
+            </span>
+          `).join(' ');
+      } catch {
+        return '<span class="text-[#86868b]">—</span>';
+      }
+    }
+
+    function renderHeader() {
+      if (!tableHeaderRow) return;
+
+      tableHeaderRow.innerHTML = columnsState
+        .filter((col) => col.visible)
+        .map((col) => {
+          const isRight = col.id === 'action';
+          return `
+            <th
+              data-col-id="${col.id}"
+              style="width: ${col.defaultWidth}px;"
+              class="py-2 px-2.5 ${isRight ? 'text-right' : 'text-left'} text-[11px] font-semibold text-[#86868b] tracking-tight relative select-none truncate"
+            >
+              <span>${col.label}</span>
+              ${col.id !== 'action' ? `<span class="col-resizer absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-black/20 transition-colors"></span>` : ''}
+            </th>
+          `;
+        })
+        .join('');
+
+      initColumnResize();
+    }
+
+    function initColumnResize() {
+      if (!tableHeaderRow) return;
+      tableHeaderRow.querySelectorAll('.col-resizer').forEach((resizer) => {
+        const th = resizer.parentElement as HTMLTableCellElement;
+        const colId = th.getAttribute('data-col-id');
+        const col = columnsState.find((c) => c.id === colId);
+        if (!col) return;
+
+        let startX = 0;
+        let startWidth = 0;
+
+        function onMouseMove(e: MouseEvent) {
+          const delta = e.clientX - startX;
+          const newWidth = Math.max(col?.minWidth || 50, startWidth + delta);
+          th.style.width = `${newWidth}px`;
+          if (col) col.defaultWidth = newWidth;
+        }
+
+        function onMouseUp() {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          document.body.style.cursor = '';
+          saveColumnsState();
+          renderRows(logsList);
+        }
+
+        resizer.addEventListener('mousedown', (e: any) => {
+          e.preventDefault();
+          e.stopPropagation();
+          startX = e.clientX;
+          startWidth = th.offsetWidth;
+          document.body.style.cursor = 'col-resize';
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup', onMouseUp);
+        });
+      });
+    }
+
+    function renderColumnsMenu() {
+      if (!columnsCheckboxList) return;
+      const visibleCount = columnsState.filter((c) => c.visible).length;
+      if (columnsCountLabel) {
+        columnsCountLabel.textContent = `Cols (${visibleCount}/${columnsState.length})`;
+      }
+
+      columnsCheckboxList.innerHTML = columnsState
+        .map((col) => {
+          return `
+            <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#f5f5f7] cursor-pointer text-xs select-none ${!col.canHide ? 'opacity-50 pointer-events-none' : ''}">
+              <input
+                type="checkbox"
+                class="col-visibility-toggle rounded text-black focus:ring-0"
+                data-col-id="${col.id}"
+                ${col.visible ? 'checked' : ''}
+                ${!col.canHide ? 'disabled' : ''}
+              />
+              <span class="text-[#1d1d1f]">${col.label}</span>
+            </label>
+          `;
+        })
+        .join('');
+
+      columnsCheckboxList.querySelectorAll('.col-visibility-toggle').forEach((chk) => {
+        chk.addEventListener('change', (e: any) => {
+          const id = e.target.getAttribute('data-col-id');
+          const col = columnsState.find((c) => c.id === id);
+          if (col && col.canHide) {
+            col.visible = e.target.checked;
+            saveColumnsState();
+            renderHeader();
+            renderRows(logsList);
+            renderColumnsMenu();
+          }
+        });
+      });
+    }
+
     function renderBottlenecks(bottlenecks: any[]) {
-      if (!bottlenecksCard || !bottlenecksList) return;
+      if (!bottlenecksBar || !topBottleneckSummary) return;
+
       if (!bottlenecks || bottlenecks.length === 0) {
-        bottlenecksCard.classList.add('hidden');
+        bottlenecksBar.classList.add('hidden');
         return;
       }
 
-      bottlenecksCard.classList.remove('hidden');
-      bottlenecksList.innerHTML = bottlenecks.map((item, idx) => {
-        const safePath = escapeHtml(item.path);
-        const avg = item.avg_latency || 0;
-        const max = item.max_latency || 0;
-        const calls = item.call_count || 0;
-        return `
-          <button
-            type="button"
-            class="bottleneck-item p-2.5 rounded-xl bg-[#f5f5f7]/80 hover:bg-[#1d1d1f] hover:text-white transition-all text-left border border-black/5 cursor-pointer group"
-            data-path="${safePath}"
-          >
-            <div class="flex items-center justify-between gap-1 mb-1">
-              <div class="flex items-center gap-1.5 truncate">
+      bottlenecksBar.classList.remove('hidden');
+
+      const top = bottlenecks[0];
+      const topAvg = top.avg_latency || 0;
+      topBottleneckSummary.innerHTML = `
+        <button type="button" class="quick-filter-bottleneck hover:underline text-[#1d1d1f] font-semibold cursor-pointer" data-path="${escapeHtml(top.path)}">
+          ${renderMethodBadge(top.method)} <span class="text-[#1d1d1f]">${escapeHtml(top.path)}</span>
+        </button>
+        <span class="text-[#86868b] ml-1.5 font-normal">· Avg <strong class="text-amber-700">${topAvg}ms</strong> · ${top.call_count} calls</span>
+      `;
+
+      if (bottlenecksGrid) {
+        bottlenecksGrid.innerHTML = bottlenecks.map((item, idx) => {
+          const safePath = escapeHtml(item.path);
+          return `
+            <button
+              type="button"
+              class="quick-filter-bottleneck p-2 rounded-lg bg-[#f5f5f7] hover:bg-[#1d1d1f] hover:text-white transition-all text-left border border-black/5 cursor-pointer group"
+              data-path="${safePath}"
+            >
+              <div class="flex items-center justify-between gap-1 mb-1">
                 <span class="text-[10px] font-mono text-[#86868b] group-hover:text-white/60">#${idx + 1}</span>
                 ${renderMethodBadge(item.method)}
-                <span class="font-mono text-xs font-semibold truncate text-[#1d1d1f] group-hover:text-white" title="${safePath}">
+                <span class="font-mono text-xs font-semibold truncate text-[#1d1d1f] group-hover:text-white flex-1" title="${safePath}">
                   ${safePath}
                 </span>
               </div>
-            </div>
-            <div class="flex items-center justify-between text-[11px] font-mono mt-1 text-[#86868b] group-hover:text-white/80">
-              <span>Avg: <strong class="text-[#1d1d1f] group-hover:text-amber-400 font-bold">${avg}ms</strong></span>
-              <span>Max: <strong>${max}ms</strong></span>
-              <span>${calls} calls</span>
-            </div>
-          </button>
-        `;
-      }).join('');
+              <div class="flex items-center justify-between text-[10px] font-mono text-[#86868b] group-hover:text-white/80">
+                <span>Avg: <strong class="text-[#1d1d1f] group-hover:text-amber-400">${item.avg_latency || 0}ms</strong></span>
+                <span>Max: ${item.max_latency || 0}ms</span>
+                <span>${item.call_count || 0} calls</span>
+              </div>
+            </button>
+          `;
+        }).join('');
+      }
 
-      bottlenecksList.querySelectorAll('.bottleneck-item').forEach((btn) => {
+      // Bind quick filter
+      document.querySelectorAll('.quick-filter-bottleneck').forEach((btn) => {
         btn.addEventListener('click', () => {
           const path = btn.getAttribute('data-path');
           if (!path || !searchInput) return;
@@ -569,160 +974,122 @@ const pageTitle = 'System Diagnostics & Logs';
     }
 
     function renderPagination(page: number, totalPages: number, total: number) {
-      if (!paginationContainer || totalPages <= 1) {
-        if (paginationContainer) paginationContainer.classList.add('hidden');
-        return;
-      }
+      if (!paginationContainer) return;
+      currentTotalPages = Math.max(1, totalPages);
 
-      paginationContainer.classList.remove('hidden');
-      currentTotalPages = totalPages;
-
-      const start = (page - 1) * limit + 1;
+      const start = total === 0 ? 0 : (page - 1) * limit + 1;
       const end = Math.min(page * limit, total);
       if (paginationSummary) {
-        paginationSummary.innerHTML = `Showing <strong class="text-[#1d1d1f] font-mono">${start}–${end}</strong> of <strong class="text-[#1d1d1f] font-mono">${total}</strong> logs`;
+        paginationSummary.innerHTML = `Showing <strong class="text-[#1d1d1f]">${start}–${end}</strong> of <strong class="text-[#1d1d1f]">${total}</strong> logs`;
       }
 
-      if (paginationPrev) {
-        paginationPrev.disabled = page <= 1;
-      }
-      if (paginationNext) {
-        paginationNext.disabled = page >= totalPages;
-      }
-      if (paginationCurrent) {
-        paginationCurrent.textContent = `${page} / ${totalPages}`;
-      }
+      if (paginationPrev) paginationPrev.disabled = page <= 1;
+      if (paginationNext) paginationNext.disabled = page >= totalPages;
+      if (paginationCurrent) paginationCurrent.textContent = `${page} / ${currentTotalPages}`;
     }
 
     function renderRows(logs: any[]) {
-      if (!contentEl) return;
+      if (!tableBody) return;
 
       if (!logs || logs.length === 0) {
-        contentEl.classList.add('hidden');
-        if (paginationContainer) paginationContainer.classList.add('hidden');
+        tableBody.innerHTML = '';
+        if (tableScrollArea) tableScrollArea.classList.add('hidden');
         if (emptyEl) emptyEl.classList.remove('hidden');
         return;
       }
 
       if (emptyEl) emptyEl.classList.add('hidden');
+      if (tableScrollArea) tableScrollArea.classList.remove('hidden');
 
-      const html = `
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs text-[#1d1d1f]">
-            <thead class="bg-[#f5f5f7]/60 text-[#86868b] font-medium border-b border-black/5">
-              <tr>
-                <th class="py-3 px-4">Level & Latency</th>
-                <th class="py-3 px-4">Endpoint & Status</th>
-                <th class="py-3 px-4">Message & Source</th>
-                <th class="py-3 px-4">User / Ray ID</th>
-                <th class="py-3 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-black/5">
-              ${logs.map((log) => {
-                const safeSource = escapeHtml(log.source || 'system');
-                const safeCode = log.error_code ? escapeHtml(log.error_code) : '';
-                const safeMessage = escapeHtml(log.message || '');
-                const safeUser = escapeHtml(log.user_email || log.user_id || 'Anonymous');
-                const safeRay = escapeHtml(log.ray_id || '');
-                const safePath = escapeHtml(log.path || '');
-                const safeMethod = log.method ? renderMethodBadge(log.method) : '';
-                const latencyBadge = renderLatencyBadge(log.latency_ms);
-                const statusBadge = log.method === 'CLIENT'
-                  ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-purple-50 text-purple-700">Browser</span>`
-                  : (log.status_code ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono ${log.status_code >= 400 ? 'bg-rose-50 text-rose-700 font-bold' : 'bg-emerald-50 text-emerald-700'}">${log.status_code}</span>` : '');
-                const timeStr = formatTime(log.created_at);
+      const isCompact = densityState === 'compact';
+      const cellPad = isCompact ? 'py-1 px-2 text-[11px]' : 'py-2 px-2.5 text-xs';
 
-                const geoTokens = [];
-                if (log.client_ip) geoTokens.push(log.client_ip);
-                if (log.country) geoTokens.push(log.country);
-                if (log.city) geoTokens.push(log.city);
-                const clientGeo = geoTokens.length > 0 ? escapeHtml(geoTokens.join(' · ')) : '';
+      const visibleCols = columnsState.filter((c) => c.visible);
 
-                return `
-                  <tr class="hover:bg-[#f5f5f7]/40 transition-colors">
-                    <td class="py-3 px-4 whitespace-nowrap">
-                      <div class="flex items-center gap-2">
-                        ${renderLevelBadge(log.level)}
-                        ${latencyBadge}
-                        <span class="text-[11px] font-mono text-[#86868b]">${timeStr}</span>
-                      </div>
-                    </td>
+      tableBody.innerHTML = logs.map((log) => {
+        const safeSource = escapeHtml(log.source || 'system');
+        const safeCode = log.error_code ? escapeHtml(log.error_code) : '';
+        const safeMessage = escapeHtml(log.message || '');
+        const safeUser = escapeHtml(log.user_email || log.user_id || 'Anonymous');
+        const safeRay = escapeHtml(log.ray_id || '');
+        const safePath = escapeHtml(log.path || '');
+        const safeMethod = renderMethodBadge(log.method);
+        const slaBadge = renderEventAwareSla(log);
+        const spansBadge = renderSpansMini(log);
+        const timeStr = formatTime(log.created_at);
 
-                    <td class="py-3 px-4 max-w-[200px] sm:max-w-xs">
-                      <div class="flex items-center gap-1.5 truncate">
-                        ${safeMethod}
-                        ${statusBadge}
-                        <span class="font-mono text-xs font-semibold truncate text-[#1d1d1f]" title="${safePath}">
-                          ${safePath || '—'}
-                        </span>
-                      </div>
-                      ${safeCode ? `<span class="text-[10px] font-mono text-[#86868b] block mt-0.5">${safeCode}</span>` : ''}
-                    </td>
+        const statusBadge = log.method === 'CLIENT'
+          ? `<span class="px-1 py-0.2 rounded text-[9px] font-mono bg-purple-50 text-purple-700">Client</span>`
+          : (log.status_code ? `<span class="px-1 py-0.2 rounded text-[9px] font-mono ${log.status_code >= 400 ? 'bg-rose-50 text-rose-700 font-bold' : 'bg-emerald-50 text-emerald-700'}">${log.status_code}</span>` : '');
 
-                    <td class="py-3 px-4 max-w-xs sm:max-w-md">
-                      <span class="truncate block font-medium text-[#1d1d1f]" title="${safeMessage}">${safeMessage}</span>
-                      <span class="text-[10px] font-mono text-[#86868b] truncate block mt-0.5">${safeSource}</span>
-                    </td>
+        const geoTokens = [];
+        if (log.client_ip) geoTokens.push(log.client_ip);
+        if (log.country) geoTokens.push(log.country);
+        const clientGeo = geoTokens.length > 0 ? escapeHtml(geoTokens.join(' · ')) : '';
 
-                    <td class="py-3 px-4 whitespace-nowrap text-[11px]">
-                      <span class="text-[#1d1d1f] block font-mono truncate max-w-[140px] font-medium">${safeUser}</span>
-                      ${clientGeo ? `
-                        <span class="text-[10px] font-mono text-[#52525b] block mt-0.5 truncate max-w-[150px]" title="${clientGeo}">
-                          🌐 ${clientGeo}
-                        </span>
-                      ` : ''}
-                      ${safeRay ? `
-                        <button
-                          type="button"
-                          class="copy-ray-btn text-[10px] font-mono text-[#86868b] hover:text-black flex items-center gap-1 cursor-pointer"
-                          data-copy="${safeRay}"
-                          title="Copy CF Ray ID"
-                        >
-                          <span class="truncate max-w-[100px]">${safeRay}</span>
-                          <span class="copy-icon">📋</span>
-                        </button>
-                      ` : ''}
-                    </td>
+        const rowCells = visibleCols.map((col) => {
+          switch (col.id) {
+            case 'time':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono text-[#86868b] whitespace-nowrap truncate">${timeStr}</td>`;
+            case 'level':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} whitespace-nowrap">${renderLevelBadge(log.level)}</td>`;
+            case 'event':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono text-[10px] text-[#52525b] truncate" title="${safeCode}">${safeCode || '—'}</td>`;
+            case 'method_status':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} whitespace-nowrap"><div class="flex items-center gap-1">${safeMethod} ${statusBadge}</div></td>`;
+            case 'path':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono font-medium truncate text-[#1d1d1f]" title="${safePath}">${safePath || '—'}</td>`;
+            case 'latency':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} whitespace-nowrap">${slaBadge}</td>`;
+            case 'spans':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} whitespace-nowrap">${spansBadge}</td>`;
+            case 'message':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} truncate font-medium text-[#1d1d1f]" title="${safeMessage}">${safeMessage}</td>`;
+            case 'client_geo':
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono text-[10px] text-[#52525b] truncate" title="${clientGeo}">${clientGeo || '—'}</td>`;
+            case 'ray_id':
+              return `
+                <td style="width: ${col.defaultWidth}px;" class="${cellPad} whitespace-nowrap">
+                  ${safeRay ? `
+                    <button type="button" class="copy-ray-btn text-[10px] font-mono text-[#86868b] hover:text-black flex items-center gap-1 cursor-pointer" data-copy="${safeRay}" title="Copy CF Ray ID">
+                      <span class="truncate max-w-[80px]">${safeRay}</span>
+                      <span class="copy-icon">📋</span>
+                    </button>
+                  ` : '<span class="text-[#86868b]">—</span>'}
+                </td>
+              `;
+            case 'action':
+              return `
+                <td style="width: ${col.defaultWidth}px;" class="${cellPad} text-right whitespace-nowrap">
+                  <button type="button" class="view-detail-btn px-2 py-0.5 rounded text-[11px] font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all cursor-pointer" data-id="${log.id}">
+                    Detail
+                  </button>
+                </td>
+              `;
+            default:
+              return `<td></td>`;
+          }
+        }).join('');
 
-                    <td class="py-3 px-4 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        class="view-detail-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all cursor-pointer"
-                        data-id="${log.id}"
-                      >
-                        Details
-                      </button>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
+        return `<tr class="hover:bg-[#f5f5f7]/60 transition-colors">${rowCells}</tr>`;
+      }).join('');
 
-      contentEl.innerHTML = html;
-      contentEl.classList.remove('hidden');
-
-      // Bind detail button events
-      contentEl.querySelectorAll('.view-detail-btn').forEach((btn) => {
+      // Bind events
+      tableBody.querySelectorAll('.view-detail-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const id = Number(btn.getAttribute('data-id'));
           const log = logsList.find((l) => l.id === id);
-          if (!log) return;
-          openDetailModal(log);
+          if (log) openDetailModal(log);
         });
       });
 
-      // Bind copy rayId events
-      contentEl.querySelectorAll('.copy-ray-btn').forEach((btn) => {
+      tableBody.querySelectorAll('.copy-ray-btn').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const text = btn.getAttribute('data-copy');
           if (!text) return;
           try {
             await navigator.clipboard.writeText(text);
-            (window as any).__showToast?.('Diagnostic context copied', 'success', 2000);
+            (window as any).__showToast?.('Copied Ray ID', 'success', 1500);
             const icon = btn.querySelector('.copy-icon');
             if (icon) {
               icon.textContent = '✓';
@@ -737,6 +1104,10 @@ const pageTitle = 'System Diagnostics & Logs';
       if (!detailModal) return;
 
       if (modalLevelBadge) modalLevelBadge.innerHTML = renderLevelBadge(log.level);
+      if (modalEventCode) {
+        modalEventCode.textContent = log.error_code || 'EVENT';
+        modalEventCode.classList.toggle('hidden', !log.error_code);
+      }
       if (modalSource) modalSource.textContent = log.source || 'system';
       if (modalMessage) modalMessage.textContent = log.message || '';
       if (modalTime) modalTime.textContent = formatTime(log.created_at);
@@ -757,12 +1128,9 @@ const pageTitle = 'System Diagnostics & Logs';
         modalGeo.textContent = parts.length > 0 ? parts.join(', ') : '—';
       }
 
-      // Parse context and sub-spans breakdown
       let parsedContext: any = null;
       if (log.context_json) {
-        try {
-          parsedContext = JSON.parse(log.context_json);
-        } catch {}
+        try { parsedContext = JSON.parse(log.context_json); } catch {}
       }
 
       const spans = parsedContext?.spans || parsedContext?.context?.spans;
@@ -783,7 +1151,6 @@ const pageTitle = 'System Diagnostics & Logs';
         }
       }
 
-      // Render breadcrumbs pre-error navigation trail
       const breadcrumbs = parsedContext?.breadcrumbs || parsedContext?.context?.breadcrumbs;
       if (modalBreadcrumbsContainer && modalBreadcrumbsList) {
         if (Array.isArray(breadcrumbs) && breadcrumbs.length > 0) {
@@ -802,7 +1169,7 @@ const pageTitle = 'System Diagnostics & Logs';
                 <span class="text-zinc-500 truncate max-w-[120px] sm:max-w-[160px]">${safeFrom}</span>
                 <span class="text-purple-600">→</span>
                 <span class="text-zinc-900 font-bold truncate flex-1">${safeTo}</span>
-                ${isLast ? '<span class="text-[9px] text-rose-600 font-bold shrink-0 ml-auto">(Triggered Error)</span>' : ''}
+                ${isLast ? '<span class="text-[9px] text-rose-600 font-bold shrink-0 ml-auto">(Triggered)</span>' : ''}
               </div>
             `;
           }).join('');
@@ -813,27 +1180,26 @@ const pageTitle = 'System Diagnostics & Logs';
       }
 
       if (modalContext) {
-        let formatted = 'No extra context recorded.';
-        if (parsedContext) {
-          formatted = JSON.stringify(parsedContext, null, 2);
-        } else if (log.context_json) {
-          formatted = log.context_json;
-        }
-        modalContext.textContent = formatted;
+        modalContext.textContent = parsedContext
+          ? JSON.stringify(parsedContext, null, 2)
+          : (log.context_json || 'No extra context recorded.');
       }
 
       detailModal.showModal();
     }
 
-    if (closeModalBtn) closeModalBtn.addEventListener('click', () => detailModal && detailModal.close());
-    if (closeModalBottomBtn) closeModalBottomBtn.addEventListener('click', () => detailModal && detailModal.close());
+    if (closeModalBtn) closeModalBtn.addEventListener('click', () => detailModal?.close());
+    if (closeModalBottomBtn) closeModalBottomBtn.addEventListener('click', () => detailModal?.close());
 
     async function loadLogs(updateUrl = true) {
       if (updateUrl) syncUrl(true);
-      const cacheKey = `admin:logs:${currentLevel}:${currentSearch}:${currentSort}:${currentPage}`;
+      const cacheKey = `admin:logs:${currentLevel}:${currentEventCode}:${currentHealth}:${currentTimeWindow}:${currentSearch}:${currentSort}:${currentPage}`;
       try {
         const query = new URLSearchParams();
         if (currentLevel && currentLevel !== 'ALL') query.set('level', currentLevel);
+        if (currentEventCode && currentEventCode !== 'ALL') query.set('eventCode', currentEventCode);
+        if (currentHealth && currentHealth !== 'ALL') query.set('health', currentHealth);
+        if (currentTimeWindow && currentTimeWindow !== 'ALL') query.set('timeWindow', currentTimeWindow);
         if (currentSearch) query.set('search', currentSearch);
         if (currentSort && currentSort !== 'newest') query.set('sort', currentSort);
         query.set('limit', String(limit));
@@ -850,8 +1216,7 @@ const pageTitle = 'System Diagnostics & Logs';
               if (metricTotal) metricTotal.textContent = data.stats?.total ?? 0;
               if (metricErrors) metricErrors.textContent = data.stats?.errors ?? 0;
               if (metricWarns) metricWarns.textContent = data.stats?.warns ?? 0;
-              if (metricInfo) metricInfo.textContent = (data.stats?.info ?? 0) + (data.stats?.debug ?? 0);
-              if (metricCritical) metricCritical.textContent = data.stats?.critical ?? 0;
+              if (metricSlow) metricSlow.textContent = data.stats?.slow ?? 0;
 
               renderBottlenecks(data.bottlenecks || []);
 
@@ -868,45 +1233,217 @@ const pageTitle = 'System Diagnostics & Logs';
       }
     }
 
-    // Sort select handler
+    // CSV Export (Native zero-dependency)
+    if (exportCsvBtn) {
+      exportCsvBtn.addEventListener('click', () => {
+        if (!logsList || logsList.length === 0) {
+          (window as any).__showToast?.('No logs to export', 'info');
+          return;
+        }
+
+        const headers = ['ID', 'Timestamp', 'Level', 'Event Code', 'Method', 'Status', 'Path', 'Latency Ms', 'Message', 'Ray ID', 'Client IP', 'Country'];
+        const csvRows = [headers.join(',')];
+
+        for (const log of logsList) {
+          const row = [
+            log.id,
+            `"${String(log.created_at || '').replace(/"/g, '""')}"`,
+            `"${String(log.level || '').replace(/"/g, '""')}"`,
+            `"${String(log.error_code || '').replace(/"/g, '""')}"`,
+            `"${String(log.method || '').replace(/"/g, '""')}"`,
+            log.status_code || '',
+            `"${String(log.path || '').replace(/"/g, '""')}"`,
+            log.latency_ms ?? '',
+            `"${String(log.message || '').replace(/"/g, '""')}"`,
+            `"${String(log.ray_id || '').replace(/"/g, '""')}"`,
+            `"${String(log.client_ip || '').replace(/"/g, '""')}"`,
+            `"${String(log.country || '').replace(/"/g, '""')}"`,
+          ];
+          csvRows.push(row.join(','));
+        }
+
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `diagnostics-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        (window as any).__showToast?.(`Exported ${logsList.length} logs to CSV`, 'success');
+      });
+    }
+
+    // Density toggle
+    if (densityToggleBtn) {
+      densityToggleBtn.addEventListener('click', () => {
+        densityState = densityState === 'compact' ? 'cozy' : 'compact';
+        try {
+          localStorage.setItem('admin_logs_density_v1', densityState);
+        } catch {}
+        updateDensityUi();
+      });
+    }
+
+    // Auto Polling
+    function toggleAutoPoll() {
+      isAutoPolling = !isAutoPolling;
+      if (isAutoPolling) {
+        if (pollIndicator) {
+          pollIndicator.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse';
+        }
+        if (pollLabel) pollLabel.textContent = 'Live: 10s';
+        if (pollToggleBtn) {
+          pollToggleBtn.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+        }
+        autoPollTimer = setInterval(() => {
+          loadLogs(false);
+        }, 10000);
+        (window as any).__showToast?.('Auto-refresh every 10s enabled', 'info', 1500);
+      } else {
+        if (pollIndicator) {
+          pollIndicator.className = 'w-1.5 h-1.5 rounded-full bg-zinc-400';
+        }
+        if (pollLabel) pollLabel.textContent = 'Live: Off';
+        if (pollToggleBtn) {
+          pollToggleBtn.classList.remove('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+        }
+        if (autoPollTimer) {
+          clearInterval(autoPollTimer);
+          autoPollTimer = null;
+        }
+      }
+    }
+
+    if (pollToggleBtn) pollToggleBtn.addEventListener('click', toggleAutoPoll);
+
+    // Columns popover menu
+    if (columnsMenuBtn && columnsMenuPanel) {
+      columnsMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        columnsMenuPanel.classList.toggle('hidden');
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!columnsMenuPanel.contains(e.target as Node) && !columnsMenuBtn.contains(e.target as Node)) {
+          columnsMenuPanel.classList.add('hidden');
+        }
+      });
+    }
+
+    if (resetColumnsBtn) {
+      resetColumnsBtn.addEventListener('click', () => {
+        columnsState = DEFAULT_COLUMNS.map((c) => ({ ...c }));
+        saveColumnsState();
+        renderHeader();
+        renderRows(logsList);
+        renderColumnsMenu();
+      });
+    }
+
+    // Bottlenecks drawer expand/collapse
+    if (toggleBottlenecksBtn && bottlenecksGrid && bottlenecksToggleText && bottlenecksToggleIcon) {
+      toggleBottlenecksBtn.addEventListener('click', () => {
+        const isHidden = bottlenecksGrid.classList.contains('hidden');
+        if (isHidden) {
+          bottlenecksGrid.classList.remove('hidden');
+          bottlenecksToggleText.textContent = 'Collapse';
+          bottlenecksToggleIcon.textContent = '▴';
+        } else {
+          bottlenecksGrid.classList.add('hidden');
+          bottlenecksToggleText.textContent = 'Expand Top 8';
+          bottlenecksToggleIcon.textContent = '▾';
+        }
+      });
+    }
+
+    // Metric capsule instant filters
+    if (metricCapsuleTotal) {
+      metricCapsuleTotal.addEventListener('click', () => {
+        currentLevel = 'ALL';
+        currentEventCode = 'ALL';
+        currentHealth = 'ALL';
+        if (levelSelect) levelSelect.value = 'ALL';
+        if (eventSelect) eventSelect.value = 'ALL';
+        if (healthSelect) healthSelect.value = 'ALL';
+        currentPage = 1;
+        loadLogs();
+      });
+    }
+
+    if (metricCapsuleErrors) {
+      metricCapsuleErrors.addEventListener('click', () => {
+        currentLevel = 'ERROR';
+        if (levelSelect) levelSelect.value = 'ERROR';
+        currentPage = 1;
+        loadLogs();
+      });
+    }
+
+    if (metricCapsuleWarns) {
+      metricCapsuleWarns.addEventListener('click', () => {
+        currentLevel = 'WARN';
+        if (levelSelect) levelSelect.value = 'WARN';
+        currentPage = 1;
+        loadLogs();
+      });
+    }
+
+    if (metricCapsuleSlow) {
+      metricCapsuleSlow.addEventListener('click', () => {
+        currentHealth = 'slow_only';
+        if (healthSelect) healthSelect.value = 'slow_only';
+        currentPage = 1;
+        loadLogs();
+      });
+    }
+
+    // Filter selects
+    if (levelSelect) {
+      levelSelect.value = currentLevel;
+      levelSelect.addEventListener('change', () => {
+        currentLevel = levelSelect.value;
+        currentPage = 1;
+        loadLogs();
+      });
+    }
+
+    if (eventSelect) {
+      eventSelect.value = currentEventCode;
+      eventSelect.addEventListener('change', () => {
+        currentEventCode = eventSelect.value;
+        currentPage = 1;
+        loadLogs();
+      });
+    }
+
+    if (healthSelect) {
+      healthSelect.value = currentHealth;
+      healthSelect.addEventListener('change', () => {
+        currentHealth = healthSelect.value;
+        currentPage = 1;
+        loadLogs();
+      });
+    }
+
+    if (timewindowSelect) {
+      timewindowSelect.value = currentTimeWindow;
+      timewindowSelect.addEventListener('change', () => {
+        currentTimeWindow = timewindowSelect.value;
+        currentPage = 1;
+        loadLogs();
+      });
+    }
+
     if (sortSelect) {
+      sortSelect.value = currentSort;
       sortSelect.addEventListener('change', () => {
         currentSort = sortSelect.value;
         currentPage = 1;
         loadLogs();
       });
     }
-
-    // Pagination events
-    if (paginationPrev) {
-      paginationPrev.addEventListener('click', () => {
-        if (currentPage > 1) {
-          currentPage--;
-          loadLogs();
-        }
-      });
-    }
-
-    if (paginationNext) {
-      paginationNext.addEventListener('click', () => {
-        if (currentPage < currentTotalPages) {
-          currentPage++;
-          loadLogs();
-        }
-      });
-    }
-
-    // Level tabs
-    document.querySelectorAll('.level-tab-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const lvl = btn.getAttribute('data-level');
-        if (!lvl || lvl === currentLevel) return;
-        currentLevel = lvl;
-        currentPage = 1;
-        updateTabsUi();
-        loadLogs();
-      });
-    });
 
     // Search input
     let searchTimer: any = null;
@@ -935,13 +1472,43 @@ const pageTitle = 'System Diagnostics & Logs';
       });
     }
 
+    // Pagination events
+    if (paginationPrev) {
+      paginationPrev.addEventListener('click', () => {
+        if (currentPage > 1) {
+          currentPage--;
+          loadLogs();
+        }
+      });
+    }
+
+    if (paginationNext) {
+      paginationNext.addEventListener('click', () => {
+        if (currentPage < currentTotalPages) {
+          currentPage++;
+          loadLogs();
+        }
+      });
+    }
+
+    // Refresh button & R key shortcut
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => {
         loadLogs();
       });
     }
 
-    // Clear logs modal logic
+    document.addEventListener('keydown', (e) => {
+      if (
+        (e.key === 'r' || e.key === 'R') &&
+        !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
+      ) {
+        e.preventDefault();
+        loadLogs();
+      }
+    });
+
+    // Clear logs modal
     if (clearLogsBtn && clearConfirmModal) {
       clearLogsBtn.addEventListener('click', () => {
         clearConfirmModal.showModal();
@@ -984,22 +1551,30 @@ const pageTitle = 'System Diagnostics & Logs';
     window.addEventListener('popstate', () => {
       const url = new URL(window.location.href);
       currentLevel = url.searchParams.get('level') || 'ALL';
+      currentEventCode = url.searchParams.get('eventCode') || 'ALL';
+      currentHealth = url.searchParams.get('health') || 'ALL';
+      currentTimeWindow = url.searchParams.get('timeWindow') || 'ALL';
       currentSearch = (url.searchParams.get('search') || '').trim();
       currentSort = url.searchParams.get('sort') || 'newest';
       currentPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
 
+      if (levelSelect) levelSelect.value = currentLevel;
+      if (eventSelect) eventSelect.value = currentEventCode;
+      if (healthSelect) healthSelect.value = currentHealth;
+      if (timewindowSelect) timewindowSelect.value = currentTimeWindow;
       if (searchInput) searchInput.value = currentSearch;
       if (sortSelect) sortSelect.value = currentSort;
       if (clearSearchBtn) {
         if (currentSearch) clearSearchBtn.classList.remove('hidden');
         else clearSearchBtn.classList.add('hidden');
       }
-      updateTabsUi();
       loadLogs(false);
     });
 
-    // Initial load
-    updateTabsUi();
+    // Initial setup
+    renderHeader();
+    renderColumnsMenu();
+    updateDensityUi();
     loadLogs(false);
   })();
 </script>

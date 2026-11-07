@@ -113,7 +113,25 @@ export async function recordErrorLog(
     const minWeight = LOG_LEVEL_WEIGHT[minLevel] ?? 30;
     const currentWeight = LOG_LEVEL_WEIGHT[level] ?? 40;
     const slowThreshold = settings?.slow_request_threshold_ms || 1000;
-    const isSlow = typeof input.latencyMs === 'number' && input.latencyMs >= slowThreshold;
+    const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;
+
+    // Event-Aware SLA判定: 区分服务端请求、Web Vitals与客户端事件，杜绝前端普通LCP误当慢请求刷屏
+    let isSlow = false;
+    if (typeof input.latencyMs === 'number' && !isNaN(input.latencyMs)) {
+      if (errorCode === 'WEB_VITALS') {
+        let isBackgrounded = false;
+        let rating = '';
+        if (input.context && typeof input.context === 'object') {
+          isBackgrounded = Boolean((input.context as any).wasHidden || (input.context as any).rating === 'backgrounded');
+          rating = String((input.context as any).rating || '');
+        }
+        isSlow = !isBackgrounded && (rating === 'poor' || input.latencyMs > 4000);
+      } else if (errorCode === 'CLIENT_NAVIGATION') {
+        isSlow = false;
+      } else {
+        isSlow = input.latencyMs >= slowThreshold;
+      }
+    }
 
     // Filter out verbose messages below min level unless marked as a slow request
     if (currentWeight < minWeight && !isSlow) {
@@ -121,7 +139,6 @@ export async function recordErrorLog(
     }
 
     const source = input.source.slice(0, 100);
-    const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;
     const message = input.message.slice(0, 1000);
     const userId = input.userId ? input.userId.slice(0, 100) : null;
     const userEmail = input.userEmail ? input.userEmail.slice(0, 120).toLowerCase().trim() : null;
@@ -202,14 +219,31 @@ export async function recordErrorLogsBatch(
 
     const level = (input.level?.toLowerCase() || 'error') as DiagnosticLogLevel;
     const currentWeight = LOG_LEVEL_WEIGHT[level] ?? LOG_LEVEL_WEIGHT.error;
-    const isSlow = typeof input.latencyMs === 'number' && input.latencyMs >= slowThreshold;
+    const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;
+
+    // Event-Aware SLA判定: 区分服务端请求、Web Vitals与客户端事件
+    let isSlow = false;
+    if (typeof input.latencyMs === 'number' && !isNaN(input.latencyMs)) {
+      if (errorCode === 'WEB_VITALS') {
+        let isBackgrounded = false;
+        let rating = '';
+        if (input.context && typeof input.context === 'object') {
+          isBackgrounded = Boolean((input.context as any).wasHidden || (input.context as any).rating === 'backgrounded');
+          rating = String((input.context as any).rating || '');
+        }
+        isSlow = !isBackgrounded && (rating === 'poor' || input.latencyMs > 4000);
+      } else if (errorCode === 'CLIENT_NAVIGATION') {
+        isSlow = false;
+      } else {
+        isSlow = input.latencyMs >= slowThreshold;
+      }
+    }
 
     if (currentWeight < minWeight && !isSlow) {
       continue;
     }
 
     const source = (input.source || 'system').slice(0, 100);
-    const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;
     const message = (input.message || '').slice(0, 1000);
     const userId = input.userId ? input.userId.slice(0, 100) : null;
     const userEmail = input.userEmail ? input.userEmail.slice(0, 120).toLowerCase().trim() : null;
@@ -261,23 +295,28 @@ export async function recordErrorLogsBatch(
   }
 }
 
+export interface ListErrorLogsOptions {
+  level?: string;
+  source?: string;
+  eventCode?: string;
+  health?: string;
+  timeWindow?: string;
+  search?: string;
+  sort?: 'newest' | 'slowest';
+  limit?: number;
+  page?: number;
+}
+
 /**
  * Lists error logs with pagination, level filter, search, sorting and bottleneck profiling.
  */
 export async function listErrorLogs(
-  options: {
-    level?: string;
-    source?: string;
-    search?: string;
-    sort?: 'newest' | 'slowest';
-    limit?: number;
-    page?: number;
-  } = {},
+  options: ListErrorLogsOptions = {},
   customEnv?: any
 ): Promise<{
   logs: ErrorLogRecord[];
   total: number;
-  stats: { total: number; debug: number; info: number; warns: number; errors: number; critical: number };
+  stats: { total: number; debug: number; info: number; warns: number; errors: number; critical: number; slow: number };
   bottlenecks: EndpointBottleneck[];
 }> {
   const page = Math.max(1, options.page || 1);
@@ -297,6 +336,50 @@ export async function listErrorLogs(
       if (options.source && options.source !== 'ALL') {
         conditions.push('source = ?');
         params.push(options.source);
+      }
+
+      // Event type filtering
+      if (options.eventCode && options.eventCode !== 'ALL') {
+        if (options.eventCode === 'SERVER_ALL') {
+          conditions.push(`(error_code IN ('REQUEST_COMPLETED', 'SLOW_REQUEST') OR (method IS NOT NULL AND method != 'CLIENT'))`);
+        } else if (options.eventCode === 'WEB_VITALS') {
+          conditions.push(`error_code = 'WEB_VITALS'`);
+        } else if (options.eventCode === 'CLIENT_ERRORS') {
+          conditions.push(`error_code LIKE 'CLIENT_%ERROR%'`);
+        } else if (options.eventCode === 'CLIENT_NAVIGATION') {
+          conditions.push(`error_code = 'CLIENT_NAVIGATION'`);
+        } else {
+          conditions.push('error_code = ?');
+          params.push(options.eventCode);
+        }
+      }
+
+      // Health & SLA latency filtering
+      if (options.health && options.health !== 'ALL') {
+        if (options.health === 'slow_only') {
+          conditions.push(`((latency_ms >= 1000 AND (error_code IS NULL OR error_code != 'WEB_VITALS')) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%'))`);
+        } else if (options.health === '500') {
+          conditions.push('latency_ms >= 500');
+        } else if (options.health === '1000') {
+          conditions.push('latency_ms >= 1000');
+        } else if (options.health === '2500') {
+          conditions.push('latency_ms >= 2500');
+        } else if (options.health === 'exclude_backgrounded') {
+          conditions.push(`(context_json NOT LIKE '%"wasHidden":true%' AND context_json NOT LIKE '%"rating":"backgrounded"%')`);
+        }
+      }
+
+      // Time window filtering
+      if (options.timeWindow && options.timeWindow !== 'ALL') {
+        if (options.timeWindow === '1h') {
+          conditions.push(`created_at >= datetime('now', '-1 hour')`);
+        } else if (options.timeWindow === '24h') {
+          conditions.push(`created_at >= datetime('now', '-24 hours')`);
+        } else if (options.timeWindow === '7d') {
+          conditions.push(`created_at >= datetime('now', '-7 days')`);
+        } else if (options.timeWindow === '30d') {
+          conditions.push(`created_at >= datetime('now', '-30 days')`);
+        }
       }
 
       if (options.search && options.search.trim()) {
@@ -323,14 +406,15 @@ export async function listErrorLogs(
           `SELECT COUNT(*) as count FROM system_error_logs ${whereClause}`,
           params
         ),
-        db.first<{ total: number; debug: number; info: number; warns: number; errors: number; critical: number }>(
+        db.first<{ total: number; debug: number; info: number; warns: number; errors: number; critical: number; slow: number }>(
           `SELECT
              COUNT(*) as total,
              SUM(CASE WHEN level = 'debug' THEN 1 ELSE 0 END) as debug,
              SUM(CASE WHEN level = 'info' THEN 1 ELSE 0 END) as info,
              SUM(CASE WHEN level = 'warn' THEN 1 ELSE 0 END) as warns,
              SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as errors,
-             SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) as critical
+             SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) as critical,
+             SUM(CASE WHEN (latency_ms >= 1000 AND (error_code IS NULL OR error_code != 'WEB_VITALS')) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%') THEN 1 ELSE 0 END) as slow
            FROM system_error_logs
            WHERE created_at >= datetime('now', '-30 days')`
         ),
@@ -344,6 +428,8 @@ export async function listErrorLogs(
              SUM(CASE WHEN latency_ms >= 500 THEN 1 ELSE 0 END) as slow_count
            FROM system_error_logs
            WHERE latency_ms IS NOT NULL AND path IS NOT NULL AND path != '' AND created_at >= datetime('now', '-7 days')
+             AND (method IS NULL OR method != 'CLIENT')
+             AND (error_code IS NULL OR error_code != 'CLIENT_NAVIGATION')
            GROUP BY path, method
            ORDER BY avg_latency DESC
            LIMIT 8`
@@ -360,6 +446,7 @@ export async function listErrorLogs(
           warns: statsRes?.warns || 0,
           errors: statsRes?.errors || 0,
           critical: statsRes?.critical || 0,
+          slow: statsRes?.slow || 0,
         },
         bottlenecks: bottlenecks || [],
       };
@@ -368,7 +455,7 @@ export async function listErrorLogs(
     return {
       logs: [],
       total: 0,
-      stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0 },
+      stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0, slow: 0 },
       bottlenecks: [],
     };
   }
