@@ -562,7 +562,11 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
                     if (dur > inpVal) inpVal = dur;
                   }
                 });
-                inpObs.observe({ type: 'first-input', buffered: true });
+                try {
+                  inpObs.observe({ type: 'event', buffered: true, durationThreshold: 40 });
+                } catch (err) {
+                  inpObs.observe({ type: 'first-input', buffered: true });
+                }
               } catch (e) {}
             }
 

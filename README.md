@@ -4,7 +4,7 @@ An edge-first, headless B2B wholesale showroom and inquiry platform engineered w
 
 > **Seed Dataset & Demo Theme**: Includes an out-of-the-box luxury textile & apparel demo seed. Brand name, logo, navigation, currencies, and product taxonomies are completely decoupled from code and managed through Sanity CMS `siteConfig` and Cloudflare D1 settings.
 
-Built with **Astro SSR + Sanity CMS + Cloudflare Workers / D1 / KV + Tailwind CSS v4 + DaisyUI + Nanostores**.
+Built with **Astro SSR + Sanity CMS + Cloudflare Workers / D1 / KV + Tailwind CSS v4 + Nanostores**.
 
 ---
 
