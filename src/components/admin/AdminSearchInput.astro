@@ -1,0 +1,95 @@
+---
+// src/components/admin/AdminSearchInput.astro
+// Reusable admin search bar with clear button & submit prevention
+
+interface Props {
+  id: string;
+  name?: string;
+  placeholder?: string;
+  initialValue?: string;
+  formId?: string;
+  clearBtnId?: string;
+  class?: string;
+  inputClass?: string;
+}
+
+const {
+  id,
+  name = 'search',
+  placeholder = 'Search...',
+  initialValue = '',
+  formId,
+  clearBtnId = 'clear-search-btn',
+  class: className = 'relative w-full sm:w-64 max-w-xs',
+  inputClass = '',
+} = Astro.props;
+---
+
+{
+  formId ? (
+    <form id={formId} class={className} method="GET">
+      <input
+        type="text"
+        id={id}
+        name={name}
+        value={initialValue}
+        placeholder={placeholder}
+        class={`w-full bg-[#f5f5f7] border border-black/5 rounded-xl pl-7 pr-6 py-1 text-xs text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-1 focus:ring-black/20 focus:bg-white transition-all ${inputClass}`}
+      />
+      <svg
+        class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-[#86868b] pointer-events-none"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        />
+      </svg>
+      <button
+        type="button"
+        id={clearBtnId}
+        class={`absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-[10px] text-[#86868b] hover:text-[#1d1d1f] transition-all cursor-pointer ${!initialValue ? 'hidden' : ''}`}
+        title="Clear search"
+      >
+        ✕
+      </button>
+    </form>
+  ) : (
+    <div class={className}>
+      <input
+        type="text"
+        id={id}
+        name={name}
+        value={initialValue}
+        placeholder={placeholder}
+        class={`w-full bg-[#f5f5f7] border border-black/5 rounded-xl pl-7 pr-6 py-1 text-xs text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-1 focus:ring-black/20 focus:bg-white transition-all ${inputClass}`}
+      />
+      <svg
+        class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-[#86868b] pointer-events-none"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        />
+      </svg>
+      <button
+        type="button"
+        id={clearBtnId}
+        class={`absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-[10px] text-[#86868b] hover:text-[#1d1d1f] transition-all cursor-pointer ${!initialValue ? 'hidden' : ''}`}
+        title="Clear search"
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+

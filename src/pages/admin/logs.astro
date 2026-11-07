@@ -2,6 +2,8 @@
 // src/pages/admin/logs.astro
 // Unified System Diagnostics & Performance Profiling Fixed-Viewport Workbench
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
+import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -283,25 +285,13 @@ const pageTitle = 'System Diagnostics & Performance';
       <!-- Search & Sort Controls -->
       <div class="flex items-center gap-1.5 ml-auto flex-1 sm:flex-initial min-w-[200px]">
         <!-- Search Input -->
-        <div class="relative flex-1">
-          <input
-            type="text"
-            id="logs-search-input"
-            value={initialSearch}
-            placeholder="Search path, message, rayId, IP..."
-            class="w-full h-7 pl-7 pr-6 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] text-[#1d1d1f]"
-          />
-          <svg class="w-3.5 h-3.5 absolute left-2 top-1.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <button
-            type="button"
-            id="clear-search-btn"
-            class={`absolute right-2 top-1.5 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
-          >
-            ✕
-          </button>
-        </div>
+        <AdminSearchInput
+          id="logs-search-input"
+          clearBtnId="clear-search-btn"
+          initialValue={initialSearch}
+          placeholder="Search path, message, rayId, IP..."
+          class="relative flex-1"
+        />
 
         <!-- Sort Select -->
         <select
@@ -315,22 +305,30 @@ const pageTitle = 'System Diagnostics & Performance';
     </div>
 
     <!-- 4. Independent Scrolling Data Table (Flex-1 Min-H-0 Overflow-Auto) -->
-    <div id="table-workbench-wrapper" class="flex-1 min-h-0 min-w-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden relative">
-      <!-- Loading Skeleton Indicator -->
-      <div id="logs-skeleton" class="p-4 space-y-3 animate-pulse">
-        {[1, 2, 3, 4, 5, 6, 7, 8].map(() => (
-          <div class="flex items-center justify-between py-2 border-b border-black/5 last:border-0">
-            <div class="flex items-center gap-3">
-              <div class="h-5 w-14 bg-black/10 rounded-md"></div>
-              <div class="h-4 w-48 bg-black/10 rounded-md"></div>
-            </div>
-            <div class="h-4 w-24 bg-black/5 rounded-md"></div>
-          </div>
-        ))}
-      </div>
+    <AdminWorkbenchTableShell
+      containerId="table-workbench-wrapper"
+      skeletonId="logs-skeleton"
+      contentId="table-scroll-area"
+      contentHidden={true}
+      emptyId="logs-empty"
+      paginationId="pagination-container"
+      summaryId="pagination-summary"
+      prevId="pagination-prev"
+      nextId="pagination-next"
+      currentId="pagination-current"
+    >
+      <table id="logs-main-table" class="w-full text-left border-collapse table-fixed select-text">
+        <thead class="sticky top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-xs border-b border-black/10 text-[#86868b] font-medium select-none shadow-2xs">
+          <tr id="table-header-row">
+            <!-- Dynamically populated or updated with resize handles via JS -->
+          </tr>
+        </thead>
+        <tbody id="logs-table-body" class="divide-y divide-black/5 text-[#1d1d1f]">
+          <!-- Injected via JavaScript -->
+        </tbody>
+      </table>
 
-      <!-- Empty State -->
-      <div id="logs-empty" class="hidden flex-1 flex flex-col items-center justify-center p-8 text-center">
+      <Fragment slot="empty">
         <div class="w-12 h-12 rounded-2xl bg-[#f5f5f7] flex items-center justify-center mb-3 text-emerald-600">
           <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -340,48 +338,8 @@ const pageTitle = 'System Diagnostics & Performance';
         <p class="text-xs text-[#86868b] mt-1 max-w-sm">
           No diagnostic logs or SLA violations found matching the active filter.
         </p>
-      </div>
-
-      <!-- Real Data Table with Independent Scroll -->
-      <div id="table-scroll-area" class="flex-1 min-h-0 overflow-auto scrollbar-thin hidden">
-        <table id="logs-main-table" class="w-full text-left border-collapse table-fixed select-text">
-          <thead class="sticky top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-xs border-b border-black/10 text-[#86868b] font-medium select-none shadow-2xs">
-            <tr id="table-header-row">
-              <!-- Dynamically populated or updated with resize handles via JS -->
-            </tr>
-          </thead>
-          <tbody id="logs-table-body" class="divide-y divide-black/5 text-[#1d1d1f]">
-            <!-- Injected via JavaScript -->
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 5. Pinned Bottom Pagination & Counter Bar -->
-      <footer id="pagination-container" class="shrink-0 bg-white border-t border-black/5 px-3 py-2 flex items-center justify-between text-xs text-[#86868b]">
-        <div id="pagination-summary" class="truncate font-mono text-[11px]">
-          <!-- Populated via JS -->
-        </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            id="pagination-prev"
-            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-          >
-            ← Prev
-          </button>
-          <span id="pagination-current" class="px-2 py-0.5 text-[11px] font-mono text-[#1d1d1f]">
-            1 / 1
-          </span>
-          <button
-            type="button"
-            id="pagination-next"
-            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-          >
-            Next →
-          </button>
-        </div>
-      </footer>
-    </div>
+      </Fragment>
+    </AdminWorkbenchTableShell>
   </div>
 
   <!-- Detail Dialog / Modal -->
@@ -491,6 +449,7 @@ const pageTitle = 'System Diagnostics & Performance';
 
 <script>
   import { clientCache } from '@utils/clientCache';
+  import { escapeHtml, formatAdminTime, createPaginationController, exportToCsv } from '@utils/adminWorkbench';
 
   (function () {
     // Column definitions
@@ -592,11 +551,18 @@ const pageTitle = 'System Diagnostics & Performance';
     const bottlenecksToggleIcon = document.getElementById('bottlenecks-toggle-icon');
     const bottlenecksGrid = document.getElementById('bottlenecks-grid');
 
-    const paginationContainer = document.getElementById('pagination-container');
-    const paginationSummary = document.getElementById('pagination-summary');
-    const paginationPrev = document.getElementById('pagination-prev') as HTMLButtonElement | null;
-    const paginationNext = document.getElementById('pagination-next') as HTMLButtonElement | null;
-    const paginationCurrent = document.getElementById('pagination-current');
+    const pagination = createPaginationController({
+      containerId: 'pagination-container',
+      summaryId: 'pagination-summary',
+      prevId: 'pagination-prev',
+      nextId: 'pagination-next',
+      currentId: 'pagination-current',
+      itemLabel: 'logs',
+      onPageChange: (newPage) => {
+        currentPage = newPage;
+        loadLogs();
+      },
+    });
 
     const metricTotal = document.getElementById('metric-total');
     const metricErrors = document.getElementById('metric-errors');
@@ -682,49 +648,6 @@ const pageTitle = 'System Diagnostics & Performance';
         densityLabel.textContent = densityState === 'compact' ? 'Compact' : 'Cozy';
       }
       renderRows(logsList);
-    }
-
-    function escapeHtml(str: any) {
-      if (str === null || str === undefined) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function formatTime(dt: any) {
-      if (!dt) return '—';
-      let str = String(dt);
-      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) {
-        str = str.replace(' ', 'T') + 'Z';
-      }
-      const d = new Date(str);
-      if (isNaN(d.getTime())) return String(dt);
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const h = String(d.getHours()).padStart(2, '0');
-      const min = String(d.getMinutes()).padStart(2, '0');
-      const s = String(d.getSeconds()).padStart(2, '0');
-      return `${m}-${day} ${h}:${min}:${s}`;
-    }
-
-    function formatFullDateTime(dt: any) {
-      if (!dt) return '—';
-      let str = String(dt);
-      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) {
-        str = str.replace(' ', 'T') + 'Z';
-      }
-      const d = new Date(str);
-      if (isNaN(d.getTime())) return String(dt);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const h = String(d.getHours()).padStart(2, '0');
-      const min = String(d.getMinutes()).padStart(2, '0');
-      const s = String(d.getSeconds()).padStart(2, '0');
-      return `${y}-${m}-${day} ${h}:${min}:${s}`;
     }
 
     function renderLevelBadge(lvl: string) {
@@ -1000,21 +923,6 @@ const pageTitle = 'System Diagnostics & Performance';
       });
     }
 
-    function renderPagination(page: number, totalPages: number, total: number) {
-      if (!paginationContainer) return;
-      currentTotalPages = Math.max(1, totalPages);
-
-      const start = total === 0 ? 0 : (page - 1) * limit + 1;
-      const end = Math.min(page * limit, total);
-      if (paginationSummary) {
-        paginationSummary.innerHTML = `Showing <strong class="text-[#1d1d1f]">${start}–${end}</strong> of <strong class="text-[#1d1d1f]">${total}</strong> logs`;
-      }
-
-      if (paginationPrev) paginationPrev.disabled = page <= 1;
-      if (paginationNext) paginationNext.disabled = page >= totalPages;
-      if (paginationCurrent) paginationCurrent.textContent = `${page} / ${currentTotalPages}`;
-    }
-
     function renderRows(logs: any[]) {
       if (!tableBody) return;
 
@@ -1043,8 +951,8 @@ const pageTitle = 'System Diagnostics & Performance';
         const safeMethod = renderMethodBadge(log.method);
         const slaBadge = renderEventAwareSla(log);
         const spansBadge = renderSpansMini(log);
-        const timeStr = formatTime(log.created_at);
-        const fullTimeStr = formatFullDateTime(log.created_at);
+        const timeStr = formatAdminTime(log.created_at, 'short');
+        const fullTimeStr = formatAdminTime(log.created_at, 'full');
 
         const statusBadge = log.method === 'CLIENT'
           ? `<span class="px-1 py-0.2 rounded text-[9px] font-mono bg-purple-50 text-purple-700">Client</span>`
@@ -1138,7 +1046,7 @@ const pageTitle = 'System Diagnostics & Performance';
       }
       if (modalSource) modalSource.textContent = log.source || 'system';
       if (modalMessage) modalMessage.textContent = log.message || '';
-      if (modalTime) modalTime.textContent = formatFullDateTime(log.created_at);
+      if (modalTime) modalTime.textContent = formatAdminTime(log.created_at, 'full');
       if (modalRay) modalRay.textContent = log.ray_id || '—';
       if (modalPath) modalPath.textContent = log.path || '—';
       if (modalHttp) {
@@ -1185,7 +1093,7 @@ const pageTitle = 'System Diagnostics & Performance';
           modalBreadcrumbsContainer.classList.remove('hidden');
           if (modalBreadcrumbsCount) modalBreadcrumbsCount.textContent = `${breadcrumbs.length} steps`;
           modalBreadcrumbsList.innerHTML = breadcrumbs.map((b: any, idx: number) => {
-            const timeStr = b.ts ? formatTime(b.ts) : '';
+            const timeStr = b.ts ? formatAdminTime(b.ts, 'short') : '';
             const safeTrigger = escapeHtml(b.trigger || 'navigate');
             const safeFrom = escapeHtml(b.from || 'direct');
             const safeTo = escapeHtml(b.to || '/');
@@ -1250,7 +1158,7 @@ const pageTitle = 'System Diagnostics & Performance';
 
               if (skeletonEl) skeletonEl.classList.add('hidden');
               renderRows(logsList);
-              renderPagination(data.page || currentPage, data.totalPages || 1, data.total ?? logsList.length);
+              pagination.render(data.page || currentPage, data.totalPages || 1, data.total ?? logsList.length, limit);
             },
           }
         );
@@ -1262,7 +1170,7 @@ const pageTitle = 'System Diagnostics & Performance';
       }
     }
 
-    // CSV Export (Native zero-dependency)
+    // CSV Export via adminWorkbench
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener('click', () => {
         if (!logsList || logsList.length === 0) {
@@ -1271,35 +1179,22 @@ const pageTitle = 'System Diagnostics & Performance';
         }
 
         const headers = ['ID', 'Timestamp', 'Level', 'Event Code', 'Method', 'Status', 'Path', 'Latency Ms', 'Message', 'Ray ID', 'Client IP', 'Country'];
-        const csvRows = [headers.join(',')];
+        const rows = logsList.map((log: any) => [
+          log.id,
+          formatAdminTime(log.created_at, 'full'),
+          log.level || '',
+          log.error_code || '',
+          log.method || '',
+          log.status_code || '',
+          log.path || '',
+          log.latency_ms ?? '',
+          log.message || '',
+          log.ray_id || '',
+          log.client_ip || '',
+          log.country || '',
+        ]);
 
-        for (const log of logsList) {
-          const row = [
-            log.id,
-            `"${String(log.created_at || '').replace(/"/g, '""')}"`,
-            `"${String(log.level || '').replace(/"/g, '""')}"`,
-            `"${String(log.error_code || '').replace(/"/g, '""')}"`,
-            `"${String(log.method || '').replace(/"/g, '""')}"`,
-            log.status_code || '',
-            `"${String(log.path || '').replace(/"/g, '""')}"`,
-            log.latency_ms ?? '',
-            `"${String(log.message || '').replace(/"/g, '""')}"`,
-            `"${String(log.ray_id || '').replace(/"/g, '""')}"`,
-            `"${String(log.client_ip || '').replace(/"/g, '""')}"`,
-            `"${String(log.country || '').replace(/"/g, '""')}"`,
-          ];
-          csvRows.push(row.join(','));
-        }
-
-        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `diagnostics-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        exportToCsv(`diagnostics-logs-${new Date().toISOString().slice(0, 10)}`, headers, rows);
         (window as any).__showToast?.(`Exported ${logsList.length} logs to CSV`, 'success');
       });
     }
@@ -1498,25 +1393,6 @@ const pageTitle = 'System Diagnostics & Performance';
         currentPage = 1;
         clearSearchBtn.classList.add('hidden');
         loadLogs();
-      });
-    }
-
-    // Pagination events
-    if (paginationPrev) {
-      paginationPrev.addEventListener('click', () => {
-        if (currentPage > 1) {
-          currentPage--;
-          loadLogs();
-        }
-      });
-    }
-
-    if (paginationNext) {
-      paginationNext.addEventListener('click', () => {
-        if (currentPage < currentTotalPages) {
-          currentPage++;
-          loadLogs();
-        }
       });
     }
 

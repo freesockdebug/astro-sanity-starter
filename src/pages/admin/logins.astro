@@ -2,6 +2,8 @@
 // src/pages/admin/logins.astro
 // Admin Security Audit: 90-Day Login History & IP/Device Tracker
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
+import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -67,75 +69,35 @@ const pageTitle = 'Login Audit Logs';
       <div class="flex items-center gap-2 ml-auto shrink-0">
         <span id="log-count-summary" class="hidden md:inline font-mono text-[11px] text-[#86868b]">(Loading...)</span>
 
-        <!-- Search Form -->
-        <div class="relative flex items-center w-48 sm:w-64">
-          <input
-            type="text"
-            id="logins-search-input"
-            value={initialSearch}
-            placeholder="Search email, IP, city..."
-            class="w-full pl-7 pr-6 py-1 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
-          />
-          <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <button
-            type="button"
-            id="clear-logins-search"
-            class={`absolute right-2 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
-            title="Clear search"
-          >
-            ✕
-          </button>
-        </div>
+        <AdminSearchInput
+          id="logins-search-input"
+          clearBtnId="clear-logins-search"
+          initialValue={initialSearch}
+          placeholder="Search email, IP, city..."
+          class="relative flex items-center w-48 sm:w-64"
+        />
       </div>
     </header>
 
     <!-- 2. Independent Scrolling Container -->
-    <div id="logins-container" class="flex-1 min-h-0 min-w-0 bg-white rounded-2xl border border-black/5 shadow-2xs flex flex-col overflow-hidden relative">
-      <!-- Skeleton loader -->
-      <div id="logins-skeleton" class="p-6 space-y-4 animate-pulse">
-        <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
-        <div class="space-y-3">
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-        </div>
-      </div>
-
-      <!-- Content injected here with Independent Scroll -->
-      <div id="logins-content" class="flex-1 min-h-0 overflow-auto scrollbar-thin hidden"></div>
-    </div>
+    <AdminWorkbenchTableShell
+      containerId="logins-container"
+      skeletonId="logins-skeleton"
+      contentId="logins-content"
+      contentHidden={true}
+      showPagination={false}
+    />
   </div>
 </AdminLayout>
 
 <script>
   import { clientCache } from '@utils/clientCache';
+  import { escapeHtml, formatAdminTime } from '@utils/adminWorkbench';
 
-  let allLogins = [];
+  let allLogins: any[] = [];
   let currentSearch = '';
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function formatDateTime(iso) {
-    if (!iso) return '-';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return String(iso);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  }
-
-  function updateMetrics(logins) {
+  function updateMetrics(logins: any[]) {
     const sessionsEl = document.getElementById('metric-sessions');
     const accountsEl = document.getElementById('metric-accounts');
     const ipsEl = document.getElementById('metric-ips');
@@ -156,7 +118,7 @@ const pageTitle = 'Login Audit Logs';
     }
   }
 
-  function renderTable(displayLogins) {
+  function renderTable(displayLogins: any[]) {
     const content = document.getElementById('logins-content');
     const summary = document.getElementById('log-count-summary');
     if (!content) return;
@@ -184,7 +146,7 @@ const pageTitle = 'Login Audit Logs';
           const safeUserId = escapeHtml(entry.user_id || '');
           const safeIp = escapeHtml(entry.ip || '—');
           const safeAgent = escapeHtml(entry.user_agent || 'Unknown Device');
-          const dateStr = formatDateTime(entry.created_at);
+          const dateStr = formatAdminTime(entry.created_at, 'full');
 
           return `
             <div class="p-3.5 space-y-2 bg-white text-xs">
@@ -232,7 +194,7 @@ const pageTitle = 'Login Audit Logs';
               const safeUserId = escapeHtml(entry.user_id || '');
               const safeIp = escapeHtml(entry.ip || '');
               const safeAgent = escapeHtml(entry.user_agent || 'Unknown Client');
-              const dateStr = formatDateTime(entry.created_at);
+              const dateStr = formatAdminTime(entry.created_at, 'full');
 
               return `
                 <tr class="hover:bg-[#f5f5f7]/60 transition-colors">
@@ -297,13 +259,13 @@ const pageTitle = 'Login Audit Logs';
           filterAndRender();
         },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load logins:', err);
       if (skeleton) skeleton.classList.add('hidden');
       if (content) {
         content.innerHTML = `
           <div class="py-16 text-center text-xs text-rose-600">
-            Failed to load login audit logs. <button type="button" id="retry-logins-btn" class="underline ml-1 cursor-pointer">Retry</button>
+            Failed to load login audit logs (${escapeHtml(err?.message || '')}). <button type="button" id="retry-logins-btn" class="underline ml-1 cursor-pointer">Retry</button>
           </div>
         `;
         content.classList.remove('hidden');
@@ -313,7 +275,7 @@ const pageTitle = 'Login Audit Logs';
   }
 
   // 0ms instant client-side search filtering
-  const searchInput = document.getElementById('logins-search-input');
+  const searchInput = document.getElementById('logins-search-input') as HTMLInputElement | null;
   const clearBtn = document.getElementById('clear-logins-search');
 
   searchInput?.addEventListener('input', () => {

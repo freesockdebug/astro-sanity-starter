@@ -1,0 +1,105 @@
+---
+// src/components/admin/AdminWorkbenchTableShell.astro
+// Unified table shell with fixed viewport scroll container, pulse skeleton, and pinned pagination footer
+
+interface Props {
+  containerId?: string;
+  skeletonId: string;
+  contentId: string;
+  contentHidden?: boolean;
+  contentClass?: string;
+  showPagination?: boolean;
+  paginationId?: string;
+  paginationHidden?: boolean;
+  summaryId?: string;
+  prevId?: string;
+  nextId?: string;
+  currentId?: string;
+  emptyId?: string;
+  class?: string;
+}
+
+const {
+  containerId,
+  skeletonId,
+  contentId,
+  contentHidden = false,
+  contentClass = '',
+  showPagination = true,
+  paginationId = 'pagination-container',
+  paginationHidden = false,
+  summaryId = 'pagination-summary',
+  prevId = 'pagination-prev',
+  nextId = 'pagination-next',
+  currentId = 'pagination-current',
+  emptyId,
+  class: className = '',
+} = Astro.props;
+---
+
+<div
+  id={containerId}
+  class={`flex-1 min-h-[420px] lg:min-h-0 bg-white rounded-2xl border border-black/5 shadow-2xs overflow-hidden flex flex-col relative ${className}`}
+>
+  <!-- 1. Pulse Skeleton Loader -->
+  <div id={skeletonId} class="p-6 space-y-3 animate-pulse">
+    <div class="h-4 bg-zinc-100 rounded w-1/4"></div>
+    <div class="h-10 bg-zinc-50 rounded-xl"></div>
+    <div class="h-10 bg-zinc-50 rounded-xl"></div>
+    <div class="h-10 bg-zinc-50 rounded-xl"></div>
+    <div class="h-10 bg-zinc-50 rounded-xl"></div>
+    <div class="h-10 bg-zinc-50 rounded-xl"></div>
+  </div>
+
+  <!-- 2. Scroll Viewport Content Area -->
+  <div
+    id={contentId}
+    class={`flex-1 min-h-0 overflow-auto scrollbar-thin ${contentHidden ? 'hidden' : ''} ${contentClass}`}
+  >
+    <slot />
+  </div>
+
+  <!-- 3. Optional Empty State -->
+  {
+    emptyId && (
+      <div
+        id={emptyId}
+        class="hidden flex-1 min-h-[300px] flex items-center justify-center p-8 text-center"
+      >
+        <slot name="empty" />
+      </div>
+    )
+  }
+
+  <!-- 4. Pinned Bottom Pagination & Counter Bar -->
+  {
+    showPagination && (
+      <footer
+        id={paginationId}
+        class={`shrink-0 bg-white border-t border-black/5 px-3 py-2 flex items-center justify-between text-xs text-[#86868b] ${paginationHidden ? 'hidden' : ''}`}
+      >
+        <div id={summaryId} class="truncate font-mono text-[11px]" />
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            id={prevId}
+            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+          >
+            ← Prev
+          </button>
+          <span id={currentId} class="px-2 py-0.5 text-[11px] font-mono text-[#1d1d1f]">
+            1 / 1
+          </span>
+          <button
+            type="button"
+            id={nextId}
+            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
+          >
+            Next →
+          </button>
+        </div>
+      </footer>
+    )
+  }
+</div>
+

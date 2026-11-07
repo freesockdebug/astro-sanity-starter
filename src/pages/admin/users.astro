@@ -1,6 +1,8 @@
 ---
 // src/pages/admin/users.astro
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
+import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import { requireAdminContext } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -85,67 +87,30 @@ const pageTitle = 'Customer & Access Management';
         </span>
 
         <!-- Search Form -->
-        <form id="users-search-form" class="relative flex items-center w-48 sm:w-64">
-          <input
-            type="text"
-            id="users-search-input"
-            name="search"
-            value={initialSearch}
-            placeholder="Search email, company..."
-            class="w-full pl-7 pr-6 py-1 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
-          />
-          <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <button
-            type="button"
-            id="clear-users-search"
-            class={`absolute right-2 text-xs text-[#86868b] hover:text-black cursor-pointer ${initialSearch ? '' : 'hidden'}`}
-          >
-            ✕
-          </button>
-        </form>
+        <AdminSearchInput
+          id="users-search-input"
+          formId="users-search-form"
+          clearBtnId="clear-users-search"
+          initialValue={initialSearch}
+          placeholder="Search email, company..."
+          class="relative flex items-center w-48 sm:w-64"
+        />
       </div>
     </header>
 
     <!-- 2. Independent Scrolling Users Container -->
-    <div id="users-container" class="flex-1 min-h-0 min-w-0 bg-white rounded-2xl border border-black/5 shadow-2xs flex flex-col overflow-hidden relative">
-      <!-- Skeleton loader -->
-      <div id="users-skeleton" class="p-6 space-y-4 animate-pulse">
-        <div class="h-6 bg-[#f5f5f7] rounded-xl w-1/4"></div>
-        <div class="space-y-3">
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-          <div class="h-10 bg-[#f5f5f7] rounded-xl"></div>
-        </div>
-      </div>
-
-      <!-- Content injected here with Independent Scroll -->
-      <div id="users-content" class="flex-1 min-h-0 overflow-auto scrollbar-thin hidden"></div>
-
-      <!-- 3. Pinned Bottom Pagination Controls -->
-      <footer id="users-pagination-container" class="shrink-0 bg-white border-t border-black/5 px-3 py-2 flex items-center justify-between text-xs text-[#86868b] hidden">
-        <div id="users-pagination-summary" class="truncate font-mono text-[11px]"></div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            id="users-pagination-prev"
-            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-          >
-            ← Prev
-          </button>
-          <span id="users-pagination-current" class="px-2 py-0.5 text-[11px] font-mono text-[#1d1d1f]">1 / 1</span>
-          <button
-            type="button"
-            id="users-pagination-next"
-            class="px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all border-black/10 bg-white text-[#1d1d1f] hover:bg-[#f5f5f7] cursor-pointer disabled:border-transparent disabled:text-[#86868b]/40 disabled:pointer-events-none"
-          >
-            Next →
-          </button>
-        </div>
-      </footer>
-    </div>
+    <AdminWorkbenchTableShell
+      containerId="users-container"
+      skeletonId="users-skeleton"
+      contentId="users-content"
+      contentHidden={true}
+      paginationId="users-pagination-container"
+      paginationHidden={true}
+      summaryId="users-pagination-summary"
+      prevId="users-pagination-prev"
+      nextId="users-pagination-next"
+      currentId="users-pagination-current"
+    />
   </div>
 
   <!-- Slide-over Customer Detail Drawer -->
@@ -281,6 +246,7 @@ const pageTitle = 'Customer & Access Management';
 
 <script>
   import { clientCache } from '@utils/clientCache';
+  import { escapeHtml, formatAdminTime, createPaginationController } from '@utils/adminWorkbench';
 
   let currentSearch = '';
   let currentTier = 'ALL';
@@ -288,25 +254,20 @@ const pageTitle = 'Customer & Access Management';
   let currentPage = 1;
   let currentLimit = 30;
   let currentTotalPages = 1;
-  let activeAbortController = null;
+  let activeAbortController: AbortController | null = null;
 
-  function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function formatDateTime(iso) {
-    if (!iso) return 'Never';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return String(iso);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
+  const pagination = createPaginationController({
+    containerId: 'users-pagination-container',
+    summaryId: 'users-pagination-summary',
+    prevId: 'users-pagination-prev',
+    nextId: 'users-pagination-next',
+    currentId: 'users-pagination-current',
+    itemLabel: 'customers',
+    onPageChange: (newPage) => {
+      currentPage = newPage;
+      loadUsers();
+    },
+  });
 
   function renderTierBadge(tier) {
     if (tier === 'VIP') {
@@ -498,7 +459,7 @@ const pageTitle = 'Customer & Access Management';
               const totalOrders = Number(u.total_orders || 0);
               const pendingOrders = Number(u.pending_orders || 0);
               const isBlocked = u.status === 'BLOCKED';
-              const lastActiveStr = formatDateTime(u.last_login_at);
+              const lastActiveStr = formatAdminTime(u.last_login_at, 'full', 'Never');
 
               return `
                 <tr class="hover:bg-[#f5f5f7]/40 transition-colors">
@@ -567,33 +528,6 @@ const pageTitle = 'Customer & Access Management';
     container.classList.remove('hidden');
   }
 
-  function renderPagination(page, totalPages, total, limit) {
-    const container = document.getElementById('users-pagination-container');
-    const summary = document.getElementById('users-pagination-summary');
-    const prevBtn = document.getElementById('users-pagination-prev');
-    const nextBtn = document.getElementById('users-pagination-next');
-    const currentIndicator = document.getElementById('users-pagination-current');
-
-    if (!container || totalPages <= 1) {
-      if (container) container.classList.add('hidden');
-      return;
-    }
-
-    container.classList.remove('hidden');
-    currentTotalPages = totalPages;
-
-    const start = (page - 1) * limit + 1;
-    const end = Math.min(page * limit, total);
-    if (summary) {
-      summary.innerHTML = `Showing <strong class="text-[#1d1d1f]">${start}</strong> to <strong class="text-[#1d1d1f]">${end}</strong> of <strong class="text-[#1d1d1f]">${total}</strong> customers`;
-    }
-    if (currentIndicator) {
-      currentIndicator.textContent = `${page} / ${totalPages}`;
-    }
-    if (prevBtn) prevBtn.disabled = page <= 1;
-    if (nextBtn) nextBtn.disabled = page >= totalPages;
-  }
-
   async function loadUsers(updateUrl = true) {
     if (activeAbortController) {
       activeAbortController.abort();
@@ -659,7 +593,7 @@ const pageTitle = 'Customer & Access Management';
             if (skeleton) skeleton.classList.add('hidden');
             renderStats(data.stats, data.total);
             renderUsers(data.users || []);
-            renderPagination(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 30);
+            pagination.render(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 30);
           },
         }
       );
@@ -746,7 +680,7 @@ const pageTitle = 'Customer & Access Management';
             default:
               badgeHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700">${escapeHtml(order.status)}</span>`;
           }
-          const date = (order.created_at || '').slice(0, 10);
+          const date = order.created_at ? formatAdminTime(order.created_at, 'full').slice(0, 10) : '—';
           return `
             <a href="/admin/orders?search=${encodeURIComponent(order.order_no || '')}" class="block p-2.5 rounded-xl border border-black/5 hover:border-black/20 hover:bg-[#fbfbfd] transition-all bg-white">
               <div class="flex items-center justify-between mb-1">
@@ -768,7 +702,7 @@ const pageTitle = 'Customer & Access Management';
         } else {
           loginsListEl.innerHTML = recentLogins.map((login) => {
             const loc = [login.city, login.country].filter(Boolean).join(', ') || 'Global';
-            const date = (login.created_at || '').slice(0, 16).replace('T', ' ');
+            const date = login.created_at ? formatAdminTime(login.created_at, 'full') : '—';
             return `
               <div class="p-2 rounded-xl bg-[#f5f5f7] flex items-center justify-between">
                 <div>
@@ -951,20 +885,6 @@ const pageTitle = 'Customer & Access Management';
     currentSearch = val;
     currentPage = 1;
     loadUsers();
-  });
-
-  // Pagination navigation
-  document.getElementById('users-pagination-prev')?.addEventListener('click', () => {
-    if (currentPage > 1) {
-      currentPage--;
-      loadUsers();
-    }
-  });
-  document.getElementById('users-pagination-next')?.addEventListener('click', () => {
-    if (currentPage < currentTotalPages) {
-      currentPage++;
-      loadUsers();
-    }
   });
 
   // Browser back/forward navigation
