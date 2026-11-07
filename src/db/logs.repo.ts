@@ -357,15 +357,15 @@ export async function listErrorLogs(
       // Health & SLA latency filtering
       if (options.health && options.health !== 'ALL') {
         if (options.health === 'slow_only') {
-          conditions.push(`((latency_ms >= 1000 AND (error_code IS NULL OR error_code != 'WEB_VITALS')) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%'))`);
+          conditions.push(`((latency_ms >= 1000 AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%'))`);
         } else if (options.health === '500') {
-          conditions.push('latency_ms >= 500');
+          conditions.push(`(latency_ms >= 500 AND (error_code IS NULL OR error_code != 'CLIENT_NAVIGATION'))`);
         } else if (options.health === '1000') {
-          conditions.push('latency_ms >= 1000');
+          conditions.push(`(latency_ms >= 1000 AND (error_code IS NULL OR error_code != 'CLIENT_NAVIGATION'))`);
         } else if (options.health === '2500') {
-          conditions.push('latency_ms >= 2500');
+          conditions.push(`(latency_ms >= 2500 AND (error_code IS NULL OR error_code != 'CLIENT_NAVIGATION'))`);
         } else if (options.health === 'exclude_backgrounded') {
-          conditions.push(`(context_json NOT LIKE '%"wasHidden":true%' AND context_json NOT LIKE '%"rating":"backgrounded"%')`);
+          conditions.push(`(context_json IS NULL OR (context_json NOT LIKE '%"wasHidden":true%' AND context_json NOT LIKE '%"rating":"backgrounded"%'))`);
         }
       }
 
@@ -384,14 +384,22 @@ export async function listErrorLogs(
 
       if (options.search && options.search.trim()) {
         const q = `%${options.search.trim().toLowerCase()}%`;
-        conditions.push('(LOWER(message) LIKE ? OR LOWER(source) LIKE ? OR LOWER(ray_id) LIKE ? OR LOWER(user_email) LIKE ? OR LOWER(path) LIKE ? OR LOWER(client_ip) LIKE ? OR LOWER(country) LIKE ? OR LOWER(city) LIKE ?)');
-        params.push(q, q, q, q, q, q, q, q);
+        conditions.push(`(LOWER(message) LIKE ? OR LOWER(source) LIKE ? OR LOWER(ray_id) LIKE ? OR LOWER(user_email) LIKE ? OR LOWER(path) LIKE ? OR LOWER(client_ip) LIKE ? OR LOWER(country) LIKE ? OR LOWER(city) LIKE ? OR LOWER(COALESCE(error_code, '')) LIKE ?)`);
+        params.push(q, q, q, q, q, q, q, q, q);
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
       const orderClause = options.sort === 'slowest'
         ? 'ORDER BY latency_ms DESC NULLS LAST, id DESC'
         : 'ORDER BY id DESC';
+
+      const bottleneckTimeWindow = options.timeWindow === '1h'
+        ? `'-1 hour'`
+        : options.timeWindow === '24h'
+        ? `'-24 hours'`
+        : options.timeWindow === '30d'
+        ? `'-30 days'`
+        : `'-7 days'`;
 
       const [logs, countRes, statsRes, bottlenecks] = await Promise.all([
         db.query<ErrorLogRecord>(
@@ -414,7 +422,7 @@ export async function listErrorLogs(
              SUM(CASE WHEN level = 'warn' THEN 1 ELSE 0 END) as warns,
              SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as errors,
              SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) as critical,
-             SUM(CASE WHEN (latency_ms >= 1000 AND (error_code IS NULL OR error_code != 'WEB_VITALS')) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%') THEN 1 ELSE 0 END) as slow
+             SUM(CASE WHEN (latency_ms >= 1000 AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%') THEN 1 ELSE 0 END) as slow
            FROM system_error_logs
            WHERE created_at >= datetime('now', '-30 days')`
         ),
@@ -427,11 +435,11 @@ export async function listErrorLogs(
              MAX(latency_ms) as max_latency,
              SUM(CASE WHEN latency_ms >= 500 THEN 1 ELSE 0 END) as slow_count
            FROM system_error_logs
-           WHERE latency_ms IS NOT NULL AND path IS NOT NULL AND path != '' AND created_at >= datetime('now', '-7 days')
+           WHERE latency_ms IS NOT NULL AND latency_ms > 0 AND path IS NOT NULL AND path != '' AND created_at >= datetime('now', ${bottleneckTimeWindow})
              AND (method IS NULL OR method != 'CLIENT')
-             AND (error_code IS NULL OR error_code != 'CLIENT_NAVIGATION')
+             AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))
            GROUP BY path, method
-           ORDER BY avg_latency DESC
+           ORDER BY avg_latency DESC, call_count DESC
            LIMIT 8`
         ).catch(() => []),
       ]);

@@ -343,7 +343,7 @@ const pageTitle = 'System Diagnostics & Performance';
       </div>
 
       <!-- Real Data Table with Independent Scroll -->
-      <div id="table-scroll-area" class="flex-1 min-h-0 overflow-auto scrollbar-thin">
+      <div id="table-scroll-area" class="flex-1 min-h-0 overflow-auto scrollbar-thin hidden">
         <table id="logs-main-table" class="w-full text-left border-collapse table-fixed select-text">
           <thead class="sticky top-0 z-20 bg-[#f5f5f7]/95 backdrop-blur-xs border-b border-black/10 text-[#86868b] font-medium select-none shadow-2xs">
             <tr id="table-header-row">
@@ -504,7 +504,7 @@ const pageTitle = 'System Diagnostics & Performance';
     }
 
     const DEFAULT_COLUMNS: ColumnDef[] = [
-      { id: 'time', label: 'Time', defaultWidth: 100, minWidth: 80, visible: true, canHide: false },
+      { id: 'time', label: 'Time', defaultWidth: 115, minWidth: 90, visible: true, canHide: false },
       { id: 'level', label: 'Level', defaultWidth: 80, minWidth: 60, visible: true, canHide: true },
       { id: 'event', label: 'Event', defaultWidth: 110, minWidth: 80, visible: true, canHide: true },
       { id: 'method_status', label: 'Method / Status', defaultWidth: 110, minWidth: 90, visible: true, canHide: true },
@@ -524,11 +524,11 @@ const pageTitle = 'System Diagnostics & Performance';
           const parsed = JSON.parse(stored);
           return DEFAULT_COLUMNS.map((col) => {
             const found = parsed.find((p: any) => p.id === col.id);
-            return found ? { ...col, visible: found.visible, defaultWidth: found.width || col.defaultWidth } : col;
+            return found ? { ...col, visible: found.visible, defaultWidth: found.width || col.defaultWidth } : { ...col };
           });
         }
       } catch {}
-      return DEFAULT_COLUMNS;
+      return DEFAULT_COLUMNS.map((col) => ({ ...col }));
     })();
 
     let densityState: 'compact' | 'cozy' = (() => {
@@ -702,12 +702,29 @@ const pageTitle = 'System Diagnostics & Performance';
       }
       const d = new Date(str);
       if (isNaN(d.getTime())) return String(dt);
-      return d.toLocaleTimeString(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const h = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      const s = String(d.getSeconds()).padStart(2, '0');
+      return `${m}-${day} ${h}:${min}:${s}`;
+    }
+
+    function formatFullDateTime(dt: any) {
+      if (!dt) return '—';
+      let str = String(dt);
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) {
+        str = str.replace(' ', 'T') + 'Z';
+      }
+      const d = new Date(str);
+      if (isNaN(d.getTime())) return String(dt);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const h = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      const s = String(d.getSeconds()).padStart(2, '0');
+      return `${y}-${m}-${day} ${h}:${min}:${s}`;
     }
 
     function renderLevelBadge(lvl: string) {
@@ -814,6 +831,14 @@ const pageTitle = 'System Diagnostics & Performance';
       }
     }
 
+    function syncTableMinWidth() {
+      if (!logsMainTable) return;
+      const totalWidth = columnsState
+        .filter((col) => col.visible)
+        .reduce((sum, col) => sum + col.defaultWidth, 0);
+      logsMainTable.style.minWidth = `${totalWidth}px`;
+    }
+
     function renderHeader() {
       if (!tableHeaderRow) return;
 
@@ -834,6 +859,7 @@ const pageTitle = 'System Diagnostics & Performance';
         })
         .join('');
 
+      syncTableMinWidth();
       initColumnResize();
     }
 
@@ -853,6 +879,7 @@ const pageTitle = 'System Diagnostics & Performance';
           const newWidth = Math.max(col?.minWidth || 50, startWidth + delta);
           th.style.width = `${newWidth}px`;
           if (col) col.defaultWidth = newWidth;
+          syncTableMinWidth();
         }
 
         function onMouseUp() {
@@ -1017,6 +1044,7 @@ const pageTitle = 'System Diagnostics & Performance';
         const slaBadge = renderEventAwareSla(log);
         const spansBadge = renderSpansMini(log);
         const timeStr = formatTime(log.created_at);
+        const fullTimeStr = formatFullDateTime(log.created_at);
 
         const statusBadge = log.method === 'CLIENT'
           ? `<span class="px-1 py-0.2 rounded text-[9px] font-mono bg-purple-50 text-purple-700">Client</span>`
@@ -1030,7 +1058,7 @@ const pageTitle = 'System Diagnostics & Performance';
         const rowCells = visibleCols.map((col) => {
           switch (col.id) {
             case 'time':
-              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono text-[#86868b] whitespace-nowrap truncate">${timeStr}</td>`;
+              return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono text-[#86868b] whitespace-nowrap truncate" title="${fullTimeStr}">${timeStr}</td>`;
             case 'level':
               return `<td style="width: ${col.defaultWidth}px;" class="${cellPad} whitespace-nowrap">${renderLevelBadge(log.level)}</td>`;
             case 'event':
@@ -1110,7 +1138,7 @@ const pageTitle = 'System Diagnostics & Performance';
       }
       if (modalSource) modalSource.textContent = log.source || 'system';
       if (modalMessage) modalMessage.textContent = log.message || '';
-      if (modalTime) modalTime.textContent = formatTime(log.created_at);
+      if (modalTime) modalTime.textContent = formatFullDateTime(log.created_at);
       if (modalRay) modalRay.textContent = log.ray_id || '—';
       if (modalPath) modalPath.textContent = log.path || '—';
       if (modalHttp) {
@@ -1229,6 +1257,7 @@ const pageTitle = 'System Diagnostics & Performance';
       } catch (err) {
         console.error('Error fetching logs:', err);
         if (skeletonEl) skeletonEl.classList.add('hidden');
+        if (tableScrollArea) tableScrollArea.classList.add('hidden');
         if (emptyEl) emptyEl.classList.remove('hidden');
       }
     }
