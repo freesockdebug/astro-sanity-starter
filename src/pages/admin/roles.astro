@@ -377,16 +377,33 @@ const pageTitle = 'Roles & Permissions Matrix';
       inputCode.value = '';
       inputCode.disabled = false;
     }
-    if (inputName) inputName.value = '';
-    if (inputDesc) inputDesc.value = '';
+    if (inputName) {
+      inputName.value = '';
+      inputName.disabled = false;
+    }
+    if (inputDesc) {
+      inputDesc.value = '';
+      inputDesc.disabled = false;
+    }
 
     // Default scope
     const scopeRadio = document.querySelector('input[name="data_scope"][value="ALL"]') as HTMLInputElement | null;
     if (scopeRadio) scopeRadio.checked = true;
 
-    // Default menus & perms checked
-    document.querySelectorAll('input[name="menu_item"]').forEach((cb: any) => { cb.checked = false; });
-    document.querySelectorAll('input[name="perm_item"]').forEach((cb: any) => { cb.checked = false; });
+    // Reset menus & perms checked & disabled state
+    document.querySelectorAll('input[name="menu_item"]').forEach((cb: any) => {
+      cb.checked = false;
+      cb.disabled = false;
+    });
+    document.querySelectorAll('input[name="perm_item"]').forEach((cb: any) => {
+      cb.checked = false;
+      cb.disabled = false;
+    });
+
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.display = 'block';
+    }
 
     dialog.showModal();
   }

@@ -390,6 +390,15 @@ const pageTitle = 'Team Members Management';
     }, 250);
   });
 
+  function escapeHtml(str: string): string {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   async function loadCandidates(search: string) {
     if (!candidatesList) return;
     candidatesLoading?.classList.remove('hidden');
@@ -399,23 +408,30 @@ const pageTitle = 'Team Members Management';
       candidatesLoading?.classList.add('hidden');
       if (res.ok && data.candidates) {
         if (data.candidates.length === 0) {
-          candidatesList.innerHTML = `<div class="p-3 text-center text-xs text-[#86868b]">No Logto accounts found matching "${search}".</div>`;
+          candidatesList.innerHTML = `<div class="p-3 text-center text-xs text-[#86868b]">No Logto accounts found matching "${escapeHtml(search)}".</div>`;
           candidatesList.classList.remove('hidden');
           return;
         }
 
-        candidatesList.innerHTML = data.candidates.map((c: any) => `
-          <div class="candidate-row p-2.5 hover:bg-[#f5f5f7] cursor-pointer flex items-center justify-between transition-colors ${c.is_member ? 'opacity-50' : ''}" data-email="${c.email}" data-name="${c.name || ''}" data-is-member="${c.is_member ? 'true' : 'false'}">
-            <div>
-              <div class="flex items-center gap-1.5">
-                <span class="font-semibold text-xs text-[#1d1d1f]">${c.name || c.email.split('@')[0]}</span>
-                ${c.is_member ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-black/5 text-[#86868b]">Already Member</span>' : ''}
+        candidatesList.innerHTML = data.candidates.map((c: any) => {
+          const safeEmail = escapeHtml(c.email);
+          const safeName = escapeHtml(c.name || c.email.split('@')[0]);
+          const rawName = escapeHtml(c.name || '');
+          const isMember = Boolean(c.is_member);
+          const lastLogin = c.last_login_at ? escapeHtml(c.last_login_at.slice(0, 10)) : 'No login';
+          return `
+            <div class="candidate-row p-2.5 hover:bg-[#f5f5f7] cursor-pointer flex items-center justify-between transition-colors ${isMember ? 'opacity-50' : ''}" data-email="${safeEmail}" data-name="${rawName}" data-is-member="${isMember ? 'true' : 'false'}">
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-semibold text-xs text-[#1d1d1f]">${safeName}</span>
+                  ${isMember ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-black/5 text-[#86868b]">Already Member</span>' : ''}
+                </div>
+                <span class="text-[11px] font-mono text-[#86868b]">${safeEmail}</span>
               </div>
-              <span class="text-[11px] font-mono text-[#86868b]">${c.email}</span>
+              <span class="text-[10px] text-[#86868b]">${lastLogin}</span>
             </div>
-            <span class="text-[10px] text-[#86868b]">${c.last_login_at ? c.last_login_at.slice(0, 10) : 'No login'}</span>
-          </div>
-        `).join('');
+          `;
+        }).join('');
         candidatesList.classList.remove('hidden');
 
         candidatesList.querySelectorAll('.candidate-row').forEach((row) => {

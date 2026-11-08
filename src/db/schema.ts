@@ -130,6 +130,7 @@ export const DDL_STATEMENTS = [
   ('sales_manager', '销售主管', 'ALL', '["orders","users","members","logins"]', '["orders:read","orders:approve","orders:ship","orders:assign","orders:export","users:read","users:edit_tier","users:assign","members:manage"]', '负责团队管理、询盘指派调配与客户等级管理', 1),
   ('sales_rep', '跟单业务员', 'SELF_AND_POOL', '["orders","users"]', '["orders:read","orders:claim","orders:approve","orders:ship","users:read"]', '负责跟单、询盘公海认领与常规发货审批', 1),
   ('auditor', '运维审计员', 'ALL', '["logins","logs"]', '["logins:read","logs:read"]', '只读查看登录轨迹与系统诊断日志，保障系统安全', 1)`,
+  `UPDATE admin_roles SET menus_json = '["orders","users","members","roles","logins","logs","settings"]' WHERE code = 'super_admin' AND is_system = 1`,
   `INSERT OR IGNORE INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init')`,
   `CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,

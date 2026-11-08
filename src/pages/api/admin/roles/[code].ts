@@ -50,3 +50,4 @@ export const DELETE: APIRoute = async (context) => {
     message: `Role "${code}" deleted successfully`,
   });
 };
+
