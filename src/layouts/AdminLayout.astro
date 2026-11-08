@@ -1,6 +1,6 @@
 ---
 // src/layouts/AdminLayout.astro
-// Fully Decoupled B2B Admin Shell: Zero-Sanity-Overhead, Grouped Vertical Sidebar, Mobile Bottom Bar
+// Fully Decoupled B2B Admin Shell: Zero-Sanity-Overhead, Grouped Vertical Sidebar, Mobile Bottom Bar, Dynamic RBAC
 import Layout from './Layout.astro';
 import AdminSidebar from '@components/admin/AdminSidebar.astro';
 
@@ -10,6 +10,12 @@ interface Props {
   sessionEmail: string;
   pendingOrdersCount?: number;
   fullscreenWorkbench?: boolean;
+  adminName?: string;
+  roleName?: string;
+  roleCode?: string;
+  menus?: string[];
+  permissions?: string[];
+  dataScope?: string;
 }
 
 const {
@@ -18,6 +24,12 @@ const {
   sessionEmail,
   pendingOrdersCount = 0,
   fullscreenWorkbench = false,
+  adminName,
+  roleName,
+  roleCode = 'super_admin',
+  menus,
+  permissions = ['*'],
+  dataScope = 'ALL',
 } = Astro.props;
 
 const tabNames: Record<string, string> = {
@@ -29,6 +41,7 @@ const tabNames: Record<string, string> = {
 };
 
 const currentTabTitle = tabNames[currentTab] || 'Workspace';
+const canShow = (key: string) => !menus || menus.includes(key);
 ---
 
 <Layout
@@ -44,6 +57,11 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
       currentTab={currentTab}
       sessionEmail={sessionEmail}
       pendingOrdersCount={pendingOrdersCount}
+      adminName={adminName}
+      roleName={roleName}
+      roleCode={roleCode}
+      menus={menus}
+      dataScope={dataScope}
     />
 
     <!-- 2. Right Main Canvas Area -->
@@ -69,7 +87,7 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
         </div>
 
         <div class="flex items-center gap-2">
-          {pendingOrdersCount > 0 && (
+          {pendingOrdersCount > 0 && canShow('orders') && (
             <a
               href="/admin/orders?status=PENDING_APPROVAL"
               class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-mono text-[11px] font-bold"
@@ -122,65 +140,81 @@ const currentTabTitle = tabNames[currentTab] || 'Workspace';
     class="fixed bottom-0 inset-x-0 h-14 bg-white/95 backdrop-blur-md border-t border-black/10 z-30 lg:hidden flex items-center justify-around px-2 pb-[max(0px,env(safe-area-inset-bottom))] shadow-lg"
     aria-label="Mobile Quick Bottom Navigation"
   >
-    <!-- Tab 1: Orders -->
-    <a
-      href="/admin/orders"
-      class:list={[
-        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
-        currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-      ]}
-    >
-      <div class="relative">
-        <span class="text-base">📦</span>
-        {pendingOrdersCount > 0 && (
-          <span class="absolute -top-1 -right-2 bg-amber-500 text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
-            {pendingOrdersCount}
-          </span>
-        )}
-      </div>
-      <span>Orders</span>
-    </a>
+    {canShow('orders') && (
+      <a
+        href="/admin/orders"
+        class:list={[
+          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
+          currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+        ]}
+      >
+        <div class="relative">
+          <span class="text-base">📦</span>
+          {pendingOrdersCount > 0 && (
+            <span class="absolute -top-1 -right-2 bg-amber-500 text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
+              {pendingOrdersCount}
+            </span>
+          )}
+        </div>
+        <span>Orders</span>
+      </a>
+    )}
 
-    <!-- Tab 2: Customers -->
-    <a
-      href="/admin/users"
-      class:list={[
-        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
-        currentTab === 'users' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-      ]}
-    >
-      <span class="text-base">👥</span>
-      <span>Customers</span>
-    </a>
+    {canShow('users') && (
+      <a
+        href="/admin/users"
+        class:list={[
+          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+          currentTab === 'users' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+        ]}
+      >
+        <span class="text-base">👥</span>
+        <span>Customers</span>
+      </a>
+    )}
 
-    <!-- Tab 3: Security Logins -->
-    <a
-      href="/admin/logins"
-      class:list={[
-        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
-        currentTab === 'logins' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-      ]}
-    >
-      <span class="text-base">🛡️</span>
-      <span>Audit</span>
-    </a>
+    {canShow('logins') && (
+      <a
+        href="/admin/logins"
+        class:list={[
+          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+          currentTab === 'logins' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+        ]}
+      >
+        <span class="text-base">🛡️</span>
+        <span>Audit</span>
+      </a>
+    )}
 
-    <!-- Tab 4: Workspace Settings -->
-    <a
-      href="/admin/settings"
-      class:list={[
-        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
-        currentTab === 'settings' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-      ]}
-    >
-      <span class="text-base">⚙️</span>
-      <span>Settings</span>
-    </a>
+    {canShow('settings') && (
+      <a
+        href="/admin/settings"
+        class:list={[
+          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+          currentTab === 'settings' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+        ]}
+      >
+        <span class="text-base">⚙️</span>
+        <span>Settings</span>
+      </a>
+    )}
   </nav>
 
   <!-- Modals & Slide-over Drawers Slots -->
   <slot name="drawers" />
   <slot name="modals" />
+
+  <!-- Inject Client RBAC Context for Button Trimming -->
+  <script is:inline define:vars={{ permissions, roleCode, dataScope }}>
+    window.__ADMIN_PERMS__ = permissions || ['*'];
+    window.__ADMIN_ROLE__ = roleCode || 'super_admin';
+    window.__ADMIN_DATA_SCOPE__ = dataScope || 'ALL';
+    window.__hasPermission = function(code) {
+      if (!window.__ADMIN_PERMS__) return false;
+      if (window.__ADMIN_PERMS__.includes('*')) return true;
+      return window.__ADMIN_PERMS__.includes(code);
+    };
+  </script>
 
   <!-- Pure Vanilla JS for Mobile Sidebar Drawer Toggle (Zero TS syntax) -->
   <script is:inline>

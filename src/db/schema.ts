@@ -89,16 +89,56 @@ export const DDL_STATEMENTS = [
   city TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 )`,
+  `CREATE TABLE IF NOT EXISTS admin_roles (
+  code TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  data_scope TEXT NOT NULL DEFAULT 'ALL',
+  menus_json TEXT NOT NULL,
+  permissions_json TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  is_system INTEGER DEFAULT 1,
+  updated_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS admin_members (
+  email TEXT PRIMARY KEY,
+  name TEXT DEFAULT '',
+  role_code TEXT NOT NULL DEFAULT 'sales_rep',
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  created_by TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_email TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT,
+  before_json TEXT,
+  after_json TEXT,
+  diff_json TEXT,
+  client_ip TEXT,
+  country TEXT,
+  duration_ms INTEGER,
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
+  `INSERT OR IGNORE INTO admin_roles (code, name, data_scope, menus_json, permissions_json, description, is_system) VALUES
+  ('super_admin', '超级管理员', 'ALL', '["orders","users","logins","logs","settings"]', '["*"]', '全局最高权限，拥有全站所有操作及系统设置能力', 1),
+  ('sales_manager', '销售主管', 'ALL', '["orders","users","logins"]', '["orders:read","orders:approve","orders:ship","orders:assign","orders:export","users:read","users:edit_tier","users:assign"]', '负责团队管理、询盘指派调配与客户等级管理', 1),
+  ('sales_rep', '跟单业务员', 'SELF_AND_POOL', '["orders","users"]', '["orders:read","orders:claim","orders:approve","orders:ship","users:read"]', '负责跟单、询盘公海认领与常规发货审批', 1),
+  ('auditor', '运维审计员', 'ALL', '["logins","logs"]', '["logins:read","logs:read"]', '只读查看登录轨迹与系统诊断日志，保障系统安全', 1)`,
   `INSERT OR IGNORE INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init')`,
   `CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON orders(assigned_to)`,
   `CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)`,
   `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
   `CREATE INDEX IF NOT EXISTS idx_users_lower_email ON users(LOWER(email))`,
   `CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier)`,
   `CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_users_assigned_to ON users(assigned_to)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_lower_email ON orders(LOWER(buyer_email))`,
   `CREATE INDEX IF NOT EXISTS idx_user_logins_user_id ON user_logins(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_user_logins_created_at ON user_logins(created_at)`,
@@ -109,7 +149,12 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_error_logs_latency ON system_error_logs(latency_ms)`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_path ON system_error_logs(path)`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_ip ON system_error_logs(client_ip)`,
-  `CREATE INDEX IF NOT EXISTS idx_error_logs_country ON system_error_logs(country)`
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_country ON system_error_logs(country)`,
+  `CREATE INDEX IF NOT EXISTS idx_admin_members_role ON admin_members(role_code)`,
+  `CREATE INDEX IF NOT EXISTS idx_admin_members_status ON admin_members(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON admin_audit_logs(action)`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON admin_audit_logs(created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON admin_audit_logs(target_type, target_id)`
 ];
 
 export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
@@ -154,6 +199,9 @@ export async function ensureSchema(rawOrClient?: any): Promise<void> {
       'ALTER TABLE system_error_logs ADD COLUMN client_ip TEXT DEFAULT NULL',
       'ALTER TABLE system_error_logs ADD COLUMN country TEXT DEFAULT NULL',
       'ALTER TABLE system_error_logs ADD COLUMN city TEXT DEFAULT NULL',
+      'ALTER TABLE orders ADD COLUMN assigned_to TEXT DEFAULT NULL',
+      'ALTER TABLE orders ADD COLUMN assigned_at TEXT DEFAULT NULL',
+      'ALTER TABLE users ADD COLUMN assigned_to TEXT DEFAULT NULL',
     ];
 
     for (const m of columnMigrations) {

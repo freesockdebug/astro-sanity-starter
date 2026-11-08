@@ -12,11 +12,11 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
   Astro,
   cfEnv,
   '/admin/logs',
-  { skipPendingCount: true }
+  { skipPendingCount: true, requiredMenu: 'logs' }
 );
 if (redirectResponse) return redirectResponse;
 
@@ -33,6 +33,17 @@ const pageTitle = 'System Diagnostics & Performance';
 
 <AdminLayout
   title={pageTitle}
+  currentTab="logs"
+  sessionEmail={sessionUser.email}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
   currentTab="logs"
   sessionEmail={sessionUser.email}
   pendingOrdersCount={pendingOrdersCount}

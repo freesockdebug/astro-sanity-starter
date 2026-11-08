@@ -1,6 +1,7 @@
 // src/pages/api/admin/users/index.ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache, checkIsAdmin } from '@utils/auth';
+import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { checkIsAdmin } from '@utils/auth';
 import { listAdminUsers, getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -8,8 +9,8 @@ import { env as cfEnv } from 'cloudflare:workers';
 export const prerender = false;
 
 export const GET: APIRoute = async ({ request, url }) => {
-  const user = await verifyAdminAuth(request, cfEnv);
-  if (!user) {
+  const auth = await verifyAdminAuth(request, cfEnv);
+  if (!auth) {
     return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
   }
 
@@ -17,6 +18,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   const tier = url.searchParams.get('tier') || 'ALL';
   const status = url.searchParams.get('status') || 'ALL';
   const timeWindow = url.searchParams.get('timeWindow') || 'ALL';
+  const assignedTo = url.searchParams.get('assignedTo') || undefined;
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '30', 10)));
 
@@ -26,6 +28,9 @@ export const GET: APIRoute = async ({ request, url }) => {
       tier,
       status,
       timeWindow,
+      assignedTo,
+      dataScope: auth.adminContext.dataScope,
+      currentAdminEmail: auth.user.email,
       page,
       limit,
     }),
@@ -52,5 +57,3 @@ export const GET: APIRoute = async ({ request, url }) => {
     totalPages: Math.max(1, Math.ceil(result.total / limit)),
   });
 };
-
-

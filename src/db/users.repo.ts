@@ -200,9 +200,30 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       params.push(term, term, term, term);
     }
 
+    const applyUserDataScope = (targetWhere: string[], targetParams: any[], prefix = 'u.') => {
+      if (filter.dataScope === 'SELF_AND_POOL') {
+        const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
+        targetWhere.push(`(LOWER(${prefix}assigned_to) = ? OR ${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
+        targetParams.push(email);
+      } else if (filter.dataScope === 'SELF_ONLY') {
+        const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
+        targetWhere.push(`LOWER(${prefix}assigned_to) = ?`);
+        targetParams.push(email);
+      } else if (filter.assignedTo) {
+        if (filter.assignedTo === 'UNASSIGNED') {
+          targetWhere.push(`(${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
+        } else {
+          targetWhere.push(`LOWER(${prefix}assigned_to) = ?`);
+          targetParams.push(filter.assignedTo.trim().toLowerCase());
+        }
+      }
+    };
+
+    applyUserDataScope(whereClauses, params, 'u.');
+
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // Status/Tier capsules stats query: apply timeWindow and search, but exclude tier/status so each tab shows its count for the filtered window
+    // Status/Tier capsules stats query: apply timeWindow, search, and dataScope, but exclude tier/status so each tab shows its count for the filtered window
     const statsWhereClauses: string[] = [];
     const statsParams: any[] = [];
 
@@ -216,6 +237,8 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       statsWhereClauses.push('(email LIKE ? OR name LIKE ? OR company LIKE ? OR country LIKE ?)');
       statsParams.push(term, term, term, term);
     }
+
+    applyUserDataScope(statsWhereClauses, statsParams, '');
 
     const statsWhereSql = statsWhereClauses.length > 0 ? `WHERE ${statsWhereClauses.join(' AND ')}` : '';
 
@@ -285,6 +308,24 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     };
 
     return { users, total, page, limit, stats };
+  });
+}
+
+/**
+ * Assigns or reassigns a customer to a dedicated salesperson/manager (or null for pool)
+ */
+export async function assignUser(identifier: string, assignedTo: string | null): Promise<boolean> {
+  const cleanAssignedTo = assignedTo ? assignedTo.trim().toLowerCase() : null;
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const res = await db.execute(
+      `UPDATE users
+       SET assigned_to = ?,
+           updated_at = datetime('now')
+       WHERE id = ? OR LOWER(email) = ?`,
+      [cleanAssignedTo, identifier, identifier.toLowerCase()]
+    );
+    invalidateUserStatusCache(identifier, identifier);
+    return res.changes > 0;
   });
 }
 

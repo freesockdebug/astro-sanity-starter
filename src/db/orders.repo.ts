@@ -24,12 +24,26 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
   const totalQuantity = input.items.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
 
   return executeWithAutoSchema(async (db: DbClient) => {
+    // 0. Auto-assign to customer's dedicated account manager if already bound
+    let assignedTo: string | null = null;
+    let assignedAt: string | null = null;
+    try {
+      const existingUser = await db.first<{ assigned_to: string }>(
+        `SELECT assigned_to FROM users WHERE LOWER(email) = ? OR (id IS NOT NULL AND id != '' AND id = ?) LIMIT 1`,
+        [normalizedEmail, input.userId || '']
+      );
+      if (existingUser?.assigned_to) {
+        assignedTo = existingUser.assigned_to.trim().toLowerCase();
+        assignedAt = new Date().toISOString();
+      }
+    } catch {}
+
     // 1. Insert order record
     const insertOrderSql = `INSERT INTO orders (
       id, order_no, user_id, buyer_email, company_name, contact_name,
       whatsapp, destination_country, customer_notes, inquiry_type,
-      total_styles, total_quantity, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_APPROVAL')`;
+      total_styles, total_quantity, status, assigned_to, assigned_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_APPROVAL', ?, ?)`;
 
     const orderParams = [
       orderId,
@@ -44,6 +58,8 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
       input.inquiryType || 'quote_cart',
       totalStyles,
       totalQuantity,
+      assignedTo,
+      assignedAt,
     ];
 
     // 2. Prepare order line items
@@ -265,9 +281,30 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
       params.push(term, term, term);
     }
 
+    const applyDataScope = (targetWhere: string[], targetParams: any[]) => {
+      if (filter.dataScope === 'SELF_AND_POOL') {
+        const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
+        targetWhere.push('(LOWER(assigned_to) = ? OR assigned_to IS NULL OR assigned_to = "")');
+        targetParams.push(email);
+      } else if (filter.dataScope === 'SELF_ONLY') {
+        const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
+        targetWhere.push('LOWER(assigned_to) = ?');
+        targetParams.push(email);
+      } else if (filter.assignedTo) {
+        if (filter.assignedTo === 'UNASSIGNED') {
+          targetWhere.push('(assigned_to IS NULL OR assigned_to = "")');
+        } else {
+          targetWhere.push('LOWER(assigned_to) = ?');
+          targetParams.push(filter.assignedTo.trim().toLowerCase());
+        }
+      }
+    };
+
+    applyDataScope(whereClauses, params);
+
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // Status capsules stats query: apply timeWindow and search, but exclude status so each tab shows its count for the filtered window
+    // Status capsules stats query: apply timeWindow, search, and dataScope, but exclude status so each tab shows its count for the filtered window
     const statsWhereClauses: string[] = [];
     const statsParams: any[] = [];
 
@@ -281,6 +318,8 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
       statsWhereClauses.push('(order_no LIKE ? OR buyer_email LIKE ? OR company_name LIKE ?)');
       statsParams.push(term, term, term);
     }
+
+    applyDataScope(statsWhereClauses, statsParams);
 
     const statsWhereSql = statsWhereClauses.length > 0 ? `WHERE ${statsWhereClauses.join(' AND ')}` : '';
 
@@ -355,6 +394,71 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
     );
 
     return res.changes > 0;
+  });
+}
+
+/**
+ * Assigns or reassigns an order to a specific salesperson (or null for public pool)
+ */
+export async function assignOrder(orderId: string, assignedTo: string | null): Promise<boolean> {
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const clean = assignedTo ? assignedTo.trim().toLowerCase() : null;
+    const res = await db.execute(
+      `UPDATE orders
+       SET assigned_to = ?,
+           assigned_at = CASE WHEN ? IS NOT NULL THEN datetime('now') ELSE NULL END,
+           updated_at = datetime('now')
+       WHERE id = ?`,
+      [clean, clean, orderId]
+    );
+    return res.changes > 0;
+  });
+}
+
+/**
+ * Batch-assigns multiple orders to a salesperson (or unassigns to pool)
+ */
+export async function batchAssignOrders(orderIds: string[], assignedTo: string | null): Promise<number> {
+  if (!orderIds || orderIds.length === 0) return 0;
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const clean = assignedTo ? assignedTo.trim().toLowerCase() : null;
+    const placeholders = orderIds.map(() => '?').join(',');
+    const res = await db.execute(
+      `UPDATE orders
+       SET assigned_to = ?,
+           assigned_at = CASE WHEN ? IS NOT NULL THEN datetime('now') ELSE NULL END,
+           updated_at = datetime('now')
+       WHERE id IN (${placeholders})`,
+      [clean, clean, ...orderIds]
+    );
+    return res.changes;
+  });
+}
+
+/**
+ * Batch-updates order status (Approve or Reject)
+ */
+export async function batchUpdateOrderStatus(
+  orderIds: string[],
+  status: OrderStatus,
+  adminUser: string,
+  adminRemark?: string
+): Promise<number> {
+  if (!orderIds || orderIds.length === 0) return 0;
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const placeholders = orderIds.map(() => '?').join(',');
+    const res = await db.execute(
+      `UPDATE orders
+       SET status = ?,
+           admin_remark = COALESCE(?, admin_remark),
+           approved_at = CASE WHEN ? = 'APPROVED' THEN datetime('now') ELSE approved_at END,
+           shipped_at = CASE WHEN ? = 'SHIPPED' THEN datetime('now') ELSE shipped_at END,
+           shipped_by = CASE WHEN ? = 'SHIPPED' THEN ? ELSE shipped_by END,
+           updated_at = datetime('now')
+       WHERE id IN (${placeholders})`,
+      [status, adminRemark || null, status, status, status, adminUser, ...orderIds]
+    );
+    return res.changes;
   });
 }
 

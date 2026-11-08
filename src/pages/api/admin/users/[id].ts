@@ -1,14 +1,18 @@
 // src/pages/api/admin/users/[id].ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, getRuntimeEnv, getMergedAdminEmails, jsonNoCache } from '@utils/auth';
+import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { hasPermission } from '@utils/rbac';
 import {
   getUserById,
   getUserDetailsWithOrders,
   updateUserAdminMeta,
+  assignUser,
   getSystemSettings,
   type CustomerTier,
   type UserStatus,
 } from '@utils/db';
+import { recordAdminAudit } from '@utils/audit';
+import { getMergedAdminEmails } from '@utils/auth';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -18,8 +22,8 @@ const VALID_TIERS = new Set<CustomerTier>(['STANDARD', 'VIP', 'PARTNER']);
 const VALID_STATUSES = new Set<UserStatus>(['ACTIVE', 'BLOCKED']);
 
 export const GET: APIRoute = async ({ request, params }) => {
-  const user = await verifyAdminAuth(request, cfEnv);
-  if (!user) {
+  const auth = await verifyAdminAuth(request, cfEnv);
+  if (!auth) {
     return jsonNoCache({ error: 'Forbidden. Admin access required.' }, 403);
   }
 
@@ -36,9 +40,10 @@ export const GET: APIRoute = async ({ request, params }) => {
   return jsonNoCache(data);
 };
 
-export const POST: APIRoute = async ({ request, params }) => {
-  const user = await verifyAdminAuth(request, cfEnv);
-  if (!user) {
+export const POST: APIRoute = async (context) => {
+  const { request, params } = context;
+  const auth = await verifyAdminAuth(request, cfEnv);
+  if (!auth) {
     return jsonNoCache({ error: 'Forbidden. Admin access required.' }, 403);
   }
 
@@ -54,10 +59,23 @@ export const POST: APIRoute = async ({ request, params }) => {
     return jsonNoCache({ error: 'Invalid JSON payload.' }, 400);
   }
 
-  const { tier, status, adminNotes } = body || {};
+  const { tier, status, adminNotes, assignedTo } = body || {};
 
-  if (!tier && !status && adminNotes === undefined) {
-    return jsonNoCache({ error: 'At least one field (tier, status, adminNotes) is required.' }, 400);
+  if (!tier && !status && adminNotes === undefined && assignedTo === undefined) {
+    return jsonNoCache({ error: 'At least one field (tier, status, adminNotes, assignedTo) is required.' }, 400);
+  }
+
+  // Permission checks
+  if (tier && !hasPermission(auth.adminContext, 'users:edit_tier')) {
+    return jsonNoCache({ error: 'Forbidden: Missing users:edit_tier permission.' }, 403);
+  }
+
+  if (status && !hasPermission(auth.adminContext, 'users:block')) {
+    return jsonNoCache({ error: 'Forbidden: Missing users:block permission.' }, 403);
+  }
+
+  if (assignedTo !== undefined && !hasPermission(auth.adminContext, 'users:assign')) {
+    return jsonNoCache({ error: 'Forbidden: Missing users:assign permission.' }, 403);
   }
 
   // Target user validation
@@ -69,8 +87,8 @@ export const POST: APIRoute = async ({ request, params }) => {
     return jsonNoCache({ error: 'User not found' }, 404);
   }
 
-  // 1. Prevent any admin/co-admin from blocking their own active account
-  if (userId === user.id && status === 'BLOCKED') {
+  // 1. Prevent any admin from blocking their own active account
+  if (userId === auth.user.id && status === 'BLOCKED') {
     return jsonNoCache({ error: 'Operation denied: You cannot block your own admin account.' }, 400);
   }
 
@@ -92,18 +110,47 @@ export const POST: APIRoute = async ({ request, params }) => {
     return jsonNoCache({ error: 'Invalid status value. Allowed: ACTIVE, BLOCKED.' }, 400);
   }
 
-  const success = await updateUserAdminMeta(userId, {
-    tier: tier as CustomerTier | undefined,
-    status: status as UserStatus | undefined,
-    adminNotes: typeof adminNotes === 'string' ? adminNotes : undefined,
-  });
-
-  if (!success) {
-    return jsonNoCache({ error: 'User not found or update failed.' }, 404);
+  if (assignedTo !== undefined) {
+    await assignUser(userId, assignedTo ? String(assignedTo).trim().toLowerCase() : null);
   }
+
+  if (tier || status || adminNotes !== undefined) {
+    const success = await updateUserAdminMeta(userId, {
+      tier: tier as CustomerTier | undefined,
+      status: status as UserStatus | undefined,
+      adminNotes: typeof adminNotes === 'string' ? adminNotes : undefined,
+    });
+
+    if (!success) {
+      return jsonNoCache({ error: 'User not found or update failed.' }, 404);
+    }
+  }
+
+  const updatedUser = await getUserById(userId);
+
+  recordAdminAudit(context, {
+    adminEmail: auth.user.email,
+    action: 'UPDATE_USER_META',
+    targetType: 'USER',
+    targetId: userId,
+    before: {
+      tier: existingUser.tier,
+      status: existingUser.status,
+      admin_notes: existingUser.admin_notes,
+      assigned_to: existingUser.assigned_to,
+    },
+    after: {
+      tier: updatedUser?.tier,
+      status: updatedUser?.status,
+      admin_notes: updatedUser?.admin_notes,
+      assigned_to: updatedUser?.assigned_to,
+    },
+    cfEnv,
+  });
 
   return jsonNoCache({
     success: true,
     message: 'User profile updated successfully.',
+    user: updatedUser,
   });
 };

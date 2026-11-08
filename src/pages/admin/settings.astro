@@ -3,17 +3,25 @@
 // Unified Dynamic Configuration Center: D1-backed Settings & Platform Infrastructure Health
 import AdminLayout from '@layouts/AdminLayout.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
+import { listAdminMembers, listAdminRoles } from '@utils/db';
+import { DEFAULT_CARRIERS, QUICK_REPLY_TEMPLATES } from '@utils/shipping';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, pendingOrdersCount, systemSettings: settings, redirectResponse } = await requireAdminContext(
+const { sessionUser, adminContext, pendingOrdersCount, systemSettings: settings, redirectResponse } = await requireAdminContext(
   Astro,
   cfEnv,
-  '/admin/settings'
+  '/admin/settings',
+  { requiredMenu: 'settings' }
 );
 if (redirectResponse) return redirectResponse;
+
+const [members, roles] = await Promise.all([
+  listAdminMembers().catch(() => []),
+  listAdminRoles().catch(() => []),
+]);
 
 const rootAdminEmails = getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '';
 const hasLogtoOidc = !!(getRuntimeEnv('LOGTO_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_ENDPOINT', cfEnv));
@@ -29,6 +37,12 @@ const pageTitle = 'Workspace Settings';
   title={pageTitle}
   currentTab="settings"
   sessionEmail={sessionUser.email}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
   pendingOrdersCount={pendingOrdersCount}
 >
   <!-- Page Header -->
@@ -407,31 +421,135 @@ const pageTitle = 'Workspace Settings';
       </div>
     </div>
 
-    <!-- Section 4: Access Control & Security -->
+    <!-- Section 4: Enterprise RBAC & Team Member Governance -->
     <div class="p-5 sm:p-6 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-4">
-      <div class="border-b border-black/5 pb-3">
-        <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">4. Access Control & Security Governance</h2>
-        <p class="text-xs text-[#86868b] mt-0.5">Manage delegated administrators, bot protection domains, and compliance retention.</p>
+      <div class="border-b border-black/5 pb-3 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">4. Team Members & Enterprise RBAC Governance</h2>
+          <p class="text-xs text-[#86868b] mt-0.5">Manage team sales reps, managers, auditors, and role-based menu/button permissions.</p>
+        </div>
+        <button
+          type="button"
+          id="btn-open-add-member"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-2xs"
+        >
+          <span>+ Add Team Member</span>
+        </button>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- Delegated Co-Admin Emails -->
-        <div class="md:col-span-2">
-          <label for="co_admin_emails" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Delegated Co-Admin Accounts (Comma-separated)
-          </label>
-          <input
-            type="text"
-            id="co_admin_emails"
-            name="co_admin_emails"
-            value={settings.co_admin_emails}
-            placeholder="admin2@domain.com, manager@domain.com"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">
-            Grants full admin workspace rights to these authenticated accounts without needing Worker redeployment.
-          </p>
+      <!-- Add Member Inline Drawer/Form -->
+      <div id="add-member-panel" class="hidden p-4 rounded-xl bg-[#fbfbfd] border border-black/10 space-y-3">
+        <h3 class="text-xs font-bold text-[#1d1d1f]">Add / Update Team Member</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div>
+            <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Login Email *</label>
+            <input type="email" id="new-member-email" placeholder="alice@domain.com" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Display Name / Team</label>
+            <input type="text" id="new-member-name" placeholder="Alice (Europe Sales)" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+          </div>
+          <div>
+            <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Role</label>
+            <select id="new-member-role" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs font-medium">
+              <option value="sales_rep">跟单业务员 (Sales Rep - My Leads + Pool)</option>
+              <option value="sales_manager">销售主管 (Sales Manager - All Team Leads)</option>
+              <option value="auditor">运维审计员 (Auditor - Logins & Logs)</option>
+              <option value="super_admin">超级管理员 (Super Admin - Full Access)</option>
+            </select>
+          </div>
         </div>
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button type="button" id="btn-cancel-add-member" class="px-3 py-1.5 text-xs text-[#52525b] hover:text-black">Cancel</button>
+          <button type="button" id="btn-submit-add-member" class="px-4 py-1.5 text-xs font-semibold bg-black text-white rounded-xl shadow-2xs">Save Member</button>
+        </div>
+      </div>
+
+      <!-- Members Table -->
+      <div class="overflow-x-auto border border-black/5 rounded-xl">
+        <table class="w-full text-left text-xs divide-y divide-black/5">
+          <thead class="bg-[#fafafa] text-[#86868b] uppercase text-[10px] font-semibold tracking-wider">
+            <tr>
+              <th class="py-2.5 px-3">Member / Email</th>
+              <th class="py-2.5 px-3">Role</th>
+              <th class="py-2.5 px-3">Data Scope</th>
+              <th class="py-2.5 px-3">Status</th>
+              <th class="py-2.5 px-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-black/5 bg-white font-mono text-[11px]" id="members-table-body">
+            {rootAdminEmails.split(',').filter(Boolean).map((rootEmail: string) => (
+              <tr class="bg-amber-50/40">
+                <td class="py-2.5 px-3">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span class="font-semibold text-[#1d1d1f]">{rootEmail.trim()}</span>
+                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-bold uppercase">Root Env</span>
+                  </div>
+                </td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    超级管理员 (Super Admin)
+                  </span>
+                </td>
+                <td class="py-2.5 px-3 text-[#52525b]">ALL (全量数据)</td>
+                <td class="py-2.5 px-3 text-emerald-700 font-semibold">ACTIVE</td>
+                <td class="py-2.5 px-3 text-right text-[#86868b]">Fixed Root</td>
+              </tr>
+            ))}
+            {(members || []).map((m: any) => (
+              <tr class="hover:bg-[#fafafa]">
+                <td class="py-2.5 px-3">
+                  <div class="font-semibold text-[#1d1d1f] font-sans">{m.name || m.email.split('@')[0]}</div>
+                  <div class="text-[10px] text-[#86868b]">{m.email}</div>
+                </td>
+                <td class="py-2.5 px-3 font-sans">
+                  <span class:list={[
+                    'px-2 py-0.5 rounded-full text-[10px] font-bold border',
+                    m.role_code === 'super_admin' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                    m.role_code === 'sales_manager' ? 'bg-purple-50 text-purple-800 border-purple-200' :
+                    m.role_code === 'sales_rep' ? 'bg-blue-50 text-blue-800 border-blue-200' :
+                    'bg-zinc-100 text-zinc-800 border-zinc-200'
+                  ]}>
+                    {m.role?.name || m.role_code}
+                  </span>
+                </td>
+                <td class="py-2.5 px-3 text-[#52525b] font-sans">
+                  {m.role?.data_scope === 'SELF_AND_POOL' ? '公海池 + 个人名下 (Self & Pool)' : 'ALL (全量数据)'}
+                </td>
+                <td class="py-2.5 px-3 font-sans">
+                  <span class:list={[
+                    'px-1.5 py-0.5 rounded text-[10px] font-bold',
+                    m.status === 'ACTIVE' ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'
+                  ]}>
+                    {m.status}
+                  </span>
+                </td>
+                <td class="py-2.5 px-3 text-right font-sans space-x-1.5">
+                  <button
+                    type="button"
+                    class="btn-toggle-member-status text-[11px] text-blue-600 hover:underline"
+                    data-email={m.email}
+                    data-status={m.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'}
+                  >
+                    {m.status === 'ACTIVE' ? 'Disable' : 'Enable'}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-delete-member text-[11px] text-rose-600 hover:underline"
+                    data-email={m.email}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+        <input type="hidden" id="co_admin_emails" name="co_admin_emails" value={settings.co_admin_emails} />
 
         <!-- Login Retention Days -->
         <div>
@@ -451,7 +569,7 @@ const pageTitle = 'Workspace Settings';
         </div>
 
         <!-- Turnstile Hostnames -->
-        <div class="md:col-span-3">
+        <div class="md:col-span-2">
           <label for="turnstile_hostnames" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
             Turnstile Allowed Hostnames (Comma-separated)
           </label>
@@ -466,6 +584,48 @@ const pageTitle = 'Workspace Settings';
           <p class="text-[11px] text-[#86868b] mt-1">
             Leave blank to accept requests from the current request hostname automatically.
           </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: Logistics Tracking & Quick English Templates (Data Dictionary) -->
+    <div class="p-5 sm:p-6 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-4">
+      <div class="border-b border-black/5 pb-3">
+        <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">5. Shipping Carrier Tracking & Quick Reply Templates</h2>
+        <p class="text-xs text-[#86868b] mt-0.5">Pre-configured logistics tracking URL templates and English quick-reply chips for order approvals.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Logistics Carriers Dict -->
+        <div class="space-y-2">
+          <h3 class="text-xs font-bold text-[#1d1d1f]">Configured Shipping Carriers</h3>
+          <div class="border border-black/5 rounded-xl divide-y divide-black/5 text-xs bg-[#fbfbfd]">
+            {DEFAULT_CARRIERS.map((c) => (
+              <div class="p-2.5 flex items-center justify-between gap-2">
+                <div>
+                  <span class="font-semibold text-[#1d1d1f]">{c.name}</span>
+                  <p class="font-mono text-[10px] text-[#86868b] truncate max-w-[280px] sm:max-w-xs">{c.urlTemplate}</p>
+                </div>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold shrink-0">Auto-Link</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <!-- Quick Reply Templates -->
+        <div class="space-y-2">
+          <h3 class="text-xs font-bold text-[#1d1d1f]">Quick Reply English Templates</h3>
+          <div class="border border-black/5 rounded-xl divide-y divide-black/5 text-xs bg-[#fbfbfd]">
+            {QUICK_REPLY_TEMPLATES.map((t) => (
+              <div class="p-2.5 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-[#1d1d1f]">{t.label}</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-700 font-medium capitalize">{t.category}</span>
+                </div>
+                <p class="text-[11px] text-[#52525b] italic">"{t.text}"</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -756,6 +916,118 @@ const pageTitle = 'Workspace Settings';
           }
         });
       }
+
+      // Member Management Scripts
+      var openAddMemberBtn = document.getElementById('btn-open-add-member');
+      var addMemberPanel = document.getElementById('add-member-panel');
+      var cancelAddMemberBtn = document.getElementById('btn-cancel-add-member');
+      var submitAddMemberBtn = document.getElementById('btn-submit-add-member');
+
+      if (openAddMemberBtn && addMemberPanel) {
+        openAddMemberBtn.addEventListener('click', function() {
+          addMemberPanel.classList.toggle('hidden');
+        });
+      }
+      if (cancelAddMemberBtn && addMemberPanel) {
+        cancelAddMemberBtn.addEventListener('click', function() {
+          addMemberPanel.classList.add('hidden');
+        });
+      }
+
+      if (submitAddMemberBtn) {
+        submitAddMemberBtn.addEventListener('click', async function() {
+          var emailInput = document.getElementById('new-member-email');
+          var nameInput = document.getElementById('new-member-name');
+          var roleSelect = document.getElementById('new-member-role');
+
+          var email = emailInput ? emailInput.value.trim() : '';
+          var name = nameInput ? nameInput.value.trim() : '';
+          var roleCode = roleSelect ? roleSelect.value : 'sales_rep';
+
+          if (!email || !email.includes('@')) {
+            showToast('Please provide a valid email address.', false);
+            return;
+          }
+
+          submitAddMemberBtn.disabled = true;
+          submitAddMemberBtn.textContent = 'Saving...';
+
+          try {
+            var res = await fetch('/api/admin/members', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: email, name: name, roleCode: roleCode, status: 'ACTIVE' }),
+            });
+            var data = await res.json();
+            if (res.ok && data.success) {
+              showToast('Member added successfully! Refreshing...', true);
+              setTimeout(function() { window.location.reload(); }, 600);
+            } else {
+              showToast(data.error || 'Failed to save member.', false);
+            }
+          } catch (e) {
+            showToast('Network error: ' + e.message, false);
+          } finally {
+            submitAddMemberBtn.disabled = false;
+            submitAddMemberBtn.textContent = 'Save Member';
+          }
+        });
+      }
+
+      // Status toggle & delete buttons
+      document.querySelectorAll('.btn-toggle-member-status').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+          var email = btn.getAttribute('data-email');
+          var targetStatus = btn.getAttribute('data-status');
+          if (!email) return;
+
+          btn.disabled = true;
+          try {
+            var res = await fetch('/api/admin/members', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: email, status: targetStatus }),
+            });
+            var data = await res.json();
+            if (res.ok && data.success) {
+              showToast('Status updated. Refreshing...', true);
+              setTimeout(function() { window.location.reload(); }, 500);
+            } else {
+              showToast(data.error || 'Update failed', false);
+              btn.disabled = false;
+            }
+          } catch (e) {
+            showToast(e.message, false);
+            btn.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll('.btn-delete-member').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+          var email = btn.getAttribute('data-email');
+          if (!email) return;
+          if (!confirm('Are you sure you want to remove ' + email + ' from admin access?')) return;
+
+          btn.disabled = true;
+          try {
+            var res = await fetch('/api/admin/members/' + encodeURIComponent(email), {
+              method: 'DELETE',
+            });
+            var data = await res.json();
+            if (res.ok && data.success) {
+              showToast('Member removed. Refreshing...', true);
+              setTimeout(function() { window.location.reload(); }, 500);
+            } else {
+              showToast(data.error || 'Delete failed', false);
+              btn.disabled = false;
+            }
+          } catch (e) {
+            showToast(e.message, false);
+            btn.disabled = false;
+          }
+        });
+      });
     })();
   </script>
 </AdminLayout>

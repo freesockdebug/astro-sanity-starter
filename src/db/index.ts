@@ -9,4 +9,6 @@ export * from './users.repo';
 export * from './logins.repo';
 export * from './logs.repo';
 export * from './settings.repo';
+export * from './rbac.repo';
+export * from './audit.repo';
 

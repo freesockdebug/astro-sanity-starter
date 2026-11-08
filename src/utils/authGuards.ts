@@ -2,6 +2,7 @@
 // Contextual authentication guards for Buyer Workspace and Admin Portal
 import { getSessionFromRequest, checkIsAdmin, SESSION_COOKIE_NAME, type AuthUser } from './auth';
 import { getUserByIdOrEmail, getPendingOrdersCount, getSystemSettings, type UserRecord } from './db';
+import { resolveAdminContext, hasPermission, hasMenu, type AdminContextInfo } from './rbac';
 
 export const NO_CACHE_HEADERS: Record<string, string> = {
   'Content-Type': 'application/json',
@@ -118,6 +119,7 @@ export async function getBuyerContext(
 
 export interface AdminContextResult {
   sessionUser: AuthUser;
+  adminContext: AdminContextInfo;
   pendingOrdersCount: number;
   systemSettings?: any;
   redirectResponse?: Response;
@@ -125,67 +127,95 @@ export interface AdminContextResult {
 
 /**
  * Enforces admin authorization and provides pending orders count for navigation badges.
- * If unauthenticated, not an admin, or blocked, redirects safely.
+ * Evaluates D1 + KV RBAC permissions, active member status, and menu access in a single parallel query.
  */
 export async function requireAdminContext(
   astro: any,
   cfEnv?: any,
   returnPath: string = '/admin/orders',
-  options: { skipPendingCount?: boolean } = {}
+  options: { skipPendingCount?: boolean; requiredMenu?: string; requiredPerm?: string } = {}
 ): Promise<AdminContextResult> {
   const sessionUser = await getSessionFromRequest(astro, cfEnv);
 
   if (!sessionUser) {
     return {
       sessionUser: sessionUser as any,
+      adminContext: null as any,
       pendingOrdersCount: 0,
       redirectResponse: astro.redirect(`/api/auth/login?returnUrl=${encodeURIComponent(returnPath)}`),
     };
   }
 
-  // 1 & 2. Concurrently check user status in D1 and recompute admin status
-  const [dbUser, settings] = await Promise.all([
+  // Optimized: Single round of concurrent parallel resolution for DB user, settings, RBAC context, and count
+  const [dbUser, settings, pendingOrdersCount] = await Promise.all([
     getUserByIdOrEmail(sessionUser.id, sessionUser.email).catch(() => null),
     getSystemSettings(cfEnv).catch(() => null),
+    options.skipPendingCount ? Promise.resolve(0) : getPendingOrdersCount().catch(() => 0),
   ]);
 
   if (dbUser && dbUser.status === 'BLOCKED') {
     astro.cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
     return {
       sessionUser,
+      adminContext: null as any,
       pendingOrdersCount: 0,
       redirectResponse: astro.redirect('/api/auth/login?error=account_suspended'),
     };
   }
 
-  const isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv, settings?.co_admin_emails);
-  sessionUser.isAdmin = isAdmin;
+  const adminCtx = await resolveAdminContext(sessionUser.email, cfEnv, settings?.co_admin_emails);
 
-  if (!isAdmin) {
+  if (!adminCtx) {
     return {
       sessionUser,
+      adminContext: null as any,
       pendingOrdersCount: 0,
       redirectResponse: astro.redirect(`/api/auth/login?returnUrl=${encodeURIComponent(returnPath)}`),
     };
   }
 
-  let pendingOrdersCount = 0;
-  if (!options.skipPendingCount) {
-    try {
-      pendingOrdersCount = await getPendingOrdersCount();
-    } catch {
-      // Non-blocking fail-safe
-    }
+  sessionUser.isAdmin = true;
+
+  // Menu level access check
+  if (options.requiredMenu && !hasMenu(adminCtx, options.requiredMenu)) {
+    // If user lacks permission for this menu, redirect to their first allowed menu
+    const firstAllowed = adminCtx.menus[0] || 'orders';
+    return {
+      sessionUser,
+      adminContext: adminCtx,
+      pendingOrdersCount,
+      systemSettings: settings,
+      redirectResponse: astro.redirect(`/admin/${firstAllowed}`),
+    };
   }
 
-  return { sessionUser, pendingOrdersCount, systemSettings: settings };
+  // Button/Feature permission check
+  if (options.requiredPerm && !hasPermission(adminCtx, options.requiredPerm)) {
+    return {
+      sessionUser,
+      adminContext: adminCtx,
+      pendingOrdersCount,
+      systemSettings: settings,
+      redirectResponse: astro.redirect('/admin/orders'),
+    };
+  }
+
+  return {
+    sessionUser,
+    adminContext: adminCtx,
+    pendingOrdersCount,
+    systemSettings: settings,
+  };
 }
 
 /**
  * Validates request session for admin API endpoints.
- * Enforces active status (not blocked) and dynamically resolves D1 co_admin_emails in parallel.
+ * Enforces active status (not blocked) and dynamically resolves D1 + KV RBAC permissions.
  */
-export async function verifyAdminAuth(request: Request, cfEnv?: any): Promise<AuthUser | null> {
+export async function verifyAdminAuth(
+  request: Request,
+  cfEnv?: any
+): Promise<{ user: AuthUser; adminContext: AdminContextInfo } | null> {
   const sessionUser = await getSessionFromRequest(request, cfEnv);
   if (!sessionUser) return null;
 
@@ -198,8 +228,50 @@ export async function verifyAdminAuth(request: Request, cfEnv?: any): Promise<Au
     return null;
   }
 
-  sessionUser.isAdmin = checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv, settings?.co_admin_emails);
-  return sessionUser.isAdmin ? sessionUser : null;
+  const adminCtx = await resolveAdminContext(sessionUser.email, cfEnv, settings?.co_admin_emails);
+  if (!adminCtx) return null;
+
+  sessionUser.isAdmin = true;
+  return { user: sessionUser, adminContext: adminCtx };
+}
+
+/**
+ * High-precision API permission guard: checks specific button/action permission code
+ */
+export async function verifyAdminPermission(
+  request: Request,
+  requiredPerm: string,
+  cfEnv?: any
+): Promise<{ user: AuthUser; adminContext: AdminContextInfo; errorResponse: null } | { user: null; adminContext: null; errorResponse: Response }> {
+  const auth = await verifyAdminAuth(request, cfEnv);
+  if (!auth) {
+    return {
+      user: null,
+      adminContext: null,
+      errorResponse: jsonNoCache({ error: 'Unauthorized: Admin session required' }, 401),
+    };
+  }
+
+  if (!hasPermission(auth.adminContext, requiredPerm)) {
+    return {
+      user: null,
+      adminContext: null,
+      errorResponse: jsonNoCache(
+        {
+          error: 'Forbidden: Insufficient privileges',
+          requiredPermission: requiredPerm,
+          yourRole: auth.adminContext.role.code,
+        },
+        403
+      ),
+    };
+  }
+
+  return {
+    user: auth.user,
+    adminContext: auth.adminContext,
+    errorResponse: null,
+  };
 }
 
 

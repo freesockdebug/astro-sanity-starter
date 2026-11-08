@@ -12,7 +12,12 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/logins');
+const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/logins',
+  { requiredMenu: 'logins' }
+);
 if (redirectResponse) return redirectResponse;
 
 const retentionDays = systemSettings?.login_retention_days || 90;
@@ -26,6 +31,12 @@ const pageTitle = 'Login Audit Logs';
   title={pageTitle}
   currentTab="logins"
   sessionEmail={sessionUser.email}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
   pendingOrdersCount={pendingOrdersCount}
   fullscreenWorkbench={true}
 >

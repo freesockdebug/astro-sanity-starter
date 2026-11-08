@@ -197,6 +197,17 @@ export function useTableSettings(options: UseTableSettingsOptions): TableSetting
     options.headerRowEl.innerHTML = columnsState
       .filter((col) => col.visible !== false)
       .map((col) => {
+        if (col.id === 'select') {
+          return `
+            <th
+              data-col-id="select"
+              style="width: ${col.defaultWidth}px;"
+              class="py-2.5 px-2 text-center relative select-none"
+            >
+              <input type="checkbox" id="orders-select-all" class="w-4 h-4 rounded text-black accent-[#1d1d1f] cursor-pointer" title="Select all visible orders">
+            </th>
+          `;
+        }
         const isRight = col.align === 'right' || col.id === 'action';
         const isPinned = col.pinRight;
         return `

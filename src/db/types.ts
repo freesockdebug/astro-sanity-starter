@@ -15,6 +15,7 @@ export interface UserRecord {
   tier: CustomerTier;
   status: UserStatus;
   admin_notes: string;
+  assigned_to?: string | null;
   last_login_at: string;
   last_login_ip?: string;
   last_login_country?: string;
@@ -67,6 +68,8 @@ export interface OrderRecord {
   carrier: string | null;
   tracking_number: string | null;
   admin_remark: string | null;
+  assigned_to?: string | null;
+  assigned_at?: string | null;
   claimed_at: string | null;
   approved_at: string | null;
   shipped_at: string | null;
@@ -100,6 +103,9 @@ export interface ListAdminOrdersFilter {
   search?: string;
   status?: string;
   timeWindow?: string;
+  assignedTo?: string;
+  dataScope?: 'ALL' | 'SELF_AND_POOL' | 'SELF_ONLY';
+  currentAdminEmail?: string;
   page?: number;
   limit?: number;
 }
@@ -131,6 +137,9 @@ export interface ListAdminUsersFilter {
   tier?: string;
   status?: string;
   timeWindow?: string;
+  assignedTo?: string;
+  dataScope?: 'ALL' | 'SELF_AND_POOL' | 'SELF_ONLY';
+  currentAdminEmail?: string;
   page?: number;
   limit?: number;
 }

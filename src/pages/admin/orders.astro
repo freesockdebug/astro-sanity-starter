@@ -11,7 +11,12 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, systemSettings, redirectResponse } = await requireAdminContext(Astro, cfEnv, '/admin/orders', { skipPendingCount: true });
+const { sessionUser, adminContext, systemSettings, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/orders',
+  { skipPendingCount: true, requiredMenu: 'orders' }
+);
 if (redirectResponse) return redirectResponse;
 
 const defaultCarriers = ['DHL Express', 'FedEx International', 'UPS Worldwide', 'SF Express', 'Air Freight', 'Other'];
@@ -31,6 +36,12 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   title={pageTitle}
   currentTab="orders"
   sessionEmail={sessionUser.email}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
   pendingOrdersCount={0}
   fullscreenWorkbench={true}
 >
@@ -211,6 +222,11 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
             placeholder="e.g. MOQ requirements not met, out of stock yarn, duplicate order..."
             class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
           ></textarea>
+          <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
+            <span class="text-[10px] text-[#86868b]">Quick:</span>
+            <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors" data-target="reject-reason-input" data-text="Order quantity does not meet factory minimum production run (MOQ).">MOQ Not Met</button>
+            <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors" data-target="reject-reason-input" data-text="Selected specialty yarn colorway is currently out of season.">Yarn Unavailable</button>
+          </div>
         </div>
 
         <div id="reject-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-2.5 text-xs font-medium leading-relaxed"></div>
@@ -292,6 +308,11 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
               placeholder="e.g. Packed in 2 export cartons, estimated arrival Nov 12."
               class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
             ></textarea>
+            <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
+              <span class="text-[10px] text-[#86868b]">Quick:</span>
+              <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors" data-target="ship-remark" data-text="Air express dispatched. Tracking details updated above; delivery in 5-7 days.">Air 5-7d</button>
+              <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors" data-target="ship-remark" data-text="Export customs clearance complete. Flight departure scheduled tonight.">Customs Cleared</button>
+            </div>
           </div>
 
           <div id="ship-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-[11px] font-medium leading-relaxed"></div>
@@ -316,6 +337,39 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       </div>
     </dialog>
   </Fragment>
+
+  <!-- Floating Batch Operations Action Bar -->
+  <div
+    id="batch-action-bar"
+    class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#1d1d1f]/95 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3 text-xs hidden"
+  >
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span class="font-semibold"><span id="batch-selected-count">0</span> Orders Selected</span>
+    </div>
+    <div class="h-4 w-px bg-white/20"></div>
+    <button
+      type="button"
+      id="btn-batch-approve"
+      class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-white shadow-2xs active:scale-95 transition-all cursor-pointer"
+    >
+      Batch Approve
+    </button>
+    <button
+      type="button"
+      id="btn-batch-reject"
+      class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 font-semibold text-white shadow-2xs active:scale-95 transition-all cursor-pointer"
+    >
+      Batch Reject
+    </button>
+    <button
+      type="button"
+      id="btn-batch-clear"
+      class="text-zinc-400 hover:text-white px-2 cursor-pointer transition-colors"
+    >
+      Deselect
+    </button>
+  </div>
 </AdminLayout>
 
 <script>
@@ -324,15 +378,27 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
   const DEFAULT_COLUMNS: ColumnConfig[] = [
+    { id: 'select', label: 'Select', defaultWidth: 46, minWidth: 46, visible: true, canHide: false },
     { id: 'order_no', label: 'Order No / Date', defaultWidth: 160, minWidth: 120, visible: true, canHide: false },
     { id: 'buyer', label: 'Buyer / Company', defaultWidth: 200, minWidth: 140, visible: true, canHide: true },
+    { id: 'assigned_to', label: 'Assigned Rep', defaultWidth: 130, minWidth: 100, visible: true, canHide: true },
     { id: 'destination', label: 'Destination', defaultWidth: 130, minWidth: 100, visible: true, canHide: true },
     { id: 'qty', label: 'Styles / Qty', defaultWidth: 120, minWidth: 90, visible: true, canHide: true, align: 'right' },
     { id: 'status', label: 'Status', defaultWidth: 140, minWidth: 100, visible: true, canHide: true },
     { id: 'action', label: 'Fulfillment Actions', defaultWidth: 220, minWidth: 160, visible: true, canHide: false, pinRight: true, align: 'right' },
   ];
 
-  let currentOrdersList: any[] = [];
+  function resolveTrackingUrl(carrier?: string, trackingNo?: string): string {
+    if (!trackingNo) return '';
+    const cleanNo = encodeURIComponent(String(trackingNo).trim());
+    const c = String(carrier || '').toLowerCase();
+    if (c.includes('dhl')) return `https://www.dhl.com/en/express/tracking.html?AWB=${cleanNo}`;
+    if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${cleanNo}`;
+    if (c.includes('ups')) return `https://www.ups.com/track?tracknum=${cleanNo}`;
+    if (c.includes('sf') || c.includes('顺丰')) return `https://www.sf-international.com/us/en/dynamic_function/waybill/#search/bill-number/${cleanNo}`;
+    if (c.includes('ems')) return `https://www.ems.com.cn/queryList?mailNum=${cleanNo}`;
+    return `https://t.17track.net/en#nums=${cleanNo}`;
+  }
   let currentStatus = 'ALL';
   let currentSearch = '';
   let currentTimeWindow = 'ALL';
@@ -741,6 +807,12 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
 
       const cells = visibleCols.map((col) => {
         switch (col.id) {
+          case 'select':
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad} text-center">
+                <input type="checkbox" class="order-row-select-checkbox w-4 h-4 rounded text-black accent-[#1d1d1f] cursor-pointer" data-id="${safeId}">
+              </td>
+            `;
           case 'order_no':
             return `
               <td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono">
@@ -755,6 +827,35 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
                 <a href="/admin/users?search=${encodeURIComponent(order.buyer_email || '')}" class="text-[11px] text-[#86868b] hover:text-blue-600 hover:underline font-mono block truncate max-w-[180px] transition-colors" title="View customer profile">
                   ${safeEmail}
                 </a>
+              </td>
+            `;
+          case 'assigned_to':
+            if (order.assigned_to) {
+              const rep = escapeHtml(order.assigned_to.split('@')[0]);
+              return `
+                <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60" title="${escapeHtml(order.assigned_to)}">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    ${rep}
+                  </span>
+                </td>
+              `;
+            }
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                <div class="flex items-center gap-1">
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
+                    Pool
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-claim-order-row px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-2xs cursor-pointer"
+                    data-id="${safeId}"
+                    title="Claim order to your account"
+                  >
+                    Claim
+                  </button>
+                </div>
               </td>
             `;
           case 'destination':
@@ -849,7 +950,7 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
                   </div>
 
                   ${order.customer_notes ? `<div class="bg-amber-50/60 rounded-xl border border-amber-200/70 p-3.5 text-xs text-amber-950 space-y-1"><span class="text-[11px] font-semibold text-amber-900 block">Customer Procurement Notes:</span><p class="italic leading-relaxed whitespace-pre-wrap">${escapeHtml(order.customer_notes)}</p></div>` : ''}
-                  ${order.status === 'SHIPPED' ? `<div class="bg-emerald-50/70 rounded-xl border border-emerald-200 p-3.5 text-xs text-emerald-950 space-y-1"><span class="text-[11px] font-semibold text-emerald-900 block">Fulfillment Dispatched:</span><p><strong>Carrier:</strong> ${escapeHtml(order.carrier || 'Standard')}</p>${order.tracking_number ? `<p class="font-mono"><strong>Waybill No:</strong> ${escapeHtml(order.tracking_number)}</p>` : ''}${order.admin_remark ? `<p class="text-[11px] text-emerald-800">Note: ${escapeHtml(order.admin_remark)}</p>` : ''}</div>` : ''}
+                  ${order.status === 'SHIPPED' ? `<div class="bg-emerald-50/70 rounded-xl border border-emerald-200 p-3.5 text-xs text-emerald-950 space-y-1"><span class="text-[11px] font-semibold text-emerald-900 block">Fulfillment Dispatched:</span><p><strong>Carrier:</strong> ${escapeHtml(order.carrier || 'Standard')}</p>${order.tracking_number ? `<p class="font-mono"><strong>Waybill No:</strong> <a href="${resolveTrackingUrl(order.carrier, order.tracking_number)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-bold" title="Click to track with carrier">${escapeHtml(order.tracking_number)} ↗</a></p>` : ''}${order.admin_remark ? `<p class="text-[11px] text-emerald-800">Note: ${escapeHtml(order.admin_remark)}</p>` : ''}</div>` : ''}
                   ${order.status === 'REJECTED' && order.admin_remark ? `<div class="bg-rose-50 rounded-xl border border-rose-200 p-3.5 text-xs text-rose-900 space-y-1"><span class="text-[11px] font-semibold text-rose-800 block">Rejection Remark:</span><p>${escapeHtml(order.admin_remark)}</p></div>` : ''}
                 </div>
               </div>
@@ -1305,6 +1406,132 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
       if (submitBtn) submitBtn.disabled = false;
     }
   });
+
+  // Quick Reply Chip Insertion
+  document.querySelectorAll('.btn-quick-chip').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-target');
+      const text = btn.getAttribute('data-text');
+      if (!targetId || !text) return;
+      const el = document.getElementById(targetId) as HTMLInputElement | HTMLTextAreaElement | null;
+      if (el) {
+        el.value = text;
+        el.focus();
+      }
+    });
+  });
+
+  // Batch Operations & Claiming
+  const selectedOrderIds = new Set<string>();
+  const batchActionBar = document.getElementById('batch-action-bar');
+  const batchSelectedCount = document.getElementById('batch-selected-count');
+  const btnBatchApprove = document.getElementById('btn-batch-approve');
+  const btnBatchReject = document.getElementById('btn-batch-reject');
+  const btnBatchClear = document.getElementById('btn-batch-clear');
+
+  function updateBatchBar() {
+    if (!batchActionBar || !batchSelectedCount) return;
+    if (selectedOrderIds.size > 0) {
+      batchSelectedCount.textContent = String(selectedOrderIds.size);
+      batchActionBar.classList.remove('hidden');
+    } else {
+      batchActionBar.classList.add('hidden');
+    }
+  }
+
+  btnBatchClear?.addEventListener('click', () => {
+    selectedOrderIds.clear();
+    document.querySelectorAll('.order-row-select-checkbox').forEach((cb: any) => { cb.checked = false; });
+    const selectAll = document.getElementById('orders-select-all') as HTMLInputElement | null;
+    if (selectAll) selectAll.checked = false;
+    updateBatchBar();
+  });
+
+  document.addEventListener('change', (e) => {
+    const target = e.target as HTMLElement;
+    if (target && target.id === 'orders-select-all') {
+      const checked = (target as HTMLInputElement).checked;
+      document.querySelectorAll('.order-row-select-checkbox').forEach((cb: any) => {
+        cb.checked = checked;
+        const id = cb.getAttribute('data-id');
+        if (id) {
+          if (checked) selectedOrderIds.add(id);
+          else selectedOrderIds.delete(id);
+        }
+      });
+      updateBatchBar();
+    } else if (target && target.classList.contains('order-row-select-checkbox')) {
+      const cb = target as HTMLInputElement;
+      const id = cb.getAttribute('data-id');
+      if (id) {
+        if (cb.checked) selectedOrderIds.add(id);
+        else selectedOrderIds.delete(id);
+      }
+      updateBatchBar();
+    }
+  });
+
+  document.addEventListener('click', async (e) => {
+    const claimBtn = (e.target as HTMLElement).closest('.btn-claim-order-row') as HTMLElement | null;
+    if (claimBtn) {
+      const orderId = claimBtn.getAttribute('data-id');
+      if (!orderId) return;
+      claimBtn.setAttribute('disabled', 'true');
+      claimBtn.textContent = '...';
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          (window as any).__showToast?.('Order claimed successfully', 'success');
+          await clientCache.invalidatePrefix('admin:orders');
+          fetchOrders(false);
+        } else {
+          (window as any).__showToast?.(data.error || 'Failed to claim order', 'error');
+          claimBtn.removeAttribute('disabled');
+          claimBtn.textContent = 'Claim';
+        }
+      } catch (err: any) {
+        (window as any).__showToast?.(err.message || 'Network error', 'error');
+        claimBtn.removeAttribute('disabled');
+        claimBtn.textContent = 'Claim';
+      }
+    }
+  });
+
+  async function executeBatchAction(action: 'APPROVE' | 'REJECT') {
+    if (selectedOrderIds.size === 0) return;
+    const confirmMsg = action === 'APPROVE'
+      ? `Are you sure you want to approve ${selectedOrderIds.size} selected orders?`
+      : `Are you sure you want to reject ${selectedOrderIds.size} selected orders?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch('/api/admin/orders/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: Array.from(selectedOrderIds), action }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        (window as any).__showToast?.(`Batch ${action} completed: ${data.updatedCount} orders updated`, 'success');
+        selectedOrderIds.clear();
+        updateBatchBar();
+        await clientCache.invalidatePrefix('admin:orders');
+        fetchOrders(false);
+      } else {
+        (window as any).__showToast?.(data.error || 'Batch operation failed', 'error');
+      }
+    } catch (err: any) {
+      (window as any).__showToast?.(err.message || 'Network error', 'error');
+    }
+  }
+
+  btnBatchApprove?.addEventListener('click', () => executeBatchAction('APPROVE'));
+  btnBatchReject?.addEventListener('click', () => executeBatchAction('REJECT'));
 
   // Initial load
   tableSettings.renderMenu();

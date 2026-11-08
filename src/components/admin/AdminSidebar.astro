@@ -1,15 +1,47 @@
 ---
 // src/components/admin/AdminSidebar.astro
-// Unified 240px B2B Vertical Sidebar for Admin Console
+// Unified 240px B2B Vertical Sidebar for Admin Console with Dynamic RBAC Trimming
 interface Props {
   currentTab: 'orders' | 'users' | 'logins' | 'logs' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
+  adminName?: string;
+  roleName?: string;
+  roleCode?: string;
+  menus?: string[];
+  dataScope?: string;
 }
 
-const { currentTab, sessionEmail, pendingOrdersCount = 0 } = Astro.props;
+const {
+  currentTab,
+  sessionEmail,
+  pendingOrdersCount = 0,
+  adminName,
+  roleName,
+  roleCode = 'super_admin',
+  menus,
+  dataScope,
+} = Astro.props;
+
 const safeEmail = typeof sessionEmail === 'string' ? sessionEmail.trim() : '';
-const emailInitial = safeEmail ? safeEmail.slice(0, 1).toUpperCase() : 'A';
+const displayName = adminName || (safeEmail ? safeEmail.split('@')[0] : 'Admin');
+const emailInitial = displayName ? displayName.slice(0, 1).toUpperCase() : 'A';
+
+const canShow = (key: string) => !menus || menus.includes(key);
+
+const showOperations = canShow('orders') || canShow('users');
+const showSecurity = canShow('logins') || canShow('logs');
+const showConfig = canShow('settings');
+
+const roleBadgeClasses: Record<string, string> = {
+  super_admin: 'bg-amber-50 text-amber-800 border-amber-200/80',
+  sales_manager: 'bg-purple-50 text-purple-800 border-purple-200/80',
+  sales_rep: 'bg-blue-50 text-blue-800 border-blue-200/80',
+  auditor: 'bg-zinc-100 text-zinc-800 border-zinc-200',
+};
+
+const badgeClass = roleBadgeClasses[roleCode] || roleBadgeClasses.super_admin;
+const roleDisplay = roleName || (roleCode === 'sales_manager' ? 'Sales Manager' : roleCode === 'sales_rep' ? 'Sales Rep' : roleCode === 'auditor' ? 'Auditor' : 'Super Admin');
 ---
 
 <!-- Mobile Drawer Backdrop Overlay -->
@@ -57,130 +89,153 @@ const emailInitial = safeEmail ? safeEmail.slice(0, 1).toUpperCase() : 'A';
   <!-- Navigation Groups -->
   <nav class="flex-1 overflow-y-auto px-3.5 py-5 space-y-6 text-xs" aria-label="Admin Sections">
     <!-- Group 1: Business Operations -->
-    <div class="space-y-1">
-      <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
-        Operations
-      </div>
-
-      <!-- Orders -->
-      <a
-        href="/admin/orders"
-        class:list={[
-          'flex items-center justify-between px-3 py-2.5 rounded-xl font-medium transition-all group',
-          currentTab === 'orders'
-            ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
-            : 'text-[#52525b] hover:text-black hover:bg-black/5'
-        ]}
-      >
-        <div class="flex items-center gap-2.5">
-          <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-          </svg>
-          <span>Orders & Fulfillment</span>
+    {showOperations && (
+      <div class="space-y-1">
+        <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+          Operations
         </div>
-        {pendingOrdersCount > 0 && (
-          <span class:list={[
-            'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
-            currentTab === 'orders' ? 'bg-amber-400 text-amber-950' : 'bg-amber-100 text-amber-900'
-          ]}>
-            {pendingOrdersCount}
-          </span>
-        )}
-      </a>
 
-      <!-- Customers -->
-      <a
-        href="/admin/users"
-        class:list={[
-          'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
-          currentTab === 'users'
-            ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
-            : 'text-[#52525b] hover:text-black hover:bg-black/5'
-        ]}
-      >
-        <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-        <span>Customers & Access</span>
-      </a>
-    </div>
+        <!-- Orders -->
+        {canShow('orders') && (
+          <a
+            href="/admin/orders"
+            class:list={[
+              'flex items-center justify-between px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'orders'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <div class="flex items-center gap-2.5">
+              <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              <span>Orders & Fulfillment</span>
+            </div>
+            {pendingOrdersCount > 0 && (
+              <span class:list={[
+                'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
+                currentTab === 'orders' ? 'bg-amber-400 text-amber-950' : 'bg-amber-100 text-amber-900'
+              ]}>
+                {pendingOrdersCount}
+              </span>
+            )}
+          </a>
+        )}
+
+        <!-- Customers -->
+        {canShow('users') && (
+          <a
+            href="/admin/users"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'users'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <span>Customers & Access</span>
+          </a>
+        )}
+      </div>
+    )}
 
     <!-- Group 2: Security & Audit -->
-    <div class="space-y-1">
-      <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
-        Security & Audit
+    {showSecurity && (
+      <div class="space-y-1">
+        <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+          Security & Audit
+        </div>
+
+        <!-- Login Audit Logs -->
+        {canShow('logins') && (
+          <a
+            href="/admin/logins"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'logins'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <span>Login Audit Logs</span>
+          </a>
+        )}
+
+        <!-- System Diagnostics & Error Logs -->
+        {canShow('logs') && (
+          <a
+            href="/admin/logs"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'logs'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>System Diagnostics</span>
+          </a>
+        )}
       </div>
-
-      <!-- Login Audit Logs -->
-      <a
-        href="/admin/logins"
-        class:list={[
-          'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
-          currentTab === 'logins'
-            ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
-            : 'text-[#52525b] hover:text-black hover:bg-black/5'
-        ]}
-      >
-        <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-        <span>Login Audit Logs</span>
-      </a>
-
-      <!-- System Diagnostics & Error Logs -->
-      <a
-        href="/admin/logs"
-        class:list={[
-          'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
-          currentTab === 'logs'
-            ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
-            : 'text-[#52525b] hover:text-black hover:bg-black/5'
-        ]}
-      >
-        <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <span>System Diagnostics</span>
-      </a>
-    </div>
+    )}
 
     <!-- Group 3: System & Platform -->
-    <div class="space-y-1">
-      <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
-        Configuration
-      </div>
+    {showConfig && (
+      <div class="space-y-1">
+        <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+          Configuration
+        </div>
 
-      <!-- Workspace Settings -->
-      <a
-        href="/admin/settings"
-        class:list={[
-          'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
-          currentTab === 'settings'
-            ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
-            : 'text-[#52525b] hover:text-black hover:bg-black/5'
-        ]}
-      >
-        <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-        <span>Workspace Settings</span>
-      </a>
-    </div>
+        <!-- Workspace Settings -->
+        <a
+          href="/admin/settings"
+          class:list={[
+            'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+            currentTab === 'settings'
+              ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+              : 'text-[#52525b] hover:text-black hover:bg-black/5'
+          ]}
+        >
+          <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span>Workspace Settings</span>
+        </a>
+      </div>
+    )}
   </nav>
 
   <!-- Bottom Admin Account & Switch Section -->
   <div class="p-3.5 border-t border-black/5 bg-[#fafafa] space-y-2.5">
     <!-- Admin User Card -->
-    <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-xl bg-white border border-black/5">
-      <div class="w-7 h-7 rounded-lg bg-zinc-100 border border-black/10 flex items-center justify-center font-mono font-semibold text-[11px] text-[#1d1d1f] shrink-0">
+    <div class="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-white border border-black/5 shadow-2xs">
+      <div class="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center font-mono font-semibold text-xs shrink-0">
         {emailInitial}
       </div>
       <div class="min-w-0 flex-1">
-        <p class="text-[11px] font-medium font-mono text-[#1d1d1f] truncate" title={safeEmail}>
-          {safeEmail || 'admin'}
+        <p class="text-[12px] font-semibold text-[#1d1d1f] truncate" title={safeEmail}>
+          {displayName}
         </p>
-        <p class="text-[9px] text-[#86868b] uppercase tracking-wider font-semibold">Super Admin</p>
+        <div class="flex items-center gap-1.5 mt-0.5">
+          <span class:list={['inline-flex items-center px-1.5 py-0.2 rounded-md text-[9px] font-bold border', badgeClass]}>
+            {roleDisplay}
+          </span>
+          {dataScope === 'SELF_AND_POOL' && (
+            <span class="text-[9px] text-[#86868b] font-medium" title="Data scope: Self leads and public pool">
+              Pool+Self
+            </span>
+          )}
+        </div>
       </div>
     </div>
 

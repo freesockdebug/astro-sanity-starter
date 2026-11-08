@@ -13,6 +13,9 @@ const isAnalyze = process.env.ANALYZE === 'true';
 export default defineConfig({
     output: 'server',
     session: false,
+    build: {
+        inlineStylesheets: 'always'
+    },
     devToolbar: {
         enabled: false
     },
