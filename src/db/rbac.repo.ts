@@ -113,7 +113,11 @@ export async function listAdminRoles(): Promise<AdminRole[]> {
       if (res && res.length > 0) {
         return res.map(parseRoleRow);
       }
-    } catch (e) {
+    } catch (e: any) {
+      const msg = (e?.message || String(e)).toLowerCase();
+      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
+        throw e;
+      }
       console.warn('[RBAC] listAdminRoles failed, falling back to SYSTEM_ROLES:', e);
     }
     return Object.values(SYSTEM_ROLES);
@@ -125,7 +129,12 @@ export async function getAdminRole(code: string): Promise<AdminRole> {
     try {
       const row = await db.first<any>('SELECT * FROM admin_roles WHERE code = ?', [code]);
       if (row) return parseRoleRow(row);
-    } catch {}
+    } catch (e: any) {
+      const msg = (e?.message || String(e)).toLowerCase();
+      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
+        throw e;
+      }
+    }
     return SYSTEM_ROLES[code] || SYSTEM_ROLES.sales_rep;
   });
 }
@@ -160,7 +169,11 @@ export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
             })
           : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
       }));
-    } catch (e) {
+    } catch (e: any) {
+      const msg = (e?.message || String(e)).toLowerCase();
+      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
+        throw e;
+      }
       console.error('[RBAC] listAdminMembers failed:', e);
       return [];
     }
@@ -203,7 +216,11 @@ export async function getAdminMember(email: string): Promise<AdminMemberWithRole
             })
           : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
       };
-    } catch (e) {
+    } catch (e: any) {
+      const msg = (e?.message || String(e)).toLowerCase();
+      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
+        throw e;
+      }
       console.error('[RBAC] getAdminMember failed:', e);
       return null;
     }

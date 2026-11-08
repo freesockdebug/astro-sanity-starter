@@ -181,16 +181,7 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
   if (!target) return;
 
   schemaInitPromise = (async () => {
-    // 1. Ensure core tables exist first
-    if (target.batch && target.prepare) {
-      try {
-        await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
-      } catch {
-        // Sequential fallback
-      }
-    }
-
-    // 2. Idempotent column migrations for existing databases before indexes
+    // 1. Idempotent column migrations for existing databases before indexes
     const columnMigrations = [
       'ALTER TABLE system_error_logs ADD COLUMN latency_ms INTEGER DEFAULT NULL',
       'ALTER TABLE system_error_logs ADD COLUMN method TEXT DEFAULT NULL',
@@ -215,7 +206,16 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
       }
     }
 
-    // 3. Sequential execution for statements and indexes
+    // 2. Ensure core tables exist first
+    if (target.batch && target.prepare) {
+      try {
+        await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
+      } catch {
+        // Sequential fallback
+      }
+    }
+
+    // 3. Sequential execution fallback for statements and indexes
     for (const sql of DDL_STATEMENTS) {
       try {
         if (target.prepare) {
