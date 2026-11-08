@@ -6,7 +6,7 @@ import AdminSidebar from '@components/admin/AdminSidebar.astro';
 
 interface Props {
   title: string;
-  currentTab: 'orders' | 'users' | 'logins' | 'logs' | 'settings';
+  currentTab: 'orders' | 'users' | 'members' | 'roles' | 'logins' | 'logs' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
   fullscreenWorkbench?: boolean;
@@ -34,7 +34,9 @@ const {
 
 const tabNames: Record<string, string> = {
   orders: 'Orders & Fulfillment',
-  users: 'Customers & Access',
+  users: 'Customers & CRM',
+  members: 'Team Members',
+  roles: 'Roles & Permissions',
   logins: 'Login Audit Logs',
   logs: 'System Diagnostics',
   settings: 'Workspace Settings',
@@ -169,7 +171,20 @@ const canShow = (key: string) => !menus || menus.includes(key);
         ]}
       >
         <span class="text-base">👥</span>
-        <span>Customers</span>
+        <span>CRM</span>
+      </a>
+    )}
+
+    {canShow('members') && (
+      <a
+        href="/admin/members"
+        class:list={[
+          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+          currentTab === 'members' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+        ]}
+      >
+        <span class="text-base">🧑‍💼</span>
+        <span>Team</span>
       </a>
     )}
 

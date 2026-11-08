@@ -2,7 +2,7 @@
 // src/components/admin/AdminSidebar.astro
 // Unified 240px B2B Vertical Sidebar for Admin Console with Dynamic RBAC Trimming
 interface Props {
-  currentTab: 'orders' | 'users' | 'logins' | 'logs' | 'settings';
+  currentTab: 'orders' | 'users' | 'members' | 'roles' | 'logins' | 'logs' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
   adminName?: string;
@@ -30,6 +30,7 @@ const emailInitial = displayName ? displayName.slice(0, 1).toUpperCase() : 'A';
 const canShow = (key: string) => !menus || menus.includes(key);
 
 const showOperations = canShow('orders') || canShow('users');
+const showAccess = canShow('members') || canShow('roles');
 const showSecurity = canShow('logins') || canShow('logs');
 const showConfig = canShow('settings');
 
@@ -137,13 +138,58 @@ const roleDisplay = roleName || (roleCode === 'sales_manager' ? 'Sales Manager' 
             <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
-            <span>Customers & Access</span>
+            <span>Customers & CRM</span>
           </a>
         )}
       </div>
     )}
 
-    <!-- Group 2: Security & Audit -->
+    <!-- Group 2: Access & RBAC -->
+    {showAccess && (
+      <div class="space-y-1">
+        <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+          Access & RBAC
+        </div>
+
+        <!-- Team Members -->
+        {canShow('members') && (
+          <a
+            href="/admin/members"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'members'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span>Team Members</span>
+          </a>
+        )}
+
+        <!-- Roles & Permissions -->
+        {canShow('roles') && (
+          <a
+            href="/admin/roles"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'roles'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span>Roles & Permissions</span>
+          </a>
+        )}
+      </div>
+    )}
+
+    <!-- Group 3: Security & Audit -->
     {showSecurity && (
       <div class="space-y-1">
         <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">

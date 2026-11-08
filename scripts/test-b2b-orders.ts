@@ -813,6 +813,58 @@ async function runSelfCheck() {
   assert.ok(Array.isArray(auditResult.logs));
   console.log('✔ [PASS] RBAC Engine, DataScope Isolation, Customer Auto-Binding & Audit Diff verified');
 
+  // 29. RBAC Custom Role Upsert/Delete Guard, Member Workload Fields & Logto Candidate Picker
+  const { upsertAdminRole, deleteAdminRole, getMemberEmailsByRole, listCandidateLogtoUsers, listAdminMembers } = await import('../src/db/rbac.repo');
+
+  const customRoleCode = `custom_finance_${Date.now()}`;
+  await upsertAdminRole({
+    code: customRoleCode,
+    name: 'Finance Controller',
+    data_scope: 'ALL',
+    menus: ['orders', 'roles'],
+    permissions: ['orders:read', 'orders:export'],
+    description: 'Custom finance role for accounting exports',
+    is_system: false,
+  });
+
+  const testFinanceEmail = `finance-${Date.now()}@gwenvenni.com`;
+  await upsertAdminMember({
+    email: testFinanceEmail,
+    name: 'Frank Finance',
+    role_code: customRoleCode,
+    status: 'ACTIVE',
+  });
+
+  const roleEmails = await getMemberEmailsByRole(customRoleCode);
+  assert.ok(roleEmails.includes(testFinanceEmail.toLowerCase()), 'getMemberEmailsByRole should include newly assigned member');
+
+  const deleteAttempt1 = await deleteAdminRole(customRoleCode);
+  assert.strictEqual(deleteAttempt1.success, false, 'Should guard against deleting a role with active members assigned');
+
+  const deleteSystemAttempt = await deleteAdminRole('sales_rep');
+  assert.strictEqual(deleteSystemAttempt.success, false, 'Should forbid deleting built-in system role');
+
+  await upsertAdminMember({
+    email: testFinanceEmail,
+    name: 'Frank Finance',
+    role_code: 'sales_rep',
+    status: 'ACTIVE',
+  });
+  const deleteAttempt2 = await deleteAdminRole(customRoleCode);
+  assert.strictEqual(deleteAttempt2.success, true, 'Deleting unassigned custom role should succeed');
+
+  const candidates = await listCandidateLogtoUsers();
+  assert.ok(Array.isArray(candidates), 'listCandidateLogtoUsers should return array');
+
+  const memberList = await listAdminMembers();
+  const repInList = memberList.find(m => m.email.toLowerCase() === testRepEmail.toLowerCase());
+  assert.ok(repInList, 'testRepEmail should be in member list');
+  assert.strictEqual(typeof repInList.assigned_orders, 'number');
+  assert.strictEqual(typeof repInList.assigned_customers, 'number');
+  assert.strictEqual(typeof repInList.is_logto_synced, 'boolean');
+
+  console.log('✔ [PASS] RBAC Custom Role Upsert/Delete Guard, Member Workload Fields & Logto Candidate Picker verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 

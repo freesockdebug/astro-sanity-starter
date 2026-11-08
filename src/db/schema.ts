@@ -126,8 +126,8 @@ export const DDL_STATEMENTS = [
   created_at TEXT DEFAULT (datetime('now'))
 )`,
   `INSERT OR IGNORE INTO admin_roles (code, name, data_scope, menus_json, permissions_json, description, is_system) VALUES
-  ('super_admin', '超级管理员', 'ALL', '["orders","users","logins","logs","settings"]', '["*"]', '全局最高权限，拥有全站所有操作及系统设置能力', 1),
-  ('sales_manager', '销售主管', 'ALL', '["orders","users","logins"]', '["orders:read","orders:approve","orders:ship","orders:assign","orders:export","users:read","users:edit_tier","users:assign"]', '负责团队管理、询盘指派调配与客户等级管理', 1),
+  ('super_admin', '超级管理员', 'ALL', '["orders","users","members","roles","logins","logs","settings"]', '["*"]', '全局最高权限，拥有全站所有操作及系统设置能力', 1),
+  ('sales_manager', '销售主管', 'ALL', '["orders","users","members","logins"]', '["orders:read","orders:approve","orders:ship","orders:assign","orders:export","users:read","users:edit_tier","users:assign","members:manage"]', '负责团队管理、询盘指派调配与客户等级管理', 1),
   ('sales_rep', '跟单业务员', 'SELF_AND_POOL', '["orders","users"]', '["orders:read","orders:claim","orders:approve","orders:ship","users:read"]', '负责跟单、询盘公海认领与常规发货审批', 1),
   ('auditor', '运维审计员', 'ALL', '["logins","logs"]', '["logins:read","logs:read"]', '只读查看登录轨迹与系统诊断日志，保障系统安全', 1)`,
   `INSERT OR IGNORE INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init')`,

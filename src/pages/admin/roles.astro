@@ -1,0 +1,554 @@
+---
+// src/pages/admin/roles.astro
+// Visual Roles & Permissions Matrix Configuration Workbench
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { requireAdminContext } from '@utils/auth';
+import { listAdminRoles, listAdminMembers } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/roles',
+  { requiredMenu: 'roles' }
+);
+if (redirectResponse) return redirectResponse;
+
+const [roles, members] = await Promise.all([
+  listAdminRoles().catch(() => []),
+  listAdminMembers().catch(() => []),
+]);
+
+// Calculate members assigned per role
+const memberCounts: Record<string, number> = {};
+members.forEach((m: any) => {
+  memberCounts[m.role_code] = (memberCounts[m.role_code] || 0) + 1;
+});
+
+const pageTitle = 'Roles & Permissions Matrix';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="roles"
+  sessionEmail={sessionUser?.email || ''}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- 1. Header Command Bar -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2 min-w-0">
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Roles & Permissions</h1>
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+          RBAC Matrix
+        </span>
+        <span class="text-xs text-[#86868b] hidden md:inline-block">· {roles.length} roles configured</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          id="btn-create-role"
+          class="h-8 px-3.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+        >
+          <span>＋ Create Custom Role</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. Roles Grid List -->
+    <div class="flex-1 min-h-0 bg-[#f5f5f7]/40 border border-black/5 rounded-2xl p-4 sm:p-5 shadow-2xs overflow-y-auto">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {roles.map((r: any) => {
+          const count = memberCounts[r.code] || 0;
+          const isSuper = r.code === 'super_admin';
+          return (
+            <div class="bg-white border border-black/10 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-3.5 flex flex-col justify-between">
+              <div class="space-y-2">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h3 class="font-bold text-sm text-[#1d1d1f]">{r.name}</h3>
+                      <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-black/5 text-[#52525b]">
+                        {r.code}
+                      </span>
+                    </div>
+                    <p class="text-[11px] text-[#86868b] mt-0.5 leading-relaxed">
+                      {r.description || 'No description provided.'}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    {r.is_system ? (
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                        System Built-in
+                      </span>
+                    ) : (
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                        Custom Role
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <!-- Scope & Members Badge -->
+                <div class="flex items-center gap-2 pt-1">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-zinc-100 text-[#1d1d1f] border border-black/5">
+                    DataScope: {r.data_scope === 'ALL' ? 'ALL (全量公司数据)' : r.data_scope === 'SELF_AND_POOL' ? 'SELF_AND_POOL (公海+个人)' : 'SELF_ONLY (仅个人私海)'}
+                  </span>
+                  <a
+                    href="/admin/members"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition-colors"
+                  >
+                    <span>👥 {count} Member(s)</span>
+                  </a>
+                </div>
+
+                <!-- Menus Preview -->
+                <div class="pt-2 border-t border-black/5 space-y-1">
+                  <span class="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block">Visible Menus</span>
+                  <div class="flex flex-wrap gap-1">
+                    {(r.menus || []).map((m: string) => (
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#f5f5f7] text-[#1d1d1f] border border-black/5">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <!-- Permissions Preview -->
+                <div class="pt-1.5 space-y-1">
+                  <span class="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block">Granted Permissions</span>
+                  <div class="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                    {r.permissions.includes('*') ? (
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        * (All Privileges / 全权通配)
+                      </span>
+                    ) : (
+                      (r.permissions || []).map((p: string) => (
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-100 text-[#52525b]">
+                          {p}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="pt-3 border-t border-black/5 flex items-center justify-between">
+                <span class="text-[10px] text-[#86868b] font-mono">
+                  {r.updated_at ? `Updated: ${r.updated_at.slice(0, 10)}` : ''}
+                </span>
+                <div class="flex items-center gap-2">
+                  {!r.is_system && (
+                    <button
+                      type="button"
+                      class="btn-delete-role text-xs text-rose-600 hover:underline cursor-pointer"
+                      data-code={r.code}
+                      data-count={count}
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    class="btn-configure-role h-7 px-3 rounded-lg text-xs font-semibold bg-[#f5f5f7] text-[#1d1d1f] hover:bg-black hover:text-white transition-all cursor-pointer border border-black/5"
+                    data-role={JSON.stringify(r)}
+                  >
+                    {isSuper ? 'View Matrix' : 'Configure Permissions'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+
+  <!-- Role Permissions Configuration Modal -->
+  <Fragment slot="modals">
+    <dialog id="role-config-dialog" class="rounded-2xl p-0 shadow-2xl border border-black/10 backdrop:bg-black/40 max-w-xl w-full mx-auto">
+      <div class="p-5 space-y-4 bg-white max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-black/5 shrink-0">
+          <div>
+            <h3 id="role-dialog-title" class="text-sm font-bold text-[#1d1d1f]">Configure Role Permissions</h3>
+            <p class="text-[11px] text-[#86868b] mt-0.5">Control data isolation scope, visible menus, and feature buttons</p>
+          </div>
+          <button type="button" id="close-role-dialog" class="text-zinc-400 hover:text-black cursor-pointer text-base">✕</button>
+        </div>
+
+        <form id="role-config-form" class="space-y-4 overflow-y-auto flex-1 pr-1 text-xs text-[#1d1d1f]">
+          <!-- Basic Info -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold mb-1 text-[11px]">Role Code (Unique Key) *</label>
+              <input
+                type="text"
+                id="role-input-code"
+                placeholder="e.g. finance_auditor"
+                class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold mb-1 text-[11px]">Role Name (Display) *</label>
+              <input
+                type="text"
+                id="role-input-name"
+                placeholder="e.g. 财务审核员"
+                class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold mb-1 text-[11px]">Description</label>
+            <input
+              type="text"
+              id="role-input-desc"
+              placeholder="e.g. 负责核对订单款项与导出财务报表"
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
+            />
+          </div>
+
+          <!-- 1. DataScope Selection -->
+          <div class="space-y-1.5 pt-1">
+            <label class="block font-semibold text-[11px] text-[#52525b]">① Data Scope (Row-level SQL Isolation)</label>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5 text-center">
+                <input type="radio" name="data_scope" value="ALL" class="sr-only" />
+                <span class="font-semibold text-xs">ALL</span>
+                <span class="text-[10px] text-[#86868b] mt-0.5">全量公司数据</span>
+              </label>
+              <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5 text-center">
+                <input type="radio" name="data_scope" value="SELF_AND_POOL" class="sr-only" />
+                <span class="font-semibold text-xs">SELF & POOL</span>
+                <span class="text-[10px] text-[#86868b] mt-0.5">公海池 + 名下</span>
+              </label>
+              <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5 text-center">
+                <input type="radio" name="data_scope" value="SELF_ONLY" class="sr-only" />
+                <span class="font-semibold text-xs">SELF ONLY</span>
+                <span class="text-[10px] text-[#86868b] mt-0.5">仅个人私海</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 2. Visible Menus Selection -->
+          <div class="space-y-1.5 pt-2 border-t border-black/5">
+            <label class="block font-semibold text-[11px] text-[#52525b]">② Visible Navigation Menus</label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {[
+                { key: 'orders', label: '📦 Orders (/admin/orders)' },
+                { key: 'users', label: '👥 Customers (/admin/users)' },
+                { key: 'members', label: '🧑‍💼 Members (/admin/members)' },
+                { key: 'roles', label: '🔐 Roles (/admin/roles)' },
+                { key: 'logins', label: '🛡️ Audit (/admin/logins)' },
+                { key: 'logs', label: '⚠️ Logs (/admin/logs)' },
+                { key: 'settings', label: '⚙️ Settings (/admin/settings)' },
+              ].map((m) => (
+                <label class="flex items-center gap-2 p-2 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] cursor-pointer">
+                  <input type="checkbox" name="menu_item" value={m.key} class="rounded text-black accent-[#1d1d1f]" />
+                  <span class="text-[11px] font-medium truncate">{m.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <!-- 3. Fine-grained Permissions -->
+          <div class="space-y-2 pt-2 border-t border-black/5">
+            <label class="block font-semibold text-[11px] text-[#52525b]">③ Granular Action Permissions</label>
+
+            <!-- Group A: Orders -->
+            <div class="p-3 rounded-xl bg-[#f5f5f7]/60 border border-black/5 space-y-2">
+              <span class="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block">📦 Orders & Fulfillment</span>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { key: 'orders:read', label: 'orders:read (查看订单)' },
+                  { key: 'orders:claim', label: 'orders:claim (公海认领)' },
+                  { key: 'orders:approve', label: 'orders:approve (审批/驳回)' },
+                  { key: 'orders:ship', label: 'orders:ship (单号发货)' },
+                  { key: 'orders:assign', label: 'orders:assign (转派/派单)' },
+                  { key: 'orders:export', label: 'orders:export (导出 CSV)' },
+                ].map((p) => (
+                  <label class="flex items-center gap-2 text-[11px] cursor-pointer">
+                    <input type="checkbox" name="perm_item" value={p.key} class="rounded text-black accent-[#1d1d1f]" />
+                    <span class="font-mono text-[10px]">{p.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <!-- Group B: Users -->
+            <div class="p-3 rounded-xl bg-[#f5f5f7]/60 border border-black/5 space-y-2">
+              <span class="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block">👥 Customers & CRM</span>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { key: 'users:read', label: 'users:read (查看客户)' },
+                  { key: 'users:edit_tier', label: 'users:edit_tier (修改等级)' },
+                  { key: 'users:assign', label: 'users:assign (指派业务员)' },
+                  { key: 'users:block', label: 'users:block (封禁/解封)' },
+                ].map((p) => (
+                  <label class="flex items-center gap-2 text-[11px] cursor-pointer">
+                    <input type="checkbox" name="perm_item" value={p.key} class="rounded text-black accent-[#1d1d1f]" />
+                    <span class="font-mono text-[10px]">{p.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <!-- Group C: Team & System -->
+            <div class="p-3 rounded-xl bg-[#f5f5f7]/60 border border-black/5 space-y-2">
+              <span class="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block">🧑‍💼 Team, Audit & System</span>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { key: 'members:manage', label: 'members:manage (团队成员)' },
+                  { key: 'roles:manage', label: 'roles:manage (角色配置)' },
+                  { key: 'logins:read', label: 'logins:read (登录审计)' },
+                  { key: 'logs:read', label: 'logs:read (系统诊断)' },
+                  { key: 'settings:manage', label: 'settings:manage (系统参数)' },
+                ].map((p) => (
+                  <label class="flex items-center gap-2 text-[11px] cursor-pointer">
+                    <input type="checkbox" name="perm_item" value={p.key} class="rounded text-black accent-[#1d1d1f]" />
+                    <span class="font-mono text-[10px]">{p.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div id="role-dialog-error" class="hidden p-2.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200"></div>
+        </form>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-black/5 shrink-0">
+          <button
+            type="button"
+            id="cancel-role-dialog"
+            class="h-8 px-3 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] transition-all cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            id="submit-role-btn"
+            class="h-8 px-4 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer shadow-2xs"
+          >
+            Save Permissions
+          </button>
+        </div>
+      </div>
+    </dialog>
+  </Fragment>
+</AdminLayout>
+
+<script>
+  function showToast(msg: string, success: boolean = true) {
+    (window as any).__showToast?.(msg, success ? 'success' : 'error');
+  }
+
+  const dialog = document.getElementById('role-config-dialog') as HTMLDialogElement | null;
+  const dialogTitle = document.getElementById('role-dialog-title');
+  const closeBtn = document.getElementById('close-role-dialog');
+  const cancelBtn = document.getElementById('cancel-role-dialog');
+  const submitBtn = document.getElementById('submit-role-btn') as HTMLButtonElement | null;
+
+  const inputCode = document.getElementById('role-input-code') as HTMLInputElement | null;
+  const inputName = document.getElementById('role-input-name') as HTMLInputElement | null;
+  const inputDesc = document.getElementById('role-input-desc') as HTMLInputElement | null;
+  const errorEl = document.getElementById('role-dialog-error');
+
+  let currentEditingCode = '';
+
+  function openCreate() {
+    if (!dialog) return;
+    currentEditingCode = '';
+    if (dialogTitle) dialogTitle.textContent = 'Create Custom Role';
+    if (errorEl) errorEl.classList.add('hidden');
+    if (inputCode) {
+      inputCode.value = '';
+      inputCode.disabled = false;
+    }
+    if (inputName) inputName.value = '';
+    if (inputDesc) inputDesc.value = '';
+
+    // Default scope
+    const scopeRadio = document.querySelector('input[name="data_scope"][value="ALL"]') as HTMLInputElement | null;
+    if (scopeRadio) scopeRadio.checked = true;
+
+    // Default menus & perms checked
+    document.querySelectorAll('input[name="menu_item"]').forEach((cb: any) => { cb.checked = false; });
+    document.querySelectorAll('input[name="perm_item"]').forEach((cb: any) => { cb.checked = false; });
+
+    dialog.showModal();
+  }
+
+  function openEdit(role: any) {
+    if (!dialog) return;
+    currentEditingCode = role.code;
+    const isSuper = role.code === 'super_admin';
+    if (dialogTitle) dialogTitle.textContent = isSuper ? 'View Super Admin Permissions (Fixed)' : `Configure: ${role.name}`;
+    if (errorEl) errorEl.classList.add('hidden');
+
+    if (inputCode) {
+      inputCode.value = role.code;
+      inputCode.disabled = true;
+    }
+    if (inputName) {
+      inputName.value = role.name;
+      inputName.disabled = isSuper;
+    }
+    if (inputDesc) {
+      inputDesc.value = role.description || '';
+      inputDesc.disabled = isSuper;
+    }
+
+    const scopeRadio = document.querySelector(`input[name="data_scope"][value="${role.data_scope || 'ALL'}"]`) as HTMLInputElement | null;
+    if (scopeRadio) scopeRadio.checked = true;
+
+    const roleMenus = new Set(role.menus || []);
+    document.querySelectorAll('input[name="menu_item"]').forEach((cb: any) => {
+      cb.checked = isSuper || roleMenus.has(cb.value);
+      cb.disabled = isSuper;
+    });
+
+    const isAllPerms = (role.permissions || []).includes('*');
+    const rolePerms = new Set(role.permissions || []);
+    document.querySelectorAll('input[name="perm_item"]').forEach((cb: any) => {
+      cb.checked = isSuper || isAllPerms || rolePerms.has(cb.value);
+      cb.disabled = isSuper;
+    });
+
+    if (submitBtn) {
+      submitBtn.disabled = isSuper;
+      submitBtn.style.display = isSuper ? 'none' : 'block';
+    }
+
+    dialog.showModal();
+  }
+
+  function closeModal() {
+    dialog?.close();
+  }
+
+  document.getElementById('btn-create-role')?.addEventListener('click', openCreate);
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+
+  document.querySelectorAll('.btn-configure-role').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const roleRaw = btn.getAttribute('data-role');
+      if (!roleRaw) return;
+      try {
+        const role = JSON.parse(roleRaw);
+        openEdit(role);
+      } catch {}
+    });
+  });
+
+  // Submit Save
+  submitBtn?.addEventListener('click', async () => {
+    const code = (inputCode?.value || '').trim().toLowerCase();
+    const name = (inputName?.value || '').trim();
+    const description = (inputDesc?.value || '').trim();
+
+    const scopeRadio = document.querySelector('input[name="data_scope"]:checked') as HTMLInputElement | null;
+    const dataScope = scopeRadio?.value || 'ALL';
+
+    const menus: string[] = [];
+    document.querySelectorAll('input[name="menu_item"]:checked').forEach((cb: any) => {
+      menus.push(cb.value);
+    });
+
+    const permissions: string[] = [];
+    document.querySelectorAll('input[name="perm_item"]:checked').forEach((cb: any) => {
+      permissions.push(cb.value);
+    });
+
+    if (!code) {
+      if (errorEl) {
+        errorEl.textContent = 'Please enter a role code (e.g. warehouse_clerk).';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+    if (!name) {
+      if (errorEl) {
+        errorEl.textContent = 'Please enter a display name.';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+    }
+
+    try {
+      const res = await fetch('/api/admin/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name, description, dataScope, menus, permissions }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || 'Role permissions updated successfully!', true);
+        closeModal();
+        setTimeout(() => window.location.reload(), 450);
+      } else {
+        if (errorEl) {
+          errorEl.textContent = data.error || 'Failed to save role';
+          errorEl.classList.remove('hidden');
+        }
+      }
+    } catch (err: any) {
+      if (errorEl) {
+        errorEl.textContent = err.message || 'Network error';
+        errorEl.classList.remove('hidden');
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save Permissions';
+      }
+    }
+  });
+
+  // Delete Custom Role
+  document.querySelectorAll('.btn-delete-role').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const code = btn.getAttribute('data-code');
+      const count = Number(btn.getAttribute('data-count') || 0);
+      if (!code) return;
+      if (count > 0) {
+        alert(`Cannot delete role "${code}": There are ${count} team member(s) currently assigned to this role. Please reassign them first.`);
+        return;
+      }
+      if (!confirm(`Are you sure you want to delete role "${code}"?`)) return;
+
+      try {
+        const res = await fetch(`/api/admin/roles/${encodeURIComponent(code)}`, {
+          method: 'DELETE',
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Role "${code}" deleted.`, true);
+          setTimeout(() => window.location.reload(), 400);
+        } else {
+          showToast(data.error || 'Failed to delete role', false);
+        }
+      } catch (e: any) {
+        showToast(e.message, false);
+      }
+    });
+  });
+</script>

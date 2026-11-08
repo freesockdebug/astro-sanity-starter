@@ -1,0 +1,567 @@
+---
+// src/pages/admin/members.astro
+// Enterprise Team Member Management with Logto User Pool Integration & Direct Role Switching
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
+import { listAdminMembers, listAdminRoles } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/members',
+  { requiredMenu: 'members' }
+);
+if (redirectResponse) return redirectResponse;
+
+const rootAdminEmailsRaw = getRuntimeEnv('ADMIN_EMAILS', cfEnv) || 'forhaisome@gmail.com';
+const rootAdminEmails = rootAdminEmailsRaw.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
+
+const [members, roles] = await Promise.all([
+  listAdminMembers().catch(() => []),
+  listAdminRoles().catch(() => []),
+]);
+
+const pageTitle = 'Team Members Management';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="members"
+  sessionEmail={sessionUser?.email || ''}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- 1. Header Command Bar -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2 min-w-0">
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Team Members</h1>
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+          Logto Connected
+        </span>
+        <span class="text-xs text-[#86868b] hidden md:inline-block">· {members.length + rootAdminEmails.length} staff accounts</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          id="btn-open-add-dialog"
+          class="h-8 px-3.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+        >
+          <span>＋ Add Member</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. Main Content Card -->
+    <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl p-4 sm:p-5 shadow-2xs overflow-y-auto">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-black/10 text-[#86868b] text-[11px] font-medium uppercase tracking-wider">
+              <th class="pb-3 px-3">Team Member</th>
+              <th class="pb-3 px-3">Logto Binding</th>
+              <th class="pb-3 px-3">Assigned Role</th>
+              <th class="pb-3 px-3">Data Scope</th>
+              <th class="pb-3 px-3">Active Workload</th>
+              <th class="pb-3 px-3">Last Active</th>
+              <th class="pb-3 px-3">Status</th>
+              <th class="pb-3 px-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-black/5">
+            <!-- Root Admins (Fixed by Environment) -->
+            {rootAdminEmails.map((email: string) => (
+              <tr class="bg-amber-50/30">
+                <td class="py-3 px-3">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                      {email[0]}
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-semibold text-[#1d1d1f]">{email.split('@')[0]}</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-bold uppercase">Root Env</span>
+                      </div>
+                      <span class="text-[#86868b] font-mono text-[11px]">{email}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-3 px-3">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Logto Synced
+                  </span>
+                </td>
+                <td class="py-3 px-3 font-semibold text-amber-900">
+                  超级管理员 (Super Admin)
+                </td>
+                <td class="py-3 px-3 text-[#52525b]">
+                  <span class="px-2 py-0.5 rounded-md text-[10px] bg-black/5 font-mono">ALL (全量)</span>
+                </td>
+                <td class="py-3 px-3 text-[#86868b] italic">Full Workspace Access</td>
+                <td class="py-3 px-3 text-[#86868b]">Root Security Principal</td>
+                <td class="py-3 px-3">
+                  <span class="text-emerald-700 font-semibold">ACTIVE</span>
+                </td>
+                <td class="py-3 px-3 text-right text-[#86868b] font-mono text-[11px]">Fixed Root</td>
+              </tr>
+            ))}
+
+            <!-- Configured Team Members -->
+            {members.map((m: any) => (
+              <tr class="hover:bg-[#fbfbfd] transition-colors">
+                <td class="py-3 px-3">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                      {(m.name || m.email)[0]}
+                    </div>
+                    <div>
+                      <span class="font-semibold text-[#1d1d1f] block">{m.name || m.email.split('@')[0]}</span>
+                      <span class="text-[#86868b] font-mono text-[11px] block">{m.email}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-3 px-3">
+                  {m.is_logto_synced ? (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200" title="Account has signed in via Logto">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      Logto Synced
+                    </span>
+                  ) : (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200" title="Pre-authorized: will auto-bind on user's first Logto sign-in">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                      Pending Logto Login
+                    </span>
+                  )}
+                </td>
+                <td class="py-3 px-3">
+                  <select
+                    class="select-member-role text-xs rounded-lg px-2 py-1 bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-semibold text-[#1d1d1f] cursor-pointer"
+                    data-email={m.email}
+                    data-status={m.status}
+                    data-name={m.name}
+                  >
+                    {roles.map((r: any) => (
+                      <option value={r.code} selected={m.role_code === r.code}>
+                        {r.name} ({r.code})
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td class="py-3 px-3">
+                  <span class="px-2 py-0.5 rounded-md text-[10px] bg-black/5 font-mono text-[#52525b]">
+                    {m.role?.data_scope || 'ALL'}
+                  </span>
+                </td>
+                <td class="py-3 px-3">
+                  <div class="flex items-center gap-2">
+                    <a
+                      href={`/admin/orders?assignedTo=${encodeURIComponent(m.email)}`}
+                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 transition-colors"
+                      title="View orders assigned to this rep"
+                    >
+                      <span>📦 {m.assigned_orders || 0}</span>
+                    </a>
+                    <a
+                      href={`/admin/users?assignedTo=${encodeURIComponent(m.email)}`}
+                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition-colors"
+                      title="View customers assigned to this rep"
+                    >
+                      <span>👥 {m.assigned_customers || 0}</span>
+                    </a>
+                  </div>
+                </td>
+                <td class="py-3 px-3 text-[#86868b] text-[11px]">
+                  {m.last_login_at ? (
+                    <div>
+                      <span class="text-[#1d1d1f] block">{m.last_login_at.slice(0, 16)}</span>
+                      {m.last_location && <span class="text-[10px]">📍 {m.last_location}</span>}
+                    </div>
+                  ) : (
+                    <span class="italic text-zinc-400">Never signed in</span>
+                  )}
+                </td>
+                <td class="py-3 px-3">
+                  <span class:list={[
+                    'px-2 py-0.5 rounded-full text-[10px] font-bold border',
+                    m.status === 'ACTIVE'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-rose-50 text-rose-800 border-rose-200'
+                  ]}>
+                    {m.status}
+                  </span>
+                </td>
+                <td class="py-3 px-3 text-right space-x-2">
+                  <button
+                    type="button"
+                    class="btn-toggle-status text-blue-600 hover:underline cursor-pointer"
+                    data-email={m.email}
+                    data-status={m.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'}
+                    data-name={m.name}
+                    data-role={m.role_code}
+                  >
+                    {m.status === 'ACTIVE' ? 'Disable' : 'Enable'}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-delete-member text-rose-600 hover:underline cursor-pointer"
+                    data-email={m.email}
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Member Modal -->
+  <Fragment slot="modals">
+    <dialog id="add-member-dialog" class="rounded-2xl p-0 shadow-2xl border border-black/10 backdrop:bg-black/40 max-w-md w-full mx-auto">
+      <div class="p-5 space-y-4 bg-white">
+        <div class="flex items-center justify-between pb-3 border-b border-black/5">
+          <div>
+            <h3 class="text-sm font-bold text-[#1d1d1f]">Add Team Member</h3>
+            <p class="text-[11px] text-[#86868b] mt-0.5">Authorize a Logto user as an internal team member</p>
+          </div>
+          <button type="button" id="close-add-dialog" class="text-zinc-400 hover:text-black cursor-pointer text-base">✕</button>
+        </div>
+
+        <!-- Mode Toggle Tabs -->
+        <div class="flex items-center gap-1 bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5">
+          <button type="button" id="tab-choose-logto" class="flex-1 py-1 rounded-lg text-xs font-semibold bg-white text-[#1d1d1f] shadow-2xs transition-all cursor-pointer">
+            Select Logto User
+          </button>
+          <button type="button" id="tab-manual-email" class="flex-1 py-1 rounded-lg text-xs font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer">
+            Pre-authorize Email
+          </button>
+        </div>
+
+        <!-- Logto Search Section -->
+        <div id="section-logto-picker" class="space-y-2">
+          <label class="block text-xs font-semibold text-[#1d1d1f]">Search Registered Logto Accounts</label>
+          <input
+            type="text"
+            id="candidate-search-input"
+            placeholder="Search by name or email..."
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans"
+          />
+          <div id="candidates-loading" class="text-[11px] text-[#86868b] hidden">Loading accounts...</div>
+          <div id="candidates-list" class="max-h-48 overflow-y-auto divide-y divide-black/5 border border-black/10 rounded-xl bg-white hidden">
+            <!-- Dynamically populated candidate items -->
+          </div>
+        </div>
+
+        <!-- Inputs Section -->
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Staff Member Email *</label>
+            <input
+              type="email"
+              id="input-member-email"
+              placeholder="e.g. alice@gwenvenni.com"
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-mono"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Display Name</label>
+            <input
+              type="text"
+              id="input-member-name"
+              placeholder="e.g. Alice Wang - Europe Lead"
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Assigned Role *</label>
+            <select
+              id="select-member-role"
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans font-medium cursor-pointer"
+            >
+              {roles.map((r: any) => (
+                <option value={r.code}>
+                  {r.name} ({r.code}) - {r.data_scope}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div id="add-member-error" class="hidden p-2.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200"></div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-black/5">
+          <button
+            type="button"
+            id="cancel-add-dialog"
+            class="h-8 px-3 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] transition-all cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            id="submit-add-member"
+            class="h-8 px-4 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer shadow-2xs"
+          >
+            Authorize Member
+          </button>
+        </div>
+      </div>
+    </dialog>
+  </Fragment>
+</AdminLayout>
+
+<script>
+  function showToast(msg: string, success: boolean = true) {
+    (window as any).__showToast?.(msg, success ? 'success' : 'error');
+  }
+
+  const addDialog = document.getElementById('add-member-dialog') as HTMLDialogElement | null;
+  const btnOpenAdd = document.getElementById('btn-open-add-dialog');
+  const btnCloseAdd = document.getElementById('close-add-dialog');
+  const btnCancelAdd = document.getElementById('cancel-add-dialog');
+  const btnSubmitAdd = document.getElementById('submit-add-member');
+
+  const tabChooseLogto = document.getElementById('tab-choose-logto');
+  const tabManualEmail = document.getElementById('tab-manual-email');
+  const sectionLogtoPicker = document.getElementById('section-logto-picker');
+
+  const candidateInput = document.getElementById('candidate-search-input') as HTMLInputElement | null;
+  const candidatesLoading = document.getElementById('candidates-loading');
+  const candidatesList = document.getElementById('candidates-list');
+
+  const inputEmail = document.getElementById('input-member-email') as HTMLInputElement | null;
+  const inputName = document.getElementById('input-member-name') as HTMLInputElement | null;
+  const selectRole = document.getElementById('select-member-role') as HTMLSelectElement | null;
+  const errorEl = document.getElementById('add-member-error');
+
+  function openModal() {
+    if (!addDialog) return;
+    if (errorEl) errorEl.classList.add('hidden');
+    if (inputEmail) inputEmail.value = '';
+    if (inputName) inputName.value = '';
+    if (candidateInput) candidateInput.value = '';
+    loadCandidates('');
+    addDialog.showModal();
+  }
+
+  function closeModal() {
+    addDialog?.close();
+  }
+
+  btnOpenAdd?.addEventListener('click', openModal);
+  btnCloseAdd?.addEventListener('click', closeModal);
+  btnCancelAdd?.addEventListener('click', closeModal);
+
+  // Tab switching
+  tabChooseLogto?.addEventListener('click', () => {
+    tabChooseLogto.className = 'flex-1 py-1 rounded-lg text-xs font-semibold bg-white text-[#1d1d1f] shadow-2xs transition-all cursor-pointer';
+    tabManualEmail?.setAttribute('class', 'flex-1 py-1 rounded-lg text-xs font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer');
+    sectionLogtoPicker?.classList.remove('hidden');
+  });
+
+  tabManualEmail?.addEventListener('click', () => {
+    tabManualEmail.className = 'flex-1 py-1 rounded-lg text-xs font-semibold bg-white text-[#1d1d1f] shadow-2xs transition-all cursor-pointer';
+    tabChooseLogto?.setAttribute('class', 'flex-1 py-1 rounded-lg text-xs font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer');
+    sectionLogtoPicker?.classList.add('hidden');
+  });
+
+  // Candidate loading
+  let debounceTimer: any = null;
+  candidateInput?.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      loadCandidates(candidateInput.value.trim());
+    }, 250);
+  });
+
+  async function loadCandidates(search: string) {
+    if (!candidatesList) return;
+    candidatesLoading?.classList.remove('hidden');
+    try {
+      const res = await fetch(`/api/admin/members?candidates=true&search=${encodeURIComponent(search)}`);
+      const data = await res.json();
+      candidatesLoading?.classList.add('hidden');
+      if (res.ok && data.candidates) {
+        if (data.candidates.length === 0) {
+          candidatesList.innerHTML = `<div class="p-3 text-center text-xs text-[#86868b]">No Logto accounts found matching "${search}".</div>`;
+          candidatesList.classList.remove('hidden');
+          return;
+        }
+
+        candidatesList.innerHTML = data.candidates.map((c: any) => `
+          <div class="candidate-row p-2.5 hover:bg-[#f5f5f7] cursor-pointer flex items-center justify-between transition-colors ${c.is_member ? 'opacity-50' : ''}" data-email="${c.email}" data-name="${c.name || ''}" data-is-member="${c.is_member ? 'true' : 'false'}">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="font-semibold text-xs text-[#1d1d1f]">${c.name || c.email.split('@')[0]}</span>
+                ${c.is_member ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-black/5 text-[#86868b]">Already Member</span>' : ''}
+              </div>
+              <span class="text-[11px] font-mono text-[#86868b]">${c.email}</span>
+            </div>
+            <span class="text-[10px] text-[#86868b]">${c.last_login_at ? c.last_login_at.slice(0, 10) : 'No login'}</span>
+          </div>
+        `).join('');
+        candidatesList.classList.remove('hidden');
+
+        candidatesList.querySelectorAll('.candidate-row').forEach((row) => {
+          row.addEventListener('click', () => {
+            const email = row.getAttribute('data-email');
+            const name = row.getAttribute('data-name');
+            if (email && inputEmail) inputEmail.value = email;
+            if (name && inputName) inputName.value = name;
+            candidatesList.classList.add('hidden');
+          });
+        });
+      }
+    } catch {
+      candidatesLoading?.classList.add('hidden');
+    }
+  }
+
+  // Submit Add Member
+  btnSubmitAdd?.addEventListener('click', async () => {
+    const email = inputEmail?.value.trim().toLowerCase();
+    const name = inputName?.value.trim();
+    const roleCode = selectRole?.value;
+
+    if (!email || !email.includes('@')) {
+      if (errorEl) {
+        errorEl.textContent = 'Please enter a valid email address.';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (btnSubmitAdd) {
+      btnSubmitAdd.setAttribute('disabled', 'true');
+      btnSubmitAdd.textContent = 'Saving...';
+    }
+
+    try {
+      const res = await fetch('/api/admin/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name, roleCode, status: 'ACTIVE' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Member ${email} authorized successfully!`, true);
+        closeModal();
+        setTimeout(() => window.location.reload(), 400);
+      } else {
+        if (errorEl) {
+          errorEl.textContent = data.error || 'Failed to authorize member';
+          errorEl.classList.remove('hidden');
+        }
+      }
+    } catch (err: any) {
+      if (errorEl) {
+        errorEl.textContent = err.message || 'Network error';
+        errorEl.classList.remove('hidden');
+      }
+    } finally {
+      if (btnSubmitAdd) {
+        btnSubmitAdd.removeAttribute('disabled');
+        btnSubmitAdd.textContent = 'Authorize Member';
+      }
+    }
+  });
+
+  // Role Inline Dropdown Switching
+  document.querySelectorAll('.select-member-role').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      const email = sel.getAttribute('data-email');
+      const status = sel.getAttribute('data-status') || 'ACTIVE';
+      const name = sel.getAttribute('data-name') || '';
+      const newRole = (sel as HTMLSelectElement).value;
+      if (!email) return;
+
+      (sel as HTMLSelectElement).disabled = true;
+      try {
+        const res = await fetch('/api/admin/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, roleCode: newRole, status, name }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Role updated to ${newRole}. Refreshing...`, true);
+          setTimeout(() => window.location.reload(), 400);
+        } else {
+          showToast(data.error || 'Failed to update role', false);
+          (sel as HTMLSelectElement).disabled = false;
+        }
+      } catch (e: any) {
+        showToast(e.message, false);
+        (sel as HTMLSelectElement).disabled = false;
+      }
+    });
+  });
+
+  // Status Toggle
+  document.querySelectorAll('.btn-toggle-status').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const email = btn.getAttribute('data-email');
+      const targetStatus = btn.getAttribute('data-status');
+      const roleCode = btn.getAttribute('data-role');
+      const name = btn.getAttribute('data-name') || '';
+      if (!email) return;
+
+      try {
+        const res = await fetch('/api/admin/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, status: targetStatus, roleCode, name }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Member status changed to ${targetStatus}`, true);
+          setTimeout(() => window.location.reload(), 400);
+        } else {
+          showToast(data.error || 'Failed to update status', false);
+        }
+      } catch (e: any) {
+        showToast(e.message, false);
+      }
+    });
+  });
+
+  // Delete Member
+  document.querySelectorAll('.btn-delete-member').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const email = btn.getAttribute('data-email');
+      if (!email) return;
+      if (!confirm(`Are you sure you want to remove team member ${email}?`)) return;
+
+      try {
+        const res = await fetch(`/api/admin/members/${encodeURIComponent(email)}`, {
+          method: 'DELETE',
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Member ${email} removed.`, true);
+          setTimeout(() => window.location.reload(), 400);
+        } else {
+          showToast(data.error || 'Failed to remove member', false);
+        }
+      } catch (e: any) {
+        showToast(e.message, false);
+      }
+    });
+  });
+</script>

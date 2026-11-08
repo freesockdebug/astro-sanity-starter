@@ -3,17 +3,24 @@
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
 import { hasPermission, invalidateAdminRbacCache } from '@utils/rbac';
-import { listAdminMembers, listAdminRoles, upsertAdminMember, getAdminMember } from '@utils/db';
+import { listAdminMembers, listAdminRoles, upsertAdminMember, getAdminMember, listCandidateLogtoUsers } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async ({ request, url }) => {
   const auth = await verifyAdminAuth(request, cfEnv);
   if (!auth) {
     return jsonNoCache({ error: 'Unauthorized: Admin session required' }, 401);
+  }
+
+  // Candidate Logto users lookup for one-click add
+  if (url.searchParams.get('candidates') === 'true') {
+    const search = url.searchParams.get('search') || undefined;
+    const candidates = await listCandidateLogtoUsers(search);
+    return jsonNoCache({ success: true, candidates });
   }
 
   const [members, roles] = await Promise.all([
@@ -35,9 +42,9 @@ export const POST: APIRoute = async (context) => {
     return jsonNoCache({ error: 'Unauthorized: Admin session required' }, 401);
   }
 
-  // Only super_admin or users with settings permission can manage team members
-  if (!auth.adminContext.isRootAdmin && !hasPermission(auth.adminContext, '*')) {
-    return jsonNoCache({ error: 'Forbidden: Super administrator privilege required' }, 403);
+  // Super admin or members:manage permission
+  if (!auth.adminContext.isRootAdmin && !hasPermission(auth.adminContext, '*') && !hasPermission(auth.adminContext, 'members:manage')) {
+    return jsonNoCache({ error: 'Forbidden: Missing members:manage permission' }, 403);
   }
 
   let body: any;
@@ -57,9 +64,10 @@ export const POST: APIRoute = async (context) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const validRoles = new Set(['super_admin', 'sales_manager', 'sales_rep', 'auditor']);
+  const allRoles = await listAdminRoles();
+  const validRoles = new Set(allRoles.map((r) => r.code));
   if (roleCode && !validRoles.has(roleCode)) {
-    return jsonNoCache({ error: 'Invalid role code' }, 400);
+    return jsonNoCache({ error: `Invalid role code: ${roleCode}` }, 400);
   }
 
   const validStatuses = new Set(['ACTIVE', 'DISABLED']);

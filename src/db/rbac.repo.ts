@@ -24,6 +24,12 @@ export interface AdminMember {
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+  is_logto_synced?: boolean;
+  assigned_orders?: number;
+  assigned_customers?: number;
+  last_login_at?: string;
+  last_ip?: string;
+  last_location?: string;
 }
 
 export interface AdminMemberWithRole extends AdminMember {
@@ -35,7 +41,7 @@ export const SYSTEM_ROLES: Record<string, AdminRole> = {
     code: 'super_admin',
     name: '超级管理员',
     data_scope: 'ALL',
-    menus: ['orders', 'users', 'logins', 'logs', 'settings'],
+    menus: ['orders', 'users', 'members', 'roles', 'logins', 'logs', 'settings'],
     permissions: ['*'],
     description: '全局最高权限，拥有全站所有操作及系统设置能力',
     is_system: true,
@@ -44,7 +50,7 @@ export const SYSTEM_ROLES: Record<string, AdminRole> = {
     code: 'sales_manager',
     name: '销售主管',
     data_scope: 'ALL',
-    menus: ['orders', 'users', 'logins'],
+    menus: ['orders', 'users', 'members', 'logins'],
     permissions: [
       'orders:read',
       'orders:approve',
@@ -54,6 +60,7 @@ export const SYSTEM_ROLES: Record<string, AdminRole> = {
       'users:read',
       'users:edit_tier',
       'users:assign',
+      'members:manage',
     ],
     description: '负责团队管理、询盘指派调配与客户等级管理',
     is_system: true,
@@ -143,32 +150,50 @@ export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
   return executeWithAutoSchema(async (db: DbClient) => {
     try {
       const rows = await db.query<any>(
-        `SELECT m.*, r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system
+        `SELECT 
+           m.*,
+           r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system,
+           u.id as user_id, u.last_login_at,
+           (SELECT COUNT(*) FROM orders o WHERE LOWER(o.assigned_to) = LOWER(m.email)) as assigned_orders,
+           (SELECT COUNT(*) FROM users cu WHERE LOWER(cu.assigned_to) = LOWER(m.email)) as assigned_customers,
+           (SELECT ul.ip FROM user_logins ul WHERE LOWER(ul.email) = LOWER(m.email) ORDER BY ul.created_at DESC LIMIT 1) as last_ip,
+           (SELECT ul.city FROM user_logins ul WHERE LOWER(ul.email) = LOWER(m.email) ORDER BY ul.created_at DESC LIMIT 1) as last_city,
+           (SELECT ul.country FROM user_logins ul WHERE LOWER(ul.email) = LOWER(m.email) ORDER BY ul.created_at DESC LIMIT 1) as last_country
          FROM admin_members m
          LEFT JOIN admin_roles r ON m.role_code = r.code
+         LEFT JOIN users u ON LOWER(m.email) = LOWER(u.email)
          ORDER BY m.created_at ASC`
       );
 
-      return (rows || []).map((row) => ({
-        email: row.email.toLowerCase(),
-        name: row.name || '',
-        role_code: row.role_code,
-        status: (row.status as 'ACTIVE' | 'DISABLED') || 'ACTIVE',
-        created_by: row.created_by || '',
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        role: row.role_name
-          ? parseRoleRow({
-              code: row.role_code,
-              name: row.role_name,
-              data_scope: row.data_scope,
-              menus_json: row.menus_json,
-              permissions_json: row.permissions_json,
-              description: row.role_desc,
-              is_system: row.is_system,
-            })
-          : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
-      }));
+      return (rows || []).map((row) => {
+        const loc = [row.last_city, row.last_country].filter(Boolean).join(', ') || '';
+        return {
+          email: row.email.toLowerCase(),
+          name: row.name || (row.email.split('@')[0]),
+          role_code: row.role_code,
+          status: (row.status as 'ACTIVE' | 'DISABLED') || 'ACTIVE',
+          created_by: row.created_by || '',
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          is_logto_synced: Boolean(row.user_id),
+          assigned_orders: Number(row.assigned_orders || 0),
+          assigned_customers: Number(row.assigned_customers || 0),
+          last_login_at: row.last_login_at || '',
+          last_ip: row.last_ip || '',
+          last_location: loc,
+          role: row.role_name
+            ? parseRoleRow({
+                code: row.role_code,
+                name: row.role_name,
+                data_scope: row.data_scope,
+                menus_json: row.menus_json,
+                permissions_json: row.permissions_json,
+                description: row.role_desc,
+                is_system: row.is_system,
+              })
+            : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
+        };
+      });
     } catch (e: any) {
       const msg = (e?.message || String(e)).toLowerCase();
       if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
@@ -260,6 +285,112 @@ export async function deleteAdminMember(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
   await executeWithAutoSchema(async (db: DbClient) => {
     await db.execute('DELETE FROM admin_members WHERE LOWER(email) = ?', [cleanEmail]);
+  });
+}
+
+/**
+ * Upserts a custom or system role
+ */
+export async function upsertAdminRole(role: {
+  code: string;
+  name: string;
+  data_scope: DataScope;
+  menus: string[];
+  permissions: string[];
+  description?: string;
+  is_system?: boolean;
+}): Promise<boolean> {
+  const code = role.code.trim().toLowerCase();
+  if (!code) throw new Error('Role code is required');
+  const name = role.name.trim();
+  if (!name) throw new Error('Role name is required');
+  const menusJson = JSON.stringify(role.menus || []);
+  const permissionsJson = JSON.stringify(role.permissions || []);
+  const dataScope = role.data_scope || 'ALL';
+  const desc = role.description || '';
+  const isSystem = role.is_system ? 1 : 0;
+
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const existing = await db.first<any>('SELECT is_system FROM admin_roles WHERE code = ?', [code]);
+    const finalIsSystem = existing ? existing.is_system : isSystem;
+
+    await db.execute(
+      `INSERT INTO admin_roles (code, name, data_scope, menus_json, permissions_json, description, is_system, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(code) DO UPDATE SET
+         name = excluded.name,
+         data_scope = excluded.data_scope,
+         menus_json = excluded.menus_json,
+         permissions_json = excluded.permissions_json,
+         description = excluded.description,
+         updated_at = datetime('now')`,
+      [code, name, dataScope, menusJson, permissionsJson, desc, finalIsSystem]
+    );
+    return true;
+  });
+}
+
+/**
+ * Deletes a custom role (built-in system roles cannot be deleted)
+ */
+export async function deleteAdminRole(code: string): Promise<{ success: boolean; error?: string }> {
+  const cleanCode = code.trim().toLowerCase();
+  if (['super_admin', 'sales_manager', 'sales_rep', 'auditor'].includes(cleanCode)) {
+    return { success: false, error: 'Cannot delete built-in system role' };
+  }
+
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const memberCountRow = await db.first<any>('SELECT COUNT(*) as count FROM admin_members WHERE role_code = ?', [cleanCode]);
+    if (memberCountRow && Number(memberCountRow.count) > 0) {
+      return { success: false, error: `Cannot delete role: ${memberCountRow.count} team member(s) currently assigned to this role.` };
+    }
+
+    await db.execute('DELETE FROM admin_roles WHERE code = ? AND is_system = 0', [cleanCode]);
+    return { success: true };
+  });
+}
+
+/**
+ * Returns all team member emails assigned to a specific role code
+ */
+export async function getMemberEmailsByRole(roleCode: string): Promise<string[]> {
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const rows = await db.query<any>('SELECT email FROM admin_members WHERE role_code = ?', [roleCode]);
+    return (rows || []).map((r) => r.email.toLowerCase());
+  });
+}
+
+/**
+ * Returns registered Logto candidate users for one-click team member authorization
+ */
+export async function listCandidateLogtoUsers(search?: string): Promise<{ id: string; email: string; name: string; last_login_at: string; is_member: boolean }[]> {
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const where: string[] = [];
+    const params: any[] = [];
+    if (search && search.trim()) {
+      where.push('(u.email LIKE ? OR u.name LIKE ?)');
+      const term = `%${search.trim()}%`;
+      params.push(term, term);
+    }
+    const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
+    const rows = await db.query<any>(
+      `SELECT u.id, u.email, u.name, u.last_login_at,
+              CASE WHEN m.email IS NOT NULL THEN 1 ELSE 0 END as is_member
+       FROM users u
+       LEFT JOIN admin_members m ON LOWER(u.email) = LOWER(m.email)
+       ${whereClause}
+       ORDER BY is_member ASC, u.last_login_at DESC
+       LIMIT 50`,
+      params
+    );
+    return (rows || []).map((r) => ({
+      id: r.id,
+      email: r.email.toLowerCase(),
+      name: r.name || '',
+      last_login_at: r.last_login_at || '',
+      is_member: Boolean(r.is_member),
+    }));
   });
 }
 

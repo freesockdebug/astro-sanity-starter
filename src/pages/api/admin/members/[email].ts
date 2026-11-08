@@ -18,8 +18,8 @@ export const DELETE: APIRoute = async (context) => {
     return jsonNoCache({ error: 'Unauthorized: Admin session required' }, 401);
   }
 
-  if (!auth.adminContext.isRootAdmin && !hasPermission(auth.adminContext, '*')) {
-    return jsonNoCache({ error: 'Forbidden: Super administrator privilege required' }, 403);
+  if (!auth.adminContext.isRootAdmin && !hasPermission(auth.adminContext, '*') && !hasPermission(auth.adminContext, 'members:manage')) {
+    return jsonNoCache({ error: 'Forbidden: Missing members:manage permission' }, 403);
   }
 
   const targetEmail = decodeURIComponent(params.email || '').trim().toLowerCase();
