@@ -65,19 +65,6 @@ export const POST: APIRoute = async (context) => {
     return jsonNoCache({ error: 'At least one field (tier, status, adminNotes, assignedTo) is required.' }, 400);
   }
 
-  // Permission checks
-  if (tier && !hasPermission(auth.adminContext, 'users:edit_tier')) {
-    return jsonNoCache({ error: 'Forbidden: Missing users:edit_tier permission.' }, 403);
-  }
-
-  if (status && !hasPermission(auth.adminContext, 'users:block')) {
-    return jsonNoCache({ error: 'Forbidden: Missing users:block permission.' }, 403);
-  }
-
-  if (assignedTo !== undefined && !hasPermission(auth.adminContext, 'users:assign')) {
-    return jsonNoCache({ error: 'Forbidden: Missing users:assign permission.' }, 403);
-  }
-
   // Target user validation
   const [existingUser, settings] = await Promise.all([
     getUserById(userId),
@@ -85,6 +72,23 @@ export const POST: APIRoute = async (context) => {
   ]);
   if (!existingUser) {
     return jsonNoCache({ error: 'User not found' }, 404);
+  }
+
+  // Permission checks: only enforce if the requested value differs from the existing value
+  if (tier && tier !== existingUser.tier && !hasPermission(auth.adminContext, 'users:edit_tier')) {
+    return jsonNoCache({ error: 'Forbidden: Missing users:edit_tier permission.' }, 403);
+  }
+
+  if (status && status !== existingUser.status && !hasPermission(auth.adminContext, 'users:block')) {
+    return jsonNoCache({ error: 'Forbidden: Missing users:block permission.' }, 403);
+  }
+
+  if (
+    assignedTo !== undefined &&
+    (assignedTo ? String(assignedTo).trim().toLowerCase() : null) !== (existingUser.assigned_to ? existingUser.assigned_to.toLowerCase() : null) &&
+    !hasPermission(auth.adminContext, 'users:assign')
+  ) {
+    return jsonNoCache({ error: 'Forbidden: Missing users:assign permission.' }, 403);
   }
 
   // 1. Prevent any admin from blocking their own active account

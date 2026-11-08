@@ -366,6 +366,15 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     >
       Batch Reject
     </button>
+    {canAssign && (
+      <button
+        type="button"
+        id="btn-batch-assign"
+        class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-white shadow-2xs active:scale-95 transition-all cursor-pointer"
+      >
+        Assign Selected
+      </button>
+    )}
     <button
       type="button"
       id="btn-batch-clear"
@@ -1619,6 +1628,43 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
 
   btnBatchApprove?.addEventListener('click', () => executeBatchAction('APPROVE'));
   btnBatchReject?.addEventListener('click', () => executeBatchAction('REJECT'));
+
+  const btnBatchAssign = document.getElementById('btn-batch-assign');
+  btnBatchAssign?.addEventListener('click', async () => {
+    if (selectedOrderIds.size === 0) return;
+    const input = prompt(
+      `Assign ${selectedOrderIds.size} selected orders\nEnter sales rep email (or leave blank to return to unassigned pool):`
+    );
+    if (input === null) return;
+    const targetEmail = input.trim();
+
+    try {
+      const res = await fetch('/api/admin/orders/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderIds: Array.from(selectedOrderIds),
+          action: 'ASSIGN',
+          assignedTo: targetEmail || null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        (window as any).__showToast?.(
+          `Batch assign completed: ${data.updatedCount} orders updated`,
+          'success'
+        );
+        selectedOrderIds.clear();
+        updateBatchBar();
+        await clientCache.invalidatePrefix('admin:orders');
+        fetchOrders(false);
+      } else {
+        (window as any).__showToast?.(data.error || 'Batch assign failed', 'error');
+      }
+    } catch (err: any) {
+      (window as any).__showToast?.(err.message || 'Network error', 'error');
+    }
+  });
 
   // Initial load
   tableSettings.renderMenu();

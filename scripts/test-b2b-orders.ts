@@ -769,6 +769,50 @@ async function runSelfCheck() {
 
   console.log('✔ [PASS] Image Optimization, Crop Mode & Preload Alignment verified');
 
+  // 28. RBAC Engine, DataScope Isolation, Auto Customer Binding & Audit Logs
+  const { resolveAdminContext, hasPermission, hasMenu } = await import('../src/utils/rbac');
+  const { upsertAdminMember, getAdminMember } = await import('../src/db/rbac.repo');
+  const { assignOrder: assignOrderRepo, listAdminOrders: listOrdersRepo } = await import('../src/db/orders.repo');
+  const { listAuditLogs } = await import('../src/db/audit.repo');
+  const { getUserById } = await import('../src/db/users.repo');
+
+  // Root Admin RBAC
+  const rootCtx = await resolveAdminContext('superadmin@gwenvenni.com', { ADMIN_EMAILS: 'superadmin@gwenvenni.com' });
+  assert.strictEqual(rootCtx?.isRootAdmin, true);
+  assert.strictEqual(hasPermission(rootCtx, 'orders:assign'), true);
+  assert.strictEqual(hasMenu(rootCtx, 'settings'), true);
+
+  // Sales Rep RBAC & DataScope
+  const testRepEmail = `rep-${Date.now()}@gwenvenni.com`;
+  await upsertAdminMember({
+    email: testRepEmail,
+    name: 'Alice Rep',
+    role_code: 'sales_rep',
+    status: 'ACTIVE',
+  });
+  const repCtx = await resolveAdminContext(testRepEmail);
+  assert.strictEqual(repCtx?.isRootAdmin, false);
+  assert.strictEqual(repCtx?.dataScope, 'SELF_AND_POOL');
+  assert.strictEqual(hasPermission(repCtx, 'orders:claim'), true);
+  assert.strictEqual(hasPermission(repCtx, 'orders:assign'), false);
+  assert.strictEqual(hasMenu(repCtx, 'orders'), true);
+  assert.strictEqual(hasMenu(repCtx, 'settings'), false);
+
+  // Auto-binding customer on order assign
+  const assignResult = await assignOrderRepo(customOrder.orderId, testRepEmail);
+  assert.strictEqual(assignResult, true);
+  const assignedCustomer = await getUserByIdOrEmail(null, customEmail);
+  assert.strictEqual(assignedCustomer?.assigned_to?.toLowerCase(), testRepEmail.toLowerCase(), 'Customer should auto-bind to sales rep on claim');
+
+  // DataScope Row-Level Public Pool & Assignment Filtering
+  const scopedOrders = await listOrdersRepo({ adminScope: { email: testRepEmail, dataScope: 'SELF_AND_POOL' } });
+  assert.ok(scopedOrders.orders.some(o => o.id === customOrder.orderId), 'Order should be visible to assigned sales rep');
+
+  // Audit Log Querying
+  const auditResult = await listAuditLogs({ limit: 10 });
+  assert.ok(Array.isArray(auditResult.logs));
+  console.log('✔ [PASS] RBAC Engine, DataScope Isolation, Customer Auto-Binding & Audit Diff verified');
+
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }
 

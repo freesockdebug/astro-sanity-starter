@@ -46,17 +46,35 @@ const pageTitle = 'Login Audit Logs';
       <!-- Left: Title & Metric Capsules -->
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-x-auto no-scrollbar">
         <div class="flex items-center gap-1.5 shrink-0">
-          <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Login Audit</h1>
+          <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Audit Center</h1>
           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             {retentionDays}d
           </span>
         </div>
 
+        <!-- Mode Tabs: Login Sessions vs Operation Audit Diff -->
+        <div class="flex items-center gap-1 shrink-0 p-0.5 bg-[#f5f5f7] rounded-xl border border-black/5">
+          <button
+            type="button"
+            id="tab-btn-logins"
+            class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#1d1d1f] text-white shadow-2xs transition-all cursor-pointer"
+          >
+            Logins
+          </button>
+          <button
+            type="button"
+            id="tab-btn-audit"
+            class="px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-black transition-all cursor-pointer"
+          >
+            Operation Diff
+          </button>
+        </div>
+
         <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
 
         <!-- Metric Capsules -->
-        <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
+        <div id="logins-metrics-container" class="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
           <span class="px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium bg-[#f5f5f7] text-[#52525b] border border-black/5 flex items-center gap-1 shrink-0 whitespace-nowrap">
             <span>Sessions</span>
             <strong id="metric-sessions" class="text-[#1d1d1f] font-bold">-</strong>
@@ -121,6 +139,26 @@ const pageTitle = 'Login Audit Logs';
       contentHidden={true}
       showPagination={false}
     />
+
+    <!-- 3. Operation Audit Diff Container (Toggled) -->
+    <div id="audit-diff-container" class="hidden flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden flex flex-col">
+      <div class="flex-1 overflow-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="sticky top-0 bg-[#fbfbfd] border-b border-black/5 text-[#52525b] font-medium z-10 text-[11px]">
+            <tr>
+              <th class="py-2.5 px-3">Timestamp</th>
+              <th class="py-2.5 px-3">Administrator</th>
+              <th class="py-2.5 px-3">Action</th>
+              <th class="py-2.5 px-3">Target</th>
+              <th class="py-2.5 px-3">Field Changes / Diff</th>
+            </tr>
+          </thead>
+          <tbody id="audit-table-body" class="divide-y divide-black/5 font-sans text-xs">
+            <tr><td colspan="5" class="py-12 text-center text-[#86868b]">Loading operation audit logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </AdminLayout>
 
@@ -442,4 +480,77 @@ const pageTitle = 'Login Audit Logs';
   }
 
   loadLogins();
+
+  // Mode Switcher: Logins vs Operation Audit Diff
+  let auditLogsLoaded = false;
+  const tabBtnLogins = document.getElementById('tab-btn-logins');
+  const tabBtnAudit = document.getElementById('tab-btn-audit');
+  const loginsShell = document.getElementById('logins-container');
+  const auditDiffContainer = document.getElementById('audit-diff-container');
+  const metricsContainer = document.getElementById('logins-metrics-container');
+
+  async function loadAuditLogs() {
+    const tbody = document.getElementById('audit-table-body');
+    if (!tbody) return;
+    try {
+      const res = await fetch('/api/admin/audit?limit=100');
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-600">Failed to load audit logs: ${escapeHtml(data.error || '')}</td></tr>`;
+        return;
+      }
+      if (!data.logs || data.logs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-[#86868b]">No admin operations recorded yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = data.logs.map((log: any) => {
+        let diffHtml = '';
+        try {
+          const diff = log.diff_json ? JSON.parse(log.diff_json) : null;
+          if (diff && Object.keys(diff).length > 0) {
+            diffHtml = Object.entries(diff).map(([k, v]: [string, any]) => {
+              const oldVal = v?.before !== undefined ? JSON.stringify(v.before) : '∅';
+              const newVal = v?.after !== undefined ? JSON.stringify(v.after) : '∅';
+              return `<span class="inline-block mr-2 text-[10px]"><span class="text-[#86868b]">${escapeHtml(k)}:</span> <span class="text-rose-700 line-through">${escapeHtml(oldVal)}</span> → <span class="text-emerald-700 font-semibold">${escapeHtml(newVal)}</span></span>`;
+            }).join('');
+          } else if (log.after_json) {
+            diffHtml = `<span class="text-[10px] text-[#52525b] font-mono">${escapeHtml(log.after_json).slice(0, 120)}</span>`;
+          }
+        } catch {
+          diffHtml = `<span class="text-[10px] text-[#86868b]">-</span>`;
+        }
+        return `
+          <tr class="hover:bg-[#fbfbfd]">
+            <td class="py-2.5 px-3 font-mono text-[10px] text-[#86868b] whitespace-nowrap">${formatAdminTime(log.created_at, 'full')}</td>
+            <td class="py-2.5 px-3 font-medium text-[#1d1d1f] whitespace-nowrap">${escapeHtml(log.admin_email)}</td>
+            <td class="py-2.5 px-3 whitespace-nowrap"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#f5f5f7] text-[#1d1d1f] border border-black/5">${escapeHtml(log.action)}</span></td>
+            <td class="py-2.5 px-3 whitespace-nowrap font-mono text-[11px] text-[#52525b]">${escapeHtml(log.target_type)} <span class="text-black font-semibold">#${escapeHtml(log.target_id)}</span></td>
+            <td class="py-2.5 px-3">${diffHtml || '<span class="text-[#86868b] text-[10px]">-</span>'}</td>
+          </tr>
+        `;
+      }).join('');
+      auditLogsLoaded = true;
+    } catch (e: any) {
+      tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-600">Network error: ${escapeHtml(e?.message || '')}</td></tr>`;
+    }
+  }
+
+  tabBtnLogins?.addEventListener('click', () => {
+    tabBtnLogins.className = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#1d1d1f] text-white shadow-2xs transition-all cursor-pointer';
+    tabBtnAudit?.classList.remove('bg-[#1d1d1f]', 'text-white', 'shadow-2xs', 'font-semibold');
+    tabBtnAudit?.classList.add('text-[#52525b]', 'font-medium');
+    loginsShell?.classList.remove('hidden');
+    auditDiffContainer?.classList.add('hidden');
+    if (metricsContainer) metricsContainer.classList.remove('hidden');
+  });
+
+  tabBtnAudit?.addEventListener('click', () => {
+    tabBtnAudit.className = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#1d1d1f] text-white shadow-2xs transition-all cursor-pointer';
+    tabBtnLogins?.classList.remove('bg-[#1d1d1f]', 'text-white', 'shadow-2xs', 'font-semibold');
+    tabBtnLogins?.classList.add('text-[#52525b]', 'font-medium');
+    loginsShell?.classList.add('hidden');
+    auditDiffContainer?.classList.remove('hidden');
+    if (metricsContainer) metricsContainer.classList.add('hidden');
+    if (!auditLogsLoaded) loadAuditLogs();
+  });
 </script>

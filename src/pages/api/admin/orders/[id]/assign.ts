@@ -46,6 +46,18 @@ export const POST: APIRoute = async (context) => {
     return jsonNoCache({ error: 'Order not found' }, 404);
   }
 
+  // Prevent regular sales rep from taking an order that is already assigned to another rep
+  if (
+    beforeOrder.assigned_to &&
+    beforeOrder.assigned_to.toLowerCase() !== auth.user.email.toLowerCase() &&
+    !hasPermission(auth.adminContext, 'orders:assign')
+  ) {
+    return jsonNoCache(
+      { error: 'This order is already assigned to another rep. Only managers can reassign it.' },
+      409
+    );
+  }
+
   const success = await assignOrder(orderId, targetAssignedTo || null);
   if (!success) {
     return jsonNoCache({ error: 'Failed to assign order' }, 500);

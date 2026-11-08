@@ -41,11 +41,16 @@ export const POST: APIRoute = async (context) => {
     }
 
     const targetStatus: OrderStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const scope = !auth.adminContext.isRootAdmin && auth.adminContext.dataScope !== 'ALL'
+      ? { email: auth.user.email, dataScope: auth.adminContext.dataScope }
+      : undefined;
+
     const changed = await batchUpdateOrderStatus(
       orderIds,
       targetStatus,
       auth.user.name || auth.user.email,
-      adminRemark
+      adminRemark,
+      scope
     );
 
     recordAdminAudit(context, {

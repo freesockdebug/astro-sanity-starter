@@ -4,6 +4,7 @@
 import { getDb, generateOrderNo, generateUuid, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { invalidateUserStatusCache } from './users.repo';
+import type { DataScope } from './rbac.repo';
 import type {
   OrderRecord,
   OrderItem,
@@ -411,6 +412,25 @@ export async function assignOrder(orderId: string, assignedTo: string | null): P
        WHERE id = ?`,
       [clean, clean, orderId]
     );
+
+    // Auto-bind customer to the sales rep if customer is not yet assigned
+    if (clean && res.changes > 0) {
+      const orderRow = await db.first<{ user_id: string; buyer_email: string }>(
+        'SELECT user_id, buyer_email FROM orders WHERE id = ?',
+        [orderId]
+      );
+      if (orderRow) {
+        await db.execute(
+          `UPDATE users
+           SET assigned_to = ?, updated_at = datetime('now')
+           WHERE (id = ? OR LOWER(email) = ?)
+             AND (assigned_to IS NULL OR assigned_to = '')`,
+          [clean, orderRow.user_id || '', (orderRow.buyer_email || '').toLowerCase()]
+        ).catch(() => {});
+        invalidateUserStatusCache(orderRow.user_id, orderRow.buyer_email);
+      }
+    }
+
     return res.changes > 0;
   });
 }
@@ -431,6 +451,17 @@ export async function batchAssignOrders(orderIds: string[], assignedTo: string |
        WHERE id IN (${placeholders})`,
       [clean, clean, ...orderIds]
     );
+
+    if (clean && res.changes > 0) {
+      await db.execute(
+        `UPDATE users
+         SET assigned_to = ?, updated_at = datetime('now')
+         WHERE (id IN (SELECT user_id FROM orders WHERE id IN (${placeholders})) OR LOWER(email) IN (SELECT LOWER(buyer_email) FROM orders WHERE id IN (${placeholders})))
+           AND (assigned_to IS NULL OR assigned_to = '')`,
+        [clean, ...orderIds, ...orderIds]
+      ).catch(() => {});
+    }
+
     return res.changes;
   });
 }
@@ -442,11 +473,23 @@ export async function batchUpdateOrderStatus(
   orderIds: string[],
   status: OrderStatus,
   adminUser: string,
-  adminRemark?: string
+  adminRemark?: string,
+  scope?: { email: string; dataScope: DataScope }
 ): Promise<number> {
   if (!orderIds || orderIds.length === 0) return 0;
   return executeWithAutoSchema(async (db: DbClient) => {
     const placeholders = orderIds.map(() => '?').join(',');
+    const params: any[] = [status, adminRemark || null, status, status, status, adminUser, ...orderIds];
+
+    let scopeSql = '';
+    if (scope && scope.dataScope === 'SELF_ONLY') {
+      scopeSql = ' AND LOWER(assigned_to) = ?';
+      params.push(scope.email.toLowerCase());
+    } else if (scope && scope.dataScope === 'SELF_AND_POOL') {
+      scopeSql = ' AND (LOWER(assigned_to) = ? OR assigned_to IS NULL OR assigned_to = \'\')';
+      params.push(scope.email.toLowerCase());
+    }
+
     const res = await db.execute(
       `UPDATE orders
        SET status = ?,
@@ -455,8 +498,8 @@ export async function batchUpdateOrderStatus(
            shipped_at = CASE WHEN ? = 'SHIPPED' THEN datetime('now') ELSE shipped_at END,
            shipped_by = CASE WHEN ? = 'SHIPPED' THEN ? ELSE shipped_by END,
            updated_at = datetime('now')
-       WHERE id IN (${placeholders})`,
-      [status, adminRemark || null, status, status, status, adminUser, ...orderIds]
+       WHERE id IN (${placeholders})${scopeSql}`,
+      params
     );
     return res.changes;
   });

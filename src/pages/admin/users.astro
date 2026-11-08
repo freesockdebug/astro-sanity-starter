@@ -216,6 +216,18 @@ const pageTitle = 'Customer & Access Management';
           </select>
         </div>
 
+        <!-- Assigned Sales Rep -->
+        <div>
+          <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Assigned Sales Rep</label>
+          <input
+            type="text"
+            id="drawer-assigned-input"
+            name="assigned_to"
+            placeholder="e.g. rep@gwenvenni.com (or leave empty for pool)"
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs placeholder:text-[#86868b]"
+          />
+        </div>
+
         <!-- Internal Admin Notes -->
         <div>
           <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Internal Admin Remarks (Private to staff)</label>
@@ -286,6 +298,7 @@ const pageTitle = 'Customer & Access Management';
   const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'profile', label: 'Customer Profile', defaultWidth: 240, minWidth: 160, visible: true, canHide: false },
     { id: 'company', label: 'Company & Location', defaultWidth: 180, minWidth: 120, visible: true, canHide: true },
+    { id: 'assigned_to', label: 'Assigned Rep', defaultWidth: 140, minWidth: 100, visible: true, canHide: true },
     { id: 'tier_status', label: 'Tier & Status', defaultWidth: 150, minWidth: 120, visible: true, canHide: true },
     { id: 'orders', label: 'Orders & Inquiries', defaultWidth: 150, minWidth: 110, visible: true, canHide: true },
     { id: 'last_active', label: 'Last Active', defaultWidth: 160, minWidth: 120, visible: true, canHide: true },
@@ -468,6 +481,7 @@ const pageTitle = 'Customer & Access Management';
                 </div>
 
                 <div class="flex items-center gap-1">
+                  ${u.assigned_to ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60">${escapeHtml(u.assigned_to.split('@')[0])}</span>` : `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">Pool</span>`}
                   ${renderTierBadge(u.tier)}
                   ${isBlocked ? `<span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>` : ''}
                 </div>
@@ -491,6 +505,7 @@ const pageTitle = 'Customer & Access Management';
                   data-tier="${escapeHtml(u.tier || 'STANDARD')}"
                   data-status="${escapeHtml(u.status || 'ACTIVE')}"
                   data-notes="${escapeHtml(u.admin_notes || '')}"
+                  data-assigned="${escapeHtml(u.assigned_to || '')}"
                   data-roles="${escapeHtml(u.logto_roles || '[]')}"
                 >
                   Edit Profile & Remarks
@@ -544,6 +559,25 @@ const pageTitle = 'Customer & Access Management';
                 <span class="text-[11px] text-[#86868b] block truncate">${safeLocation}</span>
               </td>
             `;
+          case 'assigned_to':
+            if (u.assigned_to) {
+              const rep = escapeHtml(u.assigned_to.split('@')[0]);
+              return `
+                <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60" title="${escapeHtml(u.assigned_to)}">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    ${rep}
+                  </span>
+                </td>
+              `;
+            }
+            return `
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
+                  Pool
+                </span>
+              </td>
+            `;
           case 'tier_status':
             return `
               <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
@@ -585,6 +619,7 @@ const pageTitle = 'Customer & Access Management';
                   data-tier="${escapeHtml(u.tier || 'STANDARD')}"
                   data-status="${escapeHtml(u.status || 'ACTIVE')}"
                   data-notes="${escapeHtml(u.admin_notes || '')}"
+                  data-assigned="${escapeHtml(u.assigned_to || '')}"
                   data-roles="${escapeHtml(u.logto_roles || '[]')}"
                 >
                   Edit & Notes
@@ -855,12 +890,16 @@ const pageTitle = 'Customer & Access Management';
     const tier = btn.getAttribute('data-tier') || 'STANDARD';
     const status = btn.getAttribute('data-status') || 'ACTIVE';
     const notes = btn.getAttribute('data-notes') || '';
+    const assigned = btn.getAttribute('data-assigned') || '';
     const rolesRaw = btn.getAttribute('data-roles') || '[]';
 
     if (userIdInput) userIdInput.value = id;
     if (nameLabel) nameLabel.textContent = name;
     if (emailLabel) emailLabel.textContent = email;
     if (companyLabel) companyLabel.textContent = company || 'No company specified';
+
+    const assignedInput = document.getElementById('drawer-assigned-input') as HTMLInputElement | null;
+    if (assignedInput) assignedInput.value = assigned;
 
     let rolesText = 'Logto: Buyer';
     try {
@@ -888,6 +927,8 @@ const pageTitle = 'Customer & Access Management';
     const tier = tierInput?.value || 'STANDARD';
     const status = statusSelect?.value || 'ACTIVE';
     const adminNotes = notesInput?.value || '';
+    const assignedInput = document.getElementById('drawer-assigned-input') as HTMLInputElement | null;
+    const assignedTo = assignedInput ? assignedInput.value.trim() : undefined;
 
     if (saveBtn) {
       saveBtn.disabled = true;
@@ -898,7 +939,7 @@ const pageTitle = 'Customer & Access Management';
       const res = await fetch(`/api/admin/users/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier, status, adminNotes }),
+        body: JSON.stringify({ tier, status, adminNotes, assignedTo }),
       });
 
       const data = await res.json();

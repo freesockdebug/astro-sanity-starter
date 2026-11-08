@@ -66,6 +66,19 @@ export const POST: APIRoute = async (context) => {
     return jsonNoCache({ error: 'Order not found.' }, 404);
   }
 
+  // Row-level DataScope verification
+  const dataScope = auth.adminContext.dataScope;
+  if (!auth.adminContext.isRootAdmin && dataScope !== 'ALL') {
+    const assignedEmail = (beforeOrder.assigned_to || '').toLowerCase();
+    const selfEmail = auth.user.email.toLowerCase();
+    if (dataScope === 'SELF_ONLY' && assignedEmail !== selfEmail) {
+      return jsonNoCache({ error: 'Forbidden: You can only operate on orders assigned to yourself.' }, 403);
+    }
+    if (dataScope === 'SELF_AND_POOL' && assignedEmail && assignedEmail !== selfEmail) {
+      return jsonNoCache({ error: 'Forbidden: This order belongs to another sales rep.' }, 403);
+    }
+  }
+
   const success = await updateOrderStatus(orderId, {
     status: targetStatus,
     carrier: typeof carrier === 'string' ? carrier.trim() : undefined,
