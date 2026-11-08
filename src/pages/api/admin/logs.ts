@@ -1,6 +1,7 @@
 // src/pages/api/admin/logs.ts
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
+import { hasMenu, hasPermission } from '@utils/rbac';
 import { listErrorLogs, clearErrorLogs } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -9,8 +10,8 @@ export const prerender = false;
 
 export const GET: APIRoute = async ({ request, url }) => {
   const admin = await verifyAdminAuth(request, cfEnv);
-  if (!admin) {
-    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
+  if (!admin || !hasMenu(admin.adminContext, 'logs')) {
+    return jsonNoCache({ error: 'Forbidden. Diagnostic logs access required.' }, 403);
   }
 
   const level = url.searchParams.get('level') || 'ALL';
@@ -49,8 +50,8 @@ export const GET: APIRoute = async ({ request, url }) => {
 
 export const DELETE: APIRoute = async ({ request }) => {
   const admin = await verifyAdminAuth(request, cfEnv);
-  if (!admin) {
-    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
+  if (!admin || (!admin.adminContext.isRootAdmin && !hasPermission(admin.adminContext, '*'))) {
+    return jsonNoCache({ error: 'Forbidden. Super administrator privilege required to clear diagnostic logs.' }, 403);
   }
 
   const success = await clearErrorLogs(cfEnv);

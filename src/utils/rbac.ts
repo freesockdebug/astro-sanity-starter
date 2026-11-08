@@ -1,7 +1,7 @@
 // src/utils/rbac.ts
 // RBAC Permission Engine with Cloudflare KV In-Memory Caching & Root Env Fallback
 import { getRuntimeEnv } from './auth';
-import { kvGet, kvPut } from './kv';
+import { kvGet, kvPut, kvDelete } from './kv';
 import {
   getAdminMember,
   getAdminRole,
@@ -85,7 +85,7 @@ export async function resolveAdminContext(
         permissions: managerRole.permissions,
         dataScope: managerRole.data_scope,
       };
-      await kvPut(cacheKey, ctx, KV_TTL_SECONDS, cfEnv).catch(() => {});
+      await kvPut(cacheKey, ctx, { expirationTtl: KV_TTL_SECONDS }, cfEnv).catch(() => {});
       return ctx;
     }
   }
@@ -106,9 +106,15 @@ export async function resolveAdminContext(
   };
 
   // Cache in KV
-  await kvPut(cacheKey, adminCtx, KV_TTL_SECONDS, cfEnv).catch(() => {});
+  await kvPut(cacheKey, adminCtx, { expirationTtl: KV_TTL_SECONDS }, cfEnv).catch(() => {});
 
   return adminCtx;
+}
+
+export async function invalidateAdminRbacCache(email: string, cfEnv?: any): Promise<void> {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return;
+  await kvDelete(`${KV_RBAC_PREFIX}${cleanEmail}`, cfEnv).catch(() => {});
 }
 
 export function hasPermission(adminCtx: AdminContextInfo | null | undefined, requiredPerm: string): boolean {

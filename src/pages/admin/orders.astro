@@ -30,6 +30,7 @@ const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
 const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
 const pageTitle = 'B2B Admin Fulfillment Workspace';
+const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('orders:assign'));
 ---
 
 <AdminLayout
@@ -338,6 +339,9 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
     </dialog>
   </Fragment>
 
+  <!-- App Meta for client permissions -->
+  <div id="orders-app-meta" data-can-assign={canAssign ? 'true' : 'false'} class="hidden"></div>
+
   <!-- Floating Batch Operations Action Bar -->
   <div
     id="batch-action-bar"
@@ -406,6 +410,22 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   let currentLimit = 50;
   let currentTotalPages = 1;
   let activeAbortController: AbortController | null = null;
+  const canAssign = document.getElementById('orders-app-meta')?.getAttribute('data-can-assign') === 'true';
+
+  // Batch Selection State
+  const selectedOrderIds = new Set<string>();
+  const batchActionBar = document.getElementById('batch-action-bar');
+  const batchSelectedCount = document.getElementById('batch-selected-count');
+
+  function updateBatchBar() {
+    if (!batchActionBar || !batchSelectedCount) return;
+    if (selectedOrderIds.size > 0) {
+      batchSelectedCount.textContent = String(selectedOrderIds.size);
+      batchActionBar.classList.remove('hidden');
+    } else {
+      batchActionBar.classList.add('hidden');
+    }
+  }
 
   const tableSettings = useTableSettings({
     tableKey: 'orders',
@@ -729,7 +749,16 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
                   <span class="font-mono font-bold text-xs text-[#1d1d1f] block truncate">${safeNo}</span>
                   <span class="text-[10px] text-[#86868b] font-mono block mt-0.5">${dateStr}</span>
                 </div>
-                <div class="shrink-0">
+                <div class="shrink-0 flex items-center gap-1.5 flex-wrap justify-end">
+                  ${order.assigned_to
+                    ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60" title="${escapeHtml(order.assigned_to)}"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>${escapeHtml(order.assigned_to.split('@')[0])}</span>
+                       ${canAssign ? `<button type="button" class="btn-reassign-order p-0.5 text-zinc-400 hover:text-black cursor-pointer" data-id="${safeId}" data-current="${escapeHtml(order.assigned_to)}" title="Reassign or return to pool"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg></button>` : ''}`
+                    : `<div class="flex items-center gap-1">
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">Pool</span>
+                        <button type="button" class="btn-claim-order-row px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-2xs cursor-pointer" data-id="${safeId}">Claim</button>
+                        ${canAssign ? `<button type="button" class="btn-reassign-order p-0.5 text-zinc-400 hover:text-black cursor-pointer" data-id="${safeId}" data-current="" title="Assign to specific sales rep"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></button>` : ''}
+                       </div>`
+                  }
                   ${renderStatusBadge(order.status)}
                 </div>
               </div>
@@ -834,10 +863,25 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
               const rep = escapeHtml(order.assigned_to.split('@')[0]);
               return `
                 <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
-                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60" title="${escapeHtml(order.assigned_to)}">
-                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                    ${rep}
-                  </span>
+                  <div class="flex items-center gap-1">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60" title="${escapeHtml(order.assigned_to)}">
+                      <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                      ${rep}
+                    </span>
+                    ${canAssign ? `
+                      <button
+                        type="button"
+                        class="btn-reassign-order p-1 rounded text-zinc-400 hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
+                        data-id="${safeId}"
+                        data-current="${escapeHtml(order.assigned_to)}"
+                        title="Reassign or return to pool"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                      </button>
+                    ` : ''}
+                  </div>
                 </td>
               `;
             }
@@ -855,6 +899,19 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
                   >
                     Claim
                   </button>
+                  ${canAssign ? `
+                    <button
+                      type="button"
+                      class="btn-reassign-order p-1 rounded text-zinc-400 hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
+                      data-id="${safeId}"
+                      data-current=""
+                      title="Assign to specific sales rep"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                      </svg>
+                    </button>
+                  ` : ''}
                 </div>
               </td>
             `;
@@ -984,6 +1041,11 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   }
 
   async function fetchOrders(updateUrl = true) {
+    selectedOrderIds.clear();
+    const selectAllEl = document.getElementById('orders-select-all') as HTMLInputElement | null;
+    if (selectAllEl) selectAllEl.checked = false;
+    updateBatchBar();
+
     if (activeAbortController) {
       activeAbortController.abort();
     }
@@ -1422,22 +1484,9 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
   });
 
   // Batch Operations & Claiming
-  const selectedOrderIds = new Set<string>();
-  const batchActionBar = document.getElementById('batch-action-bar');
-  const batchSelectedCount = document.getElementById('batch-selected-count');
   const btnBatchApprove = document.getElementById('btn-batch-approve');
   const btnBatchReject = document.getElementById('btn-batch-reject');
   const btnBatchClear = document.getElementById('btn-batch-clear');
-
-  function updateBatchBar() {
-    if (!batchActionBar || !batchSelectedCount) return;
-    if (selectedOrderIds.size > 0) {
-      batchSelectedCount.textContent = String(selectedOrderIds.size);
-      batchActionBar.classList.remove('hidden');
-    } else {
-      batchActionBar.classList.add('hidden');
-    }
-  }
 
   btnBatchClear?.addEventListener('click', () => {
     selectedOrderIds.clear();
@@ -1498,6 +1547,44 @@ const pageTitle = 'B2B Admin Fulfillment Workspace';
         (window as any).__showToast?.(err.message || 'Network error', 'error');
         claimBtn.removeAttribute('disabled');
         claimBtn.textContent = 'Claim';
+      }
+    }
+
+    const reassignBtn = (e.target as HTMLElement).closest('.btn-reassign-order') as HTMLElement | null;
+    if (reassignBtn) {
+      const orderId = reassignBtn.getAttribute('data-id');
+      const current = reassignBtn.getAttribute('data-current') || '';
+      if (!orderId) return;
+
+      const input = prompt(
+        `Reassign order ${orderId}\nEnter sales rep email (or leave blank to return to unassigned pool):`,
+        current
+      );
+      if (input === null) return;
+
+      const targetEmail = input.trim();
+      reassignBtn.setAttribute('disabled', 'true');
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignedTo: targetEmail || null }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          (window as any).__showToast?.(
+            targetEmail ? `Reassigned to ${targetEmail}` : 'Order returned to unassigned pool',
+            'success'
+          );
+          await clientCache.invalidatePrefix('admin:orders');
+          fetchOrders(false);
+        } else {
+          (window as any).__showToast?.(data.error || 'Failed to reassign order', 'error');
+          reassignBtn.removeAttribute('disabled');
+        }
+      } catch (err: any) {
+        (window as any).__showToast?.(err.message || 'Network error', 'error');
+        reassignBtn.removeAttribute('disabled');
       }
     }
   });

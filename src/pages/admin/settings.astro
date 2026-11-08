@@ -531,6 +531,8 @@ const pageTitle = 'Workspace Settings';
                     class="btn-toggle-member-status text-[11px] text-blue-600 hover:underline"
                     data-email={m.email}
                     data-status={m.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'}
+                    data-name={m.name}
+                    data-role={m.role_code}
                   >
                     {m.status === 'ACTIVE' ? 'Disable' : 'Enable'}
                   </button>
@@ -979,6 +981,8 @@ const pageTitle = 'Workspace Settings';
         btn.addEventListener('click', async function() {
           var email = btn.getAttribute('data-email');
           var targetStatus = btn.getAttribute('data-status');
+          var name = btn.getAttribute('data-name');
+          var role = btn.getAttribute('data-role');
           if (!email) return;
 
           btn.disabled = true;
@@ -986,7 +990,7 @@ const pageTitle = 'Workspace Settings';
             var res = await fetch('/api/admin/members', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: email, status: targetStatus }),
+              body: JSON.stringify({ email: email, status: targetStatus, name: name, roleCode: role }),
             });
             var data = await res.json();
             if (res.ok && data.success) {

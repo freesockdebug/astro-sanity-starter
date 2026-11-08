@@ -1,6 +1,7 @@
 // src/pages/api/admin/settings.ts
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, getRuntimeEnv, jsonNoCache } from '@utils/auth';
+import { hasMenu } from '@utils/rbac';
 import { getSystemSettings, updateSystemSettings } from '@utils/db';
 import { SecurityService } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
@@ -11,8 +12,8 @@ export const prerender = false;
 
 export const GET: APIRoute = async ({ request }) => {
   const admin = await verifyAdminAuth(request, cfEnv);
-  if (!admin) {
-    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
+  if (!admin || !hasMenu(admin.adminContext, 'settings')) {
+    return jsonNoCache({ error: 'Forbidden. Settings access required.' }, 403);
   }
 
   let d1Healthy = true;
@@ -39,8 +40,8 @@ export const GET: APIRoute = async ({ request }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   const admin = await verifyAdminAuth(request, cfEnv);
-  if (!admin) {
-    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
+  if (!admin || !hasMenu(admin.adminContext, 'settings')) {
+    return jsonNoCache({ error: 'Forbidden. Settings access required.' }, 403);
   }
 
   let body: any;
@@ -72,8 +73,8 @@ export const POST: APIRoute = async ({ request }) => {
     try {
       const currentSettings = await getSystemSettings(cfEnv);
       const brand = currentSettings.brand_name || 'GWENVENNI';
-      const plainText = `🔔 【${brand}】Webhook 连接测试成功\n- 触发者：${admin.email}\n- 时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- 运行环境：Cloudflare Workers\n- 状态：测试消息发送正常`;
-      const markdownText = `### 🔔 [${brand}] Webhook 验证成功\n\n- **触发者**：${admin.email}\n- **时间**：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- **运行环境**：Cloudflare Workers\n- **状态**：Live Delivery OK`;
+      const plainText = `🔔 【${brand}】Webhook 连接测试成功\n- 触发者：${admin.user.email}\n- 时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- 运行环境：Cloudflare Workers\n- 状态：测试消息发送正常`;
+      const markdownText = `### 🔔 [${brand}] Webhook 验证成功\n\n- **触发者**：${admin.user.email}\n- **时间**：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n- **运行环境**：Cloudflare Workers\n- **状态**：Live Delivery OK`;
 
       const result = await dispatchWebhookMessage(targetUrl, {
         title: `【${brand}】Webhook 验证测试`,
@@ -234,7 +235,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    const saveResult = await updateSystemSettings(updates, admin.email, cfEnv);
+    const saveResult = await updateSystemSettings(updates, admin.user.email, cfEnv);
     if (!saveResult.success) {
       return jsonNoCache({ error: saveResult.error || 'Failed to save settings.' }, 500);
     }

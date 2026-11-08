@@ -2,8 +2,8 @@
 // Admin Member Management: List, Add, or Update Members with Roles
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
-import { hasPermission } from '@utils/rbac';
-import { listAdminMembers, listAdminRoles, upsertAdminMember } from '@utils/db';
+import { hasPermission, invalidateAdminRbacCache } from '@utils/rbac';
+import { listAdminMembers, listAdminRoles, upsertAdminMember, getAdminMember } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -47,7 +47,11 @@ export const POST: APIRoute = async (context) => {
     return jsonNoCache({ error: 'Invalid JSON payload' }, 400);
   }
 
-  const { email, name, roleCode, status } = body || {};
+  const email = body?.email;
+  const roleCode = body?.roleCode || body?.role_code;
+  const name = body?.name;
+  const status = body?.status;
+
   if (!email || typeof email !== 'string' || !email.includes('@')) {
     return jsonNoCache({ error: 'Valid email address is required' }, 400);
   }
@@ -63,20 +67,27 @@ export const POST: APIRoute = async (context) => {
     return jsonNoCache({ error: 'Invalid status. Allowed: ACTIVE, DISABLED' }, 400);
   }
 
+  const existing = await getAdminMember(cleanEmail);
+  const finalRoleCode = roleCode || (existing ? existing.role_code : 'sales_rep');
+  const finalName = name !== undefined && name !== null ? String(name).trim() : (existing ? existing.name : cleanEmail.split('@')[0]);
+  const finalStatus = status || (existing ? existing.status : 'ACTIVE');
+
   await upsertAdminMember({
     email: cleanEmail,
-    name: name ? String(name).trim() : cleanEmail.split('@')[0],
-    role_code: roleCode || 'sales_rep',
-    status: status || 'ACTIVE',
+    name: finalName,
+    role_code: finalRoleCode,
+    status: finalStatus,
     created_by: auth.user.email,
   });
+
+  await invalidateAdminRbacCache(cleanEmail, cfEnv);
 
   recordAdminAudit(context, {
     adminEmail: auth.user.email,
     action: 'UPSERT_ADMIN_MEMBER',
     targetType: 'MEMBER',
     targetId: cleanEmail,
-    after: { email: cleanEmail, name, roleCode, status },
+    after: { email: cleanEmail, name: finalName, roleCode: finalRoleCode, status: finalStatus },
     cfEnv,
   });
 

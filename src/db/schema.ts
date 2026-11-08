@@ -25,6 +25,8 @@ export const DDL_STATEMENTS = [
   approved_at TEXT,
   shipped_at TEXT,
   shipped_by TEXT,
+  assigned_to TEXT DEFAULT NULL,
+  assigned_at TEXT DEFAULT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 )`,
@@ -50,6 +52,7 @@ export const DDL_STATEMENTS = [
   tier TEXT DEFAULT 'STANDARD',
   status TEXT DEFAULT 'ACTIVE',
   admin_notes TEXT DEFAULT '',
+  assigned_to TEXT DEFAULT NULL,
   last_login_at TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
@@ -165,10 +168,9 @@ let schemaInitPromise: Promise<void> | null = null;
 /**
  * Ensures database tables, columns and indexes exist
  */
-export async function ensureSchema(rawOrClient?: any): Promise<void> {
-
+export async function ensureSchema(rawOrClient?: any, force = false): Promise<void> {
   if (schemaInitPromise) return schemaInitPromise;
-  if (isSchemaVerifiedInIsolate) return;
+  if (!force && isSchemaVerifiedInIsolate) return;
   let target = rawOrClient;
   if (!target) {
     const client = await getDb();
@@ -177,9 +179,6 @@ export async function ensureSchema(rawOrClient?: any): Promise<void> {
     target = target.raw;
   }
   if (!target) return;
-
-  // Immediately set verified flag to prevent concurrent Promise.all queries from firing duplicate DDL batches
-  isSchemaVerifiedInIsolate = true;
 
   schemaInitPromise = (async () => {
     // 1. Ensure core tables exist first
@@ -228,6 +227,9 @@ export async function ensureSchema(rawOrClient?: any): Promise<void> {
         // Already exists
       }
     }
+
+    // Mark as verified only after all DDL and migrations complete
+    isSchemaVerifiedInIsolate = true;
   })().finally(() => {
     schemaInitPromise = null;
   });
@@ -256,7 +258,7 @@ export async function executeWithAutoSchema<T>(
       const errMsg = (err?.message || String(err)).toLowerCase();
       if (isD1 && rawDb && (errMsg.includes('no such table') || errMsg.includes('no such column') || errMsg.includes('has no column named'))) {
         console.warn('[DB] Schema discrepancy detected; triggering lazy schema migration...');
-        await ensureSchema(rawDb);
+        await ensureSchema(rawDb, true);
         return await fn();
       }
       throw err;
@@ -278,7 +280,7 @@ export async function executeWithAutoSchema<T>(
     const errMsg = (err?.message || String(err)).toLowerCase();
     if (errMsg.includes('no such table') || errMsg.includes('no such column') || errMsg.includes('has no column named')) {
       console.warn('[DB] Schema discrepancy detected; triggering lazy schema migration...');
-      await ensureSchema(db.raw);
+      await ensureSchema(db.raw, true);
       return await fn(db);
     }
     throw err;

@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     return jsonNoCache({ success: false, error: 'Invalid or missing tableKey' }, 400);
   }
 
-  const { kvKey, dbKey } = buildStorageKeys(admin.email, tableKey);
+  const { kvKey, dbKey } = buildStorageKeys(admin.user.email, tableKey);
 
   // 1. Try L2 Cloudflare KV (1~5ms global edge)
   try {
@@ -85,7 +85,7 @@ export const PUT: APIRoute = async ({ request }) => {
       updatedAt: Number(settings.updatedAt) || Date.now(),
     };
 
-    const { kvKey, dbKey } = buildStorageKeys(admin.email, tableKey);
+    const { kvKey, dbKey } = buildStorageKeys(admin.user.email, tableKey);
     const serialized = JSON.stringify(payload);
 
     await Promise.all([
@@ -98,7 +98,7 @@ export const PUT: APIRoute = async ({ request }) => {
              value = excluded.value,
              updated_by = excluded.updated_by,
              updated_at = excluded.updated_at`,
-          [dbKey, serialized, admin.email]
+          [dbKey, serialized, admin.user.email]
         );
       }),
     ]);
@@ -120,7 +120,7 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     return jsonNoCache({ success: false, error: 'Invalid or missing tableKey' }, 400);
   }
 
-  const { kvKey, dbKey } = buildStorageKeys(admin.email, tableKey);
+  const { kvKey, dbKey } = buildStorageKeys(admin.user.email, tableKey);
 
   await Promise.all([
     kvDelete(kvKey, cfEnv).catch(() => false),

@@ -2,7 +2,7 @@
 // Admin Member Removal Endpoint
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
-import { hasPermission } from '@utils/rbac';
+import { hasPermission, invalidateAdminRbacCache } from '@utils/rbac';
 import { deleteAdminMember, getAdminMember } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
 import { getRuntimeEnv } from '@utils/auth';
@@ -45,6 +45,7 @@ export const DELETE: APIRoute = async (context) => {
   }
 
   await deleteAdminMember(targetEmail);
+  await invalidateAdminRbacCache(targetEmail, cfEnv);
 
   recordAdminAudit(context, {
     adminEmail: auth.user.email,

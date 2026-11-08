@@ -83,7 +83,7 @@ export async function listAuditLogs(options: {
     }
 
     const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
-    const countRow = await db.queryFirst<{ count: number }>(
+    const countRow = await db.first<{ count: number }>(
       `SELECT count(*) as count FROM admin_audit_logs ${whereClause}`,
       params
     );

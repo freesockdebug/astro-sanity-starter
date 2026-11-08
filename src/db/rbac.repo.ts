@@ -123,7 +123,7 @@ export async function listAdminRoles(): Promise<AdminRole[]> {
 export async function getAdminRole(code: string): Promise<AdminRole> {
   return executeWithAutoSchema(async (db: DbClient) => {
     try {
-      const row = await db.queryFirst<any>('SELECT * FROM admin_roles WHERE code = ?', [code]);
+      const row = await db.first<any>('SELECT * FROM admin_roles WHERE code = ?', [code]);
       if (row) return parseRoleRow(row);
     } catch {}
     return SYSTEM_ROLES[code] || SYSTEM_ROLES.sales_rep;
@@ -173,7 +173,7 @@ export async function getAdminMember(email: string): Promise<AdminMemberWithRole
 
   return executeWithAutoSchema(async (db: DbClient) => {
     try {
-      const row = await db.queryFirst<any>(
+      const row = await db.first<any>(
         `SELECT m.*, r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system
          FROM admin_members m
          LEFT JOIN admin_roles r ON m.role_code = r.code
@@ -220,21 +220,21 @@ export async function upsertAdminMember(data: {
   const email = data.email.trim().toLowerCase();
   if (!email) throw new Error('Email is required');
 
-  const roleCode = data.role_code || 'sales_rep';
+  const roleCode = data.role_code !== undefined ? data.role_code : null;
   const status = data.status || 'ACTIVE';
-  const name = data.name || '';
+  const name = data.name !== undefined ? data.name : null;
   const createdBy = data.created_by || 'system';
 
   await executeWithAutoSchema(async (db: DbClient) => {
     await db.execute(
       `INSERT INTO admin_members (email, name, role_code, status, created_by, updated_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))
+       VALUES (?, COALESCE(?, ''), COALESCE(?, 'sales_rep'), ?, ?, datetime('now'))
        ON CONFLICT(email) DO UPDATE SET
-         name = excluded.name,
-         role_code = excluded.role_code,
+         name = COALESCE(?, admin_members.name),
+         role_code = COALESCE(?, admin_members.role_code),
          status = excluded.status,
          updated_at = datetime('now')`,
-      [email, name, roleCode, status, createdBy]
+      [email, name, roleCode, status, createdBy, name, roleCode]
     );
   });
 }
