@@ -13,12 +13,13 @@ import {
 } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
 import { getMergedAdminEmails } from '@utils/auth';
+import { getDictMap } from '@utils/dicts';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const VALID_TIERS = new Set<CustomerTier>(['STANDARD', 'VIP', 'PARTNER']);
+const DEFAULT_VALID_TIERS = new Set<string>(['STANDARD', 'VIP', 'PARTNER', 'DISTRIBUTOR']);
 const VALID_STATUSES = new Set<UserStatus>(['ACTIVE', 'BLOCKED']);
 
 export const GET: APIRoute = async ({ request, params }) => {
@@ -106,8 +107,12 @@ export const POST: APIRoute = async (context) => {
     );
   }
 
-  if (tier && !VALID_TIERS.has(tier)) {
-    return jsonNoCache({ error: 'Invalid tier value. Allowed: STANDARD, VIP, PARTNER.' }, 400);
+  if (tier) {
+    const tierDictMap = await getDictMap(cfEnv, 'customer_tiers').catch(() => ({}));
+    const isValidTier = Boolean(tierDictMap[tier]) || DEFAULT_VALID_TIERS.has(tier);
+    if (!isValidTier) {
+      return jsonNoCache({ error: `Invalid tier value "${tier}". Please configure it in Data Dictionaries.` }, 400);
+    }
   }
 
   if (status && !VALID_STATUSES.has(status)) {

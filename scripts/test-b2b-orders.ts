@@ -21,6 +21,15 @@ import {
   listAllLoginHistory,
 } from '../src/utils/db';
 import {
+  listDictGroups,
+  listDictItems,
+  upsertDictItem,
+  toggleDictItemEnabled,
+  deleteDictItem,
+  getDashboardStats,
+} from '../src/db';
+import { getTrackingUrl } from '../src/utils/shipping';
+import {
   createSessionToken,
   verifySessionToken,
   checkIsAdmin,
@@ -864,6 +873,57 @@ async function runSelfCheck() {
   assert.strictEqual(typeof repInList.is_logto_synced, 'boolean');
 
   console.log('✔ [PASS] RBAC Custom Role Upsert/Delete Guard, Member Workload Fields & Logto Candidate Picker verified');
+
+  // 30. Universal Data Dictionary Engine, Tracking Resolution & Executive Dashboard Stats
+  const dictGroups = await listDictGroups();
+  assert.ok(dictGroups.length >= 7, 'Should have at least 7 default dict groups seeded');
+  const carrierGroup = dictGroups.find(g => g.code === 'shipping_carriers');
+  assert.ok(carrierGroup, 'shipping_carriers group should exist');
+
+  const carriers = await listDictItems('shipping_carriers', true);
+  assert.ok(carriers.length >= 5, 'Should have default shipping carriers seeded');
+
+  // Test upsert custom carrier
+  await upsertDictItem({
+    group_code: 'shipping_carriers',
+    item_key: 'test_courier',
+    item_label: 'Test Express Courier',
+    badge_color: 'cyan',
+    meta: { tracking_url: 'https://track.testexpress.com/{tracking}' },
+    sort_order: 99,
+    is_enabled: true,
+  });
+
+  const updatedCarriers = await listDictItems('shipping_carriers', false);
+  const testCarrier = updatedCarriers.find(c => c.item_key === 'test_courier');
+  assert.ok(testCarrier, 'Newly upserted carrier should be in list');
+  assert.strictEqual(testCarrier.badge_color, 'cyan');
+
+  // Test dynamic tracking URL resolution
+  const resolvedUrl = getTrackingUrl('Test Express Courier', 'TRK999888', testCarrier.meta?.tracking_url);
+  assert.strictEqual(resolvedUrl, 'https://track.testexpress.com/TRK999888');
+
+  // Test toggle enabled
+  await toggleDictItemEnabled('shipping_carriers', 'test_courier', false);
+  const activeCarriers = await listDictItems('shipping_carriers', true);
+  assert.strictEqual(activeCarriers.some(c => c.item_key === 'test_courier'), false, 'Disabled item should not be in active list');
+
+  // Test delete dict item
+  await deleteDictItem('shipping_carriers', 'test_courier');
+  const finalCarriers = await listDictItems('shipping_carriers', false);
+  assert.strictEqual(finalCarriers.some(c => c.item_key === 'test_courier'), false, 'Deleted item should be removed');
+
+  // Test Executive Dashboard Stats Aggregation
+  const dashboardStats = await getDashboardStats();
+  assert.strictEqual(typeof dashboardStats.totalOrders, 'number');
+  assert.strictEqual(typeof dashboardStats.orders7Days, 'number');
+  assert.strictEqual(typeof dashboardStats.overdueSla, 'number');
+  assert.ok(typeof dashboardStats.statusFunnel === 'object', 'statusFunnel should be object');
+  assert.ok(Array.isArray(dashboardStats.topCountries), 'topCountries should be array');
+  assert.ok(Array.isArray(dashboardStats.topSkus), 'topSkus should be array');
+  assert.ok(Array.isArray(dashboardStats.repWorkloads), 'repWorkloads should be array');
+
+  console.log('✔ [PASS] Universal Data Dictionary Engine, Tracking Resolution & Executive Dashboard Stats verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

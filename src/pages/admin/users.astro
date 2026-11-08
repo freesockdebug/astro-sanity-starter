@@ -7,6 +7,7 @@ import TableColumnController from '@components/admin/TableColumnController.astro
 import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
 import { listAdminMembers } from '@utils/db';
+import { getDictItems } from '@utils/dicts';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -20,7 +21,13 @@ const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectR
 );
 if (redirectResponse) return redirectResponse;
 
-const teamMembers = (await listAdminMembers().catch(() => []))
+const [teamMembersList, customerTiers, customerTags] = await Promise.all([
+  listAdminMembers().catch(() => []),
+  getDictItems(cfEnv, 'customer_tiers', true).catch(() => []),
+  getDictItems(cfEnv, 'customer_tags', true).catch(() => []),
+]);
+
+const teamMembers = teamMembersList
   .filter((m: any) => m.status === 'ACTIVE')
   .map((m: any) => ({
     email: m.email,
@@ -163,6 +170,19 @@ const pageTitle = 'Customer & Access Management';
           class="relative flex items-center w-36 md:w-40 lg:w-44 xl:w-56 2xl:w-64"
         />
 
+        <!-- Export CSV Button -->
+        <button
+          id="btn-export-users-csv"
+          type="button"
+          class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white border border-black/10 transition-all cursor-pointer shadow-2xs"
+          title="Export current buyers list to CSV"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>Export CSV</span>
+        </button>
+
         <!-- Columns & Density Controller -->
         <TableColumnController
           controllerBtnId="users-columns-btn"
@@ -231,22 +251,14 @@ const pageTitle = 'Customer & Access Management';
         <!-- Customer Tier Selection -->
         <div>
           <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Customer Tier (B2B Classification)</label>
-          <div class="grid grid-cols-3 gap-2">
-            <label class={`flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 transition-all ${canEditTier ? 'cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5' : 'opacity-60 cursor-not-allowed'}`}>
-              <input type="radio" name="tier" value="STANDARD" class="sr-only" disabled={!canEditTier} />
-              <span class="font-semibold">Standard</span>
-              <span class="text-[10px] text-[#86868b]">Regular</span>
-            </label>
-            <label class={`flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 transition-all ${canEditTier ? 'cursor-pointer hover:border-black/30 has-checked:border-amber-600 has-checked:bg-amber-50' : 'opacity-60 cursor-not-allowed'}`}>
-              <input type="radio" name="tier" value="VIP" class="sr-only" disabled={!canEditTier} />
-              <span class="font-semibold text-amber-800">VIP</span>
-              <span class="text-[10px] text-amber-700/80">Key Buyer</span>
-            </label>
-            <label class={`flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 transition-all ${canEditTier ? 'cursor-pointer hover:border-black/30 has-checked:border-purple-600 has-checked:bg-purple-50' : 'opacity-60 cursor-not-allowed'}`}>
-              <input type="radio" name="tier" value="PARTNER" class="sr-only" disabled={!canEditTier} />
-              <span class="font-semibold text-purple-800">Partner</span>
-              <span class="text-[10px] text-purple-700/80">Atelier Contract</span>
-            </label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {customerTiers.map((t: any) => (
+              <label class={`flex flex-col items-center justify-center p-2 rounded-xl border border-black/10 transition-all text-center ${canEditTier ? 'cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5' : 'opacity-60 cursor-not-allowed'}`}>
+                <input type="radio" name="tier" value={t.item_key} class="sr-only" disabled={!canEditTier} />
+                <span class="font-semibold text-xs text-[#1d1d1f]">{t.item_label}</span>
+                <span class="text-[9px] text-[#86868b] truncate max-w-[80px]">{t.meta?.discount_label || t.item_key}</span>
+              </label>
+            ))}
           </div>
           {!canEditTier && <p class="text-[10px] text-[#86868b] mt-1">Requires users:edit_tier permission to change classification</p>}
         </div>
@@ -283,9 +295,25 @@ const pageTitle = 'Customer & Access Management';
           {!canAssign && <p class="text-[10px] text-[#86868b] mt-1">Requires users:assign permission to transfer accounts</p>}
         </div>
 
-        <!-- Internal Admin Notes -->
+        <!-- Internal Admin Notes with Quick CRM Tags -->
         <div>
-          <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Internal Admin Remarks (Private to staff)</label>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block font-semibold text-[11px] text-[#52525b]">Internal Admin Remarks (Private CRM)</label>
+            <span class="text-[10px] text-[#86868b]">Click tag to append:</span>
+          </div>
+          {customerTags.length > 0 && (
+            <div class="flex items-center gap-1.5 flex-wrap pb-2">
+              {customerTags.map((t: any) => (
+                <button
+                  type="button"
+                  class="btn-crm-tag px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all border border-black/5 cursor-pointer"
+                  data-tag={`[#${t.item_label}]`}
+                >
+                  #{t.item_label}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             id="drawer-notes-input"
             name="admin_notes"
@@ -319,6 +347,17 @@ const pageTitle = 'Customer & Access Management';
             <span class="text-[10px] text-[#86868b]">{systemSettings?.login_retention_days || 90}-day Retention</span>
           </div>
           <div id="drawer-recent-logins-list" class="space-y-1.5 text-xs"></div>
+        </div>
+
+        <!-- Account Governance & Lifecycle Audit Timeline -->
+        <div class="pt-3 border-t border-black/5 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block font-semibold text-[11px] text-[#52525b]">Account Governance Timeline</label>
+            <span id="drawer-audit-loading" class="text-[10px] text-[#86868b] hidden">Loading...</span>
+          </div>
+          <div id="drawer-audit-timeline-list" class="space-y-1.5 text-xs max-h-48 overflow-y-auto">
+            <p class="text-[11px] text-[#86868b] italic">No audit records yet.</p>
+          </div>
         </div>
 
         <!-- Error / Success Alert Bar -->
@@ -921,6 +960,45 @@ const pageTitle = 'Customer & Access Management';
           }).join('');
         }
       }
+
+      // Load customer audit timeline
+      const auditTimelineEl = document.getElementById('drawer-audit-timeline-list');
+      const auditLoadingEl = document.getElementById('drawer-audit-loading');
+      if (auditTimelineEl) {
+        auditLoadingEl?.classList.remove('hidden');
+        try {
+          const auditRes = await fetch(`/api/admin/audit?targetId=${encodeURIComponent(userId)}&limit=15`);
+          const auditData = await auditRes.json();
+          auditLoadingEl?.classList.add('hidden');
+          if (auditRes.ok && auditData.logs && auditData.logs.length > 0) {
+            auditTimelineEl.innerHTML = auditData.logs.map((log) => {
+              const date = log.created_at ? formatAdminTime(log.created_at, 'full') : '—';
+              let diffText = '';
+              try {
+                const diff = log.diff_json ? JSON.parse(log.diff_json) : null;
+                if (diff) {
+                  diffText = Object.keys(diff).map((k) => `${k}: ${JSON.stringify(diff[k].from)} → ${JSON.stringify(diff[k].to)}`).join(', ');
+                }
+              } catch {}
+              return `
+                <div class="p-2 rounded-xl bg-[#fafafa] border border-black/5 space-y-0.5">
+                  <div class="flex items-center justify-between text-[10px]">
+                    <span class="font-bold text-[#1d1d1f]">${escapeHtml(log.action)}</span>
+                    <span class="font-mono text-[#86868b]">${escapeHtml(date)}</span>
+                  </div>
+                  <div class="text-[10px] text-[#52525b] truncate">By: ${escapeHtml(log.admin_email)}</div>
+                  ${diffText ? `<div class="text-[9px] font-mono text-emerald-800">${escapeHtml(diffText)}</div>` : ''}
+                </div>
+              `;
+            }).join('');
+          } else {
+            auditTimelineEl.innerHTML = `<p class="text-[11px] text-[#86868b] italic">No administrative changes recorded for this buyer.</p>`;
+          }
+        } catch {
+          auditLoadingEl?.classList.add('hidden');
+          auditTimelineEl.innerHTML = `<p class="text-[11px] text-rose-600">Failed to load timeline.</p>`;
+        }
+      }
     } catch (err) {
       if (err.name !== 'AbortError') {
         if (ordersListEl) ordersListEl.innerHTML = `<div class="p-3 text-center text-xs text-rose-600">Failed to load details.</div>`;
@@ -1019,11 +1097,94 @@ const pageTitle = 'Customer & Access Management';
         await clientCache.invalidatePrefix('admin:users:');
         (window as any).__showToast?.('Customer tier & status updated', 'success');
         hideDrawer();
-        loadUsers(false);
+        // CRM Tag Quick Append Listener
+  document.querySelectorAll('.btn-crm-tag').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tag = btn.getAttribute('data-tag') || '';
+      if (!notesInput || !tag) return;
+      const current = notesInput.value.trim();
+      if (!current.includes(tag)) {
+        notesInput.value = current ? `${current} ${tag}` : tag;
+      }
+    });
+  });
+
+  // Export Buyers CSV Listener
+  document.getElementById('btn-export-users-csv')?.addEventListener('click', () => {
+    if (!currentUsersList || currentUsersList.length === 0) {
+      (window as any).__showToast?.('No buyer records to export', 'error');
+      return;
+    }
+    const headers = ['ID', 'Email', 'Name', 'Company', 'Tier', 'Status', 'Assigned Rep', 'Total Orders', 'CRM Notes', 'Created At'];
+    const rows = currentUsersList.map((u) => [
+      u.id,
+      u.email,
+      u.name || '',
+      u.company_name || '',
+      u.tier || 'STANDARD',
+      u.status || 'ACTIVE',
+      u.assigned_to || '',
+      u.total_orders || 0,
+      (u.admin_notes || '').replace(/[\n\r]+/g, ' '),
+      u.created_at || '',
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers, ...rows]
+      .map((e) => e.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `buyers_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    (window as any).__showToast?.(`Exported ${currentUsersList.length} buyers to CSV`, 'success');
+  });
+
+  loadUsers(false);
       } else {
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
           feedbackEl.textContent = data.error || 'Failed to save changes';
+        }
+      }
+
+      // Load customer audit timeline
+      const auditTimelineEl = document.getElementById('drawer-audit-timeline-list');
+      const auditLoadingEl = document.getElementById('drawer-audit-loading');
+      if (auditTimelineEl) {
+        auditLoadingEl?.classList.remove('hidden');
+        try {
+          const auditRes = await fetch(`/api/admin/audit?targetId=${encodeURIComponent(userId)}&limit=15`);
+          const auditData = await auditRes.json();
+          auditLoadingEl?.classList.add('hidden');
+          if (auditRes.ok && auditData.logs && auditData.logs.length > 0) {
+            auditTimelineEl.innerHTML = auditData.logs.map((log) => {
+              const date = log.created_at ? formatAdminTime(log.created_at, 'full') : '—';
+              let diffText = '';
+              try {
+                const diff = log.diff_json ? JSON.parse(log.diff_json) : null;
+                if (diff) {
+                  diffText = Object.keys(diff).map((k) => `${k}: ${JSON.stringify(diff[k].from)} → ${JSON.stringify(diff[k].to)}`).join(', ');
+                }
+              } catch {}
+              return `
+                <div class="p-2 rounded-xl bg-[#fafafa] border border-black/5 space-y-0.5">
+                  <div class="flex items-center justify-between text-[10px]">
+                    <span class="font-bold text-[#1d1d1f]">${escapeHtml(log.action)}</span>
+                    <span class="font-mono text-[#86868b]">${escapeHtml(date)}</span>
+                  </div>
+                  <div class="text-[10px] text-[#52525b] truncate">By: ${escapeHtml(log.admin_email)}</div>
+                  ${diffText ? `<div class="text-[9px] font-mono text-emerald-800">${escapeHtml(diffText)}</div>` : ''}
+                </div>
+              `;
+            }).join('');
+          } else {
+            auditTimelineEl.innerHTML = `<p class="text-[11px] text-[#86868b] italic">No administrative changes recorded for this buyer.</p>`;
+          }
+        } catch {
+          auditLoadingEl?.classList.add('hidden');
+          auditTimelineEl.innerHTML = `<p class="text-[11px] text-rose-600">Failed to load timeline.</p>`;
         }
       }
     } catch (err) {
@@ -1128,7 +1289,51 @@ const pageTitle = 'Customer & Access Management';
       if (currentSearch) clearBtn.classList.remove('hidden');
       else clearBtn.classList.add('hidden');
     }
-    loadUsers(false);
+    // CRM Tag Quick Append Listener
+  document.querySelectorAll('.btn-crm-tag').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tag = btn.getAttribute('data-tag') || '';
+      if (!notesInput || !tag) return;
+      const current = notesInput.value.trim();
+      if (!current.includes(tag)) {
+        notesInput.value = current ? `${current} ${tag}` : tag;
+      }
+    });
+  });
+
+  // Export Buyers CSV Listener
+  document.getElementById('btn-export-users-csv')?.addEventListener('click', () => {
+    if (!currentUsersList || currentUsersList.length === 0) {
+      (window as any).__showToast?.('No buyer records to export', 'error');
+      return;
+    }
+    const headers = ['ID', 'Email', 'Name', 'Company', 'Tier', 'Status', 'Assigned Rep', 'Total Orders', 'CRM Notes', 'Created At'];
+    const rows = currentUsersList.map((u) => [
+      u.id,
+      u.email,
+      u.name || '',
+      u.company_name || '',
+      u.tier || 'STANDARD',
+      u.status || 'ACTIVE',
+      u.assigned_to || '',
+      u.total_orders || 0,
+      (u.admin_notes || '').replace(/[\n\r]+/g, ' '),
+      u.created_at || '',
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers, ...rows]
+      .map((e) => e.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `buyers_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    (window as any).__showToast?.(`Exported ${currentUsersList.length} buyers to CSV`, 'success');
+  });
+
+  loadUsers(false);
   });
 
   // Initial load
@@ -1150,6 +1355,50 @@ const pageTitle = 'Customer & Access Management';
       loadUsers();
     });
   }
+
+  // CRM Tag Quick Append Listener
+  document.querySelectorAll('.btn-crm-tag').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tag = btn.getAttribute('data-tag') || '';
+      if (!notesInput || !tag) return;
+      const current = notesInput.value.trim();
+      if (!current.includes(tag)) {
+        notesInput.value = current ? `${current} ${tag}` : tag;
+      }
+    });
+  });
+
+  // Export Buyers CSV Listener
+  document.getElementById('btn-export-users-csv')?.addEventListener('click', () => {
+    if (!currentUsersList || currentUsersList.length === 0) {
+      (window as any).__showToast?.('No buyer records to export', 'error');
+      return;
+    }
+    const headers = ['ID', 'Email', 'Name', 'Company', 'Tier', 'Status', 'Assigned Rep', 'Total Orders', 'CRM Notes', 'Created At'];
+    const rows = currentUsersList.map((u) => [
+      u.id,
+      u.email,
+      u.name || '',
+      u.company_name || '',
+      u.tier || 'STANDARD',
+      u.status || 'ACTIVE',
+      u.assigned_to || '',
+      u.total_orders || 0,
+      (u.admin_notes || '').replace(/[\n\r]+/g, ' '),
+      u.created_at || '',
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers, ...rows]
+      .map((e) => e.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `buyers_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    (window as any).__showToast?.(`Exported ${currentUsersList.length} buyers to CSV`, 'success');
+  });
 
   loadUsers(false);
 </script>

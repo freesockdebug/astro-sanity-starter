@@ -28,15 +28,33 @@ const teamMembers = (await listAdminMembers().catch(() => []))
     roleName: m.role?.name || m.role_code,
   }));
 
-const defaultCarriers = ['DHL Express', 'FedEx International', 'UPS Worldwide', 'SF Express', 'Air Freight', 'Other'];
-const carrierOptions = systemSettings?.shipping_carriers
-  ? systemSettings.shipping_carriers.split(',').map((c: string) => c.trim()).filter(Boolean)
-  : defaultCarriers;
+import { getDictItems } from '@utils/dicts';
+
+const [carrierDictItems, quickReplyItems, inquiryTypeItems] = await Promise.all([
+  getDictItems(cfEnv, 'shipping_carriers', true).catch(() => []),
+  getDictItems(cfEnv, 'quick_replies', true).catch(() => []),
+  getDictItems(cfEnv, 'inquiry_types', true).catch(() => []),
+]);
+
+const carrierOptions = carrierDictItems.length > 0
+  ? carrierDictItems.map((c: any) => ({ name: c.item_label, key: c.item_key, url: c.meta?.tracking_url || '' }))
+  : [
+      { name: 'DHL Express', key: 'dhl', url: 'https://www.dhl.com/global-en/home/tracking/tracking-express.html?submit=1&tracking-id={tracking}' },
+      { name: 'FedEx', key: 'fedex', url: 'https://www.fedex.com/fedextrack/?trknbr={tracking}' },
+      { name: 'UPS', key: 'ups', url: 'https://www.ups.com/track?tracknum={tracking}' },
+      { name: 'SF Express', key: 'sf_express', url: 'https://www.sf-international.com/us/en/dynamic_function/waybill/#search/bill-number/{tracking}' },
+      { name: 'EMS / China Post', key: 'ems', url: 'https://www.ems.com.cn/queryList?mailNos={tracking}' },
+    ];
+
+const approveReplies = quickReplyItems.filter((q: any) => q.meta?.scene === 'approval');
+const shipReplies = quickReplyItems.filter((q: any) => q.meta?.scene === 'shipping');
+const rejectReplies = quickReplyItems.filter((q: any) => q.meta?.scene === 'rejection');
 
 const initialStatus = Astro.url.searchParams.get('status') || 'ALL';
 const initialSearch = Astro.url.searchParams.get('search') || '';
 const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
 const initialAssignedTo = Astro.url.searchParams.get('assignedTo') || '';
+const initialInquiryType = Astro.url.searchParams.get('inquiryType') || 'ALL';
 const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
 const pageTitle = 'B2B Admin Fulfillment Workspace';
@@ -220,6 +238,23 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
         </div>
 
         <input type="hidden" id="approve-order-id" />
+        <div>
+          <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Approval Note / Internal Remarks</label>
+          <textarea
+            id="approve-remark-input"
+            rows="2"
+            placeholder="e.g. Swatch approved, queued for sample cutting..."
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
+          ></textarea>
+          {approveReplies.length > 0 && (
+            <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
+              <span class="text-[10px] text-[#86868b]">Quick:</span>
+              {approveReplies.map((r: any) => (
+                <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors cursor-pointer" data-target="approve-remark-input" data-text={r.meta?.content}>{r.item_label}</button>
+              ))}
+            </div>
+          )}
+        </div>
         <div id="approve-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-2.5 text-xs font-medium leading-relaxed"></div>
 
         <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
@@ -271,8 +306,9 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
           ></textarea>
           <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
             <span class="text-[10px] text-[#86868b]">Quick:</span>
-            <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors" data-target="reject-reason-input" data-text="Order quantity does not meet factory minimum production run (MOQ).">MOQ Not Met</button>
-            <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors" data-target="reject-reason-input" data-text="Selected specialty yarn colorway is currently out of season.">Yarn Unavailable</button>
+            {rejectReplies.map((r: any) => (
+              <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors cursor-pointer" data-target="reject-reason-input" data-text={r.meta?.content}>{r.item_label}</button>
+            ))}
           </div>
         </div>
 
@@ -325,13 +361,13 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
               id="ship-carrier-select"
               name="carrier"
               required
-              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-semibold"
             >
-              {carrierOptions.map((c: string) => (
-                <option value={c}>{c}</option>
+              {carrierOptions.map((c: any) => (
+                <option value={c.name} data-url-template={c.url}>{c.name}</option>
               ))}
-              {!carrierOptions.includes('Other') && <option value="Other">Other / Custom Carrier</option>}
             </select>
+            <p id="carrier-tracking-preview" class="text-[10px] font-mono text-blue-600 truncate mt-1"></p>
           </div>
 
           <div>
@@ -355,11 +391,14 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
               placeholder="e.g. Packed in 2 export cartons, estimated arrival Nov 12."
               class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
             ></textarea>
-            <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
-              <span class="text-[10px] text-[#86868b]">Quick:</span>
-              <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors" data-target="ship-remark" data-text="Air express dispatched. Tracking details updated above; delivery in 5-7 days.">Air 5-7d</button>
-              <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors" data-target="ship-remark" data-text="Export customs clearance complete. Flight departure scheduled tonight.">Customs Cleared</button>
-            </div>
+            {shipReplies.length > 0 && (
+              <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
+                <span class="text-[10px] text-[#86868b]">Quick:</span>
+                {shipReplies.map((r: any) => (
+                  <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors cursor-pointer" data-target="ship-remark" data-text={r.meta?.content}>{r.item_label}</button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div id="ship-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-[11px] font-medium leading-relaxed"></div>
@@ -423,13 +462,15 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     </dialog>
   </Fragment>
 
-  <!-- App Meta for client permissions -->
+  <!-- App Meta for client permissions and dynamic dictionaries -->
   <div
     id="orders-app-meta"
     data-can-approve={canApprove ? 'true' : 'false'}
     data-can-ship={canShip ? 'true' : 'false'}
     data-can-claim={canClaim ? 'true' : 'false'}
     data-can-assign={canAssign ? 'true' : 'false'}
+    data-carriers={JSON.stringify(carrierOptions)}
+    data-inquiry-types={JSON.stringify(inquiryTypeItems)}
     class="hidden"
   ></div>
 
@@ -496,10 +537,41 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     { id: 'action', label: 'Fulfillment Actions', defaultWidth: 220, minWidth: 160, visible: true, canHide: false, pinRight: true, align: 'right' },
   ];
 
-  function resolveTrackingUrl(carrier?: string, trackingNo?: string): string {
+  const appMetaEl = document.getElementById('orders-app-meta');
+  const canApprove = appMetaEl?.getAttribute('data-can-approve') === 'true';
+  const canShip = appMetaEl?.getAttribute('data-can-ship') === 'true';
+  const canClaim = appMetaEl?.getAttribute('data-can-claim') === 'true';
+  const canAssign = appMetaEl?.getAttribute('data-can-assign') === 'true';
+
+  let clientCarriers: any[] = [];
+  try {
+    const rawCarriers = appMetaEl?.getAttribute('data-carriers');
+    if (rawCarriers) clientCarriers = JSON.parse(rawCarriers);
+  } catch {}
+
+  let clientInquiryTypes: any[] = [];
+  try {
+    const rawInquiry = appMetaEl?.getAttribute('data-inquiry-types');
+    if (rawInquiry) clientInquiryTypes = JSON.parse(rawInquiry);
+  } catch {}
+  const inquiryTypeMap = new Map(clientInquiryTypes.map((i: any) => [String(i.item_key || '').toLowerCase(), i]));
+
+  function resolveTrackingUrl(carrier?: string, trackingNo?: string, customTemplate?: string): string {
     if (!trackingNo) return '';
     const cleanNo = encodeURIComponent(String(trackingNo).trim());
+    if (customTemplate && (customTemplate.includes('{tracking}') || customTemplate.includes('{tracking_no}'))) {
+      return customTemplate.replace('{tracking_no}', cleanNo).replace('{tracking}', cleanNo);
+    }
     const c = String(carrier || '').toLowerCase();
+    const matched = clientCarriers.find((item: any) =>
+      item.key?.toLowerCase() === c ||
+      item.name?.toLowerCase() === c ||
+      item.name?.toLowerCase().includes(c) ||
+      c.includes(item.key?.toLowerCase())
+    );
+    if (matched && matched.url) {
+      return matched.url.replace('{tracking_no}', cleanNo).replace('{tracking}', cleanNo);
+    }
     if (c.includes('dhl')) return `https://www.dhl.com/en/express/tracking.html?AWB=${cleanNo}`;
     if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${cleanNo}`;
     if (c.includes('ups')) return `https://www.ups.com/track?tracknum=${cleanNo}`;
@@ -507,6 +579,25 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     if (c.includes('ems')) return `https://www.ems.com.cn/queryList?mailNum=${cleanNo}`;
     return `https://t.17track.net/en#nums=${cleanNo}`;
   }
+
+  function renderInquiryBadge(type?: string): string {
+    const raw = String(type || 'quote_cart').toLowerCase();
+    const item = inquiryTypeMap.get(raw);
+    const label = item?.item_label || (raw === 'swatch_request' ? 'Swatch Sample' : (raw === 'custom_oem' ? 'Custom OEM' : 'Bulk RFQ'));
+    const color = item?.badge_color || (raw === 'swatch_request' ? 'amber' : (raw === 'custom_oem' ? 'purple' : 'blue'));
+    const colorClasses: Record<string, string> = {
+      blue: 'bg-blue-50 text-blue-700 border-blue-200',
+      emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      amber: 'bg-amber-50 text-amber-700 border-amber-200',
+      rose: 'bg-rose-50 text-rose-700 border-rose-200',
+      purple: 'bg-purple-50 text-purple-700 border-purple-200',
+      cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+      zinc: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+    };
+    const cls = colorClasses[color] || colorClasses.blue;
+    return `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${cls}">${escapeHtml(label)}</span>`;
+  }
+
   let currentStatus = 'ALL';
   let currentSearch = '';
   let currentTimeWindow = 'ALL';
@@ -516,11 +607,6 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   let currentTotalPages = 1;
   let currentOrdersList: any[] = [];
   let activeAbortController: AbortController | null = null;
-  const appMetaEl = document.getElementById('orders-app-meta');
-  const canApprove = appMetaEl?.getAttribute('data-can-approve') === 'true';
-  const canShip = appMetaEl?.getAttribute('data-can-ship') === 'true';
-  const canClaim = appMetaEl?.getAttribute('data-can-claim') === 'true';
-  const canAssign = appMetaEl?.getAttribute('data-can-assign') === 'true';
 
   // Batch Selection State
   const selectedOrderIds = new Set<string>();
@@ -868,12 +954,17 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
           const totalQty = Number(order.total_quantity || 0);
           const totalStyles = Number(order.total_styles || 0);
           const isMobileExpanded = expandedMobileIds.has(`detail-m-${safeId}`);
+          const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(order.created_at).getTime() > 24 * 3600 * 1000);
 
           return `
             <div class="p-3.5 space-y-2.5 bg-white">
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0 flex-1">
-                  <span class="font-mono font-bold text-xs text-[#1d1d1f] block truncate">${safeNo}</span>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="font-mono font-bold text-xs text-[#1d1d1f] block truncate">${safeNo}</span>
+                    ${renderInquiryBadge(order.inquiry_type)}
+                    ${isOverduePending ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse" title="Pending review over 24 hours">🔥 >24h SLA</span>` : ''}
+                  </div>
                   <span class="text-[10px] text-[#86868b] font-mono block mt-0.5">${dateStr}</span>
                 </div>
                 <div class="shrink-0 flex items-center gap-1.5 flex-wrap justify-end">
@@ -937,6 +1028,16 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
                   ${order.customer_notes ? `<div class="pt-1 border-t border-black/5 text-[#52525b] italic">"${escapeHtml(order.customer_notes)}"</div>` : ''}
                   ${order.admin_remark ? `<div class="pt-1 border-t border-black/5 text-rose-700">Remark: ${escapeHtml(order.admin_remark)}</div>` : ''}
                 </div>
+
+                <div class="bg-[#fbfbfd] rounded-xl border border-black/5 p-2.5 text-[11px] space-y-2">
+                  <div class="flex items-center justify-between border-b border-black/5 pb-1">
+                    <span class="font-semibold text-[#1d1d1f]">Audit Timeline</span>
+                    <button type="button" class="btn-load-order-timeline text-[10px] font-medium text-blue-600 hover:underline cursor-pointer" data-id="${safeId}">Load</button>
+                  </div>
+                  <div id="order-timeline-m-${safeId}" class="space-y-1.5 max-h-40 overflow-y-auto">
+                    <p class="text-[10px] text-[#86868b] italic">Tap Load or toggle details to view audit logs.</p>
+                  </div>
+                </div>
               </div>
             </div>
           `;
@@ -960,6 +1061,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
       const totalStyles = Number(order.total_styles || 0);
       const itemCount = order.items?.length || 0;
       const isDesktopExpanded = expandedDesktopIds.has(`detail-${safeId}`);
+      const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(order.created_at).getTime() > 24 * 3600 * 1000);
 
       const cells = visibleCols.map((col) => {
         switch (col.id) {
@@ -972,7 +1074,11 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
           case 'order_no':
             return `
               <td style="width: ${col.defaultWidth}px;" class="${cellPad} font-mono">
-                <span class="font-semibold text-[#1d1d1f] block">${safeNo}</span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-semibold text-[#1d1d1f] block">${safeNo}</span>
+                  ${renderInquiryBadge(order.inquiry_type)}
+                  ${isOverduePending ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse" title="Pending review over 24 hours">🔥 >24h SLA</span>` : ''}
+                </div>
                 <span class="text-[11px] text-[#86868b] block">${dateStr}</span>
               </td>
             `;
@@ -1140,6 +1246,26 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
                   ${order.status === 'REJECTED' && order.admin_remark ? `<div class="bg-rose-50 rounded-xl border border-rose-200 p-3.5 text-xs text-rose-900 space-y-1"><span class="text-[11px] font-semibold text-rose-800 block">Rejection Remark:</span><p>${escapeHtml(order.admin_remark)}</p></div>` : ''}
                 </div>
               </div>
+
+              <!-- Order Lifecycle & Audit Timeline (MineAdmin Traceability) -->
+              <div class="bg-white rounded-xl border border-black/5 p-4 space-y-2.5">
+                <div class="flex items-center justify-between border-b border-black/5 pb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-[#1d1d1f]">Order Lifecycle & Audit Timeline</span>
+                    <span class="text-[10px] text-[#86868b]">Traceability & Operations</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn-load-order-timeline text-[11px] font-medium text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                    data-id="${safeId}"
+                  >
+                    Refresh Timeline
+                  </button>
+                </div>
+                <div id="order-timeline-${safeId}" class="order-audit-timeline-container space-y-2 max-h-56 overflow-y-auto text-xs pr-1">
+                  <p class="text-[11px] text-[#86868b] italic py-0.5">Click expand or refresh to load administrative audit logs.</p>
+                </div>
+              </div>
             </div>
           </td>
         </tr>
@@ -1284,10 +1410,62 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     }
   }
 
+  async function loadOrderAuditTimeline(orderId: string) {
+    const elDesktop = document.getElementById(`order-timeline-${orderId}`);
+    const elMobile = document.getElementById(`order-timeline-m-${orderId}`);
+    if (!elDesktop && !elMobile) return;
+    if (elDesktop) elDesktop.innerHTML = `<p class="text-[11px] text-[#86868b] italic py-1">Loading audit logs...</p>`;
+    if (elMobile) elMobile.innerHTML = `<p class="text-[10px] text-[#86868b] italic py-1">Loading...</p>`;
+    try {
+      const res = await fetch(`/api/admin/audit?targetId=${encodeURIComponent(orderId)}&limit=15`);
+      const data = await res.json();
+      if (res.ok && data.logs && data.logs.length > 0) {
+        const html = data.logs.map((log: any) => {
+          const date = log.created_at ? formatAdminTime(log.created_at, 'full') : '—';
+          let diffText = '';
+          try {
+            const diff = log.diff_json ? JSON.parse(log.diff_json) : null;
+            if (diff) {
+              diffText = Object.keys(diff).map((k) => `${k}: ${JSON.stringify(diff[k].from)} → ${JSON.stringify(diff[k].to)}`).join(', ');
+            }
+          } catch {}
+          return `
+            <div class="p-2 rounded-xl bg-[#fafafa] border border-black/5 space-y-0.5">
+              <div class="flex items-center justify-between text-[10px]">
+                <span class="font-bold text-[#1d1d1f]">${escapeHtml(log.action)}</span>
+                <span class="font-mono text-[#86868b]">${escapeHtml(date)}</span>
+              </div>
+              <div class="text-[10px] text-[#52525b] truncate">By: ${escapeHtml(log.admin_email)}</div>
+              ${diffText ? `<div class="text-[9px] font-mono text-emerald-800 bg-emerald-50/60 p-1 rounded border border-emerald-100">${escapeHtml(diffText)}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+        if (elDesktop) elDesktop.innerHTML = html;
+        if (elMobile) elMobile.innerHTML = html;
+      } else {
+        const noRec = `<p class="text-[11px] text-[#86868b] italic py-1">No administrative status changes or audit logs recorded for this order yet.</p>`;
+        if (elDesktop) elDesktop.innerHTML = noRec;
+        if (elMobile) elMobile.innerHTML = noRec;
+      }
+    } catch (err: any) {
+      const errMsg = `<p class="text-[11px] text-rose-600 py-1">Failed to load: ${escapeHtml(err.message || 'Error')}</p>`;
+      if (elDesktop) elDesktop.innerHTML = errMsg;
+      if (elMobile) elMobile.innerHTML = errMsg;
+    }
+  }
+
   // Event Delegation for Accordion and Action Modals
   const ordersContainer = document.getElementById('orders-container');
   ordersContainer?.addEventListener('click', (e) => {
-    const target = e.target;
+    const target = e.target as HTMLElement;
+
+    // 0. Timeline load button
+    const timelineBtn = target.closest('.btn-load-order-timeline');
+    if (timelineBtn) {
+      const orderId = timelineBtn.getAttribute('data-id');
+      if (orderId) loadOrderAuditTimeline(orderId);
+      return;
+    }
 
     // 1. Toggle Accordion
     const toggleBtn = target.closest('.action-toggle-detail-btn');
@@ -1300,10 +1478,12 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
         const isCurrentlyHidden = targetRow.classList.contains('hidden');
         if (isCurrentlyHidden) {
           targetRow.classList.remove('hidden');
-          if (icon) icon.style.transform = 'rotate(180deg)';
+          if (icon) (icon as HTMLElement).style.transform = 'rotate(180deg)';
+          const rawId = targetId.replace('detail-m-', '').replace('detail-', '');
+          loadOrderAuditTimeline(rawId);
         } else {
           targetRow.classList.add('hidden');
-          if (icon) icon.style.transform = 'rotate(0deg)';
+          if (icon) (icon as HTMLElement).style.transform = 'rotate(0deg)';
         }
       }
       return;
@@ -1353,15 +1533,19 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     if (shipBtn) {
       const orderId = shipBtn.getAttribute('data-id');
       const orderNo = shipBtn.getAttribute('data-no');
-      const modal = document.getElementById('ship-modal');
-      const orderIdInput = document.getElementById('ship-order-id');
+      const modal = document.getElementById('ship-modal') as HTMLDialogElement | null;
+      const orderIdInput = document.getElementById('ship-order-id') as HTMLInputElement | null;
       const orderNoLabel = document.getElementById('ship-modal-order-no');
       const errorEl = document.getElementById('ship-error');
+      const trackingInput = document.getElementById('ship-tracking-number') as HTMLInputElement | null;
+      const trackingPreview = document.getElementById('carrier-tracking-preview');
 
       if (!orderId || !modal) return;
       clearError(errorEl);
       if (orderIdInput) orderIdInput.value = orderId;
       if (orderNoLabel) orderNoLabel.textContent = orderNo || orderId;
+      if (trackingInput) trackingInput.value = '';
+      if (trackingPreview) trackingPreview.textContent = '';
       modal.showModal();
       return;
     }
@@ -1567,9 +1751,31 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   const closeShipModal = document.getElementById('close-ship-modal');
   const cancelShipBtn = document.getElementById('cancel-ship-btn');
 
+  const shipCarrierSelect = document.getElementById('ship-carrier-select') as HTMLSelectElement | null;
+  const shipTrackingInput = document.getElementById('ship-tracking-number') as HTMLInputElement | null;
+  const shipTrackingPreview = document.getElementById('carrier-tracking-preview');
+
+  function updateShipTrackingPreview() {
+    if (!shipTrackingPreview) return;
+    const trackingNo = shipTrackingInput?.value?.trim();
+    if (!trackingNo) {
+      shipTrackingPreview.textContent = '';
+      return;
+    }
+    const selectedOpt = shipCarrierSelect?.options[shipCarrierSelect.selectedIndex];
+    const urlTpl = selectedOpt?.getAttribute('data-url-template') || '';
+    const carrierName = shipCarrierSelect?.value || '';
+    const resolved = resolveTrackingUrl(carrierName, trackingNo, urlTpl);
+    shipTrackingPreview.innerHTML = `Track URL: <a href="${escapeHtml(resolved)}" target="_blank" rel="noopener noreferrer" class="hover:underline font-semibold">${escapeHtml(resolved)} ↗</a>`;
+  }
+
+  shipCarrierSelect?.addEventListener('change', updateShipTrackingPreview);
+  shipTrackingInput?.addEventListener('input', updateShipTrackingPreview);
+
   const hideShipModal = () => {
     clearError(shipErrorEl);
-    shipModal?.close();
+    if (shipTrackingPreview) shipTrackingPreview.textContent = '';
+    (shipModal as HTMLDialogElement)?.close();
   };
   closeShipModal?.addEventListener('click', hideShipModal);
   cancelShipBtn?.addEventListener('click', hideShipModal);

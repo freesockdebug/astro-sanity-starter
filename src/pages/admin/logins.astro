@@ -7,6 +7,7 @@ import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell
 import TableColumnController from '@components/admin/TableColumnController.astro';
 import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
+import { getDictItems } from '@utils/dicts';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -20,6 +21,7 @@ const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectR
 );
 if (redirectResponse) return redirectResponse;
 
+const auditActions = await getDictItems(cfEnv, 'audit_actions', true).catch(() => []);
 const retentionDays = systemSettings?.login_retention_days || 90;
 const initialSearch = Astro.url.searchParams.get('search')?.trim() || '';
 const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
@@ -142,6 +144,21 @@ const pageTitle = 'Login Audit Logs';
 
     <!-- 3. Operation Audit Diff Container (Toggled) -->
     <div id="audit-diff-container" class="hidden flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden flex flex-col">
+      <div class="px-3.5 py-2.5 bg-[#fafafa] border-b border-black/5 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-[#1d1d1f]">Administrative Operation Diff Logs</span>
+          <span class="text-[10px] text-[#86868b]">Indexed audit events</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-[11px] text-[#86868b] font-medium hidden sm:inline">Action Filter:</label>
+          <select id="audit-action-filter" class="px-2.5 py-1 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black font-semibold text-[#1d1d1f]">
+            <option value="">All Actions ({auditActions.length} types)</option>
+            {auditActions.map((a) => (
+              <option value={a.item_key}>{a.item_label} ({a.item_key})</option>
+            ))}
+          </select>
+        </div>
+      </div>
       <div class="flex-1 overflow-auto">
         <table class="w-full text-left text-xs border-collapse">
           <thead class="sticky top-0 bg-[#fbfbfd] border-b border-black/5 text-[#52525b] font-medium z-10 text-[11px]">
@@ -489,18 +506,26 @@ const pageTitle = 'Login Audit Logs';
   const auditDiffContainer = document.getElementById('audit-diff-container');
   const metricsContainer = document.getElementById('logins-metrics-container');
 
+  var auditActionFilter = document.getElementById('audit-action-filter') as HTMLSelectElement | null;
+  auditActionFilter?.addEventListener('change', () => {
+    loadAuditLogs();
+  });
+
   async function loadAuditLogs() {
     const tbody = document.getElementById('audit-table-body');
     if (!tbody) return;
+    const actionVal = auditActionFilter ? auditActionFilter.value : '';
+    const query = actionVal ? `?limit=100&action=${encodeURIComponent(actionVal)}` : '?limit=100';
+
     try {
-      const res = await fetch('/api/admin/audit?limit=100');
+      const res = await fetch(`/api/admin/audit${query}`);
       const data = await res.json();
       if (!res.ok || !data.success) {
         tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-600">Failed to load audit logs: ${escapeHtml(data.error || '')}</td></tr>`;
         return;
       }
       if (!data.logs || data.logs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-[#86868b]">No admin operations recorded yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-[#86868b]">No admin operations found for this action filter.</td></tr>`;
         return;
       }
       tbody.innerHTML = data.logs.map((log: any) => {
@@ -519,12 +544,27 @@ const pageTitle = 'Login Audit Logs';
         } catch {
           diffHtml = `<span class="text-[10px] text-[#86868b]">-</span>`;
         }
+
+        const act = String(log.action || '');
+        let actionBadgeColor = 'bg-slate-100 text-slate-800 border-slate-200';
+        if (act.includes('DELETE') || act.includes('BLOCK') || act.includes('REJECT')) {
+          actionBadgeColor = 'bg-rose-50 text-rose-800 border-rose-200';
+        } else if (act.includes('APPROVE') || act.includes('SHIP')) {
+          actionBadgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+        } else if (act.includes('ASSIGN') || act.includes('MEMBER')) {
+          actionBadgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+        } else if (act.includes('ROLE') || act.includes('TIER')) {
+          actionBadgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+        }
+
         return `
           <tr class="hover:bg-[#fbfbfd]">
             <td class="py-2.5 px-3 font-mono text-[10px] text-[#86868b] whitespace-nowrap">${formatAdminTime(log.created_at, 'full')}</td>
             <td class="py-2.5 px-3 font-medium text-[#1d1d1f] whitespace-nowrap">${escapeHtml(log.admin_email)}</td>
-            <td class="py-2.5 px-3 whitespace-nowrap"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#f5f5f7] text-[#1d1d1f] border border-black/5">${escapeHtml(log.action)}</span></td>
-            <td class="py-2.5 px-3 whitespace-nowrap font-mono text-[11px] text-[#52525b]">${escapeHtml(log.target_type)} <span class="text-black font-semibold">#${escapeHtml(log.target_id)}</span></td>
+            <td class="py-2.5 px-3 whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold border ${actionBadgeColor}">${escapeHtml(log.action)}</span>
+            </td>
+            <td class="py-2.5 px-3 whitespace-nowrap font-mono text-[11px] text-[#52525b]">${escapeHtml(log.target_type)} <span class="text-black font-semibold">#${escapeHtml(log.target_id || '')}</span></td>
             <td class="py-2.5 px-3">${diffHtml || '<span class="text-[#86868b] text-[10px]">-</span>'}</td>
           </tr>
         `;

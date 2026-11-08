@@ -524,3 +524,135 @@ export async function getPendingOrdersCount(): Promise<number> {
   });
 }
 
+export interface DashboardStats {
+  totalOrders: number;
+  orders7Days: number;
+  pendingReview: number;
+  overdueSla: number;
+  statusFunnel: {
+    pending: number;
+    approved: number;
+    shipped: number;
+    rejected: number;
+  };
+  topCountries: Array<{ country: string; count: number; percentage: number }>;
+  topSkus: Array<{ title: string; slug: string; totalQty: number; count: number }>;
+  repWorkloads: Array<{
+    email: string;
+    name: string;
+    roleCode: string;
+    totalOrders: number;
+    pendingOrders: number;
+    shippedOrders: number;
+    assignedCustomers: number;
+  }>;
+}
+
+/**
+ * Aggregates business overview statistics for the executive dashboard in a single roundtrip
+ */
+export async function getDashboardStats(): Promise<DashboardStats> {
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const [
+      totalsRow,
+      statusRows,
+      countryRows,
+      skuRows,
+      repRows,
+    ] = await Promise.all([
+      db.first<any>(`
+        SELECT 
+          COUNT(*) as total_orders,
+          SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) as orders_7d,
+          SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as pending_review,
+          SUM(CASE WHEN status = 'PENDING_APPROVAL' AND created_at <= datetime('now', '-24 hours') THEN 1 ELSE 0 END) as overdue_sla
+        FROM orders
+      `),
+      db.query<any>(`SELECT status, COUNT(*) as count FROM orders GROUP BY status`),
+      db.query<any>(`
+        SELECT destination_country, COUNT(*) as count 
+        FROM orders 
+        WHERE destination_country IS NOT NULL AND destination_country != '' 
+        GROUP BY destination_country 
+        ORDER BY count DESC 
+        LIMIT 5
+      `),
+      db.query<any>(`
+        SELECT title, sku, SUM(quantity) as total_qty, COUNT(id) as count
+        FROM order_items
+        WHERE title IS NOT NULL AND title != ''
+        GROUP BY title
+        ORDER BY count DESC
+        LIMIT 5
+      `),
+      db.query<any>(`
+        SELECT m.email, m.name, m.role_code,
+               (SELECT COUNT(*) FROM orders o WHERE LOWER(o.assigned_to) = LOWER(m.email)) as total_orders,
+               (SELECT COUNT(*) FROM orders o WHERE LOWER(o.assigned_to) = LOWER(m.email) AND o.status = 'PENDING_APPROVAL') as pending_orders,
+               (SELECT COUNT(*) FROM orders o WHERE LOWER(o.assigned_to) = LOWER(m.email) AND o.status = 'SHIPPED') as shipped_orders,
+               (SELECT COUNT(*) FROM users u WHERE LOWER(u.assigned_to) = LOWER(m.email)) as assigned_customers
+        FROM admin_members m
+        WHERE m.status = 'ACTIVE'
+        ORDER BY total_orders DESC
+        LIMIT 10
+      `),
+    ]);
+
+    const total = Number(totalsRow?.total_orders || 0);
+
+    const funnel = {
+      pending: 0,
+      approved: 0,
+      shipped: 0,
+      rejected: 0,
+    };
+
+    (statusRows || []).forEach((r) => {
+      const s = (r.status || '').toUpperCase();
+      const cnt = Number(r.count || 0);
+      if (s === 'PENDING_APPROVAL') funnel.pending = cnt;
+      else if (s === 'APPROVED') funnel.approved = cnt;
+      else if (s === 'SHIPPED') funnel.shipped = cnt;
+      else if (s === 'REJECTED') funnel.rejected = cnt;
+    });
+
+    const topCountries = (countryRows || []).map((r) => {
+      const cnt = Number(r.count || 0);
+      return {
+        country: r.destination_country || 'Unknown',
+        count: cnt,
+        percentage: total > 0 ? Math.round((cnt / total) * 100) : 0,
+      };
+    });
+
+    const topSkus = (skuRows || []).map((r) => ({
+      title: r.title,
+      slug: r.sku || '',
+      totalQty: Number(r.total_qty || 0),
+      count: Number(r.count || 0),
+    }));
+
+    const repWorkloads = (repRows || []).map((r) => ({
+      email: r.email,
+      name: r.name || r.email.split('@')[0],
+      roleCode: r.role_code,
+      totalOrders: Number(r.total_orders || 0),
+      pendingOrders: Number(r.pending_orders || 0),
+      shippedOrders: Number(r.shipped_orders || 0),
+      assignedCustomers: Number(r.assigned_customers || 0),
+    }));
+
+    return {
+      totalOrders: total,
+      orders7Days: Number(totalsRow?.orders_7d || 0),
+      pendingReview: Number(totalsRow?.pending_review || 0),
+      overdueSla: Number(totalsRow?.overdue_sla || 0),
+      statusFunnel: funnel,
+      topCountries,
+      topSkus,
+      repWorkloads,
+    };
+  });
+}
+
+

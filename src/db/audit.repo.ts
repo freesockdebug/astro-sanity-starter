@@ -62,6 +62,7 @@ export async function listAuditLogs(options: {
   targetType?: string;
   targetId?: string;
   adminEmail?: string;
+  action?: string;
   limit?: number;
   offset?: number;
 } = {}): Promise<{ logs: AdminAuditLog[]; total: number }> {
@@ -80,6 +81,10 @@ export async function listAuditLogs(options: {
     if (options.adminEmail) {
       where.push('LOWER(admin_email) = ?');
       params.push(options.adminEmail.toLowerCase());
+    }
+    if (options.action) {
+      where.push('action = ?');
+      params.push(options.action);
     }
 
     const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';

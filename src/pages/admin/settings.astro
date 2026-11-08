@@ -3,7 +3,6 @@
 // Unified Dynamic Configuration Center: D1-backed Settings & Platform Infrastructure Health
 import AdminLayout from '@layouts/AdminLayout.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
-import { DEFAULT_CARRIERS, QUICK_REPLY_TEMPLATES } from '@utils/shipping';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -500,53 +499,69 @@ const pageTitle = 'Workspace Settings';
       </div>
     </div>
 
-    <!-- Section 5: Logistics Tracking & Quick English Templates (Data Dictionary) -->
+    <!-- Section 5: Universal Data Dictionary Engine Integration -->
     <div class="p-5 sm:p-6 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-4">
-      <div class="border-b border-black/5 pb-3">
-        <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">5. Shipping Carrier Tracking & Quick Reply Templates</h2>
-        <p class="text-xs text-[#86868b] mt-0.5">Pre-configured logistics tracking URL templates and English quick-reply chips for order approvals.</p>
+      <div class="border-b border-black/5 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">5. Universal Data Dictionaries (Live Engine)</h2>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              3-Tier Caching Active
+            </span>
+          </div>
+          <p class="text-xs text-[#86868b] mt-0.5">Shipping carriers, quick reply templates, customer tiers, and tags are dynamically configured without code redeployment.</p>
+        </div>
+        <a
+          href="/admin/dicts"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white transition-all shadow-2xs cursor-pointer shrink-0"
+        >
+          <span>Open Data Dictionaries Console</span>
+          <span>→</span>
+        </a>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- Logistics Carriers Dict -->
-        <div class="space-y-2">
-          <h3 class="text-xs font-bold text-[#1d1d1f]">Configured Shipping Carriers</h3>
-          <div class="border border-black/5 rounded-xl divide-y divide-black/5 text-xs bg-[#fbfbfd]">
-            {DEFAULT_CARRIERS.map((c) => (
-              <div class="p-2.5 flex items-center justify-between gap-2">
-                <div>
-                  <span class="font-semibold text-[#1d1d1f]">{c.name}</span>
-                  <p class="font-mono text-[10px] text-[#86868b] truncate max-w-[280px] sm:max-w-xs">{c.urlTemplate}</p>
-                </div>
-                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold shrink-0">Auto-Link</span>
-              </div>
-            ))}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <a
+          href="/admin/dicts?group=shipping_carriers"
+          class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/15 transition-all group block space-y-1.5"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs text-[#1d1d1f] group-hover:text-blue-600 transition-colors">📦 Shipping Carriers</span>
+            <span class="text-[11px] text-[#86868b]">Manage →</span>
           </div>
-        </div>
+          <p class="text-[11px] text-[#52525b] leading-relaxed">Live carrier tracking URL templates (DHL, FedEx, UPS, SF, EMS) with query parameter placeholders.</p>
+        </a>
 
-        <!-- Quick Reply Templates -->
-        <div class="space-y-2">
-          <h3 class="text-xs font-bold text-[#1d1d1f]">Quick Reply English Templates</h3>
-          <div class="border border-black/5 rounded-xl divide-y divide-black/5 text-xs bg-[#fbfbfd]">
-            {QUICK_REPLY_TEMPLATES.map((t) => (
-              <div class="p-2.5 space-y-1">
-                <div class="flex items-center justify-between">
-                  <span class="font-semibold text-[#1d1d1f]">{t.label}</span>
-                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-700 font-medium capitalize">{t.category}</span>
-                </div>
-                <p class="text-[11px] text-[#52525b] italic">"{t.text}"</p>
-              </div>
-            ))}
+        <a
+          href="/admin/dicts?group=quick_replies"
+          class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/15 transition-all group block space-y-1.5"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs text-[#1d1d1f] group-hover:text-blue-600 transition-colors">💬 Quick Reply Templates</span>
+            <span class="text-[11px] text-[#86868b]">Manage →</span>
           </div>
-        </div>
+          <p class="text-[11px] text-[#52525b] leading-relaxed">English response chips for approval remarks, dispatch notifications, and rejection feedback.</p>
+        </a>
+
+        <a
+          href="/admin/dicts?group=customer_tiers"
+          class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/15 transition-all group block space-y-1.5"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs text-[#1d1d1f] group-hover:text-blue-600 transition-colors">🏷️ Customer Tiers & Tags</span>
+            <span class="text-[11px] text-[#86868b]">Manage →</span>
+          </div>
+          <p class="text-[11px] text-[#52525b] leading-relaxed">B2B client discount tiers (Regular, Wholesale, VIP, Partner) and CRM tag chips.</p>
+        </a>
       </div>
     </div>
 
-    <!-- Section 5: Diagnostics & Observability -->
+    <!-- Section 6: Diagnostics & Observability -->
     <div class="p-5 sm:p-6 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-4">
       <div class="border-b border-black/5 pb-3 flex items-center justify-between">
         <div>
-          <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">5. Diagnostics & Observability Governance</h2>
+          <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">6. Diagnostics & Observability Governance</h2>
           <p class="text-xs text-[#86868b] mt-0.5">Control D1 business error logging, logged-in user tracking, and retention thresholds.</p>
         </div>
         <a

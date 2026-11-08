@@ -40,17 +40,21 @@ export const DEFAULT_CARRIERS: CarrierDictItem[] = [
   },
 ];
 
-export function getTrackingUrl(carrierName?: string, trackingNo?: string): string | null {
+export function getTrackingUrl(carrierName?: string, trackingNo?: string, customTemplate?: string): string | null {
   if (!trackingNo || !trackingNo.trim()) return null;
   const cleanNo = encodeURIComponent(trackingNo.trim());
   const cleanName = (carrierName || '').trim().toLowerCase();
 
+  if (customTemplate && (customTemplate.includes('{tracking}') || customTemplate.includes('{tracking_no}'))) {
+    return customTemplate.replace('{tracking_no}', cleanNo).replace('{tracking}', cleanNo);
+  }
+
   const matched = DEFAULT_CARRIERS.find(
-    (c) => c.id.toLowerCase() === cleanName || c.name.toLowerCase().includes(cleanName)
+    (c) => c.id.toLowerCase() === cleanName || c.name.toLowerCase().includes(cleanName) || cleanName.includes(c.id.toLowerCase())
   );
 
   if (matched) {
-    return matched.urlTemplate.replace('{tracking_no}', cleanNo);
+    return matched.urlTemplate.replace('{tracking_no}', cleanNo).replace('{tracking}', cleanNo);
   }
 
   // Fallback to 17track universal

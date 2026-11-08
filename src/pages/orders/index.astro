@@ -338,6 +338,7 @@ const i18nClient = {
 
 <script>
   import { clientCache } from '@utils/clientCache';
+  import { getTrackingUrl } from '@utils/shipping';
 
   (function () {
     const dataEl = document.getElementById('orders-app-data');
@@ -706,12 +707,12 @@ const i18nClient = {
                 </div>
                 ${order.tracking_number ? `
                   <a
-                    href="https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}"
+                    href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline print:hidden"
                   >
-                    <span>Track on 17TRACK</span>
+                    <span>${order.carrier ? `Track via ${escapeHtml(order.carrier)}` : 'Track on 17TRACK'}</span>
                     <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
@@ -747,7 +748,7 @@ const i18nClient = {
             <div class="flex items-center gap-2 flex-wrap order-actions print:hidden shrink-0">
               ${isShipped && order.tracking_number ? `
                 <a
-                  href="https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}"
+                  href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all shadow-2xs"

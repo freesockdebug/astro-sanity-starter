@@ -1,0 +1,717 @@
+---
+// src/pages/admin/dicts.astro
+// Universal Data Dictionary Control Center (MineAdmin Style Double-Column Console)
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { requireAdminContext } from '@utils/auth';
+import { listDictGroups, listDictItems } from '@utils/db';
+import { getBadgeColorClasses } from '@utils/dicts';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/dicts',
+  { requiredMenu: 'dicts' }
+);
+if (redirectResponse) return redirectResponse;
+
+const [groups, allItems] = await Promise.all([
+  listDictGroups(),
+  listDictItems(undefined, false),
+]);
+
+const initialGroup = Astro.url.searchParams.get('group') || (groups[0]?.code || 'shipping_carriers');
+const pageTitle = 'Data Dictionaries';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="dicts"
+  sessionEmail={sessionUser.email}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+>
+  <!-- Page Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
+    <div>
+      <div class="flex items-center gap-2">
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Data Dictionaries</h1>
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+          Universal Engine
+        </span>
+      </div>
+      <p class="text-xs text-[#86868b] mt-0.5">
+        Manage shipping carriers, multi-scene quick replies, customer tiers, CRM tags, and SLA thresholds without code deployments.
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button
+        id="btn-add-item"
+        type="button"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>Add Dictionary Item</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Double-Column Layout -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+    <!-- Left Column: Dictionary Group Directory -->
+    <div class="lg:col-span-4 bg-white rounded-2xl border border-black/5 shadow-2xs p-3.5 space-y-3">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-[#1d1d1f]">Dictionary Categories</h2>
+        <span class="text-[10px] text-[#86868b] font-mono">{groups.length} groups</span>
+      </div>
+
+      <input
+        type="text"
+        id="group-search"
+        placeholder="Filter categories..."
+        class="w-full px-3 py-1.5 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
+      />
+
+      <div id="groups-list" class="space-y-1">
+        {groups.map((g) => {
+          const isActive = g.code === initialGroup;
+          return (
+            <button
+              type="button"
+              class={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer group-btn flex items-start justify-between gap-2 ${
+                isActive
+                  ? 'bg-black text-white border-black shadow-xs font-semibold'
+                  : 'bg-white hover:bg-[#f5f5f7] border-transparent text-[#1d1d1f]'
+              }`}
+              data-group-code={g.code}
+              data-group-name={g.name}
+              data-group-desc={g.description}
+            >
+              <div class="min-w-0">
+                <div class="text-xs truncate flex items-center gap-1.5">
+                  <span>{g.name}</span>
+                  {g.is_system && (
+                    <span class={`text-[9px] px-1 py-0.2 rounded font-mono ${isActive ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'}`}>
+                      SYS
+                    </span>
+                  )}
+                </div>
+                <p class={`text-[11px] truncate mt-0.5 ${isActive ? 'text-white/70' : 'text-[#86868b]'}`}>
+                  {g.code}
+                </p>
+              </div>
+              <span class={`text-[10px] px-1.5 py-0.5 rounded-md font-mono shrink-0 ${
+                isActive ? 'bg-white/20 text-white' : 'bg-[#f0f0f2] text-[#52525b]'
+              }`}>
+                {g.enabled_count}/{g.items_count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+
+    <!-- Right Column: Dictionary Items Workbench Table -->
+    <div class="lg:col-span-8 bg-white rounded-2xl border border-black/5 shadow-2xs overflow-hidden flex flex-col">
+      <!-- Active Group Info Header -->
+      <div class="p-4 sm:p-5 border-b border-black/5 bg-[#fafafa] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 id="current-group-title" class="text-sm sm:text-base font-bold text-[#1d1d1f] tracking-tight">
+              {groups.find(g => g.code === initialGroup)?.name || 'Dictionary Items'}
+            </h3>
+            <span id="current-group-code-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-black/5 text-[#52525b]">
+              {initialGroup}
+            </span>
+          </div>
+          <p id="current-group-desc" class="text-xs text-[#86868b] mt-0.5">
+            {groups.find(g => g.code === initialGroup)?.description || 'Configurable key-value dictionary items.'}
+          </p>
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <div class="overflow-x-auto min-h-[360px]">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-black/5 bg-[#fbfbfd] text-[#86868b] text-[11px] font-semibold uppercase tracking-wider">
+              <th class="py-2.5 px-3 w-14 text-center">Order</th>
+              <th class="py-2.5 px-3">Item Key</th>
+              <th class="py-2.5 px-3">Visual Label & Badge</th>
+              <th class="py-2.5 px-3">Extended Properties (Meta)</th>
+              <th class="py-2.5 px-3 w-24 text-center">Status</th>
+              <th class="py-2.5 px-3 w-24 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="dict-items-tbody" class="divide-y divide-black/5 font-sans">
+            <!-- Dynamically populated via client script -->
+          </tbody>
+        </table>
+        <div id="no-items-empty" class="hidden p-10 text-center text-xs text-[#86868b]">
+          No dictionary items found for this category. Click "+ Add Dictionary Item" above to add one.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Edit Item Modal -->
+  <Fragment slot="dialogs">
+    <dialog
+      id="dict-item-dialog"
+      class="backdrop:bg-black/40 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-lg m-auto"
+    >
+      <div class="p-5 sm:p-6 space-y-4">
+        <div class="flex items-center justify-between border-b border-black/5 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🏷️</span>
+            <h3 id="modal-title" class="text-sm font-bold text-[#1d1d1f]">Add Dictionary Item</h3>
+          </div>
+          <button id="btn-close-modal" type="button" class="text-zinc-400 hover:text-black text-lg cursor-pointer">✕</button>
+        </div>
+
+        <form id="dict-item-form" class="space-y-3.5">
+          <input type="hidden" id="form-group-code" name="group_code" value={initialGroup} />
+
+          <div>
+            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Item Key (Unique Key) *</label>
+            <input
+              type="text"
+              id="form-item-key"
+              name="item_key"
+              required
+              placeholder="e.g. dhl, VIP, swatch_request"
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-mono"
+            />
+            <p class="text-[10px] text-[#86868b] mt-0.5">Code identifier stored in database records.</p>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Display Label *</label>
+            <input
+              type="text"
+              id="form-item-label"
+              name="item_label"
+              required
+              placeholder="e.g. DHL Express, VIP Commercial"
+              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans"
+            />
+          </div>
+
+          <!-- Badge Color Picker -->
+          <div>
+            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1.5">Visual Badge Color</label>
+            <div class="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+              {[
+                { name: 'slate', label: 'Slate', cls: 'bg-slate-100 text-slate-800 border-slate-300' },
+                { name: 'blue', label: 'Blue', cls: 'bg-blue-100 text-blue-800 border-blue-300' },
+                { name: 'emerald', label: 'Emerald', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+                { name: 'amber', label: 'Amber', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
+                { name: 'purple', label: 'Purple', cls: 'bg-purple-100 text-purple-800 border-purple-300' },
+                { name: 'rose', label: 'Rose', cls: 'bg-rose-100 text-rose-800 border-rose-300' },
+                { name: 'indigo', label: 'Indigo', cls: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+              ].map((c) => (
+                <label class="flex flex-col items-center gap-1 p-1.5 rounded-xl border border-black/10 hover:border-black/30 cursor-pointer text-center color-option">
+                  <input type="radio" name="badge_color" value={c.name} class="sr-only" />
+                  <span class={`w-4 h-4 rounded-full border ${c.cls} inline-block`}></span>
+                  <span class="text-[10px] text-[#52525b] font-medium">{c.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <!-- Dynamic Meta Fields Container -->
+          <div id="dynamic-meta-fields" class="space-y-3 pt-1 border-t border-black/5">
+            <!-- Dynamically populated per group schema -->
+          </div>
+
+          <!-- Sort Order & Enabled -->
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Sort Order</label>
+              <input
+                type="number"
+                id="form-sort-order"
+                name="sort_order"
+                value="100"
+                class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-mono"
+              />
+            </div>
+            <div class="flex items-center pt-5">
+              <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1d1d1f]">
+                <input
+                  type="checkbox"
+                  id="form-is-enabled"
+                  name="is_enabled"
+                  checked
+                  class="w-4 h-4 rounded accent-black text-black cursor-pointer"
+                />
+                <span>Enable Dictionary Item</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="form-error" class="hidden p-2.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200"></div>
+
+          <div class="flex items-center justify-end gap-2 pt-3 border-t border-black/5">
+            <button
+              id="btn-cancel-modal"
+              type="button"
+              class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black/10 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              id="btn-submit-modal"
+              type="submit"
+              class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-xs"
+            >
+              Save Dictionary Item
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+  </Fragment>
+</AdminLayout>
+
+<script define:vars={{ initialGroups: groups, initialItems: allItems, initialSelectedGroup: initialGroup }}>
+  (function () {
+    var groups = initialGroups;
+    var allItems = initialItems;
+    var currentGroup = initialSelectedGroup;
+
+    var tbody = document.getElementById('dict-items-tbody');
+    var emptyEl = document.getElementById('no-items-empty');
+    var dialog = document.getElementById('dict-item-dialog');
+    var modalTitle = document.getElementById('modal-title');
+    var form = document.getElementById('dict-item-form');
+    var formError = document.getElementById('form-error');
+
+    function showToast(msg, isSuccess) {
+      if (window.__showToast) {
+        window.__showToast(msg, isSuccess !== false ? 'success' : 'error');
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function getBadgeClass(color) {
+      switch (color) {
+        case 'blue': return 'bg-blue-50 text-blue-700 border-blue-200';
+        case 'emerald': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        case 'amber': return 'bg-amber-50 text-amber-800 border-amber-200';
+        case 'purple': return 'bg-purple-50 text-purple-700 border-purple-200';
+        case 'rose': return 'bg-rose-50 text-rose-700 border-rose-200';
+        case 'indigo': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+        default: return 'bg-slate-100 text-slate-700 border-slate-200';
+      }
+    }
+
+    function renderItemsTable() {
+      if (!tbody) return;
+      var filtered = allItems.filter(function (i) {
+        return i.group_code.toLowerCase() === currentGroup.toLowerCase();
+      }).sort(function (a, b) {
+        return (a.sort_order ?? 100) - (b.sort_order ?? 100);
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      if (emptyEl) emptyEl.classList.add('hidden');
+      tbody.innerHTML = filtered.map(function (item) {
+        var badgeCls = getBadgeClass(item.badge_color);
+        var metaSummary = '';
+        if (item.meta) {
+          if (item.meta.tracking_url) {
+            metaSummary = '<span class="font-mono text-[10px] text-zinc-500 truncate max-w-xs block">' + escapeHtml(item.meta.tracking_url) + '</span>';
+          } else if (item.meta.scene && item.meta.content) {
+            metaSummary = '<div class="space-y-0.5"><span class="px-1 py-0.2 rounded text-[9px] bg-black/5 font-semibold uppercase">' + escapeHtml(item.meta.scene) + '</span><span class="text-[11px] text-zinc-600 italic block line-clamp-1">"' + escapeHtml(item.meta.content) + '"</span></div>';
+          } else if (item.meta.discount_label) {
+            metaSummary = '<span class="text-[11px] font-semibold text-emerald-700">' + escapeHtml(item.meta.discount_label) + '</span>';
+          } else if (item.meta.sla_hours) {
+            metaSummary = '<span class="text-[11px] font-mono font-semibold text-amber-700">SLA: ' + item.meta.sla_hours + 'h threshold</span>';
+          } else {
+            var keys = Object.keys(item.meta);
+            metaSummary = keys.length > 0 ? '<span class="text-[10px] font-mono text-zinc-400">' + keys.length + ' attributes</span>' : '<span class="text-[10px] text-zinc-300">-</span>';
+          }
+        }
+
+        var isEnabled = item.is_enabled;
+        return (
+          '<tr class="hover:bg-[#fbfbfd] transition-colors">' +
+            '<td class="py-2.5 px-3 text-center font-mono text-xs text-zinc-400">' + item.sort_order + '</td>' +
+            '<td class="py-2.5 px-3 font-mono font-bold text-xs text-[#1d1d1f]">' + escapeHtml(item.item_key) + '</td>' +
+            '<td class="py-2.5 px-3">' +
+              '<span class="inline-flex items-center px-2 py-0.5 rounded-md border text-xs font-semibold ' + badgeCls + '">' +
+                escapeHtml(item.item_label) +
+              '</span>' +
+            '</td>' +
+            '<td class="py-2.5 px-3">' + metaSummary + '</td>' +
+            '<td class="py-2.5 px-3 text-center">' +
+              '<button type="button" class="btn-toggle-status px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer ' +
+                (isEnabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-zinc-100 text-zinc-500 border border-zinc-200') +
+                '" data-group="' + item.group_code + '" data-key="' + item.item_key + '" data-enabled="' + (isEnabled ? 'true' : 'false') + '">' +
+                (isEnabled ? '● Active' : '○ Inactive') +
+              '</button>' +
+            '</td>' +
+            '<td class="py-2.5 px-3 text-right space-x-1">' +
+              '<button type="button" class="btn-edit-item p-1 text-zinc-400 hover:text-black hover:bg-black/5 rounded-lg transition-colors cursor-pointer" data-item=\'' + escapeHtml(JSON.stringify(item)) + '\' title="Edit Item">✎</button>' +
+              '<button type="button" class="btn-delete-item p-1 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" data-group="' + item.group_code + '" data-key="' + item.item_key + '" title="Delete Item">🗑</button>' +
+            '</td>' +
+          '</tr>'
+        );
+      }).join('');
+
+      bindActionListeners();
+    }
+
+    function bindActionListeners() {
+      document.querySelectorAll('.btn-toggle-status').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var g = btn.getAttribute('data-group');
+          var k = btn.getAttribute('data-key');
+          var current = btn.getAttribute('data-enabled') === 'true';
+          btn.disabled = true;
+
+          try {
+            var res = await fetch('/api/admin/dicts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'toggle_enabled', groupCode: g, itemKey: k, isEnabled: !current }),
+            });
+            var data = await res.json();
+            if (res.ok && data.success) {
+              allItems.forEach(function (i) {
+                if (i.group_code === g && i.item_key === k) i.is_enabled = !current;
+              });
+              renderItemsTable();
+              showToast(data.message || 'Status updated', true);
+            } else {
+              showToast(data.error || 'Failed to toggle status', false);
+              btn.disabled = false;
+            }
+          } catch (e) {
+            showToast(e.message, false);
+            btn.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll('.btn-delete-item').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var g = btn.getAttribute('data-group');
+          var k = btn.getAttribute('data-key');
+          if (!confirm('Are you sure you want to delete dictionary item "' + k + '"?')) return;
+
+          btn.disabled = true;
+          try {
+            var res = await fetch('/api/admin/dicts/' + encodeURIComponent(g) + '?itemKey=' + encodeURIComponent(k), {
+              method: 'DELETE',
+            });
+            var data = await res.json();
+            if (res.ok && data.success) {
+              allItems = allItems.filter(function (i) {
+                return !(i.group_code === g && i.item_key === k);
+              });
+              renderItemsTable();
+              showToast('Item deleted successfully', true);
+            } else {
+              showToast(data.error || 'Delete failed', false);
+              btn.disabled = false;
+            }
+          } catch (e) {
+            showToast(e.message, false);
+            btn.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll('.btn-edit-item').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var raw = btn.getAttribute('data-item');
+          if (!raw) return;
+          try {
+            var item = JSON.parse(raw);
+            openModal(item);
+          } catch (e) {
+            console.error('Failed to parse item json', e);
+          }
+        });
+      });
+    }
+
+    function renderDynamicMetaFields(groupCode, itemMeta) {
+      var container = document.getElementById('dynamic-meta-fields');
+      if (!container) return;
+      container.innerHTML = '';
+      itemMeta = itemMeta || {};
+
+      if (groupCode === 'shipping_carriers') {
+        container.innerHTML =
+          '<div>' +
+            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Tracking URL Template</label>' +
+            '<input type="text" id="meta-tracking-url" name="meta_tracking_url" value="' + escapeHtml(itemMeta.tracking_url || '') + '" placeholder="https://example.com/track?no={tracking}" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-mono" />' +
+            '<p class="text-[10px] text-[#86868b] mt-0.5">Use <code class="font-mono">{tracking}</code> or <code class="font-mono">{tracking_no}</code> placeholder.</p>' +
+          '</div>';
+      } else if (groupCode === 'quick_replies') {
+        var scene = itemMeta.scene || 'approval';
+        container.innerHTML =
+          '<div>' +
+            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Reply Scene Category *</label>' +
+            '<select id="meta-scene" name="meta_scene" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs font-semibold">' +
+              '<option value="approval"' + (scene === 'approval' ? ' selected' : '') + '>Order Approval (通过)</option>' +
+              '<option value="shipping"' + (scene === 'shipping' ? ' selected' : '') + '>Shipping / Dispatch (发货)</option>' +
+              '<option value="rejection"' + (scene === 'rejection' ? ' selected' : '') + '>Order Rejection (驳回)</option>' +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Template Content *</label>' +
+            '<textarea id="meta-content" name="meta_content" rows="3" placeholder="Enter standard English reply message..." class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs">' + escapeHtml(itemMeta.content || '') + '</textarea>' +
+          '</div>';
+      } else if (groupCode === 'customer_tiers') {
+        container.innerHTML =
+          '<div>' +
+            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Discount Tagline / Tier Notice</label>' +
+            '<input type="text" id="meta-discount" name="meta_discount" value="' + escapeHtml(itemMeta.discount_label || '') + '" placeholder="e.g. 15% Volume Tier" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs" />' +
+          '</div>' +
+          '<div>' +
+            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Tier Benefits Description</label>' +
+            '<input type="text" id="meta-desc" name="meta_desc" value="' + escapeHtml(itemMeta.description || '') + '" placeholder="e.g. Priority dispatch and custom fabric specialist" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs" />' +
+          '</div>';
+      } else if (groupCode === 'order_statuses') {
+        container.innerHTML =
+          '<div>' +
+            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">SLA Alert Threshold (Hours)</label>' +
+            '<input type="number" id="meta-sla-hours" name="meta_sla_hours" value="' + (itemMeta.sla_hours || '') + '" placeholder="24" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs font-mono" />' +
+            '<p class="text-[10px] text-[#86868b] mt-0.5">Orders in this status exceeding this duration trigger urgent SLA warning tags.</p>' +
+          '</div>';
+      } else if (groupCode === 'audit_actions') {
+        var risk = itemMeta.risk_level || 'LOW';
+        container.innerHTML =
+          '<div>' +
+            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Action Risk Level</label>' +
+            '<select id="meta-risk" name="meta_risk" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs font-semibold">' +
+              '<option value="LOW"' + (risk === 'LOW' ? ' selected' : '') + '>LOW (Normal Activity)</option>' +
+              '<option value="MEDIUM"' + (risk === 'MEDIUM' ? ' selected' : '') + '>MEDIUM (Privilege/Assignment Change)</option>' +
+              '<option value="HIGH"' + (risk === 'HIGH' ? ' selected' : '') + '>HIGH (Deletion / Account Lockout)</option>' +
+            '</select>' +
+          '</div>';
+      }
+    }
+
+    function openModal(editItem) {
+      if (!dialog) return;
+      if (formError) formError.classList.add('hidden');
+      var keyInput = document.getElementById('form-item-key');
+      var labelInput = document.getElementById('form-item-label');
+      var orderInput = document.getElementById('form-sort-order');
+      var enabledInput = document.getElementById('form-is-enabled');
+      var groupInput = document.getElementById('form-group-code');
+
+      if (groupInput) groupInput.value = currentGroup;
+
+      if (editItem) {
+        if (modalTitle) modalTitle.textContent = 'Edit Dictionary Item';
+        if (keyInput) { keyInput.value = editItem.item_key; keyInput.disabled = true; }
+        if (labelInput) labelInput.value = editItem.item_label;
+        if (orderInput) orderInput.value = editItem.sort_order ?? 100;
+        if (enabledInput) enabledInput.checked = editItem.is_enabled !== false;
+
+        // Color radio
+        var radio = document.querySelector('input[name="badge_color"][value="' + (editItem.badge_color || 'slate') + '"]');
+        if (radio) radio.checked = true;
+
+        renderDynamicMetaFields(currentGroup, editItem.meta);
+      } else {
+        if (modalTitle) modalTitle.textContent = 'Add Dictionary Item';
+        if (keyInput) { keyInput.value = ''; keyInput.disabled = false; }
+        if (labelInput) labelInput.value = '';
+        if (orderInput) orderInput.value = '100';
+        if (enabledInput) enabledInput.checked = true;
+
+        var defaultRadio = document.querySelector('input[name="badge_color"][value="slate"]');
+        if (defaultRadio) defaultRadio.checked = true;
+
+        renderDynamicMetaFields(currentGroup, {});
+      }
+
+      dialog.showModal();
+    }
+
+    // Modal submit handler
+    if (form) {
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var keyInput = document.getElementById('form-item-key');
+        var labelInput = document.getElementById('form-item-label');
+        var orderInput = document.getElementById('form-sort-order');
+        var enabledInput = document.getElementById('form-is-enabled');
+        var colorRadio = document.querySelector('input[name="badge_color"]:checked');
+
+        var itemKey = keyInput ? keyInput.value.trim() : '';
+        var itemLabel = labelInput ? labelInput.value.trim() : '';
+        var sortOrder = orderInput ? Number(orderInput.value) : 100;
+        var isEnabled = enabledInput ? enabledInput.checked : true;
+        var badgeColor = colorRadio ? colorRadio.value : 'slate';
+
+        if (!itemKey || !itemLabel) {
+          if (formError) {
+            formError.textContent = 'Item Key and Display Label are required.';
+            formError.classList.remove('hidden');
+          }
+          return;
+        }
+
+        // Build meta object
+        var meta = {};
+        if (currentGroup === 'shipping_carriers') {
+          var trackingUrl = document.getElementById('meta-tracking-url');
+          if (trackingUrl) meta.tracking_url = trackingUrl.value.trim();
+        } else if (currentGroup === 'quick_replies') {
+          var sceneEl = document.getElementById('meta-scene');
+          var contentEl = document.getElementById('meta-content');
+          if (sceneEl) meta.scene = sceneEl.value;
+          if (contentEl) meta.content = contentEl.value.trim();
+        } else if (currentGroup === 'customer_tiers') {
+          var discEl = document.getElementById('meta-discount');
+          var descEl = document.getElementById('meta-desc');
+          if (discEl) meta.discount_label = discEl.value.trim();
+          if (descEl) meta.description = descEl.value.trim();
+        } else if (currentGroup === 'order_statuses') {
+          var slaEl = document.getElementById('meta-sla-hours');
+          if (slaEl && slaEl.value) meta.sla_hours = Number(slaEl.value);
+        } else if (currentGroup === 'audit_actions') {
+          var riskEl = document.getElementById('meta-risk');
+          if (riskEl) meta.risk_level = riskEl.value;
+        }
+
+        var btnSubmit = document.getElementById('btn-submit-modal');
+        if (btnSubmit) { btnSubmit.disabled = true; btnSubmit.textContent = 'Saving...'; }
+
+        try {
+          var res = await fetch('/api/admin/dicts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              groupCode: currentGroup,
+              itemKey: itemKey,
+              itemLabel: itemLabel,
+              badgeColor: badgeColor,
+              meta: meta,
+              sortOrder: sortOrder,
+              isEnabled: isEnabled,
+            }),
+          });
+          var data = await res.json();
+          if (res.ok && data.success) {
+            var existingIdx = allItems.findIndex(function (i) {
+              return i.group_code === currentGroup && i.item_key === itemKey;
+            });
+            var newItem = {
+              group_code: currentGroup,
+              item_key: itemKey,
+              item_label: itemLabel,
+              badge_color: badgeColor,
+              meta: meta,
+              sort_order: sortOrder,
+              is_enabled: isEnabled,
+            };
+
+            if (existingIdx >= 0) {
+              allItems[existingIdx] = newItem;
+            } else {
+              allItems.push(newItem);
+            }
+
+            renderItemsTable();
+            dialog.close();
+            showToast(data.message || 'Dictionary item saved', true);
+          } else {
+            if (formError) {
+              formError.textContent = data.error || 'Failed to save item';
+              formError.classList.remove('hidden');
+            }
+          }
+        } catch (err) {
+          if (formError) {
+            formError.textContent = err.message;
+            formError.classList.remove('hidden');
+          }
+        } finally {
+          if (btnSubmit) { btnSubmit.disabled = false; btnSubmit.textContent = 'Save Dictionary Item'; }
+        }
+      });
+    }
+
+    // Modal buttons
+    document.getElementById('btn-add-item')?.addEventListener('click', function () { openModal(null); });
+    document.getElementById('btn-close-modal')?.addEventListener('click', function () { dialog?.close(); });
+    document.getElementById('btn-cancel-modal')?.addEventListener('click', function () { dialog?.close(); });
+
+    // Category clicking & filtering
+    document.querySelectorAll('.group-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var gCode = btn.getAttribute('data-group-code');
+        var gName = btn.getAttribute('data-group-name');
+        var gDesc = btn.getAttribute('data-group-desc');
+        if (!gCode) return;
+        currentGroup = gCode;
+
+        // UI active classes
+        document.querySelectorAll('.group-btn').forEach(function (b) {
+          b.className = 'w-full text-left p-3 rounded-xl border transition-all cursor-pointer group-btn flex items-start justify-between gap-2 bg-white hover:bg-[#f5f5f7] border-transparent text-[#1d1d1f]';
+        });
+        btn.className = 'w-full text-left p-3 rounded-xl border transition-all cursor-pointer group-btn flex items-start justify-between gap-2 bg-black text-white border-black shadow-xs font-semibold';
+
+        var titleEl = document.getElementById('current-group-title');
+        var codeEl = document.getElementById('current-group-code-badge');
+        var descEl = document.getElementById('current-group-desc');
+        if (titleEl) titleEl.textContent = gName || gCode;
+        if (codeEl) codeEl.textContent = gCode;
+        if (descEl) descEl.textContent = gDesc || '';
+
+        renderItemsTable();
+      });
+    });
+
+    // Category filter search
+    var searchInput = document.getElementById('group-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', function () {
+        var term = searchInput.value.trim().toLowerCase();
+        document.querySelectorAll('.group-btn').forEach(function (btn) {
+          var code = (btn.getAttribute('data-group-code') || '').toLowerCase();
+          var name = (btn.getAttribute('data-group-name') || '').toLowerCase();
+          var matched = !term || code.includes(term) || name.includes(term);
+          btn.style.display = matched ? 'flex' : 'none';
+        });
+      });
+    }
+
+    // Initial render
+    renderItemsTable();
+  })();
+</script>

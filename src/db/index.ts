@@ -11,4 +11,5 @@ export * from './logs.repo';
 export * from './settings.repo';
 export * from './rbac.repo';
 export * from './audit.repo';
+export * from './dicts.repo';
 

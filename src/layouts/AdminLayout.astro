@@ -6,7 +6,7 @@ import AdminSidebar from '@components/admin/AdminSidebar.astro';
 
 interface Props {
   title: string;
-  currentTab: 'orders' | 'users' | 'members' | 'roles' | 'logins' | 'logs' | 'settings';
+  currentTab: 'dashboard' | 'orders' | 'users' | 'members' | 'roles' | 'dicts' | 'logins' | 'logs' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
   fullscreenWorkbench?: boolean;
@@ -33,10 +33,12 @@ const {
 } = Astro.props;
 
 const tabNames: Record<string, string> = {
+  dashboard: 'Business Overview',
   orders: 'Orders & Fulfillment',
   users: 'Customers & CRM',
   members: 'Team Members',
   roles: 'Roles & Permissions',
+  dicts: 'Data Dictionaries',
   logins: 'Login Audit Logs',
   logs: 'System Diagnostics',
   settings: 'Workspace Settings',
@@ -119,6 +121,19 @@ const canShow = (key: string) => !menus || menus.includes(key);
         </div>
 
         <div class="flex items-center gap-4 text-xs text-[#86868b]">
+          <button
+            id="cmd-palette-trigger"
+            type="button"
+            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#f5f5f7] hover:bg-black/5 border border-black/10 text-xs text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer shadow-2xs"
+            title="Press ⌘K or Ctrl+K anywhere to open Command Palette"
+          >
+            <svg class="w-3.5 h-3.5 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span class="font-medium">Quick Jump / Search</span>
+            <kbd class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white border border-black/10 shadow-2xs text-[#86868b]">⌘K</kbd>
+          </button>
+
           <span class="flex items-center gap-1.5 font-mono">
             <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
             Cloudflare D1 Edge
@@ -219,6 +234,99 @@ const canShow = (key: string) => !menus || menus.includes(key);
   <slot name="drawers" />
   <slot name="modals" />
 
+  <!-- Global Command Palette Modal (⌘K / Ctrl+K) -->
+  <dialog
+    id="cmd-palette-dialog"
+    class="backdrop:bg-black/50 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-xl m-auto overflow-hidden text-xs"
+  >
+    <div class="p-3 border-b border-black/5 flex items-center gap-2.5 bg-white">
+      <svg class="w-4 h-4 text-[#86868b] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        type="text"
+        id="cmd-palette-input"
+        placeholder="Type command, menu, order (GW-), or customer email..."
+        class="flex-1 bg-transparent border-0 outline-none text-xs font-medium text-[#1d1d1f] placeholder:text-[#86868b]"
+      />
+      <kbd class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#f5f5f7] border border-black/10 text-[#86868b]">ESC</kbd>
+    </div>
+
+    <div id="cmd-palette-results" class="max-h-80 overflow-y-auto p-2 space-y-1">
+      <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+        Navigation Consoles
+      </div>
+      <a href="/admin/dashboard" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">📊</span>
+          <span class="font-semibold text-xs">Business Overview</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/dashboard</span>
+      </a>
+      <a href="/admin/orders" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">📦</span>
+          <span class="font-semibold text-xs">Orders & Fulfillment</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/orders</span>
+      </a>
+      <a href="/admin/users" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">👥</span>
+          <span class="font-semibold text-xs">Customers & CRM</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/users</span>
+      </a>
+      <a href="/admin/members" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">🧑‍💼</span>
+          <span class="font-semibold text-xs">Team Members</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/members</span>
+      </a>
+      <a href="/admin/roles" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">🔐</span>
+          <span class="font-semibold text-xs">Roles & Permissions</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/roles</span>
+      </a>
+      <a href="/admin/dicts" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">🏷️</span>
+          <span class="font-semibold text-xs">Data Dictionaries</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/dicts</span>
+      </a>
+      <a href="/admin/logins" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">🛡️</span>
+          <span class="font-semibold text-xs">Login Audit Logs</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/logins</span>
+      </a>
+      <a href="/admin/logs" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">🩺</span>
+          <span class="font-semibold text-xs">System Diagnostics</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/logs</span>
+      </a>
+      <a href="/admin/settings" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">⚙️</span>
+          <span class="font-semibold text-xs">Workspace Settings</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/settings</span>
+      </a>
+    </div>
+
+    <div class="p-2.5 bg-[#fafafa] border-t border-black/5 flex items-center justify-between text-[11px] text-[#86868b]">
+      <span>Tip: Enter order number to jump to order; enter email to search buyers</span>
+      <span>Press <kbd class="font-mono bg-white px-1 py-0.5 rounded border border-black/10">↵</kbd> to select</span>
+    </div>
+  </dialog>
+
   <!-- Inject Client RBAC Context for Button Trimming -->
   <script is:inline define:vars={{ permissions, roleCode, dataScope }}>
     window.__ADMIN_PERMS__ = permissions || ['*'];
@@ -231,9 +339,77 @@ const canShow = (key: string) => !menus || menus.includes(key);
     };
   </script>
 
-  <!-- Pure Vanilla JS for Mobile Sidebar Drawer Toggle (Zero TS syntax) -->
+  <!-- Command Palette & Mobile Drawer Vanilla Scripts -->
   <script is:inline>
     (function() {
+      // Command Palette (⌘K)
+      var cmdDialog = document.getElementById('cmd-palette-dialog');
+      var cmdInput = document.getElementById('cmd-palette-input');
+      var cmdTrigger = document.getElementById('cmd-palette-trigger');
+
+      function openCmdPalette() {
+        if (!cmdDialog) return;
+        cmdDialog.showModal();
+        if (cmdInput) {
+          cmdInput.value = '';
+          cmdInput.focus();
+          filterCmdItems('');
+        }
+      }
+
+      function filterCmdItems(query) {
+        var q = query.trim().toLowerCase();
+        var items = document.querySelectorAll('.cmd-item');
+        items.forEach(function(item) {
+          var text = (item.textContent || '').toLowerCase();
+          var href = item.getAttribute('href') || '';
+          var matched = !q || text.includes(q) || href.includes(q);
+          item.style.display = matched ? 'flex' : 'none';
+        });
+      }
+
+      if (cmdTrigger) cmdTrigger.addEventListener('click', openCmdPalette);
+
+      if (cmdInput) {
+        cmdInput.addEventListener('input', function() {
+          filterCmdItems(cmdInput.value);
+        });
+
+        cmdInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            var val = cmdInput.value.trim();
+            if (!val) return;
+            // Detect Order query
+            if (val.toUpperCase().startsWith('GW-') || val.toUpperCase().startsWith('ORD-') || /^[\d\-]+$/.test(val)) {
+              window.location.href = '/admin/orders?q=' + encodeURIComponent(val);
+              return;
+            }
+            // Detect Email query
+            if (val.includes('@')) {
+              window.location.href = '/admin/users?q=' + encodeURIComponent(val);
+              return;
+            }
+            // First visible item
+            var firstVisible = document.querySelector('.cmd-item:not([style*="display: none"])');
+            if (firstVisible) {
+              window.location.href = firstVisible.getAttribute('href');
+            }
+          }
+        });
+      }
+
+      document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          if (cmdDialog && cmdDialog.open) {
+            cmdDialog.close();
+          } else {
+            openCmdPalette();
+          }
+        }
+      });
+
+      // Mobile Drawer Toggle
       var openBtn = document.getElementById('admin-open-sidebar-btn');
       var closeBtn = document.getElementById('admin-close-sidebar-btn');
       var backdrop = document.getElementById('admin-sidebar-backdrop');
@@ -266,8 +442,9 @@ const canShow = (key: string) => !menus || menus.includes(key);
       if (backdrop) backdrop.addEventListener('click', closeSidebar);
 
       document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && sidebar && !sidebar.classList.contains('-translate-x-full')) {
-          closeSidebar();
+        if (e.key === 'Escape') {
+          if (cmdDialog && cmdDialog.open) cmdDialog.close();
+          if (sidebar && !sidebar.classList.contains('-translate-x-full')) closeSidebar();
         }
       });
     })();
