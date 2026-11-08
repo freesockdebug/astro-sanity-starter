@@ -203,8 +203,15 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     const applyUserDataScope = (targetWhere: string[], targetParams: any[], prefix = 'u.') => {
       if (filter.dataScope === 'SELF_AND_POOL') {
         const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
-        targetWhere.push(`(LOWER(${prefix}assigned_to) = ? OR ${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
-        targetParams.push(email);
+        if (filter.assignedTo === 'UNASSIGNED') {
+          targetWhere.push(`(${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
+        } else if (filter.assignedTo) {
+          targetWhere.push(`LOWER(${prefix}assigned_to) = ?`);
+          targetParams.push(email);
+        } else {
+          targetWhere.push(`(LOWER(${prefix}assigned_to) = ? OR ${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
+          targetParams.push(email);
+        }
       } else if (filter.dataScope === 'SELF_ONLY') {
         const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
         targetWhere.push(`LOWER(${prefix}assigned_to) = ?`);

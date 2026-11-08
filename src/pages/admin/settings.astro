@@ -504,15 +504,17 @@ const pageTitle = 'Workspace Settings';
                   <div class="text-[10px] text-[#86868b]">{m.email}</div>
                 </td>
                 <td class="py-2.5 px-3 font-sans">
-                  <span class:list={[
-                    'px-2 py-0.5 rounded-full text-[10px] font-bold border',
-                    m.role_code === 'super_admin' ? 'bg-amber-50 text-amber-800 border-amber-200' :
-                    m.role_code === 'sales_manager' ? 'bg-purple-50 text-purple-800 border-purple-200' :
-                    m.role_code === 'sales_rep' ? 'bg-blue-50 text-blue-800 border-blue-200' :
-                    'bg-zinc-100 text-zinc-800 border-zinc-200'
-                  ]}>
-                    {m.role?.name || m.role_code}
-                  </span>
+                  <select
+                    class="select-member-role text-xs rounded-lg px-2 py-1 bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-semibold text-[#1d1d1f] cursor-pointer"
+                    data-email={m.email}
+                    data-status={m.status}
+                    data-name={m.name}
+                  >
+                    <option value="super_admin" selected={m.role_code === 'super_admin'}>Super Admin (全权)</option>
+                    <option value="sales_manager" selected={m.role_code === 'sales_manager'}>Sales Manager (主管/派单)</option>
+                    <option value="sales_rep" selected={m.role_code === 'sales_rep'}>Sales Rep (跟单业务/公海)</option>
+                    <option value="auditor" selected={m.role_code === 'auditor'}>Auditor (安全审计/只读)</option>
+                  </select>
                 </td>
                 <td class="py-2.5 px-3 text-[#52525b] font-sans">
                   {m.role?.data_scope === 'SELF_AND_POOL' ? '公海池 + 个人名下 (Self & Pool)' : 'ALL (全量数据)'}
@@ -975,6 +977,37 @@ const pageTitle = 'Workspace Settings';
           }
         });
       }
+
+      // Direct Role Dropdown in Members Table
+      document.querySelectorAll('.select-member-role').forEach(function(sel) {
+        sel.addEventListener('change', async function() {
+          var email = sel.getAttribute('data-email');
+          var status = sel.getAttribute('data-status') || 'ACTIVE';
+          var name = sel.getAttribute('data-name') || '';
+          var newRole = sel.value;
+          if (!email) return;
+
+          sel.disabled = true;
+          try {
+            var res = await fetch('/api/admin/members', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: email, roleCode: newRole, status: status, name: name }),
+            });
+            var data = await res.json();
+            if (res.ok && data.success) {
+              showToast('Role updated to ' + newRole + '. Refreshing...', true);
+              setTimeout(function() { window.location.reload(); }, 500);
+            } else {
+              showToast(data.error || 'Failed to update role', false);
+              sel.disabled = false;
+            }
+          } catch (e) {
+            showToast(e.message, false);
+            sel.disabled = false;
+          }
+        });
+      });
 
       // Status toggle & delete buttons
       document.querySelectorAll('.btn-toggle-member-status').forEach(function(btn) {

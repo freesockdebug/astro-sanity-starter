@@ -6,6 +6,7 @@ import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell
 import TableColumnController from '@components/admin/TableColumnController.astro';
 import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
+import { listAdminMembers } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -19,10 +20,23 @@ const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectR
 );
 if (redirectResponse) return redirectResponse;
 
+const teamMembers = (await listAdminMembers().catch(() => []))
+  .filter((m: any) => m.status === 'ACTIVE')
+  .map((m: any) => ({
+    email: m.email,
+    name: m.name || m.email.split('@')[0],
+    roleName: m.role?.name || m.role_code,
+  }));
+
+const canBlock = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('users:block'));
+const canEditTier = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('users:edit_tier'));
+const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('users:assign'));
+
 const initialSearch = Astro.url.searchParams.get('search') || '';
 const initialTier = Astro.url.searchParams.get('tier') || 'ALL';
 const initialStatus = Astro.url.searchParams.get('status') || 'ALL';
 const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
+const initialAssignedTo = Astro.url.searchParams.get('assignedTo') || '';
 const initialPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10));
 
 const pageTitle = 'Customer & Access Management';
@@ -51,6 +65,39 @@ const pageTitle = 'Customer & Access Management';
           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
             Access
           </span>
+        </div>
+
+        <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
+
+        <!-- Scope Segmented Tabs -->
+        <div class="flex items-center gap-0.5 bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 shrink-0" id="user-scope-container">
+          <button
+            type="button"
+            data-scope=""
+            class={`scope-tab px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              !initialAssignedTo ? 'bg-white text-[#1d1d1f] shadow-2xs border border-black/10' : 'text-[#52525b] hover:text-[#1d1d1f] border border-transparent'
+            }`}
+          >
+            All Buyers
+          </button>
+          <button
+            type="button"
+            data-scope="MINE"
+            class={`scope-tab px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              initialAssignedTo === 'MINE' ? 'bg-white text-[#1d1d1f] shadow-2xs border border-black/10' : 'text-[#52525b] hover:text-[#1d1d1f] border border-transparent'
+            }`}
+          >
+            My Customers
+          </button>
+          <button
+            type="button"
+            data-scope="UNASSIGNED"
+            class={`scope-tab px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              initialAssignedTo === 'UNASSIGNED' ? 'bg-white text-[#1d1d1f] shadow-2xs border border-black/10' : 'text-[#52525b] hover:text-[#1d1d1f] border border-transparent'
+            }`}
+          >
+            Public Pool
+          </button>
         </div>
 
         <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
@@ -185,22 +232,23 @@ const pageTitle = 'Customer & Access Management';
         <div>
           <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Customer Tier (B2B Classification)</label>
           <div class="grid grid-cols-3 gap-2">
-            <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5">
-              <input type="radio" name="tier" value="STANDARD" class="sr-only" />
+            <label class={`flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 transition-all ${canEditTier ? 'cursor-pointer hover:border-black/30 has-checked:border-black has-checked:bg-black/5' : 'opacity-60 cursor-not-allowed'}`}>
+              <input type="radio" name="tier" value="STANDARD" class="sr-only" disabled={!canEditTier} />
               <span class="font-semibold">Standard</span>
               <span class="text-[10px] text-[#86868b]">Regular</span>
             </label>
-            <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-amber-600 has-checked:bg-amber-50">
-              <input type="radio" name="tier" value="VIP" class="sr-only" />
+            <label class={`flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 transition-all ${canEditTier ? 'cursor-pointer hover:border-black/30 has-checked:border-amber-600 has-checked:bg-amber-50' : 'opacity-60 cursor-not-allowed'}`}>
+              <input type="radio" name="tier" value="VIP" class="sr-only" disabled={!canEditTier} />
               <span class="font-semibold text-amber-800">VIP</span>
               <span class="text-[10px] text-amber-700/80">Key Buyer</span>
             </label>
-            <label class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 cursor-pointer hover:border-black/30 has-checked:border-purple-600 has-checked:bg-purple-50">
-              <input type="radio" name="tier" value="PARTNER" class="sr-only" />
+            <label class={`flex flex-col items-center justify-center p-2.5 rounded-xl border border-black/10 transition-all ${canEditTier ? 'cursor-pointer hover:border-black/30 has-checked:border-purple-600 has-checked:bg-purple-50' : 'opacity-60 cursor-not-allowed'}`}>
+              <input type="radio" name="tier" value="PARTNER" class="sr-only" disabled={!canEditTier} />
               <span class="font-semibold text-purple-800">Partner</span>
               <span class="text-[10px] text-purple-700/80">Atelier Contract</span>
             </label>
           </div>
+          {!canEditTier && <p class="text-[10px] text-[#86868b] mt-1">Requires users:edit_tier permission to change classification</p>}
         </div>
 
         <!-- Account Status (Risk & Block) -->
@@ -209,23 +257,30 @@ const pageTitle = 'Customer & Access Management';
           <select
             id="drawer-status-select"
             name="status"
-            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs"
+            disabled={!canBlock}
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <option value="ACTIVE">ACTIVE (Normal Ordering & Inquiries)</option>
             <option value="BLOCKED">BLOCKED (Suspend Submission Privileges)</option>
           </select>
+          {!canBlock && <p class="text-[10px] text-[#86868b] mt-1">Requires users:block permission to suspend accounts</p>}
         </div>
 
         <!-- Assigned Sales Rep -->
         <div>
           <label class="block font-semibold mb-1.5 text-[11px] text-[#52525b]">Assigned Sales Rep</label>
-          <input
-            type="text"
-            id="drawer-assigned-input"
+          <select
+            id="drawer-assigned-select"
             name="assigned_to"
-            placeholder="e.g. rep@gwenvenni.com (or leave empty for pool)"
-            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs placeholder:text-[#86868b]"
-          />
+            disabled={!canAssign}
+            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <option value="">-- Public Lead Pool (Unassigned) --</option>
+            {teamMembers.map((m) => (
+              <option value={m.email}>{m.name} ({m.email}) - {m.roleName}</option>
+            ))}
+          </select>
+          {!canAssign && <p class="text-[10px] text-[#86868b] mt-1">Requires users:assign permission to transfer accounts</p>}
         </div>
 
         <!-- Internal Admin Notes -->
@@ -310,6 +365,7 @@ const pageTitle = 'Customer & Access Management';
   let currentTier = 'ALL';
   let currentStatus = 'ALL';
   let currentTimeWindow = 'ALL';
+  let currentAssignedTo = '';
   let currentPage = 1;
   let currentLimit = 30;
   let currentTotalPages = 1;
@@ -398,6 +454,17 @@ const pageTitle = 'Customer & Access Management';
         if (countEl) {
           countEl.className = `font-mono text-[10px] px-1.5 py-0.2 rounded-md ${isBlockedTab ? 'bg-rose-50 text-rose-700' : 'bg-[#f5f5f7] text-[#1d1d1f]'}`;
         }
+      }
+    });
+
+    // 3. Update scope pills
+    document.querySelectorAll('#user-scope-container .scope-tab').forEach((tab) => {
+      const scopeVal = tab.getAttribute('data-scope') || '';
+      const isSelected = scopeVal === currentAssignedTo;
+      if (isSelected) {
+        tab.className = 'scope-tab px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap bg-white text-[#1d1d1f] shadow-2xs border border-black/10 cursor-pointer';
+      } else {
+        tab.className = 'scope-tab px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap text-[#52525b] hover:text-[#1d1d1f] border border-transparent cursor-pointer';
       }
     });
   }
@@ -701,6 +768,9 @@ const pageTitle = 'Customer & Access Management';
       if (currentTimeWindow && currentTimeWindow !== 'ALL') url.searchParams.set('timeWindow', currentTimeWindow);
       else url.searchParams.delete('timeWindow');
 
+      if (currentAssignedTo) url.searchParams.set('assignedTo', currentAssignedTo);
+      else url.searchParams.delete('assignedTo');
+
       if (currentPage > 1) url.searchParams.set('page', String(currentPage));
       else url.searchParams.delete('page');
 
@@ -713,10 +783,11 @@ const pageTitle = 'Customer & Access Management';
       if (currentStatus && currentStatus !== 'ALL') qs.set('status', currentStatus);
       if (currentSearch) qs.set('search', currentSearch);
       if (currentTimeWindow && currentTimeWindow !== 'ALL') qs.set('timeWindow', currentTimeWindow);
+      if (currentAssignedTo) qs.set('assignedTo', currentAssignedTo);
       qs.set('page', String(currentPage));
       qs.set('limit', String(currentLimit));
 
-      const cacheKey = `admin:users:${currentTier}:${currentStatus}:${currentTimeWindow}:${currentSearch}:${currentPage}:${currentLimit}`;
+      const cacheKey = `admin:users:${currentTier}:${currentStatus}:${currentTimeWindow}:${currentAssignedTo}:${currentSearch}:${currentPage}:${currentLimit}`;
       await clientCache.fetchWithCache(
         cacheKey,
         `/api/admin/users?${qs.toString()}`,
@@ -898,8 +969,8 @@ const pageTitle = 'Customer & Access Management';
     if (emailLabel) emailLabel.textContent = email;
     if (companyLabel) companyLabel.textContent = company || 'No company specified';
 
-    const assignedInput = document.getElementById('drawer-assigned-input') as HTMLInputElement | null;
-    if (assignedInput) assignedInput.value = assigned;
+    const assignedSelect = document.getElementById('drawer-assigned-select') as HTMLSelectElement | null;
+    if (assignedSelect) assignedSelect.value = assigned;
 
     let rolesText = 'Logto: Buyer';
     try {
@@ -927,8 +998,8 @@ const pageTitle = 'Customer & Access Management';
     const tier = tierInput?.value || 'STANDARD';
     const status = statusSelect?.value || 'ACTIVE';
     const adminNotes = notesInput?.value || '';
-    const assignedInput = document.getElementById('drawer-assigned-input') as HTMLInputElement | null;
-    const assignedTo = assignedInput ? assignedInput.value.trim() : undefined;
+    const assignedSelect = document.getElementById('drawer-assigned-select') as HTMLSelectElement | null;
+    const assignedTo = assignedSelect ? (assignedSelect.value.trim() || null) : undefined;
 
     if (saveBtn) {
       saveBtn.disabled = true;
@@ -1028,6 +1099,17 @@ const pageTitle = 'Customer & Access Management';
     loadUsers();
   });
 
+  // Scope filter clicks
+  document.getElementById('user-scope-container')?.addEventListener('click', (e) => {
+    const tab = (e.target as HTMLElement).closest('.scope-tab');
+    if (!tab) return;
+    const scopeVal = tab.getAttribute('data-scope') || '';
+    if (scopeVal === currentAssignedTo && currentPage === 1) return;
+    currentAssignedTo = scopeVal;
+    currentPage = 1;
+    loadUsers();
+  });
+
   // Browser back/forward navigation
   window.addEventListener('popstate', () => {
     const url = new URL(window.location.href);
@@ -1035,6 +1117,7 @@ const pageTitle = 'Customer & Access Management';
     currentStatus = url.searchParams.get('status') || 'ALL';
     currentSearch = url.searchParams.get('search') || '';
     currentTimeWindow = url.searchParams.get('timeWindow') || 'ALL';
+    currentAssignedTo = url.searchParams.get('assignedTo') || '';
     currentPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
 
     if (searchInput) searchInput.value = currentSearch;
@@ -1055,6 +1138,7 @@ const pageTitle = 'Customer & Access Management';
   currentStatus = initialUrl.searchParams.get('status') || 'ALL';
   currentSearch = initialUrl.searchParams.get('search') || '';
   currentTimeWindow = initialUrl.searchParams.get('timeWindow') || 'ALL';
+  currentAssignedTo = initialUrl.searchParams.get('assignedTo') || '';
   currentPage = Math.max(1, parseInt(initialUrl.searchParams.get('page') || '1', 10));
 
   const timeSelect = document.getElementById('users-timewindow-select') as HTMLSelectElement | null;

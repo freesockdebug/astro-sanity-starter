@@ -285,8 +285,15 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
     const applyDataScope = (targetWhere: string[], targetParams: any[]) => {
       if (filter.dataScope === 'SELF_AND_POOL') {
         const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
-        targetWhere.push('(LOWER(assigned_to) = ? OR assigned_to IS NULL OR assigned_to = "")');
-        targetParams.push(email);
+        if (filter.assignedTo === 'UNASSIGNED') {
+          targetWhere.push('(assigned_to IS NULL OR assigned_to = "")');
+        } else if (filter.assignedTo) {
+          targetWhere.push('LOWER(assigned_to) = ?');
+          targetParams.push(email);
+        } else {
+          targetWhere.push('(LOWER(assigned_to) = ? OR assigned_to IS NULL OR assigned_to = "")');
+          targetParams.push(email);
+        }
       } else if (filter.dataScope === 'SELF_ONLY') {
         const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
         targetWhere.push('LOWER(assigned_to) = ?');
