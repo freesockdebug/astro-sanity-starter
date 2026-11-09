@@ -340,7 +340,7 @@ const i18nClient = {
   import { clientCache } from '@utils/clientCache';
   import { getTrackingUrl } from '@utils/shipping';
 
-  (function () {
+  function initBuyerOrdersPage() {
     const dataEl = document.getElementById('orders-app-data');
     if (!dataEl) return;
 
@@ -1070,5 +1070,12 @@ const i18nClient = {
 
     // Initial Load
     loadOrders();
-  })();
+  }
+
+  initBuyerOrdersPage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('orders-app-data')) {
+      initBuyerOrdersPage();
+    }
+  });
 </script>

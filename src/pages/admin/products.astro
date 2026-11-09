@@ -516,7 +516,8 @@ const pageTitle = 'Products & Catalog Workspace';
 <script>
   import { escapeHtml } from '@utils/adminWorkbench';
 
-  let currentProducts: any[] = [];
+  function initProductsPage() {
+    let currentProducts: any[] = [];
   let currentCategories: any[] = [];
   let currentEditingProduct: any = null;
   let activeLanguage = 'en';
@@ -1282,7 +1283,15 @@ const pageTitle = 'Products & Catalog Workspace';
     }
   });
 
-  // Initial Boot
-  loadData();
+    // Initial Boot
+    loadData();
+  }
+
+  initProductsPage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('catalog-app-meta')) {
+      initProductsPage();
+    }
+  });
 </script>
 

@@ -521,7 +521,8 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   import { escapeHtml, formatAdminTime, createPaginationController } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
-  const DEFAULT_COLUMNS: ColumnConfig[] = [
+  function initOrdersPage() {
+    const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'select', label: 'Select', defaultWidth: 46, minWidth: 46, visible: true, canHide: false },
     { id: 'order_no', label: 'Order No / Date', defaultWidth: 160, minWidth: 120, visible: true, canHide: false },
     { id: 'buyer', label: 'Buyer / Company', defaultWidth: 200, minWidth: 140, visible: true, canHide: true },
@@ -2056,5 +2057,13 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     });
   }
 
-  fetchOrders(false);
+    fetchOrders(false);
+  }
+
+  initOrdersPage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('orders-app-meta')) {
+      initOrdersPage();
+    }
+  });
 </script>

@@ -203,19 +203,28 @@ const pageTitle = 'Edge & KV Cache Console';
     }
   }
 
-  document.querySelectorAll('.btn-purge').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const scope = btn.getAttribute('data-scope') || 'all';
-      executePurge(scope);
+  function initCachePage() {
+    document.querySelectorAll('.btn-purge').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const scope = btn.getAttribute('data-scope') || 'all';
+        executePurge(scope);
+      });
     });
-  });
 
-  document.getElementById('path-purge-form')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const pathInput = document.getElementById('target-path-input') as HTMLInputElement | null;
-    const path = pathInput?.value.trim();
-    if (path) {
-      executePurge('path', path);
+    document.getElementById('path-purge-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const pathInput = document.getElementById('target-path-input') as HTMLInputElement | null;
+      const path = pathInput?.value.trim();
+      if (path) {
+        executePurge('path', path);
+      }
+    });
+  }
+
+  initCachePage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('purge-events-log')) {
+      initCachePage();
     }
   });
 </script>

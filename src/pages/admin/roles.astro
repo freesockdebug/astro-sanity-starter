@@ -311,9 +311,10 @@ const pageTitle = 'Roles & Permissions Matrix';
 </AdminLayout>
 
 <script>
-  function showToast(msg: string, success: boolean = true) {
-    (window as any).__showToast?.(msg, success ? 'success' : 'error');
-  }
+  function initRolesPage() {
+    function showToast(msg: string, success: boolean = true) {
+      (window as any).__showToast?.(msg, success ? 'success' : 'error');
+    }
 
   const dialog = document.getElementById('role-config-dialog') as HTMLDialogElement | null;
   const dialogTitle = document.getElementById('role-dialog-title');
@@ -528,4 +529,12 @@ const pageTitle = 'Roles & Permissions Matrix';
       }
     });
   });
+}
+
+initRolesPage();
+document.addEventListener('shell:page-load', () => {
+  if (document.getElementById('btn-create-role')) {
+    initRolesPage();
+  }
+});
 </script>

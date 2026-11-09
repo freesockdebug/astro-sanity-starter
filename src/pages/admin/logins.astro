@@ -180,7 +180,8 @@ const pageTitle = 'Login Audit Logs';
   import { escapeHtml, formatAdminTime } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
-  const DEFAULT_COLUMNS: ColumnConfig[] = [
+  function initLoginsPage() {
+    const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'user', label: 'User Email & ID', defaultWidth: 220, minWidth: 160, visible: true, canHide: false },
     { id: 'ip', label: 'IP Address', defaultWidth: 140, minWidth: 100, visible: true, canHide: true },
     { id: 'location', label: 'Location', defaultWidth: 150, minWidth: 110, visible: true, canHide: true },
@@ -589,4 +590,12 @@ const pageTitle = 'Login Audit Logs';
     if (metricsContainer) metricsContainer.classList.add('hidden');
     if (!auditLogsLoaded) loadAuditLogs();
   });
+}
+
+initLoginsPage();
+document.addEventListener('shell:page-load', () => {
+  if (document.getElementById('tab-btn-logins')) {
+    initLoginsPage();
+  }
+});
 </script>

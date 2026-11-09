@@ -325,9 +325,10 @@ const pageTitle = 'Team Members Management';
 </AdminLayout>
 
 <script>
-  function showToast(msg: string, success: boolean = true) {
-    (window as any).__showToast?.(msg, success ? 'success' : 'error');
-  }
+  function initMembersPage() {
+    function showToast(msg: string, success: boolean = true) {
+      (window as any).__showToast?.(msg, success ? 'success' : 'error');
+    }
 
   const addDialog = document.getElementById('add-member-dialog') as HTMLDialogElement | null;
   const btnOpenAdd = document.getElementById('btn-open-add-dialog');
@@ -578,4 +579,12 @@ const pageTitle = 'Team Members Management';
       }
     });
   });
+}
+
+initMembersPage();
+document.addEventListener('shell:page-load', () => {
+  if (document.getElementById('btn-open-add-dialog')) {
+    initMembersPage();
+  }
+});
 </script>

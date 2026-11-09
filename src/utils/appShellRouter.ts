@@ -177,6 +177,18 @@ function cleanupCurrentPageOverlays(): void {
   document.body.classList.remove('overflow-hidden');
 }
 
+interface ApiCacheEntry {
+  body: string;
+  status: number;
+  statusText: string;
+  headers: [string, string][];
+  ts: number;
+}
+
+const apiResponseCache = new Map<string, ApiCacheEntry>();
+const API_CACHE_TTL_MS = 25_000;
+const loadedModuleSrcs = new Set<string>();
+
 function syncShellClasses(targetDoc: Document): void {
   const containers = ['shell-root', 'shell-right-col', 'shell-main-canvas'];
   containers.forEach((id) => {
@@ -189,11 +201,10 @@ function syncShellClasses(targetDoc: Document): void {
 }
 
 async function reactivateScripts(targetDoc: Document): Promise<void> {
-  // Clean up dynamic scripts injected from prior navigations
-  document.querySelectorAll('script[data-shell-dynamic]').forEach((s) => s.remove());
+  // Clean up dynamic inline scripts from prior navigations
   document.querySelectorAll('script[data-shell-inline-dynamic]').forEach((s) => s.remove());
 
-  // 1. Dual-Track Track A: Vite Module scripts (Astro hoisted entry points)
+  // 1. Dual-Track Track A: Vite Module scripts (Loaded once, natural browser HTTP caching)
   const layoutExcludes = [
     'Layout.',
     'AdminLayout.',
@@ -212,12 +223,13 @@ async function reactivateScripts(targetDoc: Document): Promise<void> {
   });
 
   for (const modScript of pageModuleScripts) {
+    const rawSrc = modScript.getAttribute('src') || '';
+    if (!rawSrc || loadedModuleSrcs.has(rawSrc)) continue;
+    loadedModuleSrcs.add(rawSrc);
+
     const newScript = document.createElement('script');
     newScript.type = 'module';
-    newScript.dataset.shellDynamic = 'true';
-    const srcUrl = new URL(modScript.src, window.location.origin);
-    srcUrl.searchParams.set('t', String(Date.now()));
-    newScript.src = srcUrl.pathname + srcUrl.search;
+    newScript.src = rawSrc;
     document.body.appendChild(newScript);
   }
 
@@ -254,7 +266,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
   if (window.__appShellInitialized) return;
   window.__appShellInitialized = true;
 
-  // Intercept write-mutations to clear prefetch cache
+  // Intercept write-mutations and provide client-side GET API caching
   const origFetch = window.fetch;
   window.fetch = function (...args) {
     const req = args[0];
@@ -265,9 +277,64 @@ export function initAppShellRouter(options: AppShellOptions): void {
     } else if (typeof req === 'object' && req && 'method' in req && typeof req.method === 'string') {
       method = req.method.toUpperCase();
     }
+
     if (method !== 'GET' && method !== 'HEAD') {
       prefetchCache.clear();
+      apiResponseCache.clear();
+      return origFetch.apply(this, args);
     }
+
+    let urlStr = '';
+    if (typeof req === 'string') {
+      urlStr = req;
+    } else if (req instanceof URL) {
+      urlStr = req.href;
+    } else if (req && 'url' in req && typeof req.url === 'string') {
+      urlStr = req.url;
+    }
+
+    const isCacheableApi =
+      urlStr &&
+      (urlStr.startsWith('/api/admin/') ||
+        urlStr.includes('/api/admin/') ||
+        urlStr.startsWith('/api/orders') ||
+        urlStr.includes('/api/orders')) &&
+      init?.cache !== 'no-store' &&
+      init?.cache !== 'reload';
+
+    if (isCacheableApi) {
+      const now = Date.now();
+      const cached = apiResponseCache.get(urlStr);
+      if (cached && now - cached.ts < API_CACHE_TTL_MS) {
+        return Promise.resolve(
+          new Response(cached.body, {
+            status: cached.status,
+            statusText: cached.statusText,
+            headers: new Headers(cached.headers),
+          })
+        );
+      }
+
+      return origFetch.apply(this, args).then(async (res) => {
+        if (res.ok) {
+          try {
+            const clone = res.clone();
+            const body = await clone.text();
+            const headers: [string, string][] = [];
+            clone.headers.forEach((v, k) => headers.push([k, v]));
+            apiResponseCache.set(urlStr, {
+              body,
+              status: clone.status,
+              statusText: clone.statusText,
+              headers,
+              ts: Date.now(),
+            });
+          } catch {}
+        }
+        return res;
+      });
+    }
+
     return origFetch.apply(this, args);
   };
 
@@ -285,7 +352,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
     clearTimeout(hoverTimer);
     hoverTimer = setTimeout(async () => {
       try {
-        const res = await origFetch(href, { headers: { 'X-Shell-Prefetch': '1' } });
+        const res = await origFetch(href, { headers: { 'X-Shell-Prefetch': '1', 'X-Shell-Request': '1' } });
         if (res.ok) {
           const text = await res.text();
           setCachedHtml(href, text);
@@ -317,7 +384,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
     let html = getCachedHtml(targetUrl.href);
     if (!html) {
       try {
-        const res = await origFetch(targetUrl.href);
+        const res = await origFetch(targetUrl.href, { headers: { 'X-Shell-Request': '1' } });
         if (!res.ok || res.redirected) {
           window.location.href = res.url || targetUrl.href;
           return;
@@ -359,6 +426,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
 
     await reactivateScripts(doc);
     finishProgressBar();
+    document.dispatchEvent(new CustomEvent('shell:page-load', { detail: { url: targetUrl.href } }));
     window.dispatchEvent(new CustomEvent('app-shell:navigated', { detail: { url: targetUrl.href } }));
   }
 

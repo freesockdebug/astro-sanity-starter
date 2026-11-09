@@ -237,6 +237,9 @@ export function getCookieValue(cookieHeader: string | null | undefined, name: st
  */
 export async function getSessionFromRequest(requestOrContext: any, customEnv?: any): Promise<AuthUser | null> {
   if (!requestOrContext) return null;
+  if (requestOrContext.locals?.sessionUser !== undefined) {
+    return requestOrContext.locals.sessionUser;
+  }
 
   let token: string | null = null;
 
@@ -260,7 +263,11 @@ export async function getSessionFromRequest(requestOrContext: any, customEnv?: a
   }
 
   if (!token) return null;
-  return verifySessionToken(token, customEnv);
+  const user = await verifySessionToken(token, customEnv);
+  if (requestOrContext.locals && typeof requestOrContext.locals === 'object') {
+    requestOrContext.locals.sessionUser = user;
+  }
+  return user;
 }
 
 /**

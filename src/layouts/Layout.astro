@@ -63,7 +63,10 @@ const resolvedImage = imageSrc
     ? { src: imageSrc.startsWith('http') || imageSrc.startsWith('/') ? imageSrc : new URL(imageSrc, Astro.site || Astro.url).toString() }
     : undefined;
 
-const systemSettings = await getSystemSettings(cfEnv).catch(() => null);
+const systemSettings = (Astro.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
+if (Astro.locals && !(Astro.locals as any).systemSettings) {
+  (Astro.locals as any).systemSettings = systemSettings;
+}
 const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_errors) : true;
 const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'warn') : 'warn';
 ---

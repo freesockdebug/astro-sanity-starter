@@ -23,6 +23,17 @@ export function jsonNoCache(data: any, status = 200, extraHeaders: Record<string
   });
 }
 
+function getSettingsPromise(contextOrRequest: any, cfEnv?: any): Promise<any> {
+  const locals = contextOrRequest?.locals;
+  if (locals?.systemSettings) {
+    return Promise.resolve(locals.systemSettings);
+  }
+  return getSystemSettings(cfEnv).then((s) => {
+    if (locals) locals.systemSettings = s;
+    return s;
+  }).catch(() => null);
+}
+
 export interface BuyerAuthResult {
   user: AuthUser | null;
   dbUser: UserRecord | null;
@@ -45,7 +56,7 @@ export async function verifyBuyerAuth(requestOrContext: any, cfEnv?: any): Promi
 
   const [dbUser, settings] = await Promise.all([
     getUserByIdOrEmail(sessionUser.id, sessionUser.email).catch(() => null),
-    getSystemSettings(cfEnv).catch(() => null),
+    getSettingsPromise(requestOrContext, cfEnv),
   ]);
 
   if (dbUser && dbUser.status === 'BLOCKED') {
@@ -99,7 +110,7 @@ export async function getBuyerContext(
 
   const [dbUser, settings] = await Promise.all([
     getUserByIdOrEmail(sessionUser.id, sessionUser.email).catch(() => null),
-    getSystemSettings(cfEnv).catch(() => null),
+    getSettingsPromise(astro, cfEnv),
   ]);
 
   if (dbUser && dbUser.status === 'BLOCKED') {
@@ -146,11 +157,15 @@ export async function requireAdminContext(
     };
   }
 
+  const isShellReq = astro.request?.headers?.get?.('x-shell-request') === '1';
+  const shouldSkipPending = options.skipPendingCount || isShellReq;
+
   // Optimized: Single round of concurrent parallel resolution for DB user, settings, RBAC context, and count
-  const [dbUser, settings, pendingOrdersCount] = await Promise.all([
+  const [dbUser, settings, pendingOrdersCount, initialAdminCtx] = await Promise.all([
     getUserByIdOrEmail(sessionUser.id, sessionUser.email).catch(() => null),
-    getSystemSettings(cfEnv).catch(() => null),
-    options.skipPendingCount ? Promise.resolve(0) : getPendingOrdersCount().catch(() => 0),
+    getSettingsPromise(astro, cfEnv),
+    shouldSkipPending ? Promise.resolve(0) : getPendingOrdersCount().catch(() => 0),
+    resolveAdminContext(sessionUser.email, cfEnv).catch(() => null),
   ]);
 
   if (dbUser && dbUser.status === 'BLOCKED') {
@@ -163,7 +178,10 @@ export async function requireAdminContext(
     };
   }
 
-  const adminCtx = await resolveAdminContext(sessionUser.email, cfEnv, settings?.co_admin_emails);
+  let adminCtx = initialAdminCtx;
+  if (!adminCtx && settings?.co_admin_emails) {
+    adminCtx = await resolveAdminContext(sessionUser.email, cfEnv, settings.co_admin_emails).catch(() => null);
+  }
 
   if (!adminCtx) {
     return {
@@ -221,7 +239,7 @@ export async function verifyAdminAuth(
 
   const [dbUser, settings] = await Promise.all([
     getUserByIdOrEmail(sessionUser.id, sessionUser.email).catch(() => null),
-    getSystemSettings(cfEnv).catch(() => null),
+    getSettingsPromise(request, cfEnv),
   ]);
 
   if (dbUser && dbUser.status === 'BLOCKED') {

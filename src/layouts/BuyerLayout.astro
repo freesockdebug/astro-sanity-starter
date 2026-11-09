@@ -46,6 +46,7 @@ const tabNames: Record<string, string> = {
 };
 
 const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
+const isShellReq = Astro.request.headers.get('x-shell-request') === '1';
 ---
 
 <Layout
@@ -56,13 +57,17 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
 >
   <div id="shell-root" class="min-h-screen flex flex-col lg:flex-row">
     <!-- 1. Left Grouped Vertical Sidebar (Slide-over on Mobile, Sticky on Desktop >= lg) -->
-    <BuyerSidebar
-      currentTab={currentTab}
-      sessionUser={sessionUser}
-      dbUser={dbUser}
-      totalOrdersCount={totalOrdersCount}
-      currentLang={currentLang}
-    />
+    {
+      !isShellReq && (
+        <BuyerSidebar
+          currentTab={currentTab}
+          sessionUser={sessionUser}
+          dbUser={dbUser}
+          totalOrdersCount={totalOrdersCount}
+          currentLang={currentLang}
+        />
+      )
+    }
 
     <!-- 2. Right Main Canvas Area -->
     <div id="shell-right-col" class="flex-1 flex flex-col min-w-0">
@@ -162,74 +167,78 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
   </div>
 
   <!-- Mobile High-Frequency Bottom Tab Bar (< lg) -->
-  <nav
-    class="fixed bottom-0 inset-x-0 h-14 bg-white/95 backdrop-blur-md border-t border-black/10 z-30 lg:hidden flex items-center justify-around px-2 pb-[max(0px,env(safe-area-inset-bottom))] shadow-lg print:hidden"
-    aria-label="Mobile Quick Bottom Navigation"
-  >
-    <!-- Tab 1: Orders -->
-    <a
-      href={getLocalizedPath('/orders', currentLang)}
-      data-shell-nav="buyer"
-      data-tab-key="orders"
-      data-tab-title={t('orders.tabOrdersTitle')}
-      class:list={[
-        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
-        currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-      ]}
-    >
-      <div class="relative">
-        <span class="text-base">📦</span>
-        {totalOrdersCount > 0 && (
-          <span class="absolute -top-1 -right-2 bg-amber-500 text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
-            {totalOrdersCount}
-          </span>
-        )}
-      </div>
-      <span class="truncate max-w-[22vw]">{t('orders.breadcrumb')}</span>
-    </a>
+  {
+    !isShellReq && (
+      <nav
+        class="fixed bottom-0 inset-x-0 h-14 bg-white/95 backdrop-blur-md border-t border-black/10 z-30 lg:hidden flex items-center justify-around px-2 pb-[max(0px,env(safe-area-inset-bottom))] shadow-lg print:hidden"
+        aria-label="Mobile Quick Bottom Navigation"
+      >
+        <!-- Tab 1: Orders -->
+        <a
+          href={getLocalizedPath('/orders', currentLang)}
+          data-shell-nav="buyer"
+          data-tab-key="orders"
+          data-tab-title={t('orders.tabOrdersTitle')}
+          class:list={[
+            'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
+            currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+          ]}
+        >
+          <div class="relative">
+            <span class="text-base">📦</span>
+            {totalOrdersCount > 0 && (
+              <span class="absolute -top-1 -right-2 bg-amber-500 text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
+                {totalOrdersCount}
+              </span>
+            )}
+          </div>
+          <span class="truncate max-w-[22vw]">{t('orders.breadcrumb')}</span>
+        </a>
 
-    <!-- Tab 2: Account -->
-    <a
-      href={getLocalizedPath('/account', currentLang)}
-      data-shell-nav="buyer"
-      data-tab-key="account"
-      data-tab-title={t('orders.tabAccountTitle')}
-      class:list={[
-        'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
-        currentTab === 'account' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-      ]}
-    >
-      <span class="text-base">👤</span>
-      <span class="truncate max-w-[22vw]">{t('orders.tabAccountTitle')}</span>
-    </a>
+        <!-- Tab 2: Account -->
+        <a
+          href={getLocalizedPath('/account', currentLang)}
+          data-shell-nav="buyer"
+          data-tab-key="account"
+          data-tab-title={t('orders.tabAccountTitle')}
+          class:list={[
+            'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+            currentTab === 'account' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+          ]}
+        >
+          <span class="text-base">👤</span>
+          <span class="truncate max-w-[22vw]">{t('orders.tabAccountTitle')}</span>
+        </a>
 
-    <!-- Tab 3: Quote Bag Drawer -->
-    <label
-      for="quote-drawer-toggle"
-      id="mobile-bottom-quote-btn"
-      class="flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors text-[#86868b] hover:text-black cursor-pointer"
-    >
-      <div class="relative">
-        <span class="text-base">🛒</span>
-        <span class="nav-quote-badge quote-badge hidden absolute -top-1 -right-2 bg-[#1d1d1f] text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
-          0
-        </span>
-      </div>
-      <span class="truncate max-w-[22vw]">{t('buyer.openQuoteBag')}</span>
-    </label>
+        <!-- Tab 3: Quote Bag Drawer -->
+        <label
+          for="quote-drawer-toggle"
+          id="mobile-bottom-quote-btn"
+          class="flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors text-[#86868b] hover:text-black cursor-pointer"
+        >
+          <div class="relative">
+            <span class="text-base">🛒</span>
+            <span class="nav-quote-badge quote-badge hidden absolute -top-1 -right-2 bg-[#1d1d1f] text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
+              0
+            </span>
+          </div>
+          <span class="truncate max-w-[22vw]">{t('buyer.openQuoteBag')}</span>
+        </label>
 
-    <!-- Tab 4: Catalog -->
-    <a
-      href={getLocalizedPath('/products', currentLang)}
-      class="flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors text-[#86868b] hover:text-black"
-    >
-      <span class="text-base">✨</span>
-      <span class="truncate max-w-[22vw]">{t('buyer.browseCatalog')}</span>
-    </a>
-  </nav>
+        <!-- Tab 4: Catalog -->
+        <a
+          href={getLocalizedPath('/products', currentLang)}
+          class="flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors text-[#86868b] hover:text-black"
+        >
+          <span class="text-base">✨</span>
+          <span class="truncate max-w-[22vw]">{t('buyer.browseCatalog')}</span>
+        </a>
+      </nav>
+    )
+  }
 
   <!-- Mount Quote Drawer (Required for RFQ and Reordering) -->
-  <QuoteDrawer />
+  { !isShellReq && <QuoteDrawer /> }
 
   <!-- Modals & Slide-over Drawers Slots -->
   <div id="shell-overlays">

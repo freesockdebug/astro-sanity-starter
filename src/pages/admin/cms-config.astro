@@ -319,7 +319,8 @@ const pageTitle = 'CMS Site Configuration';
 <script>
   import { escapeHtml } from '@utils/adminWorkbench';
 
-  let activeTab = 'site';
+  function initCmsConfig() {
+    let activeTab = 'site';
   let configs: any = {
     siteConfig: { _type: 'siteConfig', nav: [] },
     catalogSettings: { _type: 'catalogSettings' },
@@ -686,7 +687,15 @@ const pageTitle = 'CMS Site Configuration';
     }
   });
 
-  // Initial load
-  loadConfigs();
+    // Initial load
+    loadConfigs();
+  }
+
+  initCmsConfig();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('btn-save-current-config')) {
+      initCmsConfig();
+    }
+  });
 </script>
 

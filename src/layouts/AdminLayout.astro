@@ -35,6 +35,7 @@ const {
 
 const canShow = (key: string) => !menus || menus.includes(key);
 const currentTabTitle = getTabTitle(currentTab, 'Workspace');
+const isShellReq = Astro.request.headers.get('x-shell-request') === '1';
 ---
 
 <Layout
@@ -46,16 +47,20 @@ const currentTabTitle = getTabTitle(currentTab, 'Workspace');
 >
   <div id="shell-root" class:list={['flex flex-col lg:flex-row', fullscreenWorkbench ? 'h-[100dvh] overflow-hidden' : 'min-h-screen']}>
     <!-- 1. Left Grouped Vertical Sidebar (Fixed on Mobile/Tablet, Sticky on Desktop >= lg) -->
-    <AdminSidebar
-      currentTab={currentTab}
-      sessionEmail={sessionEmail}
-      pendingOrdersCount={pendingOrdersCount}
-      adminName={adminName}
-      roleName={roleName}
-      roleCode={roleCode}
-      menus={menus}
-      dataScope={dataScope}
-    />
+    {
+      !isShellReq && (
+        <AdminSidebar
+          currentTab={currentTab}
+          sessionEmail={sessionEmail}
+          pendingOrdersCount={pendingOrdersCount}
+          adminName={adminName}
+          roleName={roleName}
+          roleCode={roleCode}
+          menus={menus}
+          dataScope={dataScope}
+        />
+      )
+    }
 
     <!-- 2. Right Main Canvas Area -->
     <div id="shell-right-col" class:list={['flex-1 flex flex-col min-w-0 min-h-0', fullscreenWorkbench && 'h-full overflow-hidden']}>
@@ -142,97 +147,101 @@ const currentTabTitle = getTabTitle(currentTab, 'Workspace');
   </div>
 
   <!-- Mobile High-Frequency Bottom Tab Bar (< lg) -->
-  <nav
-    class="fixed bottom-0 inset-x-0 h-14 bg-white/95 backdrop-blur-md border-t border-black/10 z-30 lg:hidden flex items-center justify-around px-2 pb-[max(0px,env(safe-area-inset-bottom))] shadow-lg"
-    aria-label="Mobile Quick Bottom Navigation"
-  >
-    {canShow('orders') && (
-      <a
-        href="/admin/orders"
-        data-shell-nav="admin"
-        data-tab-key="orders"
-        data-tab-title="Orders"
-        class:list={[
-          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
-          currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-        ]}
+  {
+    !isShellReq && (
+      <nav
+        class="fixed bottom-0 inset-x-0 h-14 bg-white/95 backdrop-blur-md border-t border-black/10 z-30 lg:hidden flex items-center justify-around px-2 pb-[max(0px,env(safe-area-inset-bottom))] shadow-lg"
+        aria-label="Mobile Quick Bottom Navigation"
       >
-        <div class="relative">
-          <span class="text-base">📦</span>
-          {pendingOrdersCount > 0 && (
-            <span class="absolute -top-1 -right-2 bg-amber-500 text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
-              {pendingOrdersCount}
-            </span>
-          )}
-        </div>
-        <span>Orders</span>
-      </a>
-    )}
+        {canShow('orders') && (
+          <a
+            href="/admin/orders"
+            data-shell-nav="admin"
+            data-tab-key="orders"
+            data-tab-title="Orders"
+            class:list={[
+              'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
+              currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+            ]}
+          >
+            <div class="relative">
+              <span class="text-base">📦</span>
+              {pendingOrdersCount > 0 && (
+                <span class="absolute -top-1 -right-2 bg-amber-500 text-white font-mono text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center">
+                  {pendingOrdersCount}
+                </span>
+              )}
+            </div>
+            <span>Orders</span>
+          </a>
+        )}
 
-    {canShow('users') && (
-      <a
-        href="/admin/users"
-        data-shell-nav="admin"
-        data-tab-key="users"
-        data-tab-title="CRM & Customers"
-        class:list={[
-          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
-          currentTab === 'users' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-        ]}
-      >
-        <span class="text-base">👥</span>
-        <span>CRM</span>
-      </a>
-    )}
+        {canShow('users') && (
+          <a
+            href="/admin/users"
+            data-shell-nav="admin"
+            data-tab-key="users"
+            data-tab-title="CRM & Customers"
+            class:list={[
+              'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+              currentTab === 'users' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+            ]}
+          >
+            <span class="text-base">👥</span>
+            <span>CRM</span>
+          </a>
+        )}
 
-    {canShow('members') && (
-      <a
-        href="/admin/members"
-        data-shell-nav="admin"
-        data-tab-key="members"
-        data-tab-title="Team Members"
-        class:list={[
-          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
-          currentTab === 'members' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-        ]}
-      >
-        <span class="text-base">🧑‍💼</span>
-        <span>Team</span>
-      </a>
-    )}
+        {canShow('members') && (
+          <a
+            href="/admin/members"
+            data-shell-nav="admin"
+            data-tab-key="members"
+            data-tab-title="Team Members"
+            class:list={[
+              'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+              currentTab === 'members' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+            ]}
+          >
+            <span class="text-base">🧑‍💼</span>
+            <span>Team</span>
+          </a>
+        )}
 
-    {canShow('logins') && (
-      <a
-        href="/admin/logins"
-        data-shell-nav="admin"
-        data-tab-key="logins"
-        data-tab-title="Audit & Logins"
-        class:list={[
-          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
-          currentTab === 'logins' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-        ]}
-      >
-        <span class="text-base">🛡️</span>
-        <span>Audit</span>
-      </a>
-    )}
+        {canShow('logins') && (
+          <a
+            href="/admin/logins"
+            data-shell-nav="admin"
+            data-tab-key="logins"
+            data-tab-title="Audit & Logins"
+            class:list={[
+              'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+              currentTab === 'logins' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+            ]}
+          >
+            <span class="text-base">🛡️</span>
+            <span>Audit</span>
+          </a>
+        )}
 
-    {canShow('settings') && (
-      <a
-        href="/admin/settings"
-        data-shell-nav="admin"
-        data-tab-key="settings"
-        data-tab-title="System Settings"
-        class:list={[
-          'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
-          currentTab === 'settings' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
-        ]}
-      >
-        <span class="text-base">⚙️</span>
-        <span>Settings</span>
-      </a>
-    )}
-  </nav>
+        {canShow('settings') && (
+          <a
+            href="/admin/settings"
+            data-shell-nav="admin"
+            data-tab-key="settings"
+            data-tab-title="System Settings"
+            class:list={[
+              'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
+              currentTab === 'settings' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
+            ]}
+          >
+            <span class="text-base">⚙️</span>
+            <span>Settings</span>
+          </a>
+        )}
+      </nav>
+    )
+  }
 
   <!-- Modals & Slide-over Drawers Slots -->
   <div id="shell-overlays">
@@ -242,43 +251,47 @@ const currentTabTitle = getTabTitle(currentTab, 'Workspace');
   </div>
 
   <!-- Global Command Palette Modal (⌘K / Ctrl+K) -->
-  <dialog
-    id="cmd-palette-dialog"
-    class="backdrop:bg-black/50 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-xl m-auto overflow-hidden text-xs"
-  >
-    <div class="p-3 border-b border-black/5 flex items-center gap-2.5 bg-white">
-      <svg class="w-4 h-4 text-[#86868b] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <input
-        type="text"
-        id="cmd-palette-input"
-        placeholder="Type command, menu, order (GW-), or customer email..."
-        class="flex-1 bg-transparent border-0 outline-none text-xs font-medium text-[#1d1d1f] placeholder:text-[#86868b]"
-      />
-      <kbd class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#f5f5f7] border border-black/10 text-[#86868b]">ESC</kbd>
-    </div>
+  {
+    !isShellReq && (
+      <dialog
+        id="cmd-palette-dialog"
+        class="backdrop:bg-black/50 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-xl m-auto overflow-hidden text-xs"
+      >
+        <div class="p-3 border-b border-black/5 flex items-center gap-2.5 bg-white">
+          <svg class="w-4 h-4 text-[#86868b] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            id="cmd-palette-input"
+            placeholder="Type command, menu, order (GW-), or customer email..."
+            class="flex-1 bg-transparent border-0 outline-none text-xs font-medium text-[#1d1d1f] placeholder:text-[#86868b]"
+          />
+          <kbd class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#f5f5f7] border border-black/10 text-[#86868b]">ESC</kbd>
+        </div>
 
-    <div id="cmd-palette-results" class="max-h-80 overflow-y-auto p-2 space-y-1">
-      <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
-        Navigation Consoles
-      </div>
-      {getAllMenuItems().filter((item) => canShow(item.key)).map((item) => (
-        <a href={item.href} data-shell-nav="admin" data-tab-key={item.key} data-tab-title={item.label} class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
-          <div class="flex items-center gap-2.5">
-            <span class="text-sm select-none">{item.icon}</span>
-            <span class="font-semibold text-xs">{item.label}</span>
+        <div id="cmd-palette-results" class="max-h-80 overflow-y-auto p-2 space-y-1">
+          <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+            Navigation Consoles
           </div>
-          <span class="text-[10px] text-[#86868b] font-mono">{item.href}</span>
-        </a>
-      ))}
-    </div>
+          {getAllMenuItems().filter((item) => canShow(item.key)).map((item) => (
+            <a href={item.href} data-shell-nav="admin" data-tab-key={item.key} data-tab-title={item.label} class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+              <div class="flex items-center gap-2.5">
+                <span class="text-sm select-none">{item.icon}</span>
+                <span class="font-semibold text-xs">{item.label}</span>
+              </div>
+              <span class="text-[10px] text-[#86868b] font-mono">{item.href}</span>
+            </a>
+          ))}
+        </div>
 
-    <div class="p-2.5 bg-[#fafafa] border-t border-black/5 flex items-center justify-between text-[11px] text-[#86868b]">
-      <span>Tip: Enter order number to jump to order; enter email to search buyers</span>
-      <span>Press <kbd class="font-mono bg-white px-1 py-0.5 rounded border border-black/10">↵</kbd> to select</span>
-    </div>
-  </dialog>
+        <div class="p-2.5 bg-[#fafafa] border-t border-black/5 flex items-center justify-between text-[11px] text-[#86868b]">
+          <span>Tip: Enter order number to jump to order; enter email to search buyers</span>
+          <span>Press <kbd class="font-mono bg-white px-1 py-0.5 rounded border border-black/10">↵</kbd> to select</span>
+        </div>
+      </dialog>
+    )
+  }
 
   <!-- Inject Client RBAC Context for Button Trimming -->
   <script is:inline define:vars={{ permissions, roleCode, dataScope }} data-shell-persist="true">

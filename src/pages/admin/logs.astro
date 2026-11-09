@@ -414,7 +414,7 @@ const pageTitle = 'System Diagnostics & Performance';
   } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
-  (function () {
+  function initLogsPage() {
     const DEFAULT_COLUMNS: ColumnConfig[] = [
       { id: 'time', label: 'Time', defaultWidth: 115, minWidth: 90, visible: true, canHide: false },
       { id: 'level', label: 'Level', defaultWidth: 80, minWidth: 60, visible: true, canHide: true },
@@ -1271,5 +1271,12 @@ const pageTitle = 'System Diagnostics & Performance';
     tableSettings.renderHeader();
     tableSettings.renderMenu();
     loadLogs(false);
-  })();
+  }
+
+  initLogsPage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('metric-capsule-total')) {
+      initLogsPage();
+    }
+  });
 </script>

@@ -185,7 +185,8 @@ const pageTitle = 'Pages & Modular Visual Builder';
 <script>
   import { escapeHtml } from '@utils/adminWorkbench';
 
-  function getEnText(val: any): string {
+  function initPagesPage() {
+    function getEnText(val: any): string {
     if (!val) return '';
     if (typeof val === 'string') return val;
     return val.en || val.zh || Object.values(val)[0] || '';
@@ -546,7 +547,15 @@ const pageTitle = 'Pages & Modular Visual Builder';
     }
   });
 
-  // Boot
-  loadPages();
+    // Boot
+    loadPages();
+  }
+
+  initPagesPage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('builder-pane') || document.getElementById('btn-create-page')) {
+      initPagesPage();
+    }
+  });
 </script>
 

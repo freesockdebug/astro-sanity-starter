@@ -139,7 +139,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         pathname.endsWith('.txt');
 
       if (!isStaticOrLogSelf) {
-        const settings = await getSystemSettings(cfEnv).catch(() => null);
+        const settings = (context.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
         const slowThreshold = settings?.slow_request_threshold_ms || 1000;
         const spans = profiler.getSpans();
 

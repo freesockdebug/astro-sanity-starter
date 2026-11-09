@@ -385,7 +385,8 @@ const pageTitle = 'Customer & Access Management';
   import { escapeHtml, formatAdminTime, createPaginationController } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
-  const DEFAULT_COLUMNS: ColumnConfig[] = [
+  function initUsersPage() {
+    const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'profile', label: 'Customer Profile', defaultWidth: 240, minWidth: 160, visible: true, canHide: false },
     { id: 'company', label: 'Company & Location', defaultWidth: 180, minWidth: 120, visible: true, canHide: true },
     { id: 'assigned_to', label: 'Assigned Rep', defaultWidth: 140, minWidth: 100, visible: true, canHide: true },
@@ -1269,7 +1270,15 @@ const pageTitle = 'Customer & Access Management';
     (window as any).__showToast?.(`Exported ${currentUsersList.length} buyers to CSV`, 'success');
   });
 
-  loadUsers(false);
+    loadUsers(false);
+  }
+
+  initUsersPage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('user-scope-container')) {
+      initUsersPage();
+    }
+  });
 </script>
 
 <style>

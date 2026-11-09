@@ -435,8 +435,9 @@ const tier = dbUser?.tier || 'STANDARD';
 <script>
   import { clientCache } from '@utils/clientCache';
 
-  // Profile update handling
-  const form = document.getElementById('profile-form') as HTMLFormElement | null;
+  function initAccountPage() {
+    // Profile update handling
+    const form = document.getElementById('profile-form') as HTMLFormElement | null;
   const saveBtn = document.getElementById('save-profile-btn') as HTMLButtonElement | null;
   const feedbackEl = document.getElementById('profile-feedback');
 
@@ -617,5 +618,13 @@ const tier = dbUser?.tier || 'STANDARD';
       submitBtnText.textContent = pwdMsgSave;
     }
   });
+}
+
+initAccountPage();
+document.addEventListener('shell:page-load', () => {
+  if (document.getElementById('profile-form')) {
+    initAccountPage();
+  }
+});
 </script>
 
