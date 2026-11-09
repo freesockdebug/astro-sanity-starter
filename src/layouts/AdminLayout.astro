@@ -559,6 +559,78 @@ const roleDisplay = roleName || (roleCode === 'content_editor' ? 'Content Editor
       if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
       if (backdrop) backdrop.addEventListener('click', closeSidebar);
 
+      // iOS Swipe-Left-to-Close Gesture for Mobile Sidebar Drawer
+      if (sidebar && backdrop) {
+        var touchStartX = 0;
+        var touchStartY = 0;
+        var touchCurrentX = 0;
+        var touchStartTime = 0;
+        var isSwipingSidebar = false;
+        var lockAxis = null;
+
+        sidebar.addEventListener('touchstart', function(e) {
+          if (window.innerWidth >= 1024 || sidebar.classList.contains('-translate-x-full') || e.touches.length !== 1) return;
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+          touchCurrentX = touchStartX;
+          touchStartTime = performance.now();
+          isSwipingSidebar = false;
+          lockAxis = null;
+        }, { passive: true });
+
+        sidebar.addEventListener('touchmove', function(e) {
+          if (!touchStartTime || e.touches.length !== 1) return;
+          var dx = e.touches[0].clientX - touchStartX;
+          var dy = e.touches[0].clientY - touchStartY;
+
+          if (!lockAxis) {
+            if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+            lockAxis = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'x' : 'y';
+          }
+          if (lockAxis === 'y') return;
+
+          if (!isSwipingSidebar) {
+            isSwipingSidebar = true;
+            sidebar.classList.add('is-swiping');
+            backdrop.classList.add('is-swiping-backdrop');
+          }
+
+          touchCurrentX = e.touches[0].clientX;
+          var offset = dx <= 0 ? dx : 0; // Left sidebar only slides left (negative X)
+          var w = sidebar.offsetWidth || 260;
+          var progress = Math.min(1, Math.abs(offset) / w);
+
+          sidebar.style.transform = 'translate3d(' + offset + 'px, 0, 0)';
+          backdrop.style.opacity = String(1 - progress);
+        }, { passive: true });
+
+        function endSidebarSwipe() {
+          if (!isSwipingSidebar) {
+            touchStartTime = 0;
+            return;
+          }
+          isSwipingSidebar = false;
+          sidebar.classList.remove('is-swiping');
+          backdrop.classList.remove('is-swiping-backdrop');
+
+          var dx = touchCurrentX - touchStartX;
+          var dt = Math.max(1, performance.now() - touchStartTime);
+          var velocity = Math.abs(dx) / dt;
+          var w = sidebar.offsetWidth || 260;
+          touchStartTime = 0;
+
+          sidebar.style.transform = '';
+          backdrop.style.opacity = '';
+
+          if (dx < -w * 0.32 || (dx < -36 && velocity > 0.45)) {
+            closeSidebar();
+          }
+        }
+
+        sidebar.addEventListener('touchend', endSidebarSwipe, { passive: true });
+        sidebar.addEventListener('touchcancel', endSidebarSwipe, { passive: true });
+      }
+
       // Admin Account Popover Dropdown Toggle
       var triggerDesktop = document.getElementById('admin-account-trigger-desktop');
       var triggerMobile = document.getElementById('admin-account-trigger-mobile');

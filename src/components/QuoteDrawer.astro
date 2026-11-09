@@ -739,4 +739,87 @@ if (reqCountryCode) {
       }
     }
   });
+
+  // iOS Native Swipe-to-Close Gesture for Right Quote Drawer (.drawer)
+  (function initQuoteDrawerSwipe() {
+    const toggle = document.getElementById('quote-drawer-toggle') as HTMLInputElement | null;
+    const drawerSide = document.querySelector('#quote-drawer-root .drawer-side') as HTMLElement | null;
+    const overlay = drawerSide?.querySelector('.drawer-overlay') as HTMLElement | null;
+    const panel = drawerSide?.querySelector(':scope > *:not(.drawer-overlay)') as HTMLElement | null;
+    if (!toggle || !drawerSide || !panel) return;
+
+    let startX = 0;
+    let startY = 0;
+    let currentX = 0;
+    let startTime = 0;
+    let isDragging = false;
+    let directionLocked: 'horizontal' | 'vertical' | null = null;
+
+    panel.addEventListener('touchstart', (e: TouchEvent) => {
+      if (!toggle.checked || e.touches.length !== 1) return;
+      const target = e.target as HTMLElement;
+      if (target && target.closest('input, textarea, select')) return;
+
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      currentX = startX;
+      startTime = performance.now();
+      isDragging = false;
+      directionLocked = null;
+    }, { passive: true });
+
+    panel.addEventListener('touchmove', (e: TouchEvent) => {
+      if (!toggle.checked || e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+
+      if (!directionLocked) {
+        if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+        directionLocked = Math.abs(deltaX) > Math.abs(deltaY) * 1.15 ? 'horizontal' : 'vertical';
+      }
+
+      if (directionLocked === 'vertical') return;
+
+      if (!isDragging) {
+        isDragging = true;
+        drawerSide.classList.add('is-swiping');
+      }
+
+      currentX = touch.clientX;
+      // Right drawer: positive deltaX moves right to close; negative deltaX applies 0.12 rubber-band damping
+      const translateX = deltaX >= 0 ? deltaX : deltaX * 0.12;
+      const width = panel.offsetWidth || 380;
+      const progress = Math.min(1, Math.max(0, translateX / width));
+
+      panel.style.transform = `translate3d(${translateX}px, 0, 0)`;
+      if (overlay) {
+        overlay.style.opacity = String(1 - progress * 0.85);
+      }
+    }, { passive: true });
+
+    const finishSwipe = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      drawerSide.classList.remove('is-swiping');
+
+      const deltaX = currentX - startX;
+      const elapsed = Math.max(1, performance.now() - startTime);
+      const velocity = deltaX / elapsed; // px/ms
+      const width = panel.offsetWidth || 380;
+
+      // Clear inline styles so CSS transition takes over smoothly
+      panel.style.transform = '';
+      if (overlay) overlay.style.opacity = '';
+
+      // Close if flick velocity > 0.45 px/ms OR dragged past 32% of drawer width
+      if (deltaX > width * 0.32 || (deltaX > 36 && velocity > 0.45)) {
+        toggle.checked = false;
+        toggle.dispatchEvent(new Event('change'));
+      }
+    };
+
+    panel.addEventListener('touchend', finishSwipe, { passive: true });
+    panel.addEventListener('touchcancel', finishSwipe, { passive: true });
+  })();
 </script>

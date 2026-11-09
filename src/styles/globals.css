@@ -30,13 +30,13 @@
   visibility: hidden;
   overflow-y: auto;
   pointer-events: none;
-  transition: visibility 0.25s ease;
+  transition: visibility 0.36s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .drawer-overlay {
   position: fixed;
   inset: 0;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.36s cubic-bezier(0.32, 0.72, 0, 1);
   pointer-events: none;
 }
 .drawer-side > *:not(.drawer-overlay) {
@@ -44,10 +44,12 @@
   top: 0;
   bottom: 0;
   right: 0;
-  transform: translateX(100%);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translate3d(100%, 0, 0);
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
   pointer-events: auto;
   z-index: 1000;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 .drawer-toggle:checked ~ .drawer-side {
   visibility: visible;
@@ -58,7 +60,16 @@
   pointer-events: auto;
 }
 .drawer-toggle:checked ~ .drawer-side > *:not(.drawer-overlay) {
-  transform: translateX(0);
+  transform: translate3d(0, 0, 0);
+}
+
+/* 手势拖拽期间禁用 CSS transition，实现 1:1 零延迟跟手与遮罩透明度插值 */
+.drawer-side.is-swiping > *:not(.drawer-overlay),
+.drawer-side.is-swiping > .drawer-overlay,
+aside.is-swiping,
+div.is-swiping-backdrop {
+  transition: none !important;
+  will-change: transform, opacity;
 }
 
 :root {
