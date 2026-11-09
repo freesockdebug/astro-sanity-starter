@@ -56,7 +56,7 @@ const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to
 <!-- Vertical Sidebar Shell: Slide-over on Mobile (< lg), Sticky on Desktop (>= lg) -->
 <aside
   id="buyer-sidebar"
-  class="fixed inset-y-0 left-0 z-50 w-[clamp(14rem,11rem+4vw,17.5rem)] bg-white border-r border-black/10 flex flex-col justify-between transform -translate-x-full lg:translate-x-0 lg:static lg:h-screen lg:sticky lg:top-0 transition-transform duration-300 ease-in-out shrink-0 selection:bg-zinc-900 selection:text-white print:hidden"
+  class="fixed inset-y-0 left-0 z-50 w-[clamp(14rem,11rem+4vw,17.5rem)] bg-white border-r border-black/10 flex flex-col transform -translate-x-full lg:translate-x-0 lg:static lg:h-screen lg:sticky lg:top-0 transition-transform duration-300 ease-in-out shrink-0 selection:bg-zinc-900 selection:text-white print:hidden"
   aria-label="Buyer Navigation Sidebar"
   data-profile-name={displayName}
   data-profile-email={sessionUser.email}
@@ -187,44 +187,6 @@ const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to
       )}
     </div>
   </nav>
-
-  <!-- Bottom Admin / Sign Out & Profile Section -->
-  <div class="p-3.5 border-t border-black/5 bg-[#fafafa] space-y-2.5">
-    <!-- Buyer Profile Mini-Card -->
-    <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-xl bg-white border border-black/5">
-      <div class="w-7 h-7 rounded-lg bg-[#1d1d1f] text-white flex items-center justify-center font-mono font-semibold text-[11px] shrink-0">
-        {initial}
-      </div>
-      <div class="min-w-0 flex-1">
-        <p class="text-[11px] font-semibold text-[#1d1d1f] truncate">
-          {displayName}
-        </p>
-        <p class="text-[9px] text-[#86868b] font-mono truncate" title={sessionUser.email}>
-          {sessionUser.email}
-        </p>
-      </div>
-    </div>
-
-    <!-- Quick Action Links -->
-    <div class:list={['grid gap-1.5 pt-0.5 text-[11px]', sessionUser.isAdmin ? 'grid-cols-2' : 'grid-cols-1']}>
-      {sessionUser.isAdmin && (
-        <a
-          href="/admin/orders"
-          class="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all font-medium shadow-2xs hover:bg-[#f5f5f7]"
-          title="Switch to Admin Workspace"
-        >
-          <span>Admin ↗</span>
-        </a>
-      )}
-
-      <a
-        href="/api/auth/logout"
-        class="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all font-medium"
-      >
-        <span>{t('orders.signOut')}</span>
-      </a>
-    </div>
-  </div>
 </aside>
 
 <script>

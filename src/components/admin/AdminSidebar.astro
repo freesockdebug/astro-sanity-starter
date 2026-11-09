@@ -70,7 +70,7 @@ const MENU_SVGS: Record<string, string> = {
 <!-- Vertical Sidebar Shell: Fixed on Mobile (Slide-over), Sticky on Desktop -->
 <aside
   id="admin-sidebar"
-  class="fixed inset-y-0 left-0 z-50 w-[clamp(14rem,11rem+4vw,17.5rem)] bg-white border-r border-black/10 flex flex-col justify-between transform -translate-x-full lg:translate-x-0 lg:static lg:h-screen lg:sticky lg:top-0 transition-transform duration-300 ease-in-out shrink-0 selection:bg-zinc-900 selection:text-white"
+  class="fixed inset-y-0 left-0 z-50 w-[clamp(14rem,11rem+4vw,17.5rem)] bg-white border-r border-black/10 flex flex-col transform -translate-x-full lg:translate-x-0 lg:static lg:h-screen lg:sticky lg:top-0 transition-transform duration-300 ease-in-out shrink-0 selection:bg-zinc-900 selection:text-white"
   aria-label="Admin Navigation Sidebar"
 >
   <!-- Top Brand & Status Section -->
@@ -154,55 +154,4 @@ const MENU_SVGS: Record<string, string> = {
       );
     })}
   </nav>
-
-  <!-- Bottom Admin Account & Switch Section -->
-  <div class="p-3.5 border-t border-black/5 bg-[#fafafa] space-y-2.5">
-    <!-- Admin User Card -->
-    <div class="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-white border border-black/5 shadow-2xs">
-      <div class="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center font-mono font-semibold text-xs shrink-0">
-        {emailInitial}
-      </div>
-      <div class="min-w-0 flex-1">
-        <p class="text-[12px] font-semibold text-[#1d1d1f] truncate" title={safeEmail}>
-          {displayName}
-        </p>
-        <div class="flex items-center gap-1.5 mt-0.5">
-          <span class:list={['inline-flex items-center px-1.5 py-0.2 rounded-md text-[9px] font-bold border', badgeClass]}>
-            {roleDisplay}
-          </span>
-          {dataScope === 'SELF_AND_POOL' && (
-            <span class="text-[9px] text-[#86868b] font-medium" title="Data scope: Self leads and public pool">
-              Pool+Self
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Action Links -->
-    <div class="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
-      <a
-        href="/orders"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-white border border-black/10 hover:border-black/30 text-[#1d1d1f] transition-all font-medium shadow-2xs hover:bg-[#f5f5f7]"
-        title="Open Buyer View in new tab"
-      >
-        <span>Buyer View</span>
-        <svg class="w-3 h-3 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-        </svg>
-      </a>
-
-      <a
-        href="/api/auth/logout"
-        class="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all font-medium"
-      >
-        <span>Sign Out</span>
-        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-        </svg>
-      </a>
-    </div>
-  </div>
 </aside>
