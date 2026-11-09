@@ -5,6 +5,7 @@ import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
 import { hasPermission, invalidateAdminRbacCache } from '@utils/rbac';
 import { listAdminRoles, upsertAdminRole, getMemberEmailsByRole } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
+import { ALL_MENU_KEYS } from '@config/adminNavigation';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -65,7 +66,7 @@ export const POST: APIRoute = async (context) => {
   let finalMenus = menus;
   if (code === 'super_admin') {
     finalPermissions = ['*'];
-    finalMenus = ['orders', 'users', 'members', 'roles', 'logins', 'logs', 'settings'];
+    finalMenus = ALL_MENU_KEYS;
   }
 
   await upsertAdminRole({

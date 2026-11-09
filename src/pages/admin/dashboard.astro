@@ -2,6 +2,7 @@
 // src/pages/admin/dashboard.astro
 // Executive Business Dashboard (MineAdmin Style High-Performance Overview)
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { getDashboardStats } from '@utils/db';
 // @ts-ignore
@@ -49,31 +50,25 @@ const pageTitle = 'Business Overview';
   dataScope={adminContext?.dataScope}
   pendingOrdersCount={pendingOrdersCount}
 >
-  <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
-    <div>
-      <div class="flex items-center gap-2">
-        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Business Overview</h1>
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          Live D1 Edge Telemetry
-        </span>
-      </div>
-      <p class="text-xs text-[#86868b] mt-0.5">
-        Executive operational cockpit: global buyer inquiries, conversion funnel, SLA backlogs, and representative throughput.
-      </p>
-    </div>
-
-    <div class="flex items-center gap-2">
+  <!-- Unified Page Header Toolbar -->
+  <AdminPageToolbar
+    title="Business Overview"
+    badge="Live D1 Edge Telemetry"
+    badgeColor="emerald"
+    subtitle="Executive operational cockpit: global buyer inquiries, conversion funnel, SLA backlogs & sales throughput"
+    icon="📊"
+    class="mb-5"
+  >
+    <div slot="actions">
       <a
         href="/admin/orders"
-        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all"
+        class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all"
       >
         <span>View Orders Workbench</span>
         <span>→</span>
       </a>
     </div>
-  </div>
+  </AdminPageToolbar>
 
   <!-- Panel 1: Core KPI Metric Cards & SLA Overdue Alert -->
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

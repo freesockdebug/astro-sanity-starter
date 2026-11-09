@@ -2,6 +2,7 @@
 // src/pages/admin/settings.astro
 // Unified Dynamic Configuration Center: D1-backed Settings & Platform Infrastructure Health
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
 import { DEFAULT_CARRIERS, QUICK_REPLY_TEMPLATES } from '@utils/shipping';
 // @ts-ignore
@@ -40,22 +41,14 @@ const pageTitle = 'Workspace Settings';
   pendingOrdersCount={pendingOrdersCount}
 >
   <!-- Page Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-5 border-b border-black/5 gap-3">
-    <div>
-      <div class="flex items-center gap-2">
-        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1d1f]">Workspace Settings</h1>
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          Live D1 Sync
-        </span>
-      </div>
-      <p class="text-xs text-[#86868b] mt-0.5">
-        Dynamic runtime configurations for brand identity, buyer concierge, RFQ dispatch rules, and access control.
-      </p>
-    </div>
-
-    <!-- Action Button (Desktop Top Bar) -->
-    <div class="flex items-center gap-2.5 self-start sm:self-auto">
+  <AdminPageToolbar
+    title="Workspace Settings"
+    subtitle="Dynamic runtime configurations for brand identity, buyer concierge, RFQ dispatch rules, and access control."
+    badge="Live D1 Sync"
+    badgeColor="emerald"
+    class="mb-5"
+  >
+    <div slot="actions" class="flex items-center gap-2.5">
       <button
         id="save-settings-btn-top"
         type="button"
@@ -67,7 +60,7 @@ const pageTitle = 'Workspace Settings';
         <span>Save Changes</span>
       </button>
     </div>
-  </div>
+  </AdminPageToolbar>
 
   <!-- Infrastructure Health Status Grid -->
   <div class="mb-6 p-4 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-3">

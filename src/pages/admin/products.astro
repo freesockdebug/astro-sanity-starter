@@ -2,6 +2,7 @@
 // src/pages/admin/products.astro
 // Native Cloudflare SSR Product & Category CMS Workbench (Replaces Sanity Studio)
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { getDictItems } from '@utils/dicts';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -56,28 +57,27 @@ const pageTitle = 'Products & Catalog Workspace';
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
     <!-- Top Action Bar -->
-    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Catalog Workspace</h1>
-        <div class="flex items-center bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
-          <button
-            type="button"
-            id="tab-btn-products"
-            class="px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer"
-          >
-            Products (<span id="products-count-badge">0</span>)
-          </button>
-          <button
-            type="button"
-            id="tab-btn-categories"
-            class="px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
-          >
-            Categories (<span id="categories-count-badge">0</span>)
-          </button>
-        </div>
+    <AdminPageToolbar
+      title="Catalog Workspace"
+    >
+      <div slot="metrics" class="flex items-center bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
+        <button
+          type="button"
+          id="tab-btn-products"
+          class="px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer"
+        >
+          Products (<span id="products-count-badge">0</span>)
+        </button>
+        <button
+          type="button"
+          id="tab-btn-categories"
+          class="px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
+        >
+          Categories (<span id="categories-count-badge">0</span>)
+        </button>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div slot="actions" class="flex items-center gap-2">
         {canWrite && (
           <button
             type="button"
@@ -88,7 +88,7 @@ const pageTitle = 'Products & Catalog Workspace';
           </button>
         )}
       </div>
-    </header>
+    </AdminPageToolbar>
 
     <!-- Products View Container -->
     <div id="view-products" class="flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden">

@@ -2,6 +2,7 @@
 // src/pages/admin/cms-config.astro
 // Unified CMS Configuration Console: Navigation, Catalog Hall, Artisan Story & Quote Drawer
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -34,13 +35,11 @@ const pageTitle = 'CMS Site Configuration';
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
     <!-- Top Action Bar -->
-    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">CMS Global Content Config</h1>
-        <p class="text-[11px] text-[#86868b]">Manage navigation, product catalog headers, artisan story badges and B2B RFQ cart</p>
-      </div>
-
-      <div class="flex items-center gap-2">
+    <AdminPageToolbar
+      title="CMS Global Content Config"
+      subtitle="Manage navigation, product catalog headers, artisan story badges and B2B RFQ cart"
+    >
+      <div slot="actions" class="flex items-center gap-2">
         {canWrite && (
           <button
             type="button"
@@ -51,7 +50,7 @@ const pageTitle = 'CMS Site Configuration';
           </button>
         )}
       </div>
-    </header>
+    </AdminPageToolbar>
 
     <!-- Main Workspace Container -->
     <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden">

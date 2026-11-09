@@ -1,6 +1,7 @@
 ---
 // src/pages/admin/users.astro
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import TableColumnController from '@components/admin/TableColumnController.astro';
@@ -64,18 +65,13 @@ const pageTitle = 'Customer & Access Management';
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
     <!-- 1. Single-Line Command Bar (Fixed Header) -->
-    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-2xs flex flex-nowrap items-center justify-between gap-2">
-      <!-- Left: Title & Customer Tier Capsules -->
-      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-x-auto no-scrollbar">
-        <div class="flex items-center gap-1.5 shrink-0">
-          <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Customers</h1>
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-            Access
-          </span>
-        </div>
-
-        <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
-
+    <AdminPageToolbar
+      title="Customers"
+      badge="Access"
+      badgeColor="purple"
+      class="flex-nowrap px-3 py-2 sm:px-4 sm:py-2.5 gap-2"
+    >
+      <div slot="metrics" class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-x-auto no-scrollbar">
         <!-- Scope Segmented Tabs -->
         <div class="flex items-center gap-0.5 bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 shrink-0" id="user-scope-container">
           <button
@@ -148,8 +144,7 @@ const pageTitle = 'Customer & Access Management';
         </div>
       </div>
 
-      <!-- Right: Search Form & Total Counter -->
-      <div class="flex items-center gap-2 ml-auto shrink-0">
+      <div slot="actions" class="flex items-center gap-2 ml-auto shrink-0">
         <span class="hidden xl:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#f5f5f7] border border-black/5 text-[11px] font-mono text-[#52525b]">
           Total: <strong id="total-users-count" class="text-[#1d1d1f] font-semibold">-</strong>
         </span>
@@ -197,7 +192,7 @@ const pageTitle = 'Customer & Access Management';
           class="hidden md:inline-flex"
         />
       </div>
-    </header>
+    </AdminPageToolbar>
 
     <!-- 2. Independent Scrolling Users Container -->
     <AdminWorkbenchTableShell

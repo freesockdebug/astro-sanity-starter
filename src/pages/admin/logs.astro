@@ -2,6 +2,7 @@
 // src/pages/admin/logs.astro
 // Unified System Diagnostics & Performance Profiling Fixed-Viewport Workbench
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import TableColumnController from '@components/admin/TableColumnController.astro';
@@ -46,19 +47,13 @@ const pageTitle = 'System Diagnostics & Performance';
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
     <!-- 1. Single-Line Command Bar (Fixed Header) -->
-    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-2xs flex flex-nowrap items-center justify-between gap-2">
-      <!-- Left: Title & Metric Capsules -->
-      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-x-auto no-scrollbar">
-        <div class="flex items-center gap-1.5 shrink-0">
-          <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Diagnostics</h1>
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Edge D1
-          </span>
-        </div>
-
-        <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
-
+    <AdminPageToolbar
+      title="Diagnostics"
+      badge="Edge D1"
+      badgeColor="emerald"
+      class="flex-nowrap px-3 py-2 sm:px-4 sm:py-2.5 gap-2"
+    >
+      <div slot="metrics" class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-x-auto no-scrollbar">
         <!-- Metric Capsules (Clickable Instant Filters) -->
         <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
           <button
@@ -106,8 +101,7 @@ const pageTitle = 'System Diagnostics & Performance';
         </div>
       </div>
 
-      <!-- Right: Action Controls (Auto-poll, Refresh, Density, Columns, CSV, Clear) -->
-      <div class="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+      <div slot="actions" class="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
         <!-- Auto Polling Toggle -->
         <button
           type="button"
@@ -169,7 +163,7 @@ const pageTitle = 'System Diagnostics & Performance';
           </svg>
         </button>
       </div>
-    </header>
+    </AdminPageToolbar>
 
     <!-- 2. Collapsible 1-Line Top Bottleneck Drawer -->
     <div id="bottlenecks-bar" class="hidden shrink-0 bg-white/90 backdrop-blur-xs border border-black/5 rounded-xl px-3 py-1.5 shadow-2xs transition-all">

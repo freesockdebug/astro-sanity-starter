@@ -2,6 +2,7 @@
 // src/pages/admin/cache.astro
 // Cloudflare Edge & KV Multi-Tier Cache Purge Console
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -34,19 +35,12 @@ const pageTitle = 'Edge & KV Cache Console';
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-3">
     <!-- Header Command Bar -->
-    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Edge & KV Cache Control</h1>
-        <p class="text-[11px] text-[#86868b]">Purge stale Cloudflare HTML edge pages, Sanity SWR memory layers and L2 KV cache keys</p>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          Edge Cache Active
-        </span>
-      </div>
-    </header>
+    <AdminPageToolbar
+      title="Edge & KV Cache Control"
+      subtitle="Purge stale Cloudflare HTML edge pages, Sanity SWR memory layers and L2 KV cache keys"
+      badge="Edge Cache Active"
+      badgeColor="emerald"
+    />
 
     <!-- Workspace Container -->
     <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs p-4 sm:p-6 overflow-y-auto space-y-6 text-xs">

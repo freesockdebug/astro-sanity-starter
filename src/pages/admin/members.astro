@@ -2,6 +2,7 @@
 // src/pages/admin/members.astro
 // Enterprise Team Member Management with Logto User Pool Integration & Direct Role Switching
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
 import { listAdminMembers, listAdminRoles } from '@utils/db';
 // @ts-ignore
@@ -43,16 +44,13 @@ const pageTitle = 'Team Members Management';
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
     <!-- 1. Header Command Bar -->
-    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex items-center justify-between gap-3">
-      <div class="flex items-center gap-2 min-w-0">
-        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Team Members</h1>
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-          Logto Connected
-        </span>
-        <span class="text-xs text-[#86868b] hidden md:inline-block">· {members.length + rootAdminEmails.length} staff accounts</span>
-      </div>
-
-      <div class="flex items-center gap-2">
+    <AdminPageToolbar
+      title="Team Members"
+      subtitle={`· ${members.length + rootAdminEmails.length} staff accounts`}
+      badge="Logto Connected"
+      badgeColor="blue"
+    >
+      <div slot="actions" class="flex items-center gap-2">
         <button
           type="button"
           id="btn-open-add-dialog"
@@ -61,7 +59,7 @@ const pageTitle = 'Team Members Management';
           <span>＋ Add Member</span>
         </button>
       </div>
-    </header>
+    </AdminPageToolbar>
 
     <!-- 2. Main Content Card -->
     <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl p-4 sm:p-5 shadow-2xs overflow-y-auto">

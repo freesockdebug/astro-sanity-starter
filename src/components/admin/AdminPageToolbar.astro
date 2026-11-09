@@ -1,0 +1,76 @@
+---
+// src/components/admin/AdminPageToolbar.astro
+// Unified Apple/MineAdmin-styled Command Bar & Header for Admin Consoles
+interface Props {
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  badgeColor?: 'purple' | 'emerald' | 'amber' | 'blue' | 'zinc' | 'slate';
+  icon?: string;
+  class?: string;
+}
+
+const {
+  title,
+  subtitle,
+  badge,
+  badgeColor = 'purple',
+  icon,
+  class: extraClass = '',
+} = Astro.props;
+
+const badgeColors: Record<string, string> = {
+  purple: 'bg-purple-50 text-purple-700 border-purple-200/80',
+  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+  amber: 'bg-amber-50 text-amber-800 border-amber-200/80',
+  blue: 'bg-blue-50 text-blue-700 border-blue-200/80',
+  zinc: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+  slate: 'bg-slate-100 text-slate-700 border-slate-200',
+};
+
+const badgeStyle = badgeColors[badgeColor] || badgeColors.purple;
+---
+
+<header
+  class:list={[
+    'shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-3',
+    extraClass,
+  ]}
+>
+  <!-- Left: Title, Icon, Badge & Subtitle -->
+  <div class="flex items-center gap-3 min-w-0">
+    {icon && <span class="text-base select-none shrink-0">{icon}</span>}
+    <div class="min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f] truncate">
+          {title}
+        </h1>
+        {badge && (
+          <span class:list={['inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0', badgeStyle]}>
+            {badge}
+          </span>
+        )}
+      </div>
+      {subtitle && (
+        <p class="text-[11px] text-[#86868b] truncate mt-0.5">
+          {subtitle}
+        </p>
+      )}
+    </div>
+  </div>
+
+  <!-- Center Slot: Segmented Tab Buttons or Filter Metrics -->
+  {Astro.slots.has('metrics') && (
+    <div class="flex items-center gap-2">
+      <slot name="metrics" />
+    </div>
+  )}
+
+  <!-- Right Slot: Action Buttons (Search, Filter, Create, Export) -->
+  {Astro.slots.has('actions') && (
+    <div class="flex items-center gap-2 flex-wrap">
+      <slot name="actions" />
+    </div>
+  )}
+</header>
+

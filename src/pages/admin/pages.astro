@@ -2,6 +2,7 @@
 // src/pages/admin/pages.astro
 // Native Cloudflare SSR Page Builder & Visual Live Editor (Replaces Sanity Studio PageLivePreview)
 import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -36,13 +37,11 @@ const pageTitle = 'Pages & Modular Visual Builder';
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
     <!-- Top Action Bar -->
-    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Pages & Sections Builder</h1>
-        <span class="text-xs text-[#86868b] hidden md:inline-block">· Compose modular landing pages & live responsive preview</span>
-      </div>
-
-      <div class="flex items-center gap-2">
+    <AdminPageToolbar
+      title="Pages & Sections Builder"
+      subtitle="· Compose modular landing pages & live responsive preview"
+    >
+      <div slot="actions" class="flex items-center gap-2">
         {canWrite && (
           <button
             type="button"
@@ -53,7 +52,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
           </button>
         )}
       </div>
-    </header>
+    </AdminPageToolbar>
 
     <!-- Split-Pane Workspace: Left Pages List (320px) | Right Builder & Canvas -->
     <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 overflow-hidden">
