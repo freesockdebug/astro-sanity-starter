@@ -48,4 +48,3 @@ export function getTierConfig(tier?: string | null): TierStyleConfig {
     shortLabel: normalized,
   };
 }
-

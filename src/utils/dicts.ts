@@ -4,7 +4,7 @@
 import { listDictItems, type SysDictItem, type DictBadgeColor } from '../db/dicts.repo';
 
 const L1_TTL_MS = 60 * 1000; // 60s
-const KV_TTL_SECONDS = 300;  // 5min
+const KV_TTL_SECONDS = 1800; // 30min
 const KV_CACHE_KEY = 'sys:dicts:all';
 
 interface MemoryCacheEntry {
@@ -55,16 +55,18 @@ export async function getAllCachedDictItems(cfEnv?: any): Promise<SysDictItem[]>
 }
 
 /**
- * Invalidate all dictionary caches (L1 Memory + L2 KV)
+ * Invalidate and write-through all dictionary caches (L1 Memory + L2 KV)
  */
 export async function invalidateDictCache(cfEnv?: any): Promise<void> {
   l1Cache = null;
   const kv = cfEnv?.CACHE_KV || cfEnv?.KV;
   if (kv) {
     try {
-      await kv.delete(KV_CACHE_KEY);
+      const items = await listDictItems();
+      l1Cache = { items, expiresAt: Date.now() + L1_TTL_MS };
+      await kv.put(KV_CACHE_KEY, JSON.stringify(items), { expirationTtl: KV_TTL_SECONDS });
     } catch {
-      // Ignore
+      await kv.delete(KV_CACHE_KEY).catch(() => {});
     }
   }
 }

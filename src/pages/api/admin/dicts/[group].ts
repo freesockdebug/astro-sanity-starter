@@ -48,3 +48,4 @@ export const DELETE: APIRoute = async (context) => {
 
   return jsonNoCache({ success: true, message: `Dictionary item "${itemKey}" deleted successfully.` });
 };
+

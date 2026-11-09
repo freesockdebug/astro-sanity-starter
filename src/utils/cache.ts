@@ -33,16 +33,17 @@ export interface SwrCacheOptions {
 export function createSwrCache<T>(
   fetcher: () => Promise<T>,
   fallback: T,
-  ttlMs = 10_000,
+  ttlMs = 30_000,
   onUpdate?: (val: T) => void,
   options?: SwrCacheOptions
 ): SwrCache<T> {
   let value: T | null = null;
+  let lastSerialized: string | null = null;
   let timestamp = 0;
   let inflight: Promise<T> | null = null;
   const kvKey = options?.kvKey;
   const kvTtl = options?.kvTtlSeconds || 86400;
-  const staleTtlMs = options?.staleTtlMs || ttlMs * 30; // Default stale tolerance window (e.g. 5m for 10s TTL)
+  const staleTtlMs = options?.staleTtlMs || Math.max(ttlMs * 10, 300_000); // Default stale tolerance window (5m)
 
   const revalidate = async (forceRefresh = false): Promise<T> => {
     if (!forceRefresh && inflight) return inflight;
@@ -53,6 +54,11 @@ export function createSwrCache<T>(
           const kvVal = await kvGet<T>(kvKey).catch(() => null);
           if (kvVal !== null && kvVal !== undefined) {
             value = kvVal;
+            try {
+              lastSerialized = JSON.stringify(kvVal);
+            } catch {
+              lastSerialized = null;
+            }
             timestamp = Date.now();
             if (onUpdate && value) onUpdate(value);
             return value;
@@ -66,11 +72,24 @@ export function createSwrCache<T>(
           res !== null &&
           (!Array.isArray(res) || res.length > 0);
         if (hasValidData) {
+          let newSerialized: string | null = null;
+          try {
+            newSerialized = JSON.stringify(res);
+          } catch {}
+
+          // Smart Diff Check: only write to KV if data actually changed or forceRefresh!
+          const isChanged =
+            forceRefresh ||
+            lastSerialized === null ||
+            (newSerialized !== null && newSerialized !== lastSerialized);
+
           value = res;
+          lastSerialized = newSerialized;
           timestamp = Date.now();
           if (onUpdate && value) onUpdate(value);
-          // Non-blocking KV write in background
-          if (kvKey) {
+
+          // Non-blocking KV write in background ONLY if changed
+          if (kvKey && isChanged) {
             runInBackground(kvPut(kvKey, value, { expirationTtl: kvTtl }));
           }
         } else if (value === null) {
@@ -90,11 +109,17 @@ export function createSwrCache<T>(
   return {
     seed(val?: T | null) {
       value = val !== undefined && val !== null ? val : fallback;
+      try {
+        lastSerialized = JSON.stringify(value);
+      } catch {
+        lastSerialized = null;
+      }
       timestamp = Date.now();
       if (onUpdate && value) onUpdate(value);
     },
     invalidate() {
       value = null;
+      lastSerialized = null;
       timestamp = 0;
     },
     peek() {

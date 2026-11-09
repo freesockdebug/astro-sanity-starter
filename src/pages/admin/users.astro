@@ -295,6 +295,7 @@ const pageTitle = 'Customer & Access Management';
           {!canAssign && <p class="text-[10px] text-[#86868b] mt-1">Requires users:assign permission to transfer accounts</p>}
         </div>
 
+        <!-- Internal Admin Notes -->
         <!-- Internal Admin Notes with Quick CRM Tags -->
         <div>
           <div class="flex items-center justify-between mb-1.5">
@@ -1097,51 +1098,7 @@ const pageTitle = 'Customer & Access Management';
         await clientCache.invalidatePrefix('admin:users:');
         (window as any).__showToast?.('Customer tier & status updated', 'success');
         hideDrawer();
-        // CRM Tag Quick Append Listener
-  document.querySelectorAll('.btn-crm-tag').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tag = btn.getAttribute('data-tag') || '';
-      if (!notesInput || !tag) return;
-      const current = notesInput.value.trim();
-      if (!current.includes(tag)) {
-        notesInput.value = current ? `${current} ${tag}` : tag;
-      }
-    });
-  });
-
-  // Export Buyers CSV Listener
-  document.getElementById('btn-export-users-csv')?.addEventListener('click', () => {
-    if (!currentUsersList || currentUsersList.length === 0) {
-      (window as any).__showToast?.('No buyer records to export', 'error');
-      return;
-    }
-    const headers = ['ID', 'Email', 'Name', 'Company', 'Tier', 'Status', 'Assigned Rep', 'Total Orders', 'CRM Notes', 'Created At'];
-    const rows = currentUsersList.map((u) => [
-      u.id,
-      u.email,
-      u.name || '',
-      u.company_name || '',
-      u.tier || 'STANDARD',
-      u.status || 'ACTIVE',
-      u.assigned_to || '',
-      u.total_orders || 0,
-      (u.admin_notes || '').replace(/[\n\r]+/g, ' '),
-      u.created_at || '',
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers, ...rows]
-      .map((e) => e.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `buyers_report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    (window as any).__showToast?.(`Exported ${currentUsersList.length} buyers to CSV`, 'success');
-  });
-
-  loadUsers(false);
+        loadUsers(false);
       } else {
         if (feedbackEl) {
           feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';
@@ -1289,51 +1246,7 @@ const pageTitle = 'Customer & Access Management';
       if (currentSearch) clearBtn.classList.remove('hidden');
       else clearBtn.classList.add('hidden');
     }
-    // CRM Tag Quick Append Listener
-  document.querySelectorAll('.btn-crm-tag').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tag = btn.getAttribute('data-tag') || '';
-      if (!notesInput || !tag) return;
-      const current = notesInput.value.trim();
-      if (!current.includes(tag)) {
-        notesInput.value = current ? `${current} ${tag}` : tag;
-      }
-    });
-  });
-
-  // Export Buyers CSV Listener
-  document.getElementById('btn-export-users-csv')?.addEventListener('click', () => {
-    if (!currentUsersList || currentUsersList.length === 0) {
-      (window as any).__showToast?.('No buyer records to export', 'error');
-      return;
-    }
-    const headers = ['ID', 'Email', 'Name', 'Company', 'Tier', 'Status', 'Assigned Rep', 'Total Orders', 'CRM Notes', 'Created At'];
-    const rows = currentUsersList.map((u) => [
-      u.id,
-      u.email,
-      u.name || '',
-      u.company_name || '',
-      u.tier || 'STANDARD',
-      u.status || 'ACTIVE',
-      u.assigned_to || '',
-      u.total_orders || 0,
-      (u.admin_notes || '').replace(/[\n\r]+/g, ' '),
-      u.created_at || '',
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers, ...rows]
-      .map((e) => e.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `buyers_report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    (window as any).__showToast?.(`Exported ${currentUsersList.length} buyers to CSV`, 'success');
-  });
-
-  loadUsers(false);
+    loadUsers(false);
   });
 
   // Initial load

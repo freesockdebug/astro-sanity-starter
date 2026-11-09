@@ -21,8 +21,15 @@ export interface AdminContextInfo {
   dataScope: DataScope;
 }
 
+interface L1RbacEntry {
+  ctx: AdminContextInfo;
+  expiresAt: number;
+}
+
+const l1RbacCache = new Map<string, L1RbacEntry>();
+const L1_RBAC_TTL_MS = 15_000; // 15 seconds in-memory isolate window
 const KV_RBAC_PREFIX = 'rbac:member:';
-const KV_TTL_SECONDS = 300; // 5 minutes edge cache
+const KV_TTL_SECONDS = 1800; // 30 minutes edge cache
 
 export async function resolveAdminContext(
   email?: string | null,
@@ -52,14 +59,24 @@ export async function resolveAdminContext(
     };
   }
 
-  // 2. Check KV Edge Cache (1~3ms response)
+  // 2. Check L1 In-Memory Cache (0ms instant return within isolate)
+  const now = Date.now();
+  const memHit = l1RbacCache.get(cleanEmail);
+  if (memHit && memHit.expiresAt > now) {
+    return memHit.ctx;
+  }
+
+  // 3. Check KV Edge Cache (1~3ms response)
   const cacheKey = `${KV_RBAC_PREFIX}${cleanEmail}`;
   try {
     const cached = await kvGet<AdminContextInfo>(cacheKey, cfEnv);
-    if (cached) return cached;
+    if (cached) {
+      l1RbacCache.set(cleanEmail, { ctx: cached, expiresAt: now + L1_RBAC_TTL_MS });
+      return cached;
+    }
   } catch {}
 
-  // 3. Query D1 admin_members table
+  // 4. Query D1 admin_members table
   let member: AdminMemberWithRole | null = null;
   try {
     member = await getAdminMember(cleanEmail);
@@ -67,7 +84,7 @@ export async function resolveAdminContext(
     console.error('[RBAC] resolveAdminContext D1 query failed:', e);
   }
 
-  // 4. Fallback for legacy co_admin_emails if not yet in admin_members
+  // 5. Fallback for legacy co_admin_emails if not yet in admin_members
   if (!member && coAdminEmailsStr) {
     const coAdmins = coAdminEmailsStr
       .split(',')
@@ -85,6 +102,7 @@ export async function resolveAdminContext(
         permissions: managerRole.permissions,
         dataScope: managerRole.data_scope,
       };
+      l1RbacCache.set(cleanEmail, { ctx, expiresAt: now + L1_RBAC_TTL_MS });
       await kvPut(cacheKey, ctx, { expirationTtl: KV_TTL_SECONDS }, cfEnv).catch(() => {});
       return ctx;
     }
@@ -105,7 +123,8 @@ export async function resolveAdminContext(
     dataScope: role.data_scope,
   };
 
-  // Cache in KV
+  // Cache in L1 memory and KV
+  l1RbacCache.set(cleanEmail, { ctx: adminCtx, expiresAt: now + L1_RBAC_TTL_MS });
   await kvPut(cacheKey, adminCtx, { expirationTtl: KV_TTL_SECONDS }, cfEnv).catch(() => {});
 
   return adminCtx;
@@ -114,6 +133,7 @@ export async function resolveAdminContext(
 export async function invalidateAdminRbacCache(email: string, cfEnv?: any): Promise<void> {
   const cleanEmail = (email || '').trim().toLowerCase();
   if (!cleanEmail) return;
+  l1RbacCache.delete(cleanEmail);
   await kvDelete(`${KV_RBAC_PREFIX}${cleanEmail}`, cfEnv).catch(() => {});
 }
 

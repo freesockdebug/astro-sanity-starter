@@ -399,14 +399,19 @@ export class ProductService {
 
     if (memHit) {
       const age = now - memHit.timestamp;
-      // 1. Fresh window (60s): 0ms instant memory return
-      if (age < 60_000) {
-        return memHit.data ? structuredClone(memHit.data) : null;
-      }
-      // 2. Stale tolerance window (1 hour): instant memory return + non-blocking background revalidate
-      if (age < 3_600_000) {
-        runInBackground(this.revalidateSlug(slug, cacheKey, customEnv));
-        return memHit.data ? structuredClone(memHit.data) : null;
+      // 0. Negative 404 cache in memory: 30s fresh window
+      if (memHit.data === null) {
+        if (age < 30_000) return null;
+      } else {
+        // 1. Fresh window (60s): 0ms instant memory return
+        if (age < 60_000) {
+          return structuredClone(memHit.data);
+        }
+        // 2. Stale tolerance window (1 hour): instant memory return + non-blocking background revalidate
+        if (age < 3_600_000) {
+          runInBackground(this.revalidateSlug(slug, cacheKey, customEnv));
+          return structuredClone(memHit.data);
+        }
       }
     }
 
@@ -423,11 +428,7 @@ export class ProductService {
       // 1. Check L2 KV on cold boot
       try {
         const kvHit = await kvGet<any>(cacheKey, customEnv);
-        if (kvHit) {
-          if (kvHit.notFound) {
-            this.productSlugCache.set(slug, { data: null, timestamp: now });
-            return null;
-          }
+        if (kvHit && !kvHit.notFound) {
           this.productSlugCache.set(slug, { data: kvHit, timestamp: now });
           return structuredClone(kvHit);
         }
@@ -440,14 +441,22 @@ export class ProductService {
           { slug }
         );
         if (data) {
+          const memHit = this.productSlugCache.get(slug);
+          const isChanged = !memHit?.data || JSON.stringify(memHit.data) !== JSON.stringify(data);
           this.productSlugCache.set(slug, { data, timestamp: now });
-          // Non-blocking L2 KV write in background (cuts 150-300ms off SSR blocking response time)
-          runInBackground(kvPut(cacheKey, data, { expirationTtl: 86400 }, customEnv));
+          // Non-blocking L2 KV write in background ONLY if changed
+          if (isChanged) {
+            runInBackground(kvPut(cacheKey, data, { expirationTtl: 86400 }, customEnv));
+          }
           return structuredClone(data);
         } else {
-          // Negative cache for 1 hour to prevent 404 cache penetration attacks
+          // Negative cache in L1 Memory ONLY (30s) to prevent upstream penetration from bot scans,
+          // without writing to KV (saving KV writes and ensuring new products go live immediately)
           this.productSlugCache.set(slug, { data: null, timestamp: now });
-          runInBackground(kvPut(cacheKey, { notFound: true }, { expirationTtl: 3600 }, customEnv));
+          if (this.productSlugCache.size > 500) {
+            const oldestKey = this.productSlugCache.keys().next().value;
+            if (oldestKey) this.productSlugCache.delete(oldestKey);
+          }
           return null;
         }
       } catch (err: any) {

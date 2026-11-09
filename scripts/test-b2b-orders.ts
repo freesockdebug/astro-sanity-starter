@@ -611,6 +611,7 @@ async function runSelfCheck() {
   assert.strictEqual(vitalsBody.ok, true);
   assert.strictEqual(vitalsBody.level, 'info');
 
+  await new Promise((resolve) => setTimeout(resolve, 50));
   const logsWithVitals = await listErrorLogs({ level: 'info' });
   assert(logsWithVitals.logs.some(l => l.source === 'client/web-vitals'));
 

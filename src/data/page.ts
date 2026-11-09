@@ -94,14 +94,19 @@ export class PageService {
       const memHit = this.pageSlugCache.get(cacheKey);
       if (memHit) {
         const age = now - memHit.timestamp;
-        // 1. Fresh window (60s): 0ms instant memory return (whether null or page)
-        if (age < 60_000) {
-          return memHit.data ? [structuredClone(memHit.data)] : [];
-        }
-        // 2. Stale tolerance window (1 hour): instant memory return + non-blocking background revalidate
-        if (age < 3_600_000) {
-          runInBackground(this.revalidateSlug(formattedSlug, unslashed, cacheKey, customEnv));
-          return memHit.data ? [structuredClone(memHit.data)] : [];
+        // 0. Negative 404 cache in memory: 30s fresh window
+        if (memHit.data === null) {
+          if (age < 30_000) return [];
+        } else {
+          // 1. Fresh window (60s): 0ms instant memory return
+          if (age < 60_000) {
+            return [structuredClone(memHit.data)];
+          }
+          // 2. Stale tolerance window (1 hour): instant memory return + non-blocking background revalidate
+          if (age < 3_600_000) {
+            runInBackground(this.revalidateSlug(formattedSlug, unslashed, cacheKey, customEnv));
+            return [structuredClone(memHit.data)];
+          }
         }
       }
     }
@@ -123,11 +128,7 @@ export class PageService {
       // 1. Check L2 KV on cold boot
       try {
         const kvHit = await kvGet<any>(cacheKey, customEnv);
-        if (kvHit) {
-          if (kvHit.notFound) {
-            this.pageSlugCache.set(cacheKey, { data: null, timestamp: now });
-            return [];
-          }
+        if (kvHit && !kvHit.notFound) {
           this.pageSlugCache.set(cacheKey, { data: kvHit, timestamp: now });
           return [structuredClone(kvHit)];
         }
@@ -142,13 +143,21 @@ export class PageService {
         const res = data || [];
         if (res.length > 0) {
           const page = res[0];
+          const memHit = this.pageSlugCache.get(cacheKey);
+          const isChanged = !memHit?.data || JSON.stringify(memHit.data) !== JSON.stringify(page);
           this.pageSlugCache.set(cacheKey, { data: page, timestamp: now });
-          runInBackground(kvPut(cacheKey, page, { expirationTtl: 86400 }, customEnv));
+          if (isChanged) {
+            runInBackground(kvPut(cacheKey, page, { expirationTtl: 86400 }, customEnv));
+          }
           return [structuredClone(page)];
         } else {
-          // Negative cache for 1 hour to prevent 404 cache penetration attacks
+          // Negative cache in L1 Memory ONLY (30s) to prevent upstream penetration from bot scans,
+          // without writing to KV (saving KV writes and ensuring new pages go live immediately)
           this.pageSlugCache.set(cacheKey, { data: null, timestamp: now });
-          runInBackground(kvPut(cacheKey, { notFound: true }, { expirationTtl: 3600 }, customEnv));
+          if (this.pageSlugCache.size > 500) {
+            const oldestKey = this.pageSlugCache.keys().next().value;
+            if (oldestKey) this.pageSlugCache.delete(oldestKey);
+          }
           return [];
         }
       } catch (err: any) {
