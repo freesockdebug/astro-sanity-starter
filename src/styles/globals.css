@@ -72,6 +72,34 @@ div.is-swiping-backdrop {
   will-change: transform, opacity;
 }
 
+/* ==========================================================================
+   Native View Transitions (Cross-Document Storefront & In-App Shell Canvas)
+   ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.16s;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
+/* 让后台与买家中心切页时侧边栏和顶栏保持绝对静止，仅对右侧主画布做 120ms 柔和过渡 */
+#shell-main-canvas {
+  view-transition-name: shell-canvas;
+}
+::view-transition-old(shell-canvas),
+::view-transition-new(shell-canvas) {
+  animation-duration: 0.12s;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+html:has(#shell-root)::view-transition-old(root),
+html:has(#shell-root)::view-transition-new(root) {
+  animation: none;
+}
+
 :root {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;

@@ -327,6 +327,20 @@ function syncShellClasses(targetDoc: Document): void {
   });
 }
 
+function runCanvasTransition(updateDom: () => void): void {
+  const docAny = document as any;
+  const prefersReduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  if (typeof docAny.startViewTransition === 'function' && !prefersReduced) {
+    try {
+      docAny.startViewTransition(() => {
+        updateDom();
+      });
+      return;
+    } catch {}
+  }
+  updateDom();
+}
+
 async function syncHeadStyles(targetDoc: Document): Promise<void> {
   const pendingLinks: Promise<void>[] = [];
 
@@ -570,15 +584,17 @@ export function initAppShellRouter(options: AppShellOptions): void {
 
     // 4. Hot Snapshot instant preview (0ms visual restore while network in-flight)
     if (snapshot) {
-      const curCanvas = document.getElementById('shell-main-canvas');
-      if (curCanvas) {
-        curCanvas.innerHTML = snapshot.canvasHtml;
-        if (snapshot.canvasScrollTop) curCanvas.scrollTop = snapshot.canvasScrollTop;
-      }
-      const curOverlays = document.getElementById('shell-overlays');
-      if (curOverlays && snapshot.overlaysHtml) {
-        curOverlays.innerHTML = snapshot.overlaysHtml;
-      }
+      runCanvasTransition(() => {
+        const curCanvas = document.getElementById('shell-main-canvas');
+        if (curCanvas) {
+          curCanvas.innerHTML = snapshot.canvasHtml;
+          if (snapshot.canvasScrollTop) curCanvas.scrollTop = snapshot.canvasScrollTop;
+        }
+        const curOverlays = document.getElementById('shell-overlays');
+        if (curOverlays && snapshot.overlaysHtml) {
+          curOverlays.innerHTML = snapshot.overlaysHtml;
+        }
+      });
       document.title = snapshot.title;
       if (snapshot.scrollY) {
         window.scrollTo({ top: snapshot.scrollY, behavior: 'instant' });
@@ -625,11 +641,20 @@ export function initAppShellRouter(options: AppShellOptions): void {
 
       // Standard Turbo Preview Pattern: Fresh DOM nodes ensure clean event listeners & state
       const curCanvas = document.getElementById('shell-main-canvas');
-      if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
       const curOverlays = document.getElementById('shell-overlays');
       const newOverlays = doc.getElementById('shell-overlays');
-      if (curOverlays && newOverlays) {
-        curOverlays.innerHTML = newOverlays.innerHTML;
+
+      const applyFreshDom = () => {
+        if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
+        if (curOverlays && newOverlays) {
+          curOverlays.innerHTML = newOverlays.innerHTML;
+        }
+      };
+
+      if (!snapshot) {
+        runCanvasTransition(applyFreshDom);
+      } else {
+        applyFreshDom();
       }
 
       document.title = doc.title;
