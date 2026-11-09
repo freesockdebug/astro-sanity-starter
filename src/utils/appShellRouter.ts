@@ -30,9 +30,24 @@ const prefetchCache = new Map<string, { html: string; timestamp: number }>();
 export interface ShellFetchResult {
   html: string | null;
   redirectUrl?: string;
+  aborted?: boolean;
 }
 
 const inFlightHtml = new Map<string, Promise<ShellFetchResult>>();
+const inFlightControllers = new Map<string, AbortController>();
+
+/**
+ * Abort all in-flight shell requests except keepUrl (e.g. keep current prefetch)
+ */
+function abortOtherInFlightRequests(keepUrl?: string): void {
+  inFlightControllers.forEach((controller, url) => {
+    if (url !== keepUrl) {
+      controller.abort();
+      inFlightControllers.delete(url);
+      inFlightHtml.delete(url);
+    }
+  });
+}
 
 interface DomSnapshot {
   canvasHtml: string;
@@ -102,10 +117,13 @@ function fetchShellHtml(url: string, isPrefetch = false, origFetchFn = window.fe
   const existing = inFlightHtml.get(url);
   if (existing) return existing;
 
+  const controller = new AbortController();
+  inFlightControllers.set(url, controller);
+
   const headers: Record<string, string> = { 'X-Shell-Request': '1' };
   if (isPrefetch) headers['X-Shell-Prefetch'] = '1';
 
-  const promise = origFetchFn(url, { headers })
+  const promise = origFetchFn(url, { headers, signal: controller.signal })
     .then(async (res) => {
       if (res.redirected) {
         return { html: null, redirectUrl: res.url };
@@ -117,9 +135,15 @@ function fetchShellHtml(url: string, isPrefetch = false, origFetchFn = window.fe
       setCachedHtml(url, text);
       return { html: text };
     })
-    .catch(() => ({ html: null }))
+    .catch((err: any) => {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        return { html: null, aborted: true };
+      }
+      return { html: null };
+    })
     .finally(() => {
       inFlightHtml.delete(url);
+      inFlightControllers.delete(url);
     });
 
   inFlightHtml.set(url, promise);
@@ -418,9 +442,9 @@ export function initAppShellRouter(options: AppShellOptions): void {
     }
 
     if (method !== 'GET' && method !== 'HEAD') {
+      abortOtherInFlightRequests();
       prefetchCache.clear();
       apiResponseCache.clear();
-      inFlightHtml.clear();
       snapshotCache.clear();
       return origFetch.apply(this, args);
     }
@@ -492,36 +516,9 @@ export function initAppShellRouter(options: AppShellOptions): void {
   document.addEventListener('touchstart', instantPrefetch, { passive: true });
   document.addEventListener('mousedown', instantPrefetch, { passive: true });
 
-  // 65ms Hover Prefetch
+  // 65ms Hover Prefetch timer
   let hoverTimer: any = null;
   let lastHoveredHref = '';
-  document.addEventListener('mouseover', (e) => {
-    if (!shouldPrefetch()) return;
-    const target = (e.target as HTMLElement)?.closest?.('a') as HTMLAnchorElement | null;
-    if (!target || !isNavigableLink(target, options.scope)) {
-      clearTimeout(hoverTimer);
-      lastHoveredHref = '';
-      return;
-    }
-    const href = target.href;
-    if (href === window.location.href || getCachedHtml(href) || inFlightHtml.has(href)) return;
-    if (href === lastHoveredHref) return;
-    lastHoveredHref = href;
-
-    clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(() => {
-      fetchShellHtml(href, true, origFetch);
-    }, 65);
-  });
-
-  document.addEventListener('mouseout', (e) => {
-    const from = e.target as HTMLElement;
-    const to = e.relatedTarget as HTMLElement;
-    if (from?.closest('a') && !to?.closest('a')) {
-      clearTimeout(hoverTimer);
-      lastHoveredHref = '';
-    }
-  });
 
   // Concurrency navigation sequence counter
   let navSeq = 0;
@@ -535,6 +532,10 @@ export function initAppShellRouter(options: AppShellOptions): void {
   ): Promise<void> {
     const currentSeq = ++navSeq;
     const targetUrl = new URL(targetUrlStr, window.location.origin);
+
+    // Cancel pending hover prefetch and abort any in-flight requests for other URLs
+    clearTimeout(hoverTimer);
+    abortOtherInFlightRequests(targetUrl.href);
 
     // 1. Hot DOM Snapshot: save current view state using currentRenderedUrl before departing
     saveCurrentSnapshot(currentRenderedUrl);
@@ -583,8 +584,8 @@ export function initAppShellRouter(options: AppShellOptions): void {
     try {
       const result = await fetchShellHtml(targetUrl.href, false, origFetch);
 
-      // 5. Concurrency Race Condition Lock (Latest-Click-Wins)
-      if (currentSeq !== navSeq) {
+      // 5. Concurrency Race Condition & Abort Guard
+      if (result.aborted || currentSeq !== navSeq) {
         clearDimming();
         return;
       }
@@ -656,6 +657,35 @@ export function initAppShellRouter(options: AppShellOptions): void {
       window.location.href = targetUrl.href;
     }
   }
+
+  // 65ms Hover Prefetch
+  document.addEventListener('mouseover', (e) => {
+    if (!shouldPrefetch()) return;
+    const target = (e.target as HTMLElement)?.closest?.('a') as HTMLAnchorElement | null;
+    if (!target || !isNavigableLink(target, options.scope)) {
+      clearTimeout(hoverTimer);
+      lastHoveredHref = '';
+      return;
+    }
+    const href = target.href;
+    if (href === window.location.href || getCachedHtml(href) || inFlightHtml.has(href)) return;
+    if (href === lastHoveredHref) return;
+    lastHoveredHref = href;
+
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      fetchShellHtml(href, true, origFetch);
+    }, 65);
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    const from = e.target as HTMLElement;
+    const to = e.relatedTarget as HTMLElement;
+    if (from?.closest('a') && !to?.closest('a')) {
+      clearTimeout(hoverTimer);
+      lastHoveredHref = '';
+    }
+  });
 
   // Intercept in-scope link clicks
   document.addEventListener('click', (e) => {
