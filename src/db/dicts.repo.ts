@@ -40,10 +40,21 @@ function parseJsonSafe<T>(jsonStr: any, fallback: T): T {
   }
 }
 
+let cachedDictGroups: { data: SysDictGroup[]; exp: number } | null = null;
+
+export function invalidateDictGroupsCache(): void {
+  cachedDictGroups = null;
+}
+
 /**
- * Lists all dictionary groups with item counts
+ * Lists all dictionary groups with item counts (L1 memory cached for 60s)
  */
 export async function listDictGroups(): Promise<SysDictGroup[]> {
+  const now = Date.now();
+  if (cachedDictGroups && cachedDictGroups.exp > now) {
+    return cachedDictGroups.data;
+  }
+
   return executeWithAutoSchema(async (db: DbClient) => {
     try {
       const rows = await db.query<any>(
@@ -56,7 +67,7 @@ export async function listDictGroups(): Promise<SysDictGroup[]> {
          ORDER BY g.is_system DESC, g.code ASC`
       );
 
-      return (rows || []).map((r) => ({
+      const result = (rows || []).map((r) => ({
         code: r.code,
         name: r.name,
         description: r.description || '',
@@ -67,6 +78,9 @@ export async function listDictGroups(): Promise<SysDictGroup[]> {
         enabled_count: Number(r.enabled_count || 0),
         updated_at: r.updated_at,
       }));
+
+      cachedDictGroups = { data: result, exp: Date.now() + 60_000 };
+      return result;
     } catch (e: any) {
       const msg = (e?.message || String(e)).toLowerCase();
       if (msg.includes('no such table') || msg.includes('no such column')) throw e;
@@ -122,10 +136,10 @@ export async function listDictItems(groupCode?: string, onlyEnabled = false): Pr
       }
 
       const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
-      const rows = await db.query<any>(
-        `SELECT * FROM sys_dict_items ${whereClause} ORDER BY sort_order ASC, id ASC`,
-        params
-      );
+      const sql = whereClause
+        ? `SELECT * FROM sys_dict_items ${whereClause} ORDER BY sort_order ASC, id ASC`
+        : `SELECT * FROM sys_dict_items ORDER BY sort_order ASC, id ASC`;
+      const rows = await db.query<any>(sql, params);
 
       return (rows || []).map((r) => ({
         id: r.id,
@@ -185,6 +199,7 @@ export async function upsertDictItem(item: {
          updated_at = datetime('now')`,
       [groupCode, itemKey, itemLabel, badgeColor, metaJson, sortOrder, isEnabled]
     );
+    invalidateDictGroupsCache();
     return true;
   });
 }
@@ -199,6 +214,7 @@ export async function deleteDictItem(groupCode: string, itemKey: string): Promis
 
   return executeWithAutoSchema(async (db: DbClient) => {
     await db.execute('DELETE FROM sys_dict_items WHERE group_code = ? AND item_key = ?', [g, k]);
+    invalidateDictGroupsCache();
     return { success: true };
   });
 }
@@ -214,6 +230,7 @@ export async function toggleDictItemEnabled(groupCode: string, itemKey: string, 
       'UPDATE sys_dict_items SET is_enabled = ?, updated_at = datetime(\'now\') WHERE group_code = ? AND item_key = ?',
       [isEnabled ? 1 : 0, g, k]
     );
+    invalidateDictGroupsCache();
     return true;
   });
 }

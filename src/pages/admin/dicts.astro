@@ -4,8 +4,8 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
-import { listDictGroups, listDictItems } from '@utils/db';
-import { getBadgeColorClasses } from '@utils/dicts';
+import { listDictGroups } from '@utils/db';
+import { getBadgeColorClasses, getAllCachedDictItems } from '@utils/dicts';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -21,7 +21,7 @@ if (redirectResponse) return redirectResponse;
 
 const [groups, allItems] = await Promise.all([
   listDictGroups(),
-  listDictItems(undefined, false),
+  getAllCachedDictItems(cfEnv),
 ]);
 
 const initialGroup = Astro.url.searchParams.get('group') || (groups[0]?.code || 'shipping_carriers');

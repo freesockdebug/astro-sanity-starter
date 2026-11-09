@@ -6,11 +6,10 @@ import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
 import { hasPermission } from '@utils/rbac';
 import {
   listDictGroups,
-  listDictItems,
   upsertDictItem,
   toggleDictItemEnabled,
 } from '@utils/db';
-import { invalidateDictCache } from '@utils/dicts';
+import { getDictItems, getAllCachedDictItems, invalidateDictCache } from '@utils/dicts';
 import { recordAdminAudit } from '@utils/audit';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -32,14 +31,15 @@ export const GET: APIRoute = async ({ request }) => {
   const onlyEnabled = url.searchParams.get('enabled') === 'true';
 
   if (groupCode) {
-    const items = await listDictItems(groupCode, onlyEnabled);
+    const items = await getDictItems(cfEnv, groupCode, onlyEnabled);
     return jsonNoCache({ items });
   }
 
-  const [groups, items] = await Promise.all([
+  const [groups, allItems] = await Promise.all([
     listDictGroups(),
-    listDictItems(undefined, onlyEnabled),
+    getAllCachedDictItems(cfEnv),
   ]);
+  const items = onlyEnabled ? allItems.filter((i) => i.is_enabled) : allItems;
 
   return jsonNoCache({ groups, items });
 };

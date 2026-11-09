@@ -251,7 +251,9 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON admin_audit_logs(created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON admin_audit_logs(target_type, target_id)`,
   `CREATE INDEX IF NOT EXISTS idx_dict_items_group ON sys_dict_items(group_code)`,
-  `CREATE INDEX IF NOT EXISTS idx_dict_items_enabled ON sys_dict_items(is_enabled)`
+  `CREATE INDEX IF NOT EXISTS idx_dict_items_enabled ON sys_dict_items(is_enabled)`,
+  `CREATE INDEX IF NOT EXISTS idx_dict_items_group_sort ON sys_dict_items(group_code, sort_order, id)`,
+  `CREATE INDEX IF NOT EXISTS idx_dict_items_sort ON sys_dict_items(sort_order, id)`
 ];
 
 export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
@@ -301,24 +303,28 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
     }
 
     // 2. Ensure core tables exist first
+    let batchOk = false;
     if (target.batch && target.prepare) {
       try {
         await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
+        batchOk = true;
       } catch {
         // Sequential fallback
       }
     }
 
-    // 3. Sequential execution fallback for statements and indexes
-    for (const sql of DDL_STATEMENTS) {
-      try {
-        if (target.prepare) {
-          await target.prepare(sql).run();
-        } else if (target.exec) {
-          await target.exec(sql);
+    // 3. Sequential execution fallback for statements and indexes only if batch was unavailable or failed
+    if (!batchOk) {
+      for (const sql of DDL_STATEMENTS) {
+        try {
+          if (target.prepare) {
+            await target.prepare(sql).run();
+          } else if (target.exec) {
+            await target.exec(sql);
+          }
+        } catch {
+          // Already exists
         }
-      } catch {
-        // Already exists
       }
     }
 
@@ -362,11 +368,6 @@ export async function executeWithAutoSchema<T>(
   // Modern signature: executeWithAutoSchema((db: DbClient) => Promise<T>)
   const fn = arg1 as (db: DbClient) => Promise<T>;
   const db = await getDb();
-
-  // On isolate cold start, trigger non-blocking schema check so new incremental indexes apply automatically
-  if (!isSchemaVerifiedInIsolate) {
-    ensureSchema(db).catch(() => { });
-  }
 
   try {
     return await fn(db);
