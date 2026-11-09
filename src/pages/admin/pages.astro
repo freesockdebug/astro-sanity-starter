@@ -1,0 +1,525 @@
+---
+// src/pages/admin/pages.astro
+// Native Cloudflare SSR Page Builder & Visual Live Editor (Replaces Sanity Studio PageLivePreview)
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { requireAdminContext } from '@utils/auth';
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/pages',
+  { requiredMenu: 'pages' }
+);
+if (redirectResponse) return redirectResponse;
+
+const canWrite = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cms:write'));
+const canDelete = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cms:delete'));
+
+const pageTitle = 'Pages & Modular Visual Builder';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="pages"
+  sessionEmail={sessionUser?.email || ''}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- Top Action Bar -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Pages & Sections Builder</h1>
+        <span class="text-xs text-[#86868b] hidden md:inline-block">· Compose modular landing pages & live responsive preview</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        {canWrite && (
+          <button
+            type="button"
+            id="btn-create-page"
+            class="h-8 px-3.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>＋ Create Page</span>
+          </button>
+        )}
+      </div>
+    </header>
+
+    <!-- Split-Pane Workspace: Left Pages List (320px) | Right Builder & Canvas -->
+    <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 overflow-hidden">
+      <!-- Left: Pages Directory -->
+      <div class="w-full lg:w-80 shrink-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden">
+        <div class="p-3 border-b border-black/5 bg-[#fafafc] flex items-center justify-between">
+          <span class="text-xs font-bold text-[#1d1d1f]">Site Pages Directory</span>
+          <span id="pages-count-badge" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#f5f5f7] border border-black/5">0</span>
+        </div>
+        <div id="pages-list" class="flex-1 overflow-y-auto divide-y divide-black/5 p-1.5 space-y-1">
+          <div class="py-12 text-center text-[#86868b] text-xs">Loading pages...</div>
+        </div>
+      </div>
+
+      <!-- Right: Modular Block Builder & Live Responsive Canvas -->
+      <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden">
+        <!-- Editor Sub-Header: Mode & Device Switcher -->
+        <div class="p-3 border-b border-black/5 flex flex-wrap items-center justify-between gap-3 bg-[#fafafc] shrink-0">
+          <div class="flex items-center gap-2">
+            <span id="current-page-badge" class="font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-[#1d1d1f] text-white shadow-2xs">
+              Select a Page
+            </span>
+            <div class="flex items-center bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
+              <button type="button" id="btn-mode-builder" class="px-3 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer">
+                Blocks Form
+              </button>
+              <button type="button" id="btn-mode-canvas" class="px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer">
+                Live Canvas
+              </button>
+            </div>
+          </div>
+
+          <!-- Responsive Viewport Switcher -->
+          <div id="device-switcher" class="hidden flex items-center gap-1.5 bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
+            <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer" data-width="100%">
+              🖥️ Desktop
+            </button>
+            <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-width="1280px">
+              💻 1280px
+            </button>
+            <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-width="390px">
+              📱 Mobile
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            {canWrite && (
+              <button
+                type="button"
+                id="btn-save-page"
+                class="h-8 px-4 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Save & Publish Page</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <!-- Mode A: Blocks Editor Pane -->
+        <div id="builder-pane" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 text-xs">
+          <!-- Page Meta Form -->
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
+            <span class="font-bold text-xs text-[#1d1d1f] block">1. Page URL & SEO Metadata</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold mb-1">Page Title *</label>
+                <input type="text" id="page-title-input" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">URL Path Slug *</label>
+                <input type="text" id="page-slug-input" placeholder="/ or /about" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black font-mono text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">SEO Meta Title</label>
+                <input type="text" id="page-metatitle-input" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">SEO Meta Description</label>
+                <input type="text" id="page-metadesc-input" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Modular Sections Array -->
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="font-bold text-xs text-[#1d1d1f] block">2. Modular Page Sections</span>
+                <span class="text-[10px] text-[#86868b]">Drag, reorder and customize full-bleed sections</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <select id="select-new-section" class="h-8 px-2.5 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs cursor-pointer">
+                  <option value="heroSection">＋ Hero Banner (heroSection)</option>
+                  <option value="productShowcaseSection">＋ Product Showcase (productShowcaseSection)</option>
+                  <option value="featureMatrixSection">＋ Feature Matrix (featureMatrixSection)</option>
+                  <option value="manufacturingSection">＋ Manufacturing Power (manufacturingSection)</option>
+                  <option value="inquirySection">＋ Inquiry Callout (inquirySection)</option>
+                  <option value="customSection">＋ Custom Markdown/HTML (customSection)</option>
+                </select>
+                <button
+                  type="button"
+                  id="btn-add-section"
+                  class="h-8 px-3 rounded-xl bg-white border border-black/10 hover:border-black text-xs font-semibold shadow-2xs cursor-pointer"
+                >
+                  Add Block
+                </button>
+              </div>
+            </div>
+
+            <!-- Sections Container -->
+            <div id="sections-container" class="space-y-3">
+              <div class="p-8 text-center text-[#86868b] border border-dashed border-black/10 rounded-2xl">
+                No page selected or page has no sections. Select a page from the left to start editing.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode B: Live Responsive Canvas Pane -->
+        <div id="canvas-pane" class="hidden flex-1 min-h-0 bg-[#f5f5f7] flex items-center justify-center p-3 overflow-hidden">
+          <div id="canvas-wrapper" class="w-full h-full bg-white rounded-2xl shadow-xl overflow-hidden border border-black/10 transition-all duration-300">
+            <iframe id="live-preview-frame" src="/" class="w-full h-full border-0"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { escapeHtml } from '@utils/adminWorkbench';
+
+  let currentPages: any[] = [];
+  let activePageDoc: any = null;
+
+  // View Mode Switcher
+  const btnModeBuilder = document.getElementById('btn-mode-builder');
+  const btnModeCanvas = document.getElementById('btn-mode-canvas');
+  const builderPane = document.getElementById('builder-pane');
+  const canvasPane = document.getElementById('canvas-pane');
+  const deviceSwitcher = document.getElementById('device-switcher');
+  const previewFrame = document.getElementById('live-preview-frame') as HTMLIFrameElement | null;
+  const canvasWrapper = document.getElementById('canvas-wrapper');
+
+  btnModeBuilder?.addEventListener('click', () => {
+    btnModeBuilder.className = 'px-3 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
+    if (btnModeCanvas) btnModeCanvas.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
+    builderPane?.classList.remove('hidden');
+    canvasPane?.classList.add('hidden');
+    deviceSwitcher?.classList.add('hidden');
+  });
+
+  btnModeCanvas?.addEventListener('click', () => {
+    btnModeCanvas.className = 'px-3 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
+    if (btnModeBuilder) btnModeBuilder.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
+    canvasPane?.classList.remove('hidden');
+    builderPane?.classList.add('hidden');
+    deviceSwitcher?.classList.remove('hidden');
+
+    const slug = activePageDoc?.slug?.current || '/';
+    if (previewFrame) previewFrame.src = slug === '/' ? '/' : `${slug}`;
+  });
+
+  // Device Width Buttons
+  document.querySelectorAll('.btn-device').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.btn-device').forEach((b) => {
+        b.className = 'btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
+      });
+      btn.className = 'btn-device px-2.5 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
+      const width = btn.getAttribute('data-width') || '100%';
+      if (canvasWrapper) canvasWrapper.style.width = width;
+    });
+  });
+
+  // Load Pages
+  async function loadPages() {
+    try {
+      const res = await fetch('/api/admin/cms/pages');
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to fetch pages');
+
+      currentPages = data.pages || [];
+      const badge = document.getElementById('pages-count-badge');
+      if (badge) badge.textContent = String(currentPages.length);
+
+      renderPagesList();
+
+      // Automatically select Homepage or first page if not selected
+      if (!activePageDoc && currentPages.length > 0) {
+        const home = currentPages.find((p: any) => p.slug?.current === '/' || p.slug?.current === '') || currentPages[0];
+        selectPage(home._id);
+      }
+    } catch (e: any) {
+      (window as any).__showToast?.(e.message, 'error');
+    }
+  }
+
+  function renderPagesList() {
+    const list = document.getElementById('pages-list');
+    if (!list) return;
+
+    list.innerHTML = currentPages.map((p: any) => {
+      const slug = p.slug?.current || '/';
+      const isHome = slug === '/' || slug === '';
+      const isSelected = activePageDoc?._id === p._id;
+
+      return `
+        <div
+          class="p-2.5 rounded-xl cursor-pointer transition-all page-list-item ${isSelected ? 'bg-[#1d1d1f] text-white shadow-2xs' : 'hover:bg-[#f5f5f7] text-[#1d1d1f]'}"
+          data-id="${p._id}"
+        >
+          <div class="flex items-center justify-between gap-1.5 mb-1">
+            <span class="font-semibold text-xs truncate">${escapeHtml(p.title || (isHome ? 'Homepage' : 'Untitled'))}</span>
+            ${isHome ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'}">Home</span>` : ''}
+          </div>
+          <div class="flex items-center justify-between text-[10px] ${isSelected ? 'text-white/70' : 'text-[#86868b]'} font-mono">
+            <span>${escapeHtml(slug)}</span>
+            <span>${p.sectionCount || 0} blocks</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('.page-list-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        const id = item.getAttribute('data-id');
+        if (id) selectPage(id);
+      });
+    });
+  }
+
+  // Select a page and load its full document with sections
+  async function selectPage(id: string) {
+    try {
+      const res = await fetch(`/api/admin/cms/pages?id=${encodeURIComponent(id)}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load page');
+
+      activePageDoc = data.page;
+      renderPagesList();
+
+      const badge = document.getElementById('current-page-badge');
+      if (badge) badge.textContent = activePageDoc.title || activePageDoc.slug?.current || 'Page';
+
+      // Populate meta inputs
+      (document.getElementById('page-title-input') as HTMLInputElement).value = activePageDoc.title || '';
+      (document.getElementById('page-slug-input') as HTMLInputElement).value = activePageDoc.slug?.current || '/';
+      (document.getElementById('page-metatitle-input') as HTMLInputElement).value = activePageDoc.metaTitle || '';
+      (document.getElementById('page-metadesc-input') as HTMLInputElement).value = activePageDoc.metaDescription || '';
+
+      renderSections();
+    } catch (e: any) {
+      (window as any).__showToast?.(e.message, 'error');
+    }
+  }
+
+  // Render modular blocks in Sections Container
+  function renderSections() {
+    const container = document.getElementById('sections-container');
+    if (!container) return;
+
+    const sections = activePageDoc.sections || [];
+    if (sections.length === 0) {
+      container.innerHTML = `
+        <div class="p-8 text-center text-[#86868b] border border-dashed border-black/10 rounded-2xl space-y-2">
+          <p>This page has no sections yet.</p>
+          <p class="text-[11px]">Select a block type from the dropdown above and click "Add Block".</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = sections.map((sec: any, idx: number) => {
+      const type = sec._type || 'customSection';
+      const typeIcons: Record<string, string> = {
+        heroSection: '🖼️ Hero Banner',
+        productShowcaseSection: '🛍️ Product Showcase',
+        featureMatrixSection: '✨ Feature Matrix',
+        manufacturingSection: '🏭 Manufacturing Power',
+        inquirySection: '📬 RFQ Inquiry',
+        customSection: '📝 Custom Section',
+      };
+      const typeLabel = typeIcons[type] || type;
+
+      return `
+        <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3 section-block" data-idx="${idx}">
+          <div class="flex items-center justify-between border-b border-black/5 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-xs text-[#1d1d1f]">${escapeHtml(typeLabel)}</span>
+              <span class="font-mono text-[10px] text-[#86868b]">#${idx + 1}</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button type="button" class="btn-sec-up p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Move Up">▲</button>
+              <button type="button" class="btn-sec-down p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Move Down">▼</button>
+              <button type="button" class="btn-sec-del p-1 rounded-md text-[#86868b] hover:text-rose-600 hover:bg-rose-50" data-idx="${idx}" title="Delete Section">✕</button>
+            </div>
+          </div>
+
+          <!-- Section Editor Inputs -->
+          <div class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Section Title (EN)</label>
+                <input type="text" class="sec-title w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(sec.title?.en || sec.title || '')}" />
+              </div>
+              <div>
+                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Section Subtitle / Eyebrow (EN)</label>
+                <input type="text" class="sec-sub w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(sec.subtitle?.en || sec.subtitle || sec.badge?.en || '')}" />
+              </div>
+            </div>
+            ${type === 'customSection' ? `
+              <div>
+                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Custom Content / Markdown</label>
+                <textarea rows="3" class="sec-content w-full p-2.5 rounded-xl bg-white border border-black/10 font-mono text-xs">${escapeHtml(sec.content || '')}</textarea>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Reorder & Delete actions
+    container.querySelectorAll('.btn-sec-up').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        syncSectionsFromDom();
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        if (idx > 0) {
+          const temp = activePageDoc.sections[idx];
+          activePageDoc.sections[idx] = activePageDoc.sections[idx - 1];
+          activePageDoc.sections[idx - 1] = temp;
+          renderSections();
+        }
+      });
+    });
+
+    container.querySelectorAll('.btn-sec-down').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        syncSectionsFromDom();
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        if (idx < activePageDoc.sections.length - 1) {
+          const temp = activePageDoc.sections[idx];
+          activePageDoc.sections[idx] = activePageDoc.sections[idx + 1];
+          activePageDoc.sections[idx + 1] = temp;
+          renderSections();
+        }
+      });
+    });
+
+    container.querySelectorAll('.btn-sec-del').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        syncSectionsFromDom();
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        activePageDoc.sections.splice(idx, 1);
+        renderSections();
+      });
+    });
+  }
+
+  function syncSectionsFromDom() {
+    if (!activePageDoc || !activePageDoc.sections) return;
+    const blocks = document.querySelectorAll('.section-block');
+    blocks.forEach((block, idx) => {
+      if (activePageDoc.sections[idx]) {
+        const titleVal = (block.querySelector('.sec-title') as HTMLInputElement)?.value.trim();
+        const subVal = (block.querySelector('.sec-sub') as HTMLInputElement)?.value.trim();
+        const contentVal = (block.querySelector('.sec-content') as HTMLTextAreaElement)?.value;
+
+        if (!activePageDoc.sections[idx].title) activePageDoc.sections[idx].title = {};
+        if (typeof activePageDoc.sections[idx].title === 'object') {
+          activePageDoc.sections[idx].title.en = titleVal;
+        } else {
+          activePageDoc.sections[idx].title = titleVal;
+        }
+
+        if (subVal !== undefined) {
+          if (!activePageDoc.sections[idx].subtitle) activePageDoc.sections[idx].subtitle = {};
+          if (typeof activePageDoc.sections[idx].subtitle === 'object') {
+            activePageDoc.sections[idx].subtitle.en = subVal;
+          } else {
+            activePageDoc.sections[idx].subtitle = subVal;
+          }
+        }
+
+        if (contentVal !== undefined) {
+          activePageDoc.sections[idx].content = contentVal;
+        }
+      }
+    });
+  }
+
+  // Add Block Handler
+  document.getElementById('btn-add-section')?.addEventListener('click', () => {
+    if (!activePageDoc) {
+      (window as any).__showToast?.('Please select or create a page first', 'error');
+      return;
+    }
+    syncSectionsFromDom();
+    if (!activePageDoc.sections) activePageDoc.sections = [];
+
+    const select = document.getElementById('select-new-section') as HTMLSelectElement | null;
+    const type = select?.value || 'customSection';
+
+    activePageDoc.sections.push({
+      _type: type,
+      _key: crypto.randomUUID().slice(0, 8),
+      title: { en: 'New Section Title' },
+      subtitle: { en: 'Section Subtitle' },
+    });
+    renderSections();
+  });
+
+  // Create New Page
+  document.getElementById('btn-create-page')?.addEventListener('click', () => {
+    activePageDoc = {
+      _type: 'page',
+      title: 'New Landing Page',
+      slug: { _type: 'slug', current: `/page-${Date.now().toString().slice(-4)}` },
+      metaTitle: 'Landing Page',
+      metaDescription: '',
+      sections: [],
+    };
+    (document.getElementById('page-title-input') as HTMLInputElement).value = activePageDoc.title;
+    (document.getElementById('page-slug-input') as HTMLInputElement).value = activePageDoc.slug.current;
+    (document.getElementById('page-metatitle-input') as HTMLInputElement).value = activePageDoc.metaTitle;
+    (document.getElementById('page-metadesc-input') as HTMLInputElement).value = '';
+    renderSections();
+    (window as any).__showToast?.('Draft page created. Add sections and click Save.', 'info');
+  });
+
+  // Save Page
+  document.getElementById('btn-save-page')?.addEventListener('click', async () => {
+    if (!activePageDoc) return;
+    syncSectionsFromDom();
+
+    const title = (document.getElementById('page-title-input') as HTMLInputElement)?.value.trim();
+    const slug = (document.getElementById('page-slug-input') as HTMLInputElement)?.value.trim();
+    if (!title || !slug) {
+      (window as any).__showToast?.('Page Title and Slug are required.', 'error');
+      return;
+    }
+
+    activePageDoc.title = title;
+    activePageDoc.slug = { _type: 'slug', current: slug };
+    activePageDoc.metaTitle = (document.getElementById('page-metatitle-input') as HTMLInputElement)?.value.trim();
+    activePageDoc.metaDescription = (document.getElementById('page-metadesc-input') as HTMLInputElement)?.value.trim();
+
+    (window as any).__showToast?.('Publishing page to Sanity CMS...', 'info');
+
+    try {
+      const res = await fetch('/api/admin/cms/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document: activePageDoc }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save page');
+
+      (window as any).__showToast?.('Page successfully saved and published!', 'success');
+      loadPages();
+    } catch (err: any) {
+      (window as any).__showToast?.(err.message, 'error');
+    }
+  });
+
+  // Boot
+  loadPages();
+</script>
+

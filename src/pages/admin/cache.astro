@@ -1,0 +1,228 @@
+---
+// src/pages/admin/cache.astro
+// Cloudflare Edge & KV Multi-Tier Cache Purge Console
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { requireAdminContext } from '@utils/auth';
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/cache',
+  { requiredMenu: 'cache' }
+);
+if (redirectResponse) return redirectResponse;
+
+const canPurge = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cache:purge'));
+const pageTitle = 'Edge & KV Cache Console';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="cache"
+  sessionEmail={sessionUser?.email || ''}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-3">
+    <!-- Header Command Bar -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Edge & KV Cache Control</h1>
+        <p class="text-[11px] text-[#86868b]">Purge stale Cloudflare HTML edge pages, Sanity SWR memory layers and L2 KV cache keys</p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          Edge Cache Active
+        </span>
+      </div>
+    </header>
+
+    <!-- Workspace Container -->
+    <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs p-4 sm:p-6 overflow-y-auto space-y-6 text-xs">
+      <!-- Section 1: Quick Action Cards -->
+      <div class="space-y-3">
+        <div>
+          <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">One-Click Cache Invalidation Partitions</h2>
+          <p class="text-[11px] text-[#86868b]">Select a partition to immediately clear in-memory singletons and Cloudflare Edge KV</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Card 1: All -->
+          <div class="p-4 rounded-2xl border border-black/10 bg-[#fafafc] hover:border-black/20 transition-all flex flex-col justify-between space-y-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-lg">⚡</span>
+                <span class="font-bold text-xs text-[#1d1d1f]">Purge Everything</span>
+              </div>
+              <p class="text-[11px] text-[#86868b]">Invalidates all CMS products, pages, dictionaries, settings, and CDN asset tags.</p>
+            </div>
+            <button
+              type="button"
+              class="btn-purge w-full py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer shadow-2xs"
+              data-scope="all"
+              disabled={!canPurge}
+            >
+              Purge All Caches
+            </button>
+          </div>
+
+          <!-- Card 2: Products -->
+          <div class="p-4 rounded-2xl border border-black/10 bg-[#fafafc] hover:border-black/20 transition-all flex flex-col justify-between space-y-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-lg">🛍️</span>
+                <span class="font-bold text-xs text-[#1d1d1f]">Products & Catalog</span>
+              </div>
+              <p class="text-[11px] text-[#86868b]">Clears product lists, category trees, and individual product details (prod:details:*).</p>
+            </div>
+            <button
+              type="button"
+              class="btn-purge w-full py-2 rounded-xl text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] transition-all cursor-pointer shadow-2xs"
+              data-scope="products"
+              disabled={!canPurge}
+            >
+              Purge Catalog
+            </button>
+          </div>
+
+          <!-- Card 3: Pages -->
+          <div class="p-4 rounded-2xl border border-black/10 bg-[#fafafc] hover:border-black/20 transition-all flex flex-col justify-between space-y-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-lg">📄</span>
+                <span class="font-bold text-xs text-[#1d1d1f]">Pages & Builder</span>
+              </div>
+              <p class="text-[11px] text-[#86868b]">Clears Homepage (page:home), about, contact, and custom section builder caches.</p>
+            </div>
+            <button
+              type="button"
+              class="btn-purge w-full py-2 rounded-xl text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] transition-all cursor-pointer shadow-2xs"
+              data-scope="pages"
+              disabled={!canPurge}
+            >
+              Purge Pages
+            </button>
+          </div>
+
+          <!-- Card 4: Dictionaries -->
+          <div class="p-4 rounded-2xl border border-black/10 bg-[#fafafc] hover:border-black/20 transition-all flex flex-col justify-between space-y-3">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-lg">🏷️</span>
+                <span class="font-bold text-xs text-[#1d1d1f]">Data Dictionaries</span>
+              </div>
+              <p class="text-[11px] text-[#86868b]">Forces re-aggregation of sys:dicts:all from D1 SQLite into Cloudflare Edge KV.</p>
+            </div>
+            <button
+              type="button"
+              class="btn-purge w-full py-2 rounded-xl text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] transition-all cursor-pointer shadow-2xs"
+              data-scope="dicts"
+              disabled={!canPurge}
+            >
+              Purge Dictionaries
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Targeted Path Purge -->
+      <div class="p-5 rounded-2xl border border-black/10 bg-[#fafafc] space-y-3 max-w-2xl">
+        <div>
+          <h3 class="font-bold text-xs text-[#1d1d1f]">Targeted URL Path Invalidation</h3>
+          <p class="text-[11px] text-[#86868b]">Purge a specific product or page URL to instantly reflect fresh CMS editorial content</p>
+        </div>
+
+        <form id="path-purge-form" class="flex items-center gap-2">
+          <input
+            type="text"
+            id="target-path-input"
+            placeholder="e.g. /products/silk-merino-crew-socks or /about"
+            class="flex-1 px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black font-mono text-xs"
+            required
+          />
+          <button
+            type="submit"
+            class="px-4 py-2 rounded-xl bg-[#1d1d1f] text-white font-semibold hover:bg-black transition-all cursor-pointer shrink-0 shadow-2xs"
+            disabled={!canPurge}
+          >
+            Purge Path
+          </button>
+        </form>
+      </div>
+
+      <!-- Section 3: Live Activity Result Log -->
+      <div class="space-y-2">
+        <h3 class="font-bold text-xs text-[#1d1d1f]">Recent Invalidation Events</h3>
+        <div id="purge-events-log" class="p-4 rounded-2xl bg-[#f5f5f7] border border-black/5 font-mono text-[11px] space-y-1 text-[#52525b]">
+          <div>Ready. Click any action above to trigger multi-tier cache purge.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { escapeHtml } from '@utils/adminWorkbench';
+
+  const logContainer = document.getElementById('purge-events-log');
+
+  function appendLog(text: string, isError = false) {
+    if (!logContainer) return;
+    const time = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    line.className = isError ? 'text-rose-600 font-semibold' : 'text-emerald-700';
+    line.innerHTML = `<span class="text-[#86868b]">[${time}]</span> ${escapeHtml(text)}`;
+    logContainer.prepend(line);
+  }
+
+  async function executePurge(scope: string, path?: string) {
+    appendLog(`Dispatching cache purge for scope: ${scope}${path ? ` (${path})` : ''}...`);
+    (window as any).__showToast?.('Triggering cache purge...', 'info');
+
+    try {
+      const res = await fetch('/api/admin/cache/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope, path }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to purge cache');
+      }
+
+      appendLog(`✔ Success: ${data.message} (${data.durationMs}ms)`);
+      (window as any).__showToast?.(data.message, 'success');
+    } catch (err: any) {
+      appendLog(`✖ Error: ${err.message}`, true);
+      (window as any).__showToast?.(err.message, 'error');
+    }
+  }
+
+  document.querySelectorAll('.btn-purge').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const scope = btn.getAttribute('data-scope') || 'all';
+      executePurge(scope);
+    });
+  });
+
+  document.getElementById('path-purge-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const pathInput = document.getElementById('target-path-input') as HTMLInputElement | null;
+    const path = pathInput?.value.trim();
+    if (path) {
+      executePurge('path', path);
+    }
+  });
+</script>
+

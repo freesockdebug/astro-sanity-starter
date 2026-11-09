@@ -248,10 +248,16 @@ const pageTitle = 'Roles & Permissions Matrix';
             <label class="block font-semibold text-[11px] text-[#52525b]">② Visible Navigation Menus</label>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {[
+                { key: 'dashboard', label: '📊 Dashboard (/admin/dashboard)' },
                 { key: 'orders', label: '📦 Orders (/admin/orders)' },
                 { key: 'users', label: '👥 Customers (/admin/users)' },
+                { key: 'products', label: '🛍️ Products (/admin/products)' },
+                { key: 'pages', label: '📄 Pages (/admin/pages)' },
+                { key: 'cms_config', label: '🎨 CMS Config (/admin/cms-config)' },
+                { key: 'cache', label: '⚡ Cache (/admin/cache)' },
                 { key: 'members', label: '🧑‍💼 Members (/admin/members)' },
                 { key: 'roles', label: '🔐 Roles (/admin/roles)' },
+                { key: 'dicts', label: '🏷️ Dictionaries (/admin/dicts)' },
                 { key: 'logins', label: '🛡️ Audit (/admin/logins)' },
                 { key: 'logs', label: '⚠️ Logs (/admin/logs)' },
                 { key: 'settings', label: '⚙️ Settings (/admin/settings)' },
@@ -316,6 +322,24 @@ const pageTitle = 'Roles & Permissions Matrix';
                   { key: 'logins:read', label: 'logins:read (登录审计)' },
                   { key: 'logs:read', label: 'logs:read (系统诊断)' },
                   { key: 'settings:manage', label: 'settings:manage (系统参数)' },
+                ].map((p) => (
+                  <label class="flex items-center gap-2 text-[11px] cursor-pointer">
+                    <input type="checkbox" name="perm_item" value={p.key} class="rounded text-black accent-[#1d1d1f]" />
+                    <span class="font-mono text-[10px]">{p.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <!-- Group D: Content & CMS (Sanity) -->
+            <div class="p-3 rounded-xl bg-[#f5f5f7]/60 border border-black/5 space-y-2">
+              <span class="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block">🛍️ Content & CMS (Sanity)</span>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { key: 'cms:read', label: 'cms:read (查看商品/页面/配置)' },
+                  { key: 'cms:write', label: 'cms:write (新建/编辑商品与页面)' },
+                  { key: 'cms:delete', label: 'cms:delete (删除商品与页面)' },
+                  { key: 'cache:purge', label: 'cache:purge (手动清理边缘缓存)' },
                 ].map((p) => (
                   <label class="flex items-center gap-2 text-[11px] cursor-pointer">
                     <input type="checkbox" name="perm_item" value={p.key} class="rounded text-black accent-[#1d1d1f]" />

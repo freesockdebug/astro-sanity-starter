@@ -49,6 +49,10 @@ export class PageService {
     homePageCache.invalidate();
     this.pageSlugCache.clear();
   }
+
+  public static invalidateAll(): void {
+    this.invalidateCache();
+  }
   /**
    * Fetch all pages
    */

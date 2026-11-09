@@ -6,7 +6,7 @@ import AdminSidebar from '@components/admin/AdminSidebar.astro';
 
 interface Props {
   title: string;
-  currentTab: 'dashboard' | 'orders' | 'users' | 'members' | 'roles' | 'dicts' | 'logins' | 'logs' | 'settings';
+  currentTab: 'dashboard' | 'orders' | 'users' | 'products' | 'pages' | 'cms_config' | 'cache' | 'members' | 'roles' | 'dicts' | 'logins' | 'logs' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
   fullscreenWorkbench?: boolean;
@@ -276,6 +276,34 @@ const canShow = (key: string) => !menus || menus.includes(key);
           <span class="font-semibold text-xs">Customers & CRM</span>
         </div>
         <span class="text-[10px] text-[#86868b] font-mono">/admin/users</span>
+      </a>
+      <a href="/admin/products" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">🛍️</span>
+          <span class="font-semibold text-xs">Products & Catalog</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/products</span>
+      </a>
+      <a href="/admin/pages" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">📄</span>
+          <span class="font-semibold text-xs">Pages & Visual Builder</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/pages</span>
+      </a>
+      <a href="/admin/cms-config" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">🎨</span>
+          <span class="font-semibold text-xs">CMS Site Config</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/cms-config</span>
+      </a>
+      <a href="/admin/cache" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
+        <div class="flex items-center gap-2.5">
+          <span class="text-sm">⚡</span>
+          <span class="font-semibold text-xs">Cache Purge Console</span>
+        </div>
+        <span class="text-[10px] text-[#86868b] font-mono">/admin/cache</span>
       </a>
       <a href="/admin/members" class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
         <div class="flex items-center gap-2.5">

@@ -2,6 +2,8 @@
 // Asynchronous Operation Audit Logging Engine with 0ms Latency Impact
 import { insertAuditLog, computeJsonDiff } from '../db/audit.repo';
 
+export { insertAuditLog, computeJsonDiff };
+
 export interface AuditLogParams {
   adminEmail: string;
   action: string;

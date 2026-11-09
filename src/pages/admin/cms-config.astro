@@ -1,0 +1,395 @@
+---
+// src/pages/admin/cms-config.astro
+// Unified CMS Configuration Console: Navigation, Catalog Hall, Artisan Story & Quote Drawer
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { requireAdminContext } from '@utils/auth';
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/cms-config',
+  { requiredMenu: 'cms_config' }
+);
+if (redirectResponse) return redirectResponse;
+
+const canWrite = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cms:write'));
+const pageTitle = 'CMS Site Configuration';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="cms_config"
+  sessionEmail={sessionUser?.email || ''}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- Top Action Bar -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">CMS Global Content Config</h1>
+        <p class="text-[11px] text-[#86868b]">Manage navigation, product catalog headers, artisan story badges and B2B RFQ cart</p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        {canWrite && (
+          <button
+            type="button"
+            id="btn-save-current-config"
+            class="h-8 px-4 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Save Configuration</span>
+          </button>
+        )}
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden">
+      <!-- Tabs Bar -->
+      <div class="px-4 border-b border-black/5 flex gap-4 text-xs font-semibold shrink-0 bg-[#fafafc]">
+        <button type="button" class="cfg-tab-btn py-3 border-b-2 border-black text-[#1d1d1f] cursor-pointer" data-tab="site">
+          1. Navigation & Brand (siteConfig)
+        </button>
+        <button type="button" class="cfg-tab-btn py-3 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="catalog">
+          2. Product Hall (catalogSettings)
+        </button>
+        <button type="button" class="cfg-tab-btn py-3 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="story">
+          3. Craft Badges (productStorySettings)
+        </button>
+        <button type="button" class="cfg-tab-btn py-3 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="rfq">
+          4. RFQ Quote Drawer (rfqSettings)
+        </button>
+      </div>
+
+      <!-- Tab Panes Container -->
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6 text-xs">
+        <!-- PANE 1: siteConfig -->
+        <div id="pane-site" class="cfg-pane space-y-5 max-w-3xl">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block font-semibold mb-1">Brand Name *</label>
+              <input type="text" id="site-brand-name" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs" />
+            </div>
+            <div>
+              <label class="block font-semibold mb-1">Header Tagline</label>
+              <input type="text" id="site-tagline" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs" />
+            </div>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="font-bold text-xs text-[#1d1d1f] block">Header Navigation Links</span>
+                <span class="text-[10px] text-[#86868b]">Top navigation items displayed across the store</span>
+              </div>
+              <button type="button" id="btn-add-nav-item" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
+                ＋ Add Link
+              </button>
+            </div>
+            <div id="nav-items-container" class="space-y-2">
+              <!-- Nav items injected here -->
+            </div>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+            <label class="block font-bold text-xs text-[#1d1d1f]">Footer & Copyright Text</label>
+            <input type="text" id="site-copyright" placeholder="© 2026 Gwen & Venni Atelier. All rights reserved." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs" />
+          </div>
+        </div>
+
+        <!-- PANE 2: catalogSettings -->
+        <div id="pane-catalog" class="cfg-pane hidden space-y-5 max-w-3xl">
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
+            <span class="font-bold text-xs text-[#1d1d1f] block">/products Catalog Header Banner</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold mb-1">Banner Title (EN)</label>
+                <input type="text" id="cat-title-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Banner Title (DE)</label>
+                <input type="text" id="cat-title-de" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Banner Subtitle (EN)</label>
+                <input type="text" id="cat-sub-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Banner Subtitle (DE)</label>
+                <input type="text" id="cat-sub-de" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE 3: productStorySettings -->
+        <div id="pane-story" class="cfg-pane hidden space-y-5 max-w-3xl">
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="font-bold text-xs text-[#1d1d1f] block">Universal Craft & Quality Badges</span>
+                <span class="text-[10px] text-[#86868b]">Highlighted promises shown at the top of product detail pages</span>
+              </div>
+              <button type="button" id="btn-add-badge" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
+                ＋ Add Badge
+              </button>
+            </div>
+            <div id="story-badges-container" class="space-y-2">
+              <!-- Badges injected here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE 4: rfqSettings -->
+        <div id="pane-rfq" class="cfg-pane hidden space-y-5 max-w-3xl">
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
+            <span class="font-bold text-xs text-[#1d1d1f] block">B2B Quote Cart & RFQ Drawer Copy</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold mb-1">Drawer Header Title (EN)</label>
+                <input type="text" id="rfq-title-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Empty Cart Message (EN)</label>
+                <input type="text" id="rfq-empty-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Add to Quote Button Text (EN)</label>
+                <input type="text" id="rfq-btn-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Submit Inquiry Button Text (EN)</label>
+                <input type="text" id="rfq-submit-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { escapeHtml } from '@utils/adminWorkbench';
+
+  let activeTab = 'site';
+  let configs: any = {
+    siteConfig: { _type: 'siteConfig', nav: [] },
+    catalogSettings: { _type: 'catalogSettings' },
+    productStorySettings: { _type: 'productStorySettings', badges: [] },
+    rfqSettings: { _type: 'rfqSettings' },
+  };
+
+  // Tab switching
+  const tabBtns = document.querySelectorAll('.cfg-tab-btn');
+  tabBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeTab = btn.getAttribute('data-tab') || 'site';
+      tabBtns.forEach((b) => {
+        b.classList.remove('border-black', 'text-[#1d1d1f]');
+        b.classList.add('border-transparent', 'text-[#86868b]');
+      });
+      btn.classList.add('border-black', 'text-[#1d1d1f]');
+      btn.classList.remove('border-transparent', 'text-[#86868b]');
+
+      document.querySelectorAll('.cfg-pane').forEach((p) => p.classList.add('hidden'));
+      document.getElementById(`pane-${activeTab}`)?.classList.remove('hidden');
+    });
+  });
+
+  // Load All Configs
+  async function loadConfigs() {
+    try {
+      const res = await fetch('/api/admin/cms/config');
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load configs');
+
+      configs = data.configs;
+      populateSitePane();
+      populateCatalogPane();
+      populateStoryPane();
+      populateRfqPane();
+    } catch (e: any) {
+      (window as any).__showToast?.(e.message, 'error');
+    }
+  }
+
+  // 1. Site Pane
+  function populateSitePane() {
+    const s = configs.siteConfig || {};
+    const brandInput = document.getElementById('site-brand-name') as HTMLInputElement | null;
+    const tagInput = document.getElementById('site-tagline') as HTMLInputElement | null;
+    const copyInput = document.getElementById('site-copyright') as HTMLInputElement | null;
+
+    if (brandInput) brandInput.value = s.brandName || 'Gwen & Venni';
+    if (tagInput) tagInput.value = s.tagline || '';
+    if (copyInput) copyInput.value = s.copyright || '';
+
+    renderNavItems();
+  }
+
+  function renderNavItems() {
+    const container = document.getElementById('nav-items-container');
+    if (!container) return;
+    const nav = configs.siteConfig.nav || [];
+    if (nav.length === 0) {
+      container.innerHTML = `<div class="py-2 text-[#86868b] text-[11px]">No custom navigation links.</div>`;
+      return;
+    }
+    container.innerHTML = nav.map((item: any, idx: number) => `
+      <div class="flex items-center gap-2">
+        <input type="text" class="nav-label w-1/3 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Label" value="${escapeHtml(item.label?.en || item.label || '')}" />
+        <input type="text" class="nav-href flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 font-mono text-xs" placeholder="/products" value="${escapeHtml(item.href || '')}" />
+        <button type="button" class="btn-del-nav text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.btn-del-nav').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        configs.siteConfig.nav.splice(idx, 1);
+        renderNavItems();
+      });
+    });
+  }
+
+  document.getElementById('btn-add-nav-item')?.addEventListener('click', () => {
+    if (!configs.siteConfig.nav) configs.siteConfig.nav = [];
+    configs.siteConfig.nav.push({ label: { en: 'New Link' }, href: '/custom' });
+    renderNavItems();
+  });
+
+  // 2. Catalog Pane
+  function populateCatalogPane() {
+    const c = configs.catalogSettings || {};
+    (document.getElementById('cat-title-en') as HTMLInputElement).value = c.title?.en || '';
+    (document.getElementById('cat-title-de') as HTMLInputElement).value = c.title?.de || '';
+    (document.getElementById('cat-sub-en') as HTMLInputElement).value = c.subtitle?.en || '';
+    (document.getElementById('cat-sub-de') as HTMLInputElement).value = c.subtitle?.de || '';
+  }
+
+  // 3. Story Pane
+  function populateStoryPane() {
+    renderStoryBadges();
+  }
+
+  function renderStoryBadges() {
+    const container = document.getElementById('story-badges-container');
+    if (!container) return;
+    const badges = configs.productStorySettings.badges || [];
+    if (badges.length === 0) {
+      container.innerHTML = `<div class="py-2 text-[#86868b] text-[11px]">No badges configured.</div>`;
+      return;
+    }
+    container.innerHTML = badges.map((b: any, idx: number) => `
+      <div class="flex items-center gap-2">
+        <input type="text" class="badge-icon w-12 px-2 py-1.5 rounded-xl bg-white border border-black/10 text-center text-xs" placeholder="Icon" value="${escapeHtml(b.icon || '✨')}" />
+        <input type="text" class="badge-title flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Badge Title" value="${escapeHtml(b.title?.en || b.title || '')}" />
+        <button type="button" class="btn-del-badge text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.btn-del-badge').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        configs.productStorySettings.badges.splice(idx, 1);
+        renderStoryBadges();
+      });
+    });
+  }
+
+  document.getElementById('btn-add-badge')?.addEventListener('click', () => {
+    if (!configs.productStorySettings.badges) configs.productStorySettings.badges = [];
+    configs.productStorySettings.badges.push({ icon: '🌿', title: { en: '100% Organic Silk' } });
+    renderStoryBadges();
+  });
+
+  // 4. RFQ Pane
+  function populateRfqPane() {
+    const r = configs.rfqSettings || {};
+    (document.getElementById('rfq-title-en') as HTMLInputElement).value = r.drawerTitle?.en || '';
+    (document.getElementById('rfq-empty-en') as HTMLInputElement).value = r.emptyCartNotice?.en || '';
+    (document.getElementById('rfq-btn-en') as HTMLInputElement).value = r.addToQuoteBtn?.en || '';
+    (document.getElementById('rfq-submit-en') as HTMLInputElement).value = r.submitInquiryBtn?.en || '';
+  }
+
+  // Save handler for current active config
+  document.getElementById('btn-save-current-config')?.addEventListener('click', async () => {
+    let targetDocType = 'siteConfig';
+    let targetPayload: any = {};
+
+    if (activeTab === 'site') {
+      targetDocType = 'siteConfig';
+      configs.siteConfig.brandName = (document.getElementById('site-brand-name') as HTMLInputElement)?.value.trim();
+      configs.siteConfig.tagline = (document.getElementById('site-tagline') as HTMLInputElement)?.value.trim();
+      configs.siteConfig.copyright = (document.getElementById('site-copyright') as HTMLInputElement)?.value.trim();
+
+      const labels = document.querySelectorAll('#nav-items-container .nav-label');
+      const hrefs = document.querySelectorAll('#nav-items-container .nav-href');
+      configs.siteConfig.nav = Array.from(labels).map((lInput: any, idx: number) => ({
+        label: { en: lInput.value.trim() },
+        href: (hrefs[idx] as HTMLInputElement)?.value.trim() || '/',
+      }));
+      targetPayload = configs.siteConfig;
+    } else if (activeTab === 'catalog') {
+      targetDocType = 'catalogSettings';
+      configs.catalogSettings.title = {
+        en: (document.getElementById('cat-title-en') as HTMLInputElement)?.value.trim(),
+        de: (document.getElementById('cat-title-de') as HTMLInputElement)?.value.trim(),
+      };
+      configs.catalogSettings.subtitle = {
+        en: (document.getElementById('cat-sub-en') as HTMLInputElement)?.value.trim(),
+        de: (document.getElementById('cat-sub-de') as HTMLInputElement)?.value.trim(),
+      };
+      targetPayload = configs.catalogSettings;
+    } else if (activeTab === 'story') {
+      targetDocType = 'productStorySettings';
+      const icons = document.querySelectorAll('#story-badges-container .badge-icon');
+      const titles = document.querySelectorAll('#story-badges-container .badge-title');
+      configs.productStorySettings.badges = Array.from(icons).map((iInput: any, idx: number) => ({
+        icon: iInput.value.trim() || '✨',
+        title: { en: (titles[idx] as HTMLInputElement)?.value.trim() || 'Feature' },
+      }));
+      targetPayload = configs.productStorySettings;
+    } else if (activeTab === 'rfq') {
+      targetDocType = 'rfqSettings';
+      configs.rfqSettings.drawerTitle = { en: (document.getElementById('rfq-title-en') as HTMLInputElement)?.value.trim() };
+      configs.rfqSettings.emptyCartNotice = { en: (document.getElementById('rfq-empty-en') as HTMLInputElement)?.value.trim() };
+      configs.rfqSettings.addToQuoteBtn = { en: (document.getElementById('rfq-btn-en') as HTMLInputElement)?.value.trim() };
+      configs.rfqSettings.submitInquiryBtn = { en: (document.getElementById('rfq-submit-en') as HTMLInputElement)?.value.trim() };
+      targetPayload = configs.rfqSettings;
+    }
+
+    targetPayload._type = targetDocType;
+    (window as any).__showToast?.(`Saving ${targetDocType}...`, 'info');
+
+    try {
+      const res = await fetch('/api/admin/cms/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document: targetPayload }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save config');
+
+      (window as any).__showToast?.(`Saved ${targetDocType} & refreshed caches!`, 'success');
+      loadConfigs();
+    } catch (e: any) {
+      (window as any).__showToast?.(e.message, 'error');
+    }
+  });
+
+  // Initial load
+  loadConfigs();
+</script>
+

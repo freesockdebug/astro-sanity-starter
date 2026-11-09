@@ -26,6 +26,8 @@
       "@layouts/*": ["./src/layouts/*"],
       "@styles/*": ["./src/styles/*"],
       "@utils/*": ["./src/utils/*"],
+      "@db/*": ["./src/db/*"],
+      "@db": ["./src/db/index.ts"],
       "@hooks/*": ["./src/hooks/*"],
       "@data/*": ["./src/data/*"],
       "@data": ["./src/data/index.ts"],

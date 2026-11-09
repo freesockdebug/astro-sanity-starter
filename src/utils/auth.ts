@@ -430,4 +430,5 @@ export async function updateLogtoUserPassword(
 
 // Re-export contextual guards
 export * from './authGuards';
+export { hasPermission, hasMenu } from './rbac';
 

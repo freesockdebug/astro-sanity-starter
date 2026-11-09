@@ -2,7 +2,7 @@
 // src/components/admin/AdminSidebar.astro
 // Unified 240px B2B Vertical Sidebar for Admin Console with Dynamic RBAC Trimming
 interface Props {
-  currentTab: 'dashboard' | 'orders' | 'users' | 'members' | 'roles' | 'dicts' | 'logins' | 'logs' | 'settings';
+  currentTab: 'dashboard' | 'orders' | 'users' | 'products' | 'pages' | 'cms_config' | 'cache' | 'members' | 'roles' | 'dicts' | 'logins' | 'logs' | 'settings';
   sessionEmail: string;
   pendingOrdersCount?: number;
   adminName?: string;
@@ -31,19 +31,21 @@ const canShow = (key: string) => !menus || menus.includes(key);
 
 const showOverview = canShow('dashboard');
 const showOperations = canShow('orders') || canShow('users');
+const showContent = canShow('products') || canShow('pages') || canShow('cms_config') || canShow('cache');
 const showAccess = canShow('members') || canShow('roles');
 const showSecurity = canShow('logins') || canShow('logs');
 const showConfig = canShow('settings') || canShow('dicts');
 
 const roleBadgeClasses: Record<string, string> = {
   super_admin: 'bg-amber-50 text-amber-800 border-amber-200/80',
+  content_editor: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
   sales_manager: 'bg-purple-50 text-purple-800 border-purple-200/80',
   sales_rep: 'bg-blue-50 text-blue-800 border-blue-200/80',
   auditor: 'bg-zinc-100 text-zinc-800 border-zinc-200',
 };
 
 const badgeClass = roleBadgeClasses[roleCode] || roleBadgeClasses.super_admin;
-const roleDisplay = roleName || (roleCode === 'sales_manager' ? 'Sales Manager' : roleCode === 'sales_rep' ? 'Sales Rep' : roleCode === 'auditor' ? 'Auditor' : 'Super Admin');
+const roleDisplay = roleName || (roleCode === 'content_editor' ? 'Content Editor' : roleCode === 'sales_manager' ? 'Sales Manager' : roleCode === 'sales_rep' ? 'Sales Rep' : roleCode === 'auditor' ? 'Auditor' : 'Super Admin');
 ---
 
 <!-- Mobile Drawer Backdrop Overlay -->
@@ -163,6 +165,87 @@ const roleDisplay = roleName || (roleCode === 'sales_manager' ? 'Sales Manager' 
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
             <span>Customers & CRM</span>
+          </a>
+        )}
+      </div>
+    )}
+
+    <!-- Group 1.5: Content & Catalog (CMS) -->
+    {showContent && (
+      <div class="space-y-1">
+        <div class="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+          Content & Catalog
+        </div>
+
+        <!-- Products & Categories -->
+        {canShow('products') && (
+          <a
+            href="/admin/products"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'products'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+            <span>Products & Catalog</span>
+          </a>
+        )}
+
+        <!-- Pages & Visual Builder -->
+        {canShow('pages') && (
+          <a
+            href="/admin/pages"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'pages'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Pages & Builder</span>
+          </a>
+        )}
+
+        <!-- CMS Config -->
+        {canShow('cms_config') && (
+          <a
+            href="/admin/cms-config"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'cms_config'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+            <span>CMS Config</span>
+          </a>
+        )}
+
+        <!-- Cache Purge -->
+        {canShow('cache') && (
+          <a
+            href="/admin/cache"
+            class:list={[
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium transition-all group',
+              currentTab === 'cache'
+                ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
+                : 'text-[#52525b] hover:text-black hover:bg-black/5'
+            ]}
+          >
+            <svg class="w-4 h-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span>Cache Purge</span>
           </a>
         )}
       </div>

@@ -1,0 +1,1202 @@
+---
+// src/pages/admin/products.astro
+// Native Cloudflare SSR Product & Category CMS Workbench (Replaces Sanity Studio)
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { requireAdminContext } from '@utils/auth';
+import { getDictItems } from '@utils/dicts';
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/products',
+  { requiredMenu: 'products' }
+);
+if (redirectResponse) return redirectResponse;
+
+const [currencyDict, unitDict] = await Promise.all([
+  getDictItems(cfEnv, 'currencies', true).catch(() => []),
+  getDictItems(cfEnv, 'product_units', true).catch(() => []),
+]);
+
+const canWrite = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cms:write'));
+const canDelete = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cms:delete'));
+
+const defaultCurrencies = currencyDict.length > 0 ? currencyDict : [
+  { item_key: 'USD', item_label: 'USD ($)' },
+  { item_key: 'EUR', item_label: 'EUR (€)' },
+  { item_key: 'GBP', item_label: 'GBP (£)' },
+  { item_key: 'CNY', item_label: 'CNY (¥)' },
+];
+
+const defaultUnits = unitDict.length > 0 ? unitDict : [
+  { item_key: 'Pairs', item_label: 'Pairs' },
+  { item_key: 'Pcs', item_label: 'Pcs' },
+  { item_key: 'Sets', item_label: 'Sets' },
+  { item_key: 'Dozens', item_label: 'Dozens' },
+];
+
+const pageTitle = 'Products & Catalog Workspace';
+---
+
+<AdminLayout
+  title={pageTitle}
+  currentTab="products"
+  sessionEmail={sessionUser?.email || ''}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <!-- Top Action Bar -->
+    <header class="shrink-0 bg-white border border-black/5 rounded-2xl px-4 py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-[#1d1d1f]">Catalog Workspace</h1>
+        <div class="flex items-center bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
+          <button
+            type="button"
+            id="tab-btn-products"
+            class="px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer"
+          >
+            Products (<span id="products-count-badge">0</span>)
+          </button>
+          <button
+            type="button"
+            id="tab-btn-categories"
+            class="px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
+          >
+            Categories (<span id="categories-count-badge">0</span>)
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        {canWrite && (
+          <button
+            type="button"
+            id="btn-create-item"
+            class="h-8 px-3.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>＋ Add New Product</span>
+          </button>
+        )}
+      </div>
+    </header>
+
+    <!-- Products View Container -->
+    <div id="view-products" class="flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden">
+      <!-- Filter Bar -->
+      <div class="p-3 border-b border-black/5 flex flex-wrap items-center justify-between gap-3 bg-[#fafafc]">
+        <div class="flex items-center gap-2 flex-1 min-w-[200px] max-w-md">
+          <div class="relative w-full">
+            <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              id="search-input"
+              placeholder="Search product title, SKU, or category..."
+              class="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <select id="category-filter" class="h-8 px-2.5 rounded-xl bg-white border border-black/10 text-xs focus:outline-none focus:border-black cursor-pointer">
+            <option value="ALL">All Categories</option>
+          </select>
+
+          <select id="status-filter" class="h-8 px-2.5 rounded-xl bg-white border border-black/10 text-xs focus:outline-none focus:border-black cursor-pointer">
+            <option value="ALL">All Statuses</option>
+            <option value="LIVE">Live Published</option>
+            <option value="DRAFT">Drafts</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Products Table Content -->
+      <div class="flex-1 overflow-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-[#f5f5f7]/80 text-[#86868b] text-[11px] uppercase tracking-wider sticky top-0 backdrop-blur-xs z-10 border-b border-black/5">
+            <tr>
+              <th class="py-2.5 px-3.5 w-16">Image</th>
+              <th class="py-2.5 px-3.5">Product Title / SKU</th>
+              <th class="py-2.5 px-3.5">Category</th>
+              <th class="py-2.5 px-3.5">Pricing Tiers & MOQ</th>
+              <th class="py-2.5 px-3.5">Colors</th>
+              <th class="py-2.5 px-3.5">Status</th>
+              <th class="py-2.5 px-3.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="products-table-body" class="divide-y divide-black/5">
+            <tr>
+              <td colspan="7" class="py-12 text-center text-[#86868b]">Loading products from Sanity CDN...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Categories View Container (Hidden by default) -->
+    <div id="view-categories" class="hidden flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden">
+      <div class="p-3 border-b border-black/5 bg-[#fafafc] flex items-center justify-between">
+        <p class="text-xs text-[#52525b]">Categories drive the main navigation, product hall filtering, and catalog organization.</p>
+        {canWrite && (
+          <button
+            type="button"
+            id="btn-add-category"
+            class="h-7 px-3 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] shadow-2xs cursor-pointer"
+          >
+            ＋ Add Category
+          </button>
+        )}
+      </div>
+      <div class="flex-1 overflow-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-[#f5f5f7]/80 text-[#86868b] text-[11px] uppercase tracking-wider sticky top-0 backdrop-blur-xs z-10 border-b border-black/5">
+            <tr>
+              <th class="py-2.5 px-3.5 w-20">Order</th>
+              <th class="py-2.5 px-3.5">Slug</th>
+              <th class="py-2.5 px-3.5">Title (EN / DE / FR / ES)</th>
+              <th class="py-2.5 px-3.5">Description</th>
+              <th class="py-2.5 px-3.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="categories-table-body" class="divide-y divide-black/5">
+            <tr>
+              <td colspan="5" class="py-12 text-center text-[#86868b]">Loading categories...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <Fragment slot="drawers">
+    <!-- Product Edit Physics Slide-Over Drawer -->
+    <div
+      id="product-drawer-backdrop"
+      class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden opacity-0 transition-opacity duration-300"
+    ></div>
+
+    <div
+      id="product-drawer"
+      class="fixed inset-y-0 right-0 z-50 w-full sm:max-w-2xl lg:max-w-3xl bg-white shadow-2xl flex flex-col transform translate-x-full transition-transform duration-300 ease-out"
+    >
+      <!-- Drawer Header -->
+      <div class="p-4 border-b border-black/5 flex items-center justify-between bg-white shrink-0">
+        <div>
+          <h2 id="drawer-title" class="text-sm font-bold text-[#1d1d1f]">Edit Product</h2>
+          <p id="drawer-subtitle" class="text-[11px] text-[#86868b]">Configure multilingual content, wholesale pricing, colors & imagery</p>
+        </div>
+        <button
+          type="button"
+          id="close-product-drawer"
+          class="p-1.5 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] transition-all text-sm cursor-pointer"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Multilingual Language Selector Ribbon -->
+      <div class="px-4 py-2 border-b border-black/5 bg-[#fafafc] flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">Language:</span>
+          {['en', 'de', 'fr', 'es'].map((lang) => (
+            <button
+              type="button"
+              class="btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer"
+              data-lang={lang}
+            >
+              {lang.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <span class="text-[10px] text-[#86868b]">Auto-syncs across localized tabs</span>
+      </div>
+
+      <!-- Drawer Sub-tabs -->
+      <div class="px-4 border-b border-black/5 flex gap-4 text-xs font-semibold shrink-0 bg-white">
+        <button type="button" class="drawer-tab-btn py-2.5 border-b-2 border-black text-[#1d1d1f] cursor-pointer" data-tab="basic">
+          1. Basic Info
+        </button>
+        <button type="button" class="drawer-tab-btn py-2.5 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="images">
+          2. Imagery & Gallery
+        </button>
+        <button type="button" class="drawer-tab-btn py-2.5 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="b2b">
+          3. Wholesale & Tiers
+        </button>
+        <button type="button" class="drawer-tab-btn py-2.5 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="story">
+          4. Story & Specs
+        </button>
+      </div>
+
+      <!-- Drawer Body Forms -->
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 text-xs">
+        <form id="product-form" class="space-y-6">
+          <input type="hidden" id="p-id" name="_id" />
+
+          <!-- TAB 1: Basic Info -->
+          <div id="tab-pane-basic" class="drawer-pane space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold mb-1">Product Title (<span class="active-lang-label font-bold uppercase">EN</span>) *</label>
+                <input type="text" id="p-title" required class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Short Title (<span class="active-lang-label font-bold uppercase">EN</span>)</label>
+                <input type="text" id="p-short-title" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold mb-1">SKU Code *</label>
+                <input type="text" id="p-sku" required placeholder="e.g. MS-200-SILK" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">URL Slug *</label>
+                <div class="flex items-center gap-1.5">
+                  <input type="text" id="p-slug" required class="flex-1 px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs" />
+                  <button type="button" id="btn-auto-slug" class="px-2.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer">
+                    Auto
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold mb-1">Category</label>
+                <select id="p-category" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs cursor-pointer">
+                  <option value="">No Category</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Publish Status</label>
+                <div class="flex items-center gap-3 pt-2">
+                  <label class="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" id="p-is-draft" class="rounded accent-black" />
+                    <span class="text-xs">Draft Mode</span>
+                  </label>
+                  <label class="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" id="p-is-archived" class="rounded accent-black" />
+                    <span class="text-xs">Archived</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-semibold mb-1">Tagline / Key Highlight (<span class="active-lang-label font-bold uppercase">EN</span>)</label>
+              <input type="text" id="p-tagline" placeholder="e.g. 100% Grade 6A Mulberry Silk · 200 Needle Count" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs" />
+            </div>
+          </div>
+
+          <!-- TAB 2: Imagery & Gallery -->
+          <div id="tab-pane-images" class="drawer-pane hidden space-y-5">
+            <!-- Main Hero Image -->
+            <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+              <label class="block font-bold text-xs text-[#1d1d1f]">Main Catalog Image *</label>
+              <div class="flex items-center gap-4">
+                <div id="main-image-preview" class="w-24 h-24 rounded-xl bg-white border border-black/10 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                  <span class="text-[10px] text-[#86868b]">No Image</span>
+                </div>
+                <div class="space-y-2 flex-1">
+                  <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1d1d1f] text-white text-xs font-semibold hover:bg-black cursor-pointer shadow-2xs">
+                    <span>Upload Image</span>
+                    <input type="file" id="upload-main-image" accept="image/*" class="hidden" />
+                  </label>
+                  <p class="text-[10px] text-[#86868b]">Uploaded directly to Sanity CDN Asset Store.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gallery Images -->
+            <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="block font-bold text-xs text-[#1d1d1f]">Product Gallery & Detail Views</label>
+                <label class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
+                  <span>＋ Add to Gallery</span>
+                  <input type="file" id="upload-gallery-image" accept="image/*" class="hidden" />
+                </label>
+              </div>
+              <div id="gallery-container" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                <!-- Gallery thumbs injected here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: Wholesale & Tiers -->
+          <div id="tab-pane-b2b" class="drawer-pane hidden space-y-5">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label class="block font-semibold mb-1">Currency</label>
+                <select id="p-currency" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs">
+                  {defaultCurrencies.map((c: any) => (
+                    <option value={c.item_key}>{c.item_label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Unit</label>
+                <select id="p-unit" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs">
+                  {defaultUnits.map((u: any) => (
+                    <option value={u.item_key}>{u.item_label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">MOQ</label>
+                <input type="number" id="p-moq" min="1" placeholder="200" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs font-mono" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Lead Time</label>
+                <input type="text" id="p-leadtime" placeholder="15-20 days" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs" />
+              </div>
+            </div>
+
+            <!-- Pricing Tiers Dynamic Table -->
+            <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-xs text-[#1d1d1f] block">B2B Quantity Pricing Tiers</span>
+                  <span class="text-[10px] text-[#86868b]">Progressive wholesale discounts based on order volume</span>
+                </div>
+                <button type="button" id="btn-add-tier" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
+                  ＋ Add Tier
+                </button>
+              </div>
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="text-[10px] text-[#86868b] border-b border-black/5">
+                    <th class="py-1.5 text-left font-semibold">Min Qty</th>
+                    <th class="py-1.5 text-left font-semibold">Max Qty</th>
+                    <th class="py-1.5 text-left font-semibold">Unit Price</th>
+                    <th class="py-1.5 text-right w-10"></th>
+                  </tr>
+                </thead>
+                <tbody id="tier-rows" class="divide-y divide-black/5">
+                  <!-- Tier rows injected here -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Color Swatches Dynamic Palette -->
+            <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-xs text-[#1d1d1f] block">Color Swatches</span>
+                  <span class="text-[10px] text-[#86868b]">Available production colors and hex swatches</span>
+                </div>
+                <button type="button" id="btn-add-color" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
+                  ＋ Add Color
+                </button>
+              </div>
+              <div id="color-rows" class="space-y-2">
+                <!-- Color items injected here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: Story & Specs -->
+          <div id="tab-pane-story" class="drawer-pane hidden space-y-5">
+            <div>
+              <label class="block font-semibold mb-1">Artisan Story & Craft Narrative (<span class="active-lang-label font-bold uppercase">EN</span> Markdown)</label>
+              <textarea
+                id="p-story"
+                rows="8"
+                placeholder="Write artisanal storytelling in Markdown (e.g. Crafted from 100% Grade 6A mulberry silk with Italian hand-linked toes...)"
+                class="w-full p-3 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs resize-y"
+              ></textarea>
+            </div>
+
+            <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-[#1d1d1f]">Technical Specifications</span>
+                <button type="button" id="btn-add-spec" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
+                  ＋ Add Spec
+                </button>
+              </div>
+              <div id="spec-rows" class="space-y-2">
+                <!-- Specs rows injected here -->
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Drawer Footer Controls -->
+      <div class="p-4 border-t border-black/5 bg-white flex items-center justify-between gap-3 shrink-0">
+        <button
+          type="button"
+          id="btn-cancel-drawer"
+          class="h-9 px-4 rounded-xl text-xs font-semibold text-[#52525b] hover:bg-[#f5f5f7] transition-all cursor-pointer"
+        >
+          Cancel
+        </button>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            id="btn-save-product"
+            class="h-9 px-5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Save Product to Sanity</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category Modal Dialog -->
+    <dialog
+      id="category-dialog"
+      class="backdrop:bg-black/50 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-md m-auto overflow-hidden text-xs"
+    >
+      <div class="p-4 border-b border-black/5 bg-white flex items-center justify-between">
+        <h3 id="cat-modal-title" class="font-bold text-sm text-[#1d1d1f]">Edit Category</h3>
+        <button type="button" id="close-cat-dialog" class="text-[#86868b] hover:text-black text-sm">✕</button>
+      </div>
+      <form id="category-form" class="p-4 space-y-3.5">
+        <input type="hidden" id="c-id" />
+        <div>
+          <label class="block font-semibold mb-1">Title (EN) *</label>
+          <input type="text" id="c-title-en" required class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs" />
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Slug *</label>
+          <input type="text" id="c-slug" required class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 font-mono text-xs" />
+        </div>
+        <div>
+          <label class="block font-semibold mb-1">Display Sort Order</label>
+          <input type="number" id="c-order" value="10" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 font-mono text-xs" />
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t border-black/5">
+          <button type="button" id="btn-cancel-cat" class="px-3 py-1.5 rounded-xl text-[#52525b] hover:bg-[#f5f5f7]">Cancel</button>
+          <button type="submit" class="px-4 py-1.5 rounded-xl bg-[#1d1d1f] text-white font-semibold">Save Category</button>
+        </div>
+      </form>
+    </dialog>
+  </Fragment>
+
+  <!-- App Meta Attributes -->
+  <div
+    id="catalog-app-meta"
+    class="hidden"
+    data-can-write={canWrite ? 'true' : 'false'}
+    data-can-delete={canDelete ? 'true' : 'false'}
+  ></div>
+</AdminLayout>
+
+<script>
+  import { escapeHtml } from '@utils/adminWorkbench';
+
+  let currentProducts: any[] = [];
+  let currentCategories: any[] = [];
+  let currentEditingProduct: any = null;
+  let activeLanguage = 'en';
+
+  const metaEl = document.getElementById('catalog-app-meta');
+  const canWrite = metaEl?.getAttribute('data-can-write') === 'true';
+  const canDelete = metaEl?.getAttribute('data-can-delete') === 'true';
+
+  // UI Tabs Switcher
+  const tabProductsBtn = document.getElementById('tab-btn-products');
+  const tabCategoriesBtn = document.getElementById('tab-btn-categories');
+  const viewProducts = document.getElementById('view-products');
+  const viewCategories = document.getElementById('view-categories');
+
+  tabProductsBtn?.addEventListener('click', () => {
+    tabProductsBtn.className = 'px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer';
+    if (tabCategoriesBtn) tabCategoriesBtn.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer';
+    viewProducts?.classList.remove('hidden');
+    viewCategories?.classList.add('hidden');
+  });
+
+  tabCategoriesBtn?.addEventListener('click', () => {
+    tabCategoriesBtn.className = 'px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer';
+    if (tabProductsBtn) tabProductsBtn.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer';
+    viewCategories?.classList.remove('hidden');
+    viewProducts?.classList.add('hidden');
+  });
+
+  // Drawer Tabs
+  const drawerTabBtns = document.querySelectorAll('.drawer-tab-btn');
+  drawerTabBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.getAttribute('data-tab');
+      drawerTabBtns.forEach((b) => {
+        b.classList.remove('border-black', 'text-[#1d1d1f]');
+        b.classList.add('border-transparent', 'text-[#86868b]');
+      });
+      btn.classList.add('border-black', 'text-[#1d1d1f]');
+      btn.classList.remove('border-transparent', 'text-[#86868b]');
+
+      document.querySelectorAll('.drawer-pane').forEach((p) => p.classList.add('hidden'));
+      document.getElementById(`tab-pane-${targetTab}`)?.classList.remove('hidden');
+    });
+  });
+
+  // Language Bar Switcher
+  function updateActiveLang(lang: string) {
+    activeLanguage = lang;
+    document.querySelectorAll('.btn-lang-toggle').forEach((b: any) => {
+      if (b.getAttribute('data-lang') === lang) {
+        b.className = 'btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-bold border border-black bg-black text-white transition-all cursor-pointer';
+      } else {
+        b.className = 'btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-semibold border border-black/10 bg-white text-[#52525b] hover:border-black transition-all cursor-pointer';
+      }
+    });
+    document.querySelectorAll('.active-lang-label').forEach((el) => {
+      el.textContent = lang.toUpperCase();
+    });
+
+    // Populate localized values into input fields
+    if (currentEditingProduct) {
+      const pTitle = document.getElementById('p-title') as HTMLInputElement | null;
+      const pShortTitle = document.getElementById('p-short-title') as HTMLInputElement | null;
+      const pTagline = document.getElementById('p-tagline') as HTMLInputElement | null;
+      const pStory = document.getElementById('p-story') as HTMLTextAreaElement | null;
+
+      if (pTitle) pTitle.value = currentEditingProduct.title?.[lang] || '';
+      if (pShortTitle) pShortTitle.value = currentEditingProduct.shortTitle?.[lang] || '';
+      if (pTagline) pTagline.value = currentEditingProduct.tagline?.[lang] || '';
+      if (pStory) pStory.value = currentEditingProduct.story?.[lang] || '';
+    }
+  }
+
+  document.querySelectorAll('.btn-lang-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      // Save current input values into temporary object before switching
+      syncInputsToActiveDoc();
+      const lang = btn.getAttribute('data-lang') || 'en';
+      updateActiveLang(lang);
+    });
+  });
+
+  function syncInputsToActiveDoc() {
+    if (!currentEditingProduct) return;
+    if (!currentEditingProduct.title) currentEditingProduct.title = {};
+    if (!currentEditingProduct.shortTitle) currentEditingProduct.shortTitle = {};
+    if (!currentEditingProduct.tagline) currentEditingProduct.tagline = {};
+    if (!currentEditingProduct.story) currentEditingProduct.story = {};
+
+    const pTitle = document.getElementById('p-title') as HTMLInputElement | null;
+    const pShortTitle = document.getElementById('p-short-title') as HTMLInputElement | null;
+    const pTagline = document.getElementById('p-tagline') as HTMLInputElement | null;
+    const pStory = document.getElementById('p-story') as HTMLTextAreaElement | null;
+
+    if (pTitle) currentEditingProduct.title[activeLanguage] = pTitle.value.trim();
+    if (pShortTitle) currentEditingProduct.shortTitle[activeLanguage] = pShortTitle.value.trim();
+    if (pTagline) currentEditingProduct.tagline[activeLanguage] = pTagline.value.trim();
+    if (pStory) currentEditingProduct.story[activeLanguage] = pStory.value.trim();
+  }
+
+  // Load Products & Categories from /api/admin/cms/products
+  async function loadData() {
+    try {
+      const res = await fetch('/api/admin/cms/products');
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to fetch catalog');
+      }
+
+      currentProducts = data.products || [];
+      currentCategories = data.categories || [];
+
+      // Update counters
+      const pBadge = document.getElementById('products-count-badge');
+      const cBadge = document.getElementById('categories-count-badge');
+      if (pBadge) pBadge.textContent = String(currentProducts.length);
+      if (cBadge) cBadge.textContent = String(currentCategories.length);
+
+      // Populate Category Dropdowns
+      const catFilter = document.getElementById('category-filter') as HTMLSelectElement | null;
+      const pCatSelect = document.getElementById('p-category') as HTMLSelectElement | null;
+      if (catFilter) {
+        catFilter.innerHTML = '<option value="ALL">All Categories</option>' +
+          currentCategories.map((c: any) => `<option value="${c.slug?.current || c._id}">${escapeHtml(c.title?.en || c.slug?.current || 'Category')}</option>`).join('');
+      }
+      if (pCatSelect) {
+        pCatSelect.innerHTML = '<option value="">No Category</option>' +
+          currentCategories.map((c: any) => `<option value="${c._id}">${escapeHtml(c.title?.en || c.slug?.current || 'Category')}</option>`).join('');
+      }
+
+      renderProductsTable();
+      renderCategoriesTable();
+    } catch (err: any) {
+      (window as any).__showToast?.(err.message, 'error');
+    }
+  }
+
+  function renderProductsTable() {
+    const tbody = document.getElementById('products-table-body');
+    if (!tbody) return;
+
+    const search = (document.getElementById('search-input') as HTMLInputElement)?.value.toLowerCase().trim() || '';
+    const cat = (document.getElementById('category-filter') as HTMLSelectElement)?.value || 'ALL';
+    const status = (document.getElementById('status-filter') as HTMLSelectElement)?.value || 'ALL';
+
+    const filtered = currentProducts.filter((p: any) => {
+      const titleEn = (p.title?.en || '').toLowerCase();
+      const sku = (p.sku || '').toLowerCase();
+      const catSlug = (p.category?.slug?.current || p.category?._id || '').toLowerCase();
+
+      if (search && !titleEn.includes(search) && !sku.includes(search) && !catSlug.includes(search)) return false;
+      if (cat !== 'ALL' && catSlug !== cat.toLowerCase()) return false;
+      if (status === 'DRAFT' && !p.isDraft) return false;
+      if (status === 'ARCHIVED' && !p.isArchived) return false;
+      if (status === 'LIVE' && (p.isDraft || p.isArchived)) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-[#86868b]">No products matching filter criteria.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map((p: any) => {
+      const imgUrl = p.mainImage?.asset?.url || (p.mainImage?.asset?._ref ? `https://cdn.sanity.io/images/mock-proj-test/production/${p.mainImage.asset._ref.replace('image-', '').replace('-jpg', '.jpg')}` : '');
+      const title = p.title?.en || p.shortTitle?.en || 'Untitled Product';
+      const sku = p.sku || 'NO-SKU';
+      const catName = p.category?.title?.en || p.category?.slug?.current || '—';
+
+      // Price Tiers preview
+      let priceText = '—';
+      if (Array.isArray(p.pricingTiers) && p.pricingTiers.length > 0) {
+        const prices = p.pricingTiers.map((t: any) => t.price).filter(Boolean);
+        if (prices.length > 0) {
+          const min = Math.min(...prices);
+          const max = Math.max(...prices);
+          const curr = p.pricingTiers[0]?.currency || 'USD';
+          priceText = min === max ? `${curr} ${min}` : `${curr} ${min} ~ ${max}`;
+        }
+      }
+
+      // Color dots
+      const colorDots = Array.isArray(p.colors)
+        ? p.colors.slice(0, 5).map((c: any) => `<span class="w-3.5 h-3.5 rounded-full border border-black/10 inline-block shrink-0 shadow-2xs" style="background-color: ${escapeHtml(c.hex || '#ccc')};" title="${escapeHtml(c.name || '')}"></span>`).join('')
+        : '';
+
+      const isLive = !p.isDraft && !p.isArchived;
+
+      return `
+        <tr class="hover:bg-[#fafafc] transition-colors group">
+          <td class="py-2.5 px-3.5">
+            <div class="w-12 h-12 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-center justify-center overflow-hidden shrink-0">
+              ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#86868b]">No Img</span>`}
+            </div>
+          </td>
+          <td class="py-2.5 px-3.5">
+            <span class="font-semibold text-[#1d1d1f] block">${escapeHtml(title)}</span>
+            <span class="font-mono text-[10px] text-[#86868b]">${escapeHtml(sku)}</span>
+          </td>
+          <td class="py-2.5 px-3.5">
+            <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#f5f5f7] border border-black/5 text-[#52525b]">${escapeHtml(catName)}</span>
+          </td>
+          <td class="py-2.5 px-3.5">
+            <span class="font-semibold text-[#1d1d1f] block">${escapeHtml(priceText)}</span>
+            <span class="text-[10px] text-[#86868b]">MOQ: ${p.minOrderQuantity || 200}</span>
+          </td>
+          <td class="py-2.5 px-3.5">
+            <div class="flex items-center gap-1">${colorDots || '<span class="text-[#86868b] text-[10px]">—</span>'}</div>
+          </td>
+          <td class="py-2.5 px-3.5">
+            ${isLive
+              ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Live</span>`
+              : p.isDraft
+              ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Draft</span>`
+              : `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">Archived</span>`}
+          </td>
+          <td class="py-2.5 px-3.5 text-right whitespace-nowrap">
+            <button
+              type="button"
+              class="btn-edit-product px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] shadow-2xs transition-all cursor-pointer"
+              data-id="${p._id}"
+            >
+              Edit
+            </button>
+            ${canDelete ? `
+              <button
+                type="button"
+                class="btn-delete-product ml-1 p-1 rounded-lg text-[#86868b] hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                data-id="${p._id}"
+                data-title="${escapeHtml(title)}"
+                title="Delete Product"
+              >
+                <svg class="w-3.5 h-3.5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            ` : ''}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Attach row events
+    document.querySelectorAll('.btn-edit-product').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const prod = currentProducts.find((p: any) => p._id === id);
+        if (prod) openProductDrawer(prod);
+      });
+    });
+
+    document.querySelectorAll('.btn-delete-product').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        const title = btn.getAttribute('data-title') || 'this product';
+        if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) return;
+
+        try {
+          const res = await fetch(`/api/admin/cms/products?id=${encodeURIComponent(id || '')}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete');
+          (window as any).__showToast?.(`Deleted "${title}"`, 'success');
+          loadData();
+        } catch (e: any) {
+          (window as any).__showToast?.(e.message, 'error');
+        }
+      });
+    });
+  }
+
+  function renderCategoriesTable() {
+    const tbody = document.getElementById('categories-table-body');
+    if (!tbody) return;
+
+    if (currentCategories.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-[#86868b]">No categories configured.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = currentCategories.map((c: any) => {
+      const titles = `EN: ${c.title?.en || '—'} · DE: ${c.title?.de || '—'}`;
+      const slug = c.slug?.current || '—';
+      return `
+        <tr class="hover:bg-[#fafafc]">
+          <td class="py-2.5 px-3.5 font-mono text-[11px]">${c.order ?? 10}</td>
+          <td class="py-2.5 px-3.5 font-mono font-semibold">${escapeHtml(slug)}</td>
+          <td class="py-2.5 px-3.5 font-medium text-[#1d1d1f]">${escapeHtml(titles)}</td>
+          <td class="py-2.5 px-3.5 text-[#86868b]">${escapeHtml(c.description?.en || '—')}</td>
+          <td class="py-2.5 px-3.5 text-right whitespace-nowrap">
+            <button type="button" class="btn-edit-cat px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black shadow-2xs cursor-pointer" data-id="${c._id}">Edit</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    document.querySelectorAll('.btn-edit-cat').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const cat = currentCategories.find((c: any) => c._id === id);
+        if (cat) openCategoryDialog(cat);
+      });
+    });
+  }
+
+  // Filter Event Listeners
+  document.getElementById('search-input')?.addEventListener('input', renderProductsTable);
+  document.getElementById('category-filter')?.addEventListener('change', renderProductsTable);
+  document.getElementById('status-filter')?.addEventListener('change', renderProductsTable);
+
+  // Auto-Slug generator
+  document.getElementById('btn-auto-slug')?.addEventListener('click', () => {
+    const pTitle = (document.getElementById('p-title') as HTMLInputElement)?.value.trim() || '';
+    const slugInput = document.getElementById('p-slug') as HTMLInputElement | null;
+    if (slugInput && pTitle) {
+      slugInput.value = pTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+  });
+
+  // Open Product Drawer
+  function openProductDrawer(prod?: any) {
+    currentEditingProduct = prod ? JSON.parse(JSON.stringify(prod)) : {
+      _type: 'product',
+      title: { en: '' },
+      shortTitle: { en: '' },
+      slug: { current: '' },
+      pricingTiers: [
+        { minQuantity: 200, maxQuantity: 499, price: 3.50, currency: 'USD', unit: 'Pairs' },
+        { minQuantity: 500, maxQuantity: 999, price: 3.20, currency: 'USD', unit: 'Pairs' },
+        { minQuantity: 1000, price: 2.90, currency: 'USD', unit: 'Pairs' },
+      ],
+      colors: [
+        { name: 'Onyx Black', hex: '#111111' },
+        { name: 'Ivory White', hex: '#fcfcfc' },
+      ],
+      specifications: [
+        { name: 'Composition', value: '100% Grade 6A Mulberry Silk' },
+        { name: 'Needle Count', value: '200 Needles' },
+      ],
+      minOrderQuantity: 200,
+      leadTime: '15-20 days',
+      isDraft: false,
+      isArchived: false,
+    };
+
+    const drawer = document.getElementById('product-drawer');
+    const backdrop = document.getElementById('product-drawer-backdrop');
+    const drawerTitle = document.getElementById('drawer-title');
+    if (drawerTitle) drawerTitle.textContent = prod ? `Edit: ${prod.title?.en || prod.sku}` : 'Create New Product';
+
+    // Populate common inputs
+    (document.getElementById('p-id') as HTMLInputElement).value = currentEditingProduct._id || '';
+    (document.getElementById('p-sku') as HTMLInputElement).value = currentEditingProduct.sku || '';
+    (document.getElementById('p-slug') as HTMLInputElement).value = currentEditingProduct.slug?.current || '';
+    (document.getElementById('p-category') as HTMLSelectElement).value = currentEditingProduct.category?._id || '';
+    (document.getElementById('p-is-draft') as HTMLInputElement).checked = Boolean(currentEditingProduct.isDraft);
+    (document.getElementById('p-is-archived') as HTMLInputElement).checked = Boolean(currentEditingProduct.isArchived);
+    (document.getElementById('p-moq') as HTMLInputElement).value = String(currentEditingProduct.minOrderQuantity || 200);
+    (document.getElementById('p-leadtime') as HTMLInputElement).value = currentEditingProduct.leadTime || '';
+
+    // Main Image
+    renderMainImagePreview();
+    // Gallery
+    renderGalleryPreview();
+    // Pricing tiers
+    renderPricingTiersTable();
+    // Colors
+    renderColorsList();
+    // Specs
+    renderSpecsList();
+
+    // Default to EN tab
+    updateActiveLang('en');
+
+    // Show Drawer
+    drawer?.classList.remove('translate-x-full');
+    backdrop?.classList.remove('hidden');
+    setTimeout(() => backdrop?.classList.remove('opacity-0'), 10);
+    document.body.classList.add('overflow-hidden');
+  }
+
+  function closeProductDrawer() {
+    const drawer = document.getElementById('product-drawer');
+    const backdrop = document.getElementById('product-drawer-backdrop');
+    drawer?.classList.add('translate-x-full');
+    backdrop?.classList.add('opacity-0');
+    setTimeout(() => {
+      backdrop?.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }, 300);
+    currentEditingProduct = null;
+  }
+
+  document.getElementById('close-product-drawer')?.addEventListener('click', closeProductDrawer);
+  document.getElementById('btn-cancel-drawer')?.addEventListener('click', closeProductDrawer);
+  document.getElementById('product-drawer-backdrop')?.addEventListener('click', closeProductDrawer);
+  document.getElementById('btn-create-item')?.addEventListener('click', () => openProductDrawer());
+
+  // Main Image preview render
+  function renderMainImagePreview() {
+    const el = document.getElementById('main-image-preview');
+    if (!el) return;
+    const imgUrl = currentEditingProduct?.mainImage?.asset?.url || (currentEditingProduct?.mainImage?.asset?._ref ? `https://cdn.sanity.io/images/mock-proj-test/production/${currentEditingProduct.mainImage.asset._ref.replace('image-', '').replace('-jpg', '.jpg')}` : '');
+    if (imgUrl) {
+      el.innerHTML = `<img src="${escapeHtml(imgUrl)}" class="w-full h-full object-cover" />`;
+    } else {
+      el.innerHTML = `<span class="text-[10px] text-[#86868b]">No Image</span>`;
+    }
+  }
+
+  // Upload Main Image
+  document.getElementById('upload-main-image')?.addEventListener('change', async (e: any) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('file', file);
+    (window as any).__showToast?.('Uploading image to Sanity CDN...', 'info');
+
+    try {
+      const res = await fetch('/api/admin/cms/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
+
+      if (!currentEditingProduct.mainImage) currentEditingProduct.mainImage = { _type: 'image' };
+      currentEditingProduct.mainImage.asset = data.asset.asset;
+      currentEditingProduct.mainImage.asset.url = data.url;
+      renderMainImagePreview();
+      (window as any).__showToast?.('Image uploaded successfully', 'success');
+    } catch (err: any) {
+      (window as any).__showToast?.(err.message, 'error');
+    }
+  });
+
+  // Gallery render & upload
+  function renderGalleryPreview() {
+    const container = document.getElementById('gallery-container');
+    if (!container) return;
+    const gallery = currentEditingProduct?.gallery || [];
+    if (gallery.length === 0) {
+      container.innerHTML = `<div class="col-span-4 py-4 text-center text-[#86868b] text-[11px]">No gallery images added yet.</div>`;
+      return;
+    }
+    container.innerHTML = gallery.map((item: any, idx: number) => {
+      const url = item.asset?.url || '';
+      return `
+        <div class="relative group rounded-xl overflow-hidden border border-black/10 aspect-square bg-[#f5f5f7]">
+          ${url ? `<img src="${escapeHtml(url)}" class="w-full h-full object-cover" />` : `<div class="w-full h-full flex items-center justify-center text-[10px] text-[#86868b]">Img</div>`}
+          <button type="button" class="btn-del-gallery absolute top-1 right-1 p-1 rounded-md bg-black/60 text-white hover:bg-rose-600 transition-colors opacity-0 group-hover:opacity-100" data-idx="${idx}">✕</button>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.btn-del-gallery').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        currentEditingProduct.gallery.splice(idx, 1);
+        renderGalleryPreview();
+      });
+    });
+  }
+
+  document.getElementById('upload-gallery-image')?.addEventListener('change', async (e: any) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/admin/cms/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
+
+      if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
+      currentEditingProduct.gallery.push({
+        _type: 'image',
+        _key: crypto.randomUUID().slice(0, 8),
+        asset: { ...data.asset.asset, url: data.url },
+      });
+      renderGalleryPreview();
+      (window as any).__showToast?.('Added image to gallery', 'success');
+    } catch (err: any) {
+      (window as any).__showToast?.(err.message, 'error');
+    }
+  });
+
+  // Dynamic Tiers Table
+  function renderPricingTiersTable() {
+    const tbody = document.getElementById('tier-rows');
+    if (!tbody) return;
+    const tiers = currentEditingProduct.pricingTiers || [];
+    tbody.innerHTML = tiers.map((t: any, idx: number) => `
+      <tr>
+        <td class="py-1.5 pr-2"><input type="number" class="t-min w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${t.minQuantity || ''}" /></td>
+        <td class="py-1.5 pr-2"><input type="number" class="t-max w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" placeholder="∞" value="${t.maxQuantity || ''}" /></td>
+        <td class="py-1.5 pr-2"><input type="number" step="0.01" class="t-price w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${t.price || ''}" /></td>
+        <td class="py-1.5 text-right"><button type="button" class="btn-del-tier text-[#86868b] hover:text-rose-600" data-idx="${idx}">✕</button></td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('.btn-del-tier').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        tiers.splice(idx, 1);
+        renderPricingTiersTable();
+      });
+    });
+  }
+
+  document.getElementById('btn-add-tier')?.addEventListener('click', () => {
+    if (!currentEditingProduct.pricingTiers) currentEditingProduct.pricingTiers = [];
+    currentEditingProduct.pricingTiers.push({ minQuantity: 100, maxQuantity: null, price: 3.00 });
+    renderPricingTiersTable();
+  });
+
+  // Dynamic Colors List
+  function renderColorsList() {
+    const container = document.getElementById('color-rows');
+    if (!container) return;
+    const colors = currentEditingProduct.colors || [];
+    container.innerHTML = colors.map((c: any, idx: number) => `
+      <div class="flex items-center gap-2">
+        <input type="color" class="c-hex-pick w-7 h-7 rounded-lg border border-black/10 p-0.5 cursor-pointer shrink-0" value="${c.hex || '#000000'}" />
+        <input type="text" class="c-name flex-1 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Color Name (e.g. Navy Blue)" value="${escapeHtml(c.name || '')}" />
+        <input type="text" class="c-hex w-20 px-2.5 py-1 rounded-lg bg-white border border-black/10 font-mono text-xs" placeholder="#hex" value="${escapeHtml(c.hex || '')}" />
+        <button type="button" class="btn-del-color text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.c-hex-pick').forEach((picker: any, idx: number) => {
+      picker.addEventListener('input', () => {
+        colors[idx].hex = picker.value;
+        const hexInput = container.querySelectorAll('.c-hex')[idx] as HTMLInputElement | null;
+        if (hexInput) hexInput.value = picker.value;
+      });
+    });
+
+    container.querySelectorAll('.btn-del-color').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        colors.splice(idx, 1);
+        renderColorsList();
+      });
+    });
+  }
+
+  document.getElementById('btn-add-color')?.addEventListener('click', () => {
+    if (!currentEditingProduct.colors) currentEditingProduct.colors = [];
+    currentEditingProduct.colors.push({ name: 'New Color', hex: '#3b82f6' });
+    renderColorsList();
+  });
+
+  // Specs Rows
+  function renderSpecsList() {
+    const container = document.getElementById('spec-rows');
+    if (!container) return;
+    const specs = currentEditingProduct.specifications || [];
+    container.innerHTML = specs.map((s: any, idx: number) => `
+      <div class="flex items-center gap-2">
+        <input type="text" class="s-name w-1/3 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Name" value="${escapeHtml(s.name || '')}" />
+        <input type="text" class="s-val flex-1 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Value" value="${escapeHtml(s.value || '')}" />
+        <button type="button" class="btn-del-spec text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.btn-del-spec').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        specs.splice(idx, 1);
+        renderSpecsList();
+      });
+    });
+  }
+
+  document.getElementById('btn-add-spec')?.addEventListener('click', () => {
+    if (!currentEditingProduct.specifications) currentEditingProduct.specifications = [];
+    currentEditingProduct.specifications.push({ name: '', value: '' });
+    renderSpecsList();
+  });
+
+  // Save Product Button Handler
+  document.getElementById('btn-save-product')?.addEventListener('click', async () => {
+    syncInputsToActiveDoc();
+
+    const pSku = (document.getElementById('p-sku') as HTMLInputElement)?.value.trim();
+    const pSlug = (document.getElementById('p-slug') as HTMLInputElement)?.value.trim();
+    if (!pSku || !pSlug) {
+      (window as any).__showToast?.('SKU and Slug are required.', 'error');
+      return;
+    }
+
+    currentEditingProduct.sku = pSku;
+    currentEditingProduct.slug = { _type: 'slug', current: pSlug };
+    const catId = (document.getElementById('p-category') as HTMLSelectElement)?.value;
+    currentEditingProduct.category = catId ? { _type: 'reference', _ref: catId } : null;
+    currentEditingProduct.isDraft = (document.getElementById('p-is-draft') as HTMLInputElement)?.checked;
+    currentEditingProduct.isArchived = (document.getElementById('p-is-archived') as HTMLInputElement)?.checked;
+    currentEditingProduct.minOrderQuantity = parseInt((document.getElementById('p-moq') as HTMLInputElement)?.value || '200', 10);
+    currentEditingProduct.leadTime = (document.getElementById('p-leadtime') as HTMLInputElement)?.value.trim();
+
+    // Read back pricing tiers
+    const tierTrs = document.querySelectorAll('#tier-rows tr');
+    currentEditingProduct.pricingTiers = Array.from(tierTrs).map((tr) => {
+      const min = parseInt((tr.querySelector('.t-min') as HTMLInputElement)?.value || '0', 10);
+      const maxVal = (tr.querySelector('.t-max') as HTMLInputElement)?.value;
+      const max = maxVal ? parseInt(maxVal, 10) : null;
+      const price = parseFloat((tr.querySelector('.t-price') as HTMLInputElement)?.value || '0');
+      return {
+        _key: crypto.randomUUID().slice(0, 8),
+        minQuantity: min,
+        maxQuantity: max,
+        price,
+        currency: (document.getElementById('p-currency') as HTMLSelectElement)?.value || 'USD',
+        unit: (document.getElementById('p-unit') as HTMLSelectElement)?.value || 'Pairs',
+      };
+    });
+
+    // Read back colors
+    const colorDivs = document.querySelectorAll('#color-rows > div');
+    currentEditingProduct.colors = Array.from(colorDivs).map((div) => {
+      const name = (div.querySelector('.c-name') as HTMLInputElement)?.value.trim() || 'Color';
+      const hex = (div.querySelector('.c-hex') as HTMLInputElement)?.value.trim() || '#000000';
+      return { _key: crypto.randomUUID().slice(0, 8), name, hex };
+    });
+
+    // Read back specs
+    const specDivs = document.querySelectorAll('#spec-rows > div');
+    currentEditingProduct.specifications = Array.from(specDivs).map((div) => {
+      const name = (div.querySelector('.s-name') as HTMLInputElement)?.value.trim() || '';
+      const value = (div.querySelector('.s-val') as HTMLInputElement)?.value.trim() || '';
+      return { _key: crypto.randomUUID().slice(0, 8), name, value };
+    }).filter((s) => s.name);
+
+    (window as any).__showToast?.('Saving product to Sanity CMS...', 'info');
+
+    try {
+      const res = await fetch('/api/admin/cms/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document: currentEditingProduct }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save');
+
+      (window as any).__showToast?.('Product successfully saved & cached refreshed!', 'success');
+      closeProductDrawer();
+      loadData();
+    } catch (err: any) {
+      (window as any).__showToast?.(err.message, 'error');
+    }
+  });
+
+  // Category Modal Handlers
+  const catDialog = document.getElementById('category-dialog') as HTMLDialogElement | null;
+  function openCategoryDialog(cat?: any) {
+    (document.getElementById('c-id') as HTMLInputElement).value = cat?._id || '';
+    (document.getElementById('c-title-en') as HTMLInputElement).value = cat?.title?.en || '';
+    (document.getElementById('c-slug') as HTMLInputElement).value = cat?.slug?.current || '';
+    (document.getElementById('c-order') as HTMLInputElement).value = String(cat?.order ?? 10);
+    catDialog?.showModal();
+  }
+
+  document.getElementById('btn-add-category')?.addEventListener('click', () => openCategoryDialog());
+  document.getElementById('close-cat-dialog')?.addEventListener('click', () => catDialog?.close());
+  document.getElementById('btn-cancel-cat')?.addEventListener('click', () => catDialog?.close());
+
+  document.getElementById('category-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = (document.getElementById('c-id') as HTMLInputElement)?.value;
+    const titleEn = (document.getElementById('c-title-en') as HTMLInputElement)?.value.trim();
+    const slug = (document.getElementById('c-slug') as HTMLInputElement)?.value.trim();
+    const order = parseInt((document.getElementById('c-order') as HTMLInputElement)?.value || '10', 10);
+
+    const catDoc: any = {
+      _type: 'category',
+      title: { en: titleEn },
+      slug: { _type: 'slug', current: slug },
+      order,
+    };
+    if (id) catDoc._id = id;
+
+    try {
+      const res = await fetch('/api/admin/cms/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document: catDoc }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save category');
+
+      (window as any).__showToast?.('Category saved successfully', 'success');
+      catDialog?.close();
+      loadData();
+    } catch (err: any) {
+      (window as any).__showToast?.(err.message, 'error');
+    }
+  });
+
+  // Initial Boot
+  loadData();
+</script>
+

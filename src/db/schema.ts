@@ -146,12 +146,13 @@ export const DDL_STATEMENTS = [
   UNIQUE(group_code, item_key)
 )`,
   `INSERT OR IGNORE INTO admin_roles (code, name, data_scope, menus_json, permissions_json, description, is_system) VALUES
-  ('super_admin', '超级管理员', 'ALL', '["dashboard","orders","users","members","roles","dicts","logins","logs","settings"]', '["*"]', '全局最高权限，拥有全站所有操作及系统设置能力', 1),
-  ('sales_manager', '销售主管', 'ALL', '["dashboard","orders","users","members","logins"]', '["dashboard:read","orders:read","orders:approve","orders:ship","orders:assign","orders:export","users:read","users:edit_tier","users:assign","members:manage","dicts:read"]', '负责团队管理、询盘指派调配与客户等级管理', 1),
+  ('super_admin', '超级管理员', 'ALL', '["dashboard","orders","users","products","pages","cms_config","cache","members","roles","dicts","logins","logs","settings"]', '["*"]', '全局最高权限，拥有全站所有操作及系统设置能力', 1),
+  ('content_editor', '内容与美工运营', 'ALL', '["products","pages","cms_config","cache"]', '["cms:read","cms:write","cache:purge"]', '负责商品管理、分类维护、页面积木编排与边缘缓存刷新', 1),
+  ('sales_manager', '销售主管', 'ALL', '["dashboard","orders","users","products","members","logins"]', '["dashboard:read","orders:read","orders:approve","orders:ship","orders:assign","orders:export","users:read","users:edit_tier","users:assign","members:manage","dicts:read","cms:read","cms:write","cache:purge"]', '负责团队管理、询盘指派调配、商品报价与客户等级管理', 1),
   ('sales_rep', '跟单业务员', 'SELF_AND_POOL', '["orders","users"]', '["orders:read","orders:claim","orders:approve","orders:ship","users:read"]', '负责跟单、询盘公海认领与常规发货审批', 1),
   ('auditor', '运维审计员', 'ALL', '["dashboard","logins","logs"]', '["dashboard:read","logins:read","logs:read"]', '只读查看登录轨迹与系统诊断日志，保障系统安全', 1)`,
-  `UPDATE admin_roles SET menus_json = '["dashboard","orders","users","members","roles","dicts","logins","logs","settings"]' WHERE code = 'super_admin' AND is_system = 1`,
-  `UPDATE admin_roles SET menus_json = '["dashboard","orders","users","members","logins"]' WHERE code = 'sales_manager' AND is_system = 1`,
+  `UPDATE admin_roles SET menus_json = '["dashboard","orders","users","products","pages","cms_config","cache","members","roles","dicts","logins","logs","settings"]' WHERE code = 'super_admin' AND is_system = 1`,
+  `UPDATE admin_roles SET menus_json = '["dashboard","orders","users","products","members","logins"]' WHERE code = 'sales_manager' AND is_system = 1`,
   `UPDATE admin_roles SET menus_json = '["dashboard","logins","logs"]' WHERE code = 'auditor' AND is_system = 1`,
   `INSERT OR IGNORE INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init')`,
   `INSERT OR IGNORE INTO sys_dict_groups (code, name, description, meta_schema_json, is_system) VALUES
