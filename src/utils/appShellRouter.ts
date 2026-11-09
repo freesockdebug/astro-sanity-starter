@@ -57,21 +57,24 @@ function getDomSnapshot(url: string): DomSnapshot | null {
   return entry;
 }
 
-function saveCurrentSnapshot(): void {
+let currentRenderedUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+function saveCurrentSnapshot(url?: string): void {
   try {
     const curCanvas = document.getElementById('shell-main-canvas');
     if (!curCanvas) return;
     const curOverlays = document.getElementById('shell-overlays');
     const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
     const canvasScrollTop = curCanvas.scrollTop || 0;
-    const currentUrl = window.location.href;
+    const keyUrl = url || currentRenderedUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    if (!keyUrl) return;
 
     if (snapshotCache.size >= SNAPSHOT_MAX_ENTRIES) {
       const oldestKey = snapshotCache.keys().next().value;
       if (oldestKey) snapshotCache.delete(oldestKey);
     }
 
-    snapshotCache.set(currentUrl, {
+    snapshotCache.set(keyUrl, {
       canvasHtml: curCanvas.innerHTML,
       overlaysHtml: curOverlays ? curOverlays.innerHTML : '',
       title: document.title,
@@ -533,8 +536,8 @@ export function initAppShellRouter(options: AppShellOptions): void {
     const currentSeq = ++navSeq;
     const targetUrl = new URL(targetUrlStr, window.location.origin);
 
-    // 1. Hot DOM Snapshot: save current view state before departing
-    saveCurrentSnapshot();
+    // 1. Hot DOM Snapshot: save current view state using currentRenderedUrl before departing
+    saveCurrentSnapshot(currentRenderedUrl);
 
     // 2. Check if target URL has warm DOM snapshot
     const snapshot = getDomSnapshot(targetUrl.href);
@@ -560,8 +563,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
       }
     };
 
-    // 4. Hot Snapshot instant restoration (0ms visual restore, no skeleton, restore scroll)
-    let hasRestoredSnapshot = false;
+    // 4. Hot Snapshot instant preview (0ms visual restore while network in-flight)
     if (snapshot) {
       const curCanvas = document.getElementById('shell-main-canvas');
       if (curCanvas) {
@@ -576,7 +578,6 @@ export function initAppShellRouter(options: AppShellOptions): void {
       if (snapshot.scrollY) {
         window.scrollTo({ top: snapshot.scrollY, behavior: 'instant' });
       }
-      hasRestoredSnapshot = true;
     }
 
     try {
@@ -617,39 +618,39 @@ export function initAppShellRouter(options: AppShellOptions): void {
 
       syncShellClasses(doc);
 
-      // Only swap canvas if no snapshot was restored, or server returned real content (not skeleton)
+      // Standard Turbo Preview Pattern: Fresh DOM nodes ensure clean event listeners & state
       const curCanvas = document.getElementById('shell-main-canvas');
-      const isSkeletonPlaceholder =
-        newCanvas.innerHTML.includes('Loading products') ||
-        newCanvas.innerHTML.includes('Loading pages') ||
-        newCanvas.innerHTML.includes('Loading operation audit logs');
-
-      if (!hasRestoredSnapshot || !isSkeletonPlaceholder) {
-        if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
-        const curOverlays = document.getElementById('shell-overlays');
-        const newOverlays = doc.getElementById('shell-overlays');
-        if (curOverlays && newOverlays) {
-          curOverlays.innerHTML = newOverlays.innerHTML;
-        }
+      if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
+      const curOverlays = document.getElementById('shell-overlays');
+      const newOverlays = doc.getElementById('shell-overlays');
+      if (curOverlays && newOverlays) {
+        curOverlays.innerHTML = newOverlays.innerHTML;
       }
 
       document.title = doc.title;
       if (!isPopState) {
         window.history.pushState({ shell: true, url: targetUrl.href }, doc.title, targetUrl.href);
       }
-
-      if (!hasRestoredSnapshot) {
-        const curRoot = document.getElementById('shell-root');
-        if (!curRoot?.classList.contains('overflow-hidden')) {
-          window.scrollTo({ top: 0, behavior: 'instant' });
-        }
-      }
+      currentRenderedUrl = targetUrl.href;
 
       clearDimming();
       await reactivateScripts(doc);
       finishProgressBar();
       document.dispatchEvent(new CustomEvent('shell:page-load', { detail: { url: targetUrl.href } }));
       window.dispatchEvent(new CustomEvent('app-shell:navigated', { detail: { url: targetUrl.href } }));
+
+      // Restore scroll position after microtask queue (e.g. instant cache-hydrated tables)
+      if (snapshot && isPopState) {
+        Promise.resolve().then(() => {
+          if (curCanvas && snapshot.canvasScrollTop) curCanvas.scrollTop = snapshot.canvasScrollTop;
+          if (snapshot.scrollY) window.scrollTo({ top: snapshot.scrollY, behavior: 'instant' });
+        });
+      } else {
+        const curRoot = document.getElementById('shell-root');
+        if (!curRoot?.classList.contains('overflow-hidden')) {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+      }
     } catch {
       clearDimming();
       window.location.href = targetUrl.href;
