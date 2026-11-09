@@ -26,6 +26,33 @@ declare global {
 const PREFETCH_TTL_MS = 15_000;
 const PREFETCH_MAX_ENTRIES = 6;
 const prefetchCache = new Map<string, { html: string; timestamp: number }>();
+const inFlightHtml = new Map<string, Promise<string | null>>();
+
+function fetchShellHtml(url: string, isPrefetch = false, origFetchFn = window.fetch): Promise<string | null> {
+  const cached = getCachedHtml(url);
+  if (cached) return Promise.resolve(cached);
+
+  const existing = inFlightHtml.get(url);
+  if (existing) return existing;
+
+  const headers: Record<string, string> = { 'X-Shell-Request': '1' };
+  if (isPrefetch) headers['X-Shell-Prefetch'] = '1';
+
+  const promise = origFetchFn(url, { headers })
+    .then(async (res) => {
+      if (!res.ok || res.redirected) return null;
+      const text = await res.text();
+      setCachedHtml(url, text);
+      return text;
+    })
+    .catch(() => null)
+    .finally(() => {
+      inFlightHtml.delete(url);
+    });
+
+  inFlightHtml.set(url, promise);
+  return promise;
+}
 
 function ensureProgressBar(): HTMLElement {
   let bar = document.getElementById('shell-progress-bar');
@@ -305,6 +332,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
     if (method !== 'GET' && method !== 'HEAD') {
       prefetchCache.clear();
       apiResponseCache.clear();
+      inFlightHtml.clear();
       return origFetch.apply(this, args);
     }
 
@@ -364,24 +392,22 @@ export function initAppShellRouter(options: AppShellOptions): void {
 
   // 65ms Hover Prefetch
   let hoverTimer: any = null;
+  let lastHoveredHref = '';
   document.addEventListener('mouseover', (e) => {
     const target = (e.target as HTMLElement)?.closest?.('a') as HTMLAnchorElement | null;
     if (!target || !isNavigableLink(target, options.scope)) {
       clearTimeout(hoverTimer);
+      lastHoveredHref = '';
       return;
     }
     const href = target.href;
-    if (getCachedHtml(href)) return;
+    if (href === window.location.href || getCachedHtml(href) || inFlightHtml.has(href)) return;
+    if (href === lastHoveredHref) return;
+    lastHoveredHref = href;
 
     clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(async () => {
-      try {
-        const res = await origFetch(href, { headers: { 'X-Shell-Prefetch': '1', 'X-Shell-Request': '1' } });
-        if (res.ok) {
-          const text = await res.text();
-          setCachedHtml(href, text);
-        }
-      } catch {}
+    hoverTimer = setTimeout(() => {
+      fetchShellHtml(href, true, origFetch);
     }, 65);
   });
 
@@ -390,6 +416,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
     const to = e.relatedTarget as HTMLElement;
     if (from?.closest('a') && !to?.closest('a')) {
       clearTimeout(hoverTimer);
+      lastHoveredHref = '';
     }
   });
 
@@ -405,19 +432,10 @@ export function initAppShellRouter(options: AppShellOptions): void {
     startProgressBar();
     cleanupCurrentPageOverlays();
 
-    let html = getCachedHtml(targetUrl.href);
+    const html = await fetchShellHtml(targetUrl.href, false, origFetch);
     if (!html) {
-      try {
-        const res = await origFetch(targetUrl.href, { headers: { 'X-Shell-Request': '1' } });
-        if (!res.ok || res.redirected) {
-          window.location.href = res.url || targetUrl.href;
-          return;
-        }
-        html = await res.text();
-      } catch {
-        window.location.href = targetUrl.href;
-        return;
-      }
+      window.location.href = targetUrl.href;
+      return;
     }
 
     const doc = new DOMParser().parseFromString(html, 'text/html');
