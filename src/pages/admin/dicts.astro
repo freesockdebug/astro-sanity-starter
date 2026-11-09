@@ -162,7 +162,7 @@ const pageTitle = 'Data Dictionaries';
   </div>
 
   <!-- Add / Edit Item Modal -->
-  <Fragment slot="dialogs">
+  <Fragment slot="modals">
     <dialog
       id="dict-item-dialog"
       class="backdrop:bg-black/40 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-lg m-auto"
@@ -373,7 +373,7 @@ const pageTitle = 'Data Dictionaries';
               '</button>' +
             '</td>' +
             '<td class="py-2.5 px-3 text-right space-x-1">' +
-              '<button type="button" class="btn-edit-item p-1 text-zinc-400 hover:text-black hover:bg-black/5 rounded-lg transition-colors cursor-pointer" data-item=\'' + escapeHtml(JSON.stringify(item)) + '\' title="Edit Item">✎</button>' +
+              '<button type="button" class="btn-edit-item p-1 text-zinc-400 hover:text-black hover:bg-black/5 rounded-lg transition-colors cursor-pointer" data-group="' + item.group_code + '" data-key="' + item.item_key + '" title="Edit Item">✎</button>' +
               '<button type="button" class="btn-delete-item p-1 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" data-group="' + item.group_code + '" data-key="' + item.item_key + '" title="Delete Item">🗑</button>' +
             '</td>' +
           '</tr>'
@@ -446,13 +446,13 @@ const pageTitle = 'Data Dictionaries';
 
       document.querySelectorAll('.btn-edit-item').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          var raw = btn.getAttribute('data-item');
-          if (!raw) return;
-          try {
-            var item = JSON.parse(raw);
+          var g = btn.getAttribute('data-group');
+          var k = btn.getAttribute('data-key');
+          var item = allItems.find(function (i) {
+            return i.group_code === g && i.item_key === k;
+          });
+          if (item) {
             openModal(item);
-          } catch (e) {
-            console.error('Failed to parse item json', e);
           }
         });
       });
