@@ -26,11 +26,75 @@ declare global {
 const PREFETCH_TTL_MS = 15_000;
 const PREFETCH_MAX_ENTRIES = 6;
 const prefetchCache = new Map<string, { html: string; timestamp: number }>();
-const inFlightHtml = new Map<string, Promise<string | null>>();
 
-function fetchShellHtml(url: string, isPrefetch = false, origFetchFn = window.fetch): Promise<string | null> {
+export interface ShellFetchResult {
+  html: string | null;
+  redirectUrl?: string;
+}
+
+const inFlightHtml = new Map<string, Promise<ShellFetchResult>>();
+
+interface DomSnapshot {
+  canvasHtml: string;
+  overlaysHtml: string;
+  title: string;
+  scrollY: number;
+  canvasScrollTop: number;
+  timestamp: number;
+}
+
+const SNAPSHOT_TTL_MS = 300_000; // 5 min
+const SNAPSHOT_MAX_ENTRIES = 10;
+const snapshotCache = new Map<string, DomSnapshot>();
+
+function getDomSnapshot(url: string): DomSnapshot | null {
+  const entry = snapshotCache.get(url);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > SNAPSHOT_TTL_MS) {
+    snapshotCache.delete(url);
+    return null;
+  }
+  return entry;
+}
+
+function saveCurrentSnapshot(): void {
+  try {
+    const curCanvas = document.getElementById('shell-main-canvas');
+    if (!curCanvas) return;
+    const curOverlays = document.getElementById('shell-overlays');
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const canvasScrollTop = curCanvas.scrollTop || 0;
+    const currentUrl = window.location.href;
+
+    if (snapshotCache.size >= SNAPSHOT_MAX_ENTRIES) {
+      const oldestKey = snapshotCache.keys().next().value;
+      if (oldestKey) snapshotCache.delete(oldestKey);
+    }
+
+    snapshotCache.set(currentUrl, {
+      canvasHtml: curCanvas.innerHTML,
+      overlaysHtml: curOverlays ? curOverlays.innerHTML : '',
+      title: document.title,
+      scrollY,
+      canvasScrollTop,
+      timestamp: Date.now(),
+    });
+  } catch {}
+}
+
+function shouldPrefetch(): boolean {
+  if (typeof navigator === 'undefined') return true;
+  const conn = (navigator as any).connection;
+  if (conn) {
+    if (conn.saveData) return false;
+    if (conn.effectiveType && conn.effectiveType.includes('2g')) return false;
+  }
+  return true;
+}
+
+function fetchShellHtml(url: string, isPrefetch = false, origFetchFn = window.fetch): Promise<ShellFetchResult> {
   const cached = getCachedHtml(url);
-  if (cached) return Promise.resolve(cached);
+  if (cached) return Promise.resolve({ html: cached });
 
   const existing = inFlightHtml.get(url);
   if (existing) return existing;
@@ -40,12 +104,17 @@ function fetchShellHtml(url: string, isPrefetch = false, origFetchFn = window.fe
 
   const promise = origFetchFn(url, { headers })
     .then(async (res) => {
-      if (!res.ok || res.redirected) return null;
+      if (res.redirected) {
+        return { html: null, redirectUrl: res.url };
+      }
+      if (!res.ok) {
+        return { html: null };
+      }
       const text = await res.text();
       setCachedHtml(url, text);
-      return text;
+      return { html: text };
     })
-    .catch(() => null)
+    .catch(() => ({ html: null }))
     .finally(() => {
       inFlightHtml.delete(url);
     });
@@ -227,13 +296,22 @@ function syncShellClasses(targetDoc: Document): void {
   });
 }
 
-function syncHeadStyles(targetDoc: Document): void {
+async function syncHeadStyles(targetDoc: Document): Promise<void> {
+  const pendingLinks: Promise<void>[] = [];
+
   targetDoc.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]').forEach((link) => {
     const href = link.getAttribute('href');
     if (href && !document.head.querySelector(`link[rel="stylesheet"][href="${href}"]`)) {
-      document.head.appendChild(link.cloneNode(true));
+      const newLink = link.cloneNode(true) as HTMLLinkElement;
+      const loadPromise = new Promise<void>((resolve) => {
+        newLink.onload = () => resolve();
+        newLink.onerror = () => resolve();
+      });
+      pendingLinks.push(loadPromise);
+      document.head.appendChild(newLink);
     }
   });
+
   targetDoc.head.querySelectorAll<HTMLStyleElement>('style').forEach((style) => {
     const devId = style.getAttribute('data-vite-dev-id');
     if (devId && document.head.querySelector(`style[data-vite-dev-id="${devId}"]`)) return;
@@ -243,6 +321,13 @@ function syncHeadStyles(targetDoc: Document): void {
       document.head.appendChild(style.cloneNode(true));
     }
   });
+
+  if (pendingLinks.length > 0) {
+    await Promise.race([
+      Promise.all(pendingLinks),
+      new Promise<void>((resolve) => setTimeout(resolve, 500)),
+    ]);
+  }
 }
 
 async function reactivateScripts(targetDoc: Document): Promise<void> {
@@ -333,6 +418,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
       prefetchCache.clear();
       apiResponseCache.clear();
       inFlightHtml.clear();
+      snapshotCache.clear();
       return origFetch.apply(this, args);
     }
 
@@ -390,10 +476,24 @@ export function initAppShellRouter(options: AppShellOptions): void {
     return origFetch.apply(this, args);
   };
 
+  // Instant.page: pointerdown / touchstart instant prefetch with Save-Data & 2G guard
+  const instantPrefetch = (e: Event) => {
+    if (!shouldPrefetch()) return;
+    const target = (e.target as HTMLElement)?.closest?.('a') as HTMLAnchorElement | null;
+    if (!target || !isNavigableLink(target, options.scope)) return;
+    const href = target.href;
+    if (href === window.location.href || getCachedHtml(href) || inFlightHtml.has(href)) return;
+    fetchShellHtml(href, true, origFetch);
+  };
+
+  document.addEventListener('touchstart', instantPrefetch, { passive: true });
+  document.addEventListener('mousedown', instantPrefetch, { passive: true });
+
   // 65ms Hover Prefetch
   let hoverTimer: any = null;
   let lastHoveredHref = '';
   document.addEventListener('mouseover', (e) => {
+    if (!shouldPrefetch()) return;
     const target = (e.target as HTMLElement)?.closest?.('a') as HTMLAnchorElement | null;
     if (!target || !isNavigableLink(target, options.scope)) {
       clearTimeout(hoverTimer);
@@ -420,6 +520,9 @@ export function initAppShellRouter(options: AppShellOptions): void {
     }
   });
 
+  // Concurrency navigation sequence counter
+  let navSeq = 0;
+
   // Core navigation function
   async function navigateTo(
     targetUrlStr: string,
@@ -427,50 +530,130 @@ export function initAppShellRouter(options: AppShellOptions): void {
     targetTabKey?: string,
     targetTabTitle?: string
   ): Promise<void> {
+    const currentSeq = ++navSeq;
     const targetUrl = new URL(targetUrlStr, window.location.origin);
+
+    // 1. Hot DOM Snapshot: save current view state before departing
+    saveCurrentSnapshot();
+
+    // 2. Check if target URL has warm DOM snapshot
+    const snapshot = getDomSnapshot(targetUrl.href);
+
     updateActiveNavUI(targetUrl, options.scope, targetTabKey, targetTabTitle);
     startProgressBar();
     cleanupCurrentPageOverlays();
 
-    const html = await fetchShellHtml(targetUrl.href, false, origFetch);
-    if (!html) {
+    // 3. Turbo 8 Slow Network Dimming (>120ms feedback to prevent rage-clicks)
+    const slowDimTimer = setTimeout(() => {
+      if (currentSeq !== navSeq) return;
+      const canvas = document.getElementById('shell-main-canvas');
+      if (canvas) {
+        canvas.classList.add('opacity-60', 'pointer-events-none', 'transition-opacity', 'duration-150');
+      }
+    }, 120);
+
+    const clearDimming = () => {
+      clearTimeout(slowDimTimer);
+      const canvas = document.getElementById('shell-main-canvas');
+      if (canvas) {
+        canvas.classList.remove('opacity-60', 'pointer-events-none');
+      }
+    };
+
+    // 4. Hot Snapshot instant restoration (0ms visual restore, no skeleton, restore scroll)
+    let hasRestoredSnapshot = false;
+    if (snapshot) {
+      const curCanvas = document.getElementById('shell-main-canvas');
+      if (curCanvas) {
+        curCanvas.innerHTML = snapshot.canvasHtml;
+        if (snapshot.canvasScrollTop) curCanvas.scrollTop = snapshot.canvasScrollTop;
+      }
+      const curOverlays = document.getElementById('shell-overlays');
+      if (curOverlays && snapshot.overlaysHtml) {
+        curOverlays.innerHTML = snapshot.overlaysHtml;
+      }
+      document.title = snapshot.title;
+      if (snapshot.scrollY) {
+        window.scrollTo({ top: snapshot.scrollY, behavior: 'instant' });
+      }
+      hasRestoredSnapshot = true;
+    }
+
+    try {
+      const result = await fetchShellHtml(targetUrl.href, false, origFetch);
+
+      // 5. Concurrency Race Condition Lock (Latest-Click-Wins)
+      if (currentSeq !== navSeq) {
+        clearDimming();
+        return;
+      }
+
+      if (result.redirectUrl) {
+        clearDimming();
+        window.location.href = result.redirectUrl;
+        return;
+      }
+
+      if (!result.html) {
+        clearDimming();
+        window.location.href = targetUrl.href;
+        return;
+      }
+
+      const doc = new DOMParser().parseFromString(result.html, 'text/html');
+      const newCanvas = doc.getElementById('shell-main-canvas');
+      if (!newCanvas) {
+        clearDimming();
+        window.location.href = targetUrl.href;
+        return;
+      }
+
+      // 6. Zero FOUC: await new stylesheet loads
+      await syncHeadStyles(doc);
+      if (currentSeq !== navSeq) {
+        clearDimming();
+        return;
+      }
+
+      syncShellClasses(doc);
+
+      // Only swap canvas if no snapshot was restored, or server returned real content (not skeleton)
+      const curCanvas = document.getElementById('shell-main-canvas');
+      const isSkeletonPlaceholder =
+        newCanvas.innerHTML.includes('Loading products') ||
+        newCanvas.innerHTML.includes('Loading pages') ||
+        newCanvas.innerHTML.includes('Loading operation audit logs');
+
+      if (!hasRestoredSnapshot || !isSkeletonPlaceholder) {
+        if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
+        const curOverlays = document.getElementById('shell-overlays');
+        const newOverlays = doc.getElementById('shell-overlays');
+        if (curOverlays && newOverlays) {
+          curOverlays.innerHTML = newOverlays.innerHTML;
+        }
+      }
+
+      document.title = doc.title;
+      if (!isPopState) {
+        window.history.pushState({ shell: true, url: targetUrl.href }, doc.title, targetUrl.href);
+      }
+
+      if (!hasRestoredSnapshot) {
+        const curRoot = document.getElementById('shell-root');
+        if (!curRoot?.classList.contains('overflow-hidden')) {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+      }
+
+      clearDimming();
+      await reactivateScripts(doc);
+      finishProgressBar();
+      document.dispatchEvent(new CustomEvent('shell:page-load', { detail: { url: targetUrl.href } }));
+      window.dispatchEvent(new CustomEvent('app-shell:navigated', { detail: { url: targetUrl.href } }));
+    } catch {
+      clearDimming();
       window.location.href = targetUrl.href;
-      return;
     }
-
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const newCanvas = doc.getElementById('shell-main-canvas');
-    if (!newCanvas) {
-      window.location.href = targetUrl.href;
-      return;
-    }
-
-    syncShellClasses(doc);
-    syncHeadStyles(doc);
-
-    const curCanvas = document.getElementById('shell-main-canvas');
-    if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
-
-    const curOverlays = document.getElementById('shell-overlays');
-    const newOverlays = doc.getElementById('shell-overlays');
-    if (curOverlays && newOverlays) {
-      curOverlays.innerHTML = newOverlays.innerHTML;
-    }
-
-    document.title = doc.title;
-    if (!isPopState) {
-      window.history.pushState({ shell: true, url: targetUrl.href }, doc.title, targetUrl.href);
-    }
-
-    const curRoot = document.getElementById('shell-root');
-    if (!curRoot?.classList.contains('overflow-hidden')) {
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    }
-
-    await reactivateScripts(doc);
-    finishProgressBar();
-    document.dispatchEvent(new CustomEvent('shell:page-load', { detail: { url: targetUrl.href } }));
-    window.dispatchEvent(new CustomEvent('app-shell:navigated', { detail: { url: targetUrl.href } }));
   }
 
   // Intercept in-scope link clicks

@@ -122,6 +122,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
         'Server-Timing': profiler.toServerTimingHeader(latencyMs),
       });
 
+      // Shell Request Cache Isolation & Vary Guard (Item 5: HTMX/PJAX Vary: X-Shell-Request + no-store)
+      if (request.headers.get('x-shell-request') === '1') {
+        const currentVary = response.headers.get('Vary') || '';
+        const hasVaryShell = currentVary.toLowerCase().includes('x-shell-request');
+        const newVary = hasVaryShell ? currentVary : (currentVary ? `${currentVary}, X-Shell-Request` : 'X-Shell-Request');
+        response = safeSetHeaders(response, {
+          'Vary': newVary,
+          'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+          'Cloudflare-CDN-Cache-Control': 'no-store',
+          'CDN-Cache-Control': 'no-store',
+        });
+      }
+
       // Filter out static assets and internal logging workbench to avoid loops
       const isStaticOrLogSelf =
         pathname.startsWith('/_astro/') ||
