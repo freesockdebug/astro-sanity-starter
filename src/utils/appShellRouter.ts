@@ -327,16 +327,23 @@ function syncShellClasses(targetDoc: Document): void {
   });
 }
 
-function runCanvasTransition(updateDom: () => void): void {
+async function runCanvasTransition(updateDom: () => void): Promise<void> {
   const docAny = document as any;
-  const prefersReduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const prefersReduced =
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   if (typeof docAny.startViewTransition === 'function' && !prefersReduced) {
+    let executed = false;
     try {
-      docAny.startViewTransition(() => {
+      const transition = docAny.startViewTransition(() => {
+        executed = true;
         updateDom();
       });
+      await transition.updateCallbackDone;
       return;
-    } catch {}
+    } catch {
+      if (!executed) updateDom();
+      return;
+    }
   }
   updateDom();
 }
@@ -584,7 +591,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
 
     // 4. Hot Snapshot instant preview (0ms visual restore while network in-flight)
     if (snapshot) {
-      runCanvasTransition(() => {
+      await runCanvasTransition(() => {
         const curCanvas = document.getElementById('shell-main-canvas');
         if (curCanvas) {
           curCanvas.innerHTML = snapshot.canvasHtml;
@@ -595,6 +602,10 @@ export function initAppShellRouter(options: AppShellOptions): void {
           curOverlays.innerHTML = snapshot.overlaysHtml;
         }
       });
+      if (currentSeq !== navSeq) {
+        clearDimming();
+        return;
+      }
       document.title = snapshot.title;
       if (snapshot.scrollY) {
         window.scrollTo({ top: snapshot.scrollY, behavior: 'instant' });
@@ -637,14 +648,14 @@ export function initAppShellRouter(options: AppShellOptions): void {
         return;
       }
 
-      syncShellClasses(doc);
-
       // Standard Turbo Preview Pattern: Fresh DOM nodes ensure clean event listeners & state
       const curCanvas = document.getElementById('shell-main-canvas');
       const curOverlays = document.getElementById('shell-overlays');
       const newOverlays = doc.getElementById('shell-overlays');
 
       const applyFreshDom = () => {
+        clearDimming();
+        syncShellClasses(doc);
         if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
         if (curOverlays && newOverlays) {
           curOverlays.innerHTML = newOverlays.innerHTML;
@@ -652,7 +663,8 @@ export function initAppShellRouter(options: AppShellOptions): void {
       };
 
       if (!snapshot) {
-        runCanvasTransition(applyFreshDom);
+        await runCanvasTransition(applyFreshDom);
+        if (currentSeq !== navSeq) return;
       } else {
         applyFreshDom();
       }
@@ -663,7 +675,6 @@ export function initAppShellRouter(options: AppShellOptions): void {
       }
       currentRenderedUrl = targetUrl.href;
 
-      clearDimming();
       await reactivateScripts(doc);
       finishProgressBar();
       document.dispatchEvent(new CustomEvent('shell:page-load', { detail: { url: targetUrl.href } }));
