@@ -100,6 +100,9 @@ const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to
 
       <a
         href={getLocalizedPath('/orders', currentLang)}
+        data-shell-nav="buyer"
+        data-tab-key="orders"
+        data-tab-title={t('orders.tabOrdersTitle')}
         class:list={[
           'flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all',
           currentTab === 'orders'
@@ -123,6 +126,9 @@ const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to
 
       <a
         href={getLocalizedPath('/account', currentLang)}
+        data-shell-nav="buyer"
+        data-tab-key="account"
+        data-tab-title={t('orders.tabAccountTitle')}
         class:list={[
           'flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all',
           currentTab === 'account'

@@ -34,6 +34,7 @@ import {
   verifySessionToken,
   checkIsAdmin,
 } from '../src/utils/auth';
+import { isScopeMatch, isNavigableLink } from '../src/utils/appShellRouter';
 
 async function runSelfCheck() {
   console.log('🧪 Starting B2B Order & Claiming Self-Check...\n');
@@ -926,6 +927,28 @@ async function runSelfCheck() {
   assert.ok(Array.isArray(dashboardStats.repWorkloads), 'repWorkloads should be array');
 
   console.log('✔ [PASS] Universal Data Dictionary Engine, Tracking Resolution & Executive Dashboard Stats verified');
+
+  // Test App Shell Router Scope & Link Interception
+  assert.strictEqual(isScopeMatch(new URL('https://gwenvenni.com/admin/orders'), 'admin'), true);
+  assert.strictEqual(isScopeMatch(new URL('https://gwenvenni.com/orders'), 'admin'), false);
+  assert.strictEqual(isScopeMatch(new URL('https://otherdomain.com/admin'), 'admin', 'https://gwenvenni.com'), false);
+  assert.strictEqual(isScopeMatch(new URL('https://gwenvenni.com/orders'), 'buyer'), true);
+  assert.strictEqual(isScopeMatch(new URL('https://gwenvenni.com/de/account'), 'buyer'), true);
+  assert.strictEqual(isScopeMatch(new URL('https://gwenvenni.com/admin/orders'), 'buyer'), false);
+
+  const mockAnchor = (attrs: Record<string, string>, href: string) => ({
+    href,
+    target: attrs.target || '',
+    hasAttribute: (name: string) => name in attrs,
+    getAttribute: (name: string) => attrs[name] ?? null,
+  } as unknown as HTMLAnchorElement);
+
+  assert.strictEqual(isNavigableLink(mockAnchor({}, 'https://gwenvenni.com/admin/orders'), 'admin'), true);
+  assert.strictEqual(isNavigableLink(mockAnchor({ target: '_blank' }, 'https://gwenvenni.com/admin/orders'), 'admin'), false);
+  assert.strictEqual(isNavigableLink(mockAnchor({ 'data-no-pjax': 'true' }, 'https://gwenvenni.com/admin/orders'), 'admin'), false);
+  assert.strictEqual(isNavigableLink(mockAnchor({}, 'https://gwenvenni.com/api/auth/logout'), 'admin'), false);
+
+  console.log('✔ [PASS] App Shell Router Scope Matching & Navigable Link Filtering verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

@@ -54,7 +54,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
   bare={true}
   bodyClass="bg-[#f5f5f7] text-[#1d1d1f] font-sans antialiased selection:bg-zinc-900 selection:text-white min-h-screen"
 >
-  <div class="min-h-screen flex flex-col lg:flex-row">
+  <div id="shell-root" class="min-h-screen flex flex-col lg:flex-row">
     <!-- 1. Left Grouped Vertical Sidebar (Slide-over on Mobile, Sticky on Desktop >= lg) -->
     <BuyerSidebar
       currentTab={currentTab}
@@ -65,7 +65,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
     />
 
     <!-- 2. Right Main Canvas Area -->
-    <div class="flex-1 flex flex-col min-w-0">
+    <div id="shell-right-col" class="flex-1 flex flex-col min-w-0">
       <!-- Mobile Top Sticky Bar (< lg): 56px (h-14) Compact Header -->
       <header class="lg:hidden h-14 flex items-center justify-between px-3.5 bg-white/95 backdrop-blur-md border-b border-black/10 sticky top-0 z-30 shadow-2xs print:hidden">
         <div class="flex items-center gap-2">
@@ -121,7 +121,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
         <div class="flex items-center gap-2 text-xs">
           <span class="text-[#86868b]">{t('buyer.portal')}</span>
           <span class="text-[#86868b]">/</span>
-          <span class="font-semibold text-[#1d1d1f]">{currentTabTitle}</span>
+          <span id="shell-breadcrumb-title" class="font-semibold text-[#1d1d1f]">{currentTabTitle}</span>
         </div>
 
         <div class="flex items-center gap-4 text-xs">
@@ -155,7 +155,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
       </header>
 
       <!-- Main Dynamic Content Canvas: Bottom padded pb-24 on mobile to clear Bottom Tab Bar -->
-      <div class="flex-1 p-[clamp(1rem,0.4rem+2vw,2.25rem)] pb-24 lg:pb-8 w-full max-w-[1700px] mx-auto">
+      <div id="shell-main-canvas" class="flex-1 p-[clamp(1rem,0.4rem+2vw,2.25rem)] pb-24 lg:pb-8 w-full max-w-[1700px] mx-auto">
         <slot />
       </div>
     </div>
@@ -169,6 +169,9 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
     <!-- Tab 1: Orders -->
     <a
       href={getLocalizedPath('/orders', currentLang)}
+      data-shell-nav="buyer"
+      data-tab-key="orders"
+      data-tab-title={t('orders.tabOrdersTitle')}
       class:list={[
         'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors relative',
         currentTab === 'orders' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
@@ -188,6 +191,9 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
     <!-- Tab 2: Account -->
     <a
       href={getLocalizedPath('/account', currentLang)}
+      data-shell-nav="buyer"
+      data-tab-key="account"
+      data-tab-title={t('orders.tabAccountTitle')}
       class:list={[
         'flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-colors',
         currentTab === 'account' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
@@ -224,6 +230,13 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
 
   <!-- Mount Quote Drawer (Required for RFQ and Reordering) -->
   <QuoteDrawer />
+
+  <!-- Modals & Slide-over Drawers Slots -->
+  <div id="shell-overlays">
+    <slot name="drawers" />
+    <slot name="modals" />
+    <slot name="dialogs" />
+  </div>
 
   <!-- Pure Vanilla JS for Mobile Sidebar Drawer Toggle & Global openQuoteDrawer helper -->
   <script is:inline>
@@ -281,6 +294,11 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
         }
       });
     })();
+  </script>
+
+  <script>
+    import { initAppShellRouter } from '@utils/appShellRouter';
+    initAppShellRouter({ scope: 'buyer' });
   </script>
 </Layout>
 
