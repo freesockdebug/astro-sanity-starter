@@ -3,11 +3,29 @@
 import { executeWithAutoSchema } from './schema';
 import type { DbClient } from './client';
 
+export type AuditTargetType =
+  | 'ORDER'
+  | 'USER'
+  | 'SETTINGS'
+  | 'MEMBER'
+  | 'ROLE'
+  | 'SYS_DICT_ITEM'
+  | 'SYS_DICT_GROUP'
+  | 'product'
+  | 'category'
+  | 'page'
+  | 'siteConfig'
+  | 'catalogSettings'
+  | 'productStorySettings'
+  | 'rfqSettings'
+  | 'cache'
+  | (string & {});
+
 export interface AdminAuditLog {
   id?: number;
   admin_email: string;
   action: string;
-  target_type: 'ORDER' | 'USER' | 'SETTINGS' | 'MEMBER' | 'ROLE';
+  target_type: AuditTargetType;
   target_id?: string;
   before_json?: string;
   after_json?: string;

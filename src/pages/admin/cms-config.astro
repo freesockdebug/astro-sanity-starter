@@ -133,18 +133,32 @@ const pageTitle = 'CMS Site Configuration';
 
         <!-- PANE 3: productStorySettings -->
         <div id="pane-story" class="cfg-pane hidden space-y-5 max-w-3xl">
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
+            <span class="font-bold text-xs text-[#1d1d1f] block">Sidebar Story Header (Global Defaults)</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold mb-1">Badge Text (EN)</label>
+                <input type="text" id="story-badge-text" placeholder="CRAFTSMANSHIP & STORY" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1">Story Heading (EN)</label>
+                <input type="text" id="story-heading" placeholder="The Story Behind the Silhouette" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+            </div>
+          </div>
+
           <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
             <div class="flex items-center justify-between">
               <div>
-                <span class="font-bold text-xs text-[#1d1d1f] block">Universal Craft & Quality Badges</span>
-                <span class="text-[10px] text-[#86868b]">Highlighted promises shown at the top of product detail pages</span>
+                <span class="font-bold text-xs text-[#1d1d1f] block">Universal Craft & Quality Credential Cards</span>
+                <span class="text-[10px] text-[#86868b]">Prominent credibility badges shown in the sticky sidebar (credentials[])</span>
               </div>
               <button type="button" id="btn-add-badge" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
-                ＋ Add Badge
+                ＋ Add Credential Card
               </button>
             </div>
             <div id="story-badges-container" class="space-y-2">
-              <!-- Badges injected here -->
+              <!-- Credentials injected here -->
             </div>
           </div>
         </div>
@@ -223,6 +237,21 @@ const pageTitle = 'CMS Site Configuration';
     }
   }
 
+  // Helper to extract localized text or string safely
+  function getLocaleVal(val: any): string {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    return val.en || val.zh || Object.values(val)[0] || '';
+  }
+
+  function makeLocaleVal(str: string, orig?: any): any {
+    return {
+      ...(typeof orig === 'object' && orig ? orig : {}),
+      _type: 'localeString',
+      en: str,
+    };
+  }
+
   // 1. Site Pane
   function populateSitePane() {
     const s = configs.siteConfig || {};
@@ -230,9 +259,9 @@ const pageTitle = 'CMS Site Configuration';
     const tagInput = document.getElementById('site-tagline') as HTMLInputElement | null;
     const copyInput = document.getElementById('site-copyright') as HTMLInputElement | null;
 
-    if (brandInput) brandInput.value = s.brandName || 'Gwen & Venni';
-    if (tagInput) tagInput.value = s.tagline || '';
-    if (copyInput) copyInput.value = s.copyright || '';
+    if (brandInput) brandInput.value = s.header?.title || s.brandName || 'Gwen & Venni';
+    if (tagInput) tagInput.value = getLocaleVal(s.header?.subtitle) || s.tagline || '';
+    if (copyInput) copyInput.value = getLocaleVal(s.footer?.text) || s.copyright || '';
 
     renderNavItems();
   }
@@ -240,15 +269,15 @@ const pageTitle = 'CMS Site Configuration';
   function renderNavItems() {
     const container = document.getElementById('nav-items-container');
     if (!container) return;
-    const nav = configs.siteConfig.nav || [];
+    const nav = configs.siteConfig.header?.navLinks || configs.siteConfig.nav || [];
     if (nav.length === 0) {
       container.innerHTML = `<div class="py-2 text-[#86868b] text-[11px]">No custom navigation links.</div>`;
       return;
     }
     container.innerHTML = nav.map((item: any, idx: number) => `
       <div class="flex items-center gap-2">
-        <input type="text" class="nav-label w-1/3 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Label" value="${escapeHtml(item.label?.en || item.label || '')}" />
-        <input type="text" class="nav-href flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 font-mono text-xs" placeholder="/products" value="${escapeHtml(item.href || '')}" />
+        <input type="text" class="nav-label w-1/3 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Label" value="${escapeHtml(getLocaleVal(item.label) || '')}" />
+        <input type="text" class="nav-href flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 font-mono text-xs" placeholder="/products" value="${escapeHtml(item.url || item.href || '')}" />
         <button type="button" class="btn-del-nav text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
       </div>
     `).join('');
@@ -256,15 +285,26 @@ const pageTitle = 'CMS Site Configuration';
     container.querySelectorAll('.btn-del-nav').forEach((btn) => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        configs.siteConfig.nav.splice(idx, 1);
+        if (configs.siteConfig.header?.navLinks) {
+          configs.siteConfig.header.navLinks.splice(idx, 1);
+        }
+        if (configs.siteConfig.nav) {
+          configs.siteConfig.nav.splice(idx, 1);
+        }
         renderNavItems();
       });
     });
   }
 
   document.getElementById('btn-add-nav-item')?.addEventListener('click', () => {
-    if (!configs.siteConfig.nav) configs.siteConfig.nav = [];
-    configs.siteConfig.nav.push({ label: { en: 'New Link' }, href: '/custom' });
+    if (!configs.siteConfig.header) configs.siteConfig.header = {};
+    if (!configs.siteConfig.header.navLinks) configs.siteConfig.header.navLinks = [];
+    configs.siteConfig.header.navLinks.push({
+      _key: crypto.randomUUID().slice(0, 8),
+      _type: 'actionLink',
+      label: { en: 'New Link' },
+      url: '/custom',
+    });
     renderNavItems();
   });
 
@@ -279,47 +319,72 @@ const pageTitle = 'CMS Site Configuration';
 
   // 3. Story Pane
   function populateStoryPane() {
+    const s = configs.productStorySettings || {};
+    const badgeInput = document.getElementById('story-badge-text') as HTMLInputElement | null;
+    const headingInput = document.getElementById('story-heading') as HTMLInputElement | null;
+
+    if (badgeInput) badgeInput.value = getLocaleVal(s.storyBadgeText) || 'CRAFTSMANSHIP & STORY';
+    if (headingInput) headingInput.value = getLocaleVal(s.storyHeading) || 'The Story Behind the Silhouette';
+
     renderStoryBadges();
   }
 
   function renderStoryBadges() {
     const container = document.getElementById('story-badges-container');
     if (!container) return;
-    const badges = configs.productStorySettings.badges || [];
+    const badges = configs.productStorySettings.credentials || configs.productStorySettings.badges || [];
     if (badges.length === 0) {
-      container.innerHTML = `<div class="py-2 text-[#86868b] text-[11px]">No badges configured.</div>`;
+      container.innerHTML = `<div class="py-2 text-[#86868b] text-[11px]">No credential cards configured.</div>`;
       return;
     }
     container.innerHTML = badges.map((b: any, idx: number) => `
-      <div class="flex items-center gap-2">
-        <input type="text" class="badge-icon w-12 px-2 py-1.5 rounded-xl bg-white border border-black/10 text-center text-xs" placeholder="Icon" value="${escapeHtml(b.icon || '✨')}" />
-        <input type="text" class="badge-title flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Badge Title" value="${escapeHtml(b.title?.en || b.title || '')}" />
-        <button type="button" class="btn-del-badge text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
+      <div class="p-2.5 rounded-xl bg-white border border-black/5 flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <select class="badge-icon-type px-2 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs shrink-0">
+          <option value="lonati" ${b.iconType === 'lonati' ? 'selected' : ''}>⚙️ Lonati</option>
+          <option value="seamless" ${b.iconType === 'seamless' ? 'selected' : ''}>🪡 Seamless</option>
+          <option value="oekotex" ${b.iconType === 'oekotex' ? 'selected' : ''}>🌿 OEKO-TEX</option>
+          <option value="gauge" ${b.iconType === 'gauge' ? 'selected' : ''}>📐 High-Gauge</option>
+          <option value="fiber" ${b.iconType === 'fiber' ? 'selected' : ''}>🧵 Natural Fibers</option>
+          <option value="custom" ${b.iconType === 'custom' ? 'selected' : ''}>✨ Custom</option>
+        </select>
+        <input type="text" class="badge-title flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Card Title" value="${escapeHtml(getLocaleVal(b.title) || '')}" />
+        <input type="text" class="badge-desc flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Detail Description" value="${escapeHtml(getLocaleVal(b.description) || '')}" />
+        <button type="button" class="btn-del-badge text-[#86868b] hover:text-rose-600 p-1 self-end sm:self-center" data-idx="${idx}">✕</button>
       </div>
     `).join('');
 
     container.querySelectorAll('.btn-del-badge').forEach((btn) => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        configs.productStorySettings.badges.splice(idx, 1);
+        if (configs.productStorySettings.credentials) {
+          configs.productStorySettings.credentials.splice(idx, 1);
+        }
+        if (configs.productStorySettings.badges) {
+          configs.productStorySettings.badges.splice(idx, 1);
+        }
         renderStoryBadges();
       });
     });
   }
 
   document.getElementById('btn-add-badge')?.addEventListener('click', () => {
-    if (!configs.productStorySettings.badges) configs.productStorySettings.badges = [];
-    configs.productStorySettings.badges.push({ icon: '🌿', title: { en: '100% Organic Silk' } });
+    if (!configs.productStorySettings.credentials) configs.productStorySettings.credentials = [];
+    configs.productStorySettings.credentials.push({
+      _key: crypto.randomUUID().slice(0, 8),
+      iconType: 'lonati',
+      title: { en: 'Italian Lonati Calibration' },
+      description: { en: '200-needle precision cylinder engineering' },
+    });
     renderStoryBadges();
   });
 
   // 4. RFQ Pane
   function populateRfqPane() {
     const r = configs.rfqSettings || {};
-    (document.getElementById('rfq-title-en') as HTMLInputElement).value = r.drawerTitle?.en || '';
-    (document.getElementById('rfq-empty-en') as HTMLInputElement).value = r.emptyCartNotice?.en || '';
-    (document.getElementById('rfq-btn-en') as HTMLInputElement).value = r.addToQuoteBtn?.en || '';
-    (document.getElementById('rfq-submit-en') as HTMLInputElement).value = r.submitInquiryBtn?.en || '';
+    (document.getElementById('rfq-title-en') as HTMLInputElement).value = getLocaleVal(r.drawerTitle) || '';
+    (document.getElementById('rfq-empty-en') as HTMLInputElement).value = getLocaleVal(r.drawerEmptyTitle) || getLocaleVal(r.emptyCartNotice) || '';
+    (document.getElementById('rfq-btn-en') as HTMLInputElement).value = getLocaleVal(r.btnAddToQuoteText) || getLocaleVal(r.addToQuoteBtn) || '';
+    (document.getElementById('rfq-submit-en') as HTMLInputElement).value = getLocaleVal(r.drawerSubmitButtonText) || getLocaleVal(r.submitInquiryBtn) || '';
   }
 
   // Save handler for current active config
@@ -329,16 +394,33 @@ const pageTitle = 'CMS Site Configuration';
 
     if (activeTab === 'site') {
       targetDocType = 'siteConfig';
-      configs.siteConfig.brandName = (document.getElementById('site-brand-name') as HTMLInputElement)?.value.trim();
-      configs.siteConfig.tagline = (document.getElementById('site-tagline') as HTMLInputElement)?.value.trim();
-      configs.siteConfig.copyright = (document.getElementById('site-copyright') as HTMLInputElement)?.value.trim();
+      const brand = (document.getElementById('site-brand-name') as HTMLInputElement)?.value.trim() || 'Gwen & Venni';
+      const tagline = (document.getElementById('site-tagline') as HTMLInputElement)?.value.trim() || '';
+      const copyright = (document.getElementById('site-copyright') as HTMLInputElement)?.value.trim() || '';
 
       const labels = document.querySelectorAll('#nav-items-container .nav-label');
       const hrefs = document.querySelectorAll('#nav-items-container .nav-href');
-      configs.siteConfig.nav = Array.from(labels).map((lInput: any, idx: number) => ({
-        label: { en: lInput.value.trim() },
-        href: (hrefs[idx] as HTMLInputElement)?.value.trim() || '/',
+      const navLinks = Array.from(labels).map((lInput: any, idx: number) => ({
+        _key: crypto.randomUUID().slice(0, 8),
+        _type: 'actionLink',
+        label: makeLocaleVal(lInput.value.trim()),
+        url: (hrefs[idx] as HTMLInputElement)?.value.trim() || '/',
       }));
+
+      if (!configs.siteConfig.header) configs.siteConfig.header = {};
+      configs.siteConfig.header.title = brand;
+      configs.siteConfig.header.subtitle = makeLocaleVal(tagline, configs.siteConfig.header.subtitle);
+      configs.siteConfig.header.navLinks = navLinks;
+
+      if (!configs.siteConfig.footer) configs.siteConfig.footer = {};
+      configs.siteConfig.footer.text = makeLocaleVal(copyright, configs.siteConfig.footer.text);
+
+      // Backwards-compatible aliases
+      configs.siteConfig.brandName = brand;
+      configs.siteConfig.tagline = tagline;
+      configs.siteConfig.copyright = copyright;
+      configs.siteConfig.nav = navLinks.map(l => ({ label: l.label, href: l.url }));
+
       targetPayload = configs.siteConfig;
     } else if (activeTab === 'catalog') {
       targetDocType = 'catalogSettings';
@@ -353,19 +435,45 @@ const pageTitle = 'CMS Site Configuration';
       targetPayload = configs.catalogSettings;
     } else if (activeTab === 'story') {
       targetDocType = 'productStorySettings';
-      const icons = document.querySelectorAll('#story-badges-container .badge-icon');
+      const badgeText = (document.getElementById('story-badge-text') as HTMLInputElement)?.value.trim() || '';
+      const heading = (document.getElementById('story-heading') as HTMLInputElement)?.value.trim() || '';
+
+      configs.productStorySettings.storyBadgeText = makeLocaleVal(badgeText, configs.productStorySettings.storyBadgeText);
+      configs.productStorySettings.storyHeading = makeLocaleVal(heading, configs.productStorySettings.storyHeading);
+
+      const iconSelects = document.querySelectorAll('#story-badges-container .badge-icon-type');
       const titles = document.querySelectorAll('#story-badges-container .badge-title');
-      configs.productStorySettings.badges = Array.from(icons).map((iInput: any, idx: number) => ({
-        icon: iInput.value.trim() || '✨',
-        title: { en: (titles[idx] as HTMLInputElement)?.value.trim() || 'Feature' },
+      const descs = document.querySelectorAll('#story-badges-container .badge-desc');
+
+      const credentials = Array.from(titles).map((tInput: any, idx: number) => ({
+        _key: crypto.randomUUID().slice(0, 8),
+        iconType: (iconSelects[idx] as HTMLSelectElement)?.value || 'lonati',
+        title: makeLocaleVal((tInput as HTMLInputElement)?.value.trim() || 'Standard'),
+        description: { _type: 'localeText', en: (descs[idx] as HTMLInputElement)?.value.trim() || '' },
       }));
+
+      configs.productStorySettings.credentials = credentials;
+      // Backward-compatible alias
+      configs.productStorySettings.badges = credentials.map(c => ({ icon: c.iconType, title: c.title }));
+
       targetPayload = configs.productStorySettings;
     } else if (activeTab === 'rfq') {
       targetDocType = 'rfqSettings';
-      configs.rfqSettings.drawerTitle = { en: (document.getElementById('rfq-title-en') as HTMLInputElement)?.value.trim() };
-      configs.rfqSettings.emptyCartNotice = { en: (document.getElementById('rfq-empty-en') as HTMLInputElement)?.value.trim() };
-      configs.rfqSettings.addToQuoteBtn = { en: (document.getElementById('rfq-btn-en') as HTMLInputElement)?.value.trim() };
-      configs.rfqSettings.submitInquiryBtn = { en: (document.getElementById('rfq-submit-en') as HTMLInputElement)?.value.trim() };
+      const drawerTitle = (document.getElementById('rfq-title-en') as HTMLInputElement)?.value.trim();
+      const emptyNotice = (document.getElementById('rfq-empty-en') as HTMLInputElement)?.value.trim();
+      const btnQuote = (document.getElementById('rfq-btn-en') as HTMLInputElement)?.value.trim();
+      const btnSubmit = (document.getElementById('rfq-submit-en') as HTMLInputElement)?.value.trim();
+
+      configs.rfqSettings.drawerTitle = makeLocaleVal(drawerTitle, configs.rfqSettings.drawerTitle);
+      configs.rfqSettings.drawerEmptyTitle = makeLocaleVal(emptyNotice, configs.rfqSettings.drawerEmptyTitle);
+      configs.rfqSettings.btnAddToQuoteText = makeLocaleVal(btnQuote, configs.rfqSettings.btnAddToQuoteText);
+      configs.rfqSettings.drawerSubmitButtonText = makeLocaleVal(btnSubmit, configs.rfqSettings.drawerSubmitButtonText);
+
+      // Backward-compatible aliases
+      configs.rfqSettings.emptyCartNotice = configs.rfqSettings.drawerEmptyTitle;
+      configs.rfqSettings.addToQuoteBtn = configs.rfqSettings.btnAddToQuoteText;
+      configs.rfqSettings.submitInquiryBtn = configs.rfqSettings.drawerSubmitButtonText;
+
       targetPayload = configs.rfqSettings;
     }
 

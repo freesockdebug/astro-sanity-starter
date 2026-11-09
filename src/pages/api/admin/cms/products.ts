@@ -52,34 +52,15 @@ export const GET: APIRoute = async ({ request, url }) => {
     const [products, categories] = await Promise.all([
       client.fetch(
         `*[_type == "product"] | order(_updatedAt desc) {
-          _id,
-          _type,
-          title,
-          shortTitle,
-          slug,
-          sku,
+          ...,
           category->{ _id, title, slug },
-          pricingTiers,
-          minOrderQuantity,
-          colors,
-          mainImage,
-          gallery,
-          tagline,
-          statusBadges,
-          serviceBadges,
-          isDraft,
-          isArchived,
-          _updatedAt,
-          _createdAt
+          "mainImageUrl": mainImage.asset->url,
+          "galleryUrls": gallery[].asset->url
         }`
       ),
       client.fetch(
         `*[_type == "category"] | order(order asc, title.en asc) {
-          _id,
-          _type,
-          title,
-          slug,
-          order
+          ...
         }`
       ),
     ]);
@@ -105,7 +86,7 @@ export const POST: APIRoute = async ({ request }) => {
   const client = getSanityAdminClient(cfEnv);
 
   try {
-    const body = await request.json();
+    const body = (await request.json().catch(() => ({}))) as Record<string, any>;
     const doc = body.document;
     if (!doc || !doc._type) {
       return jsonNoCache({ error: 'Invalid document payload: missing _type.' }, 400);
@@ -131,7 +112,7 @@ export const POST: APIRoute = async ({ request }) => {
     await kvDelete('cms:categories:all', cfEnv).catch(() => {});
     const slugStr = result.slug?.current || (typeof result.slug === 'string' ? result.slug : '');
     if (slugStr) {
-      await kvDelete(`prod:details:${slugStr}`, cfEnv).catch(() => {});
+      await kvDelete(`cms:product:${slugStr}`, cfEnv).catch(() => {});
     }
 
     // Audit Logging with Differential Snapshot
@@ -192,7 +173,7 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     await kvDelete('cms:categories:all', cfEnv).catch(() => {});
     const slugStr = existingDoc.slug?.current || (typeof existingDoc.slug === 'string' ? existingDoc.slug : '');
     if (slugStr) {
-      await kvDelete(`prod:details:${slugStr}`, cfEnv).catch(() => {});
+      await kvDelete(`cms:product:${slugStr}`, cfEnv).catch(() => {});
     }
 
     // Audit Logging

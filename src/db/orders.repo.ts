@@ -12,7 +12,10 @@ import type {
   ListAdminOrdersFilter,
   ListAdminOrdersResult,
   UpdateOrderStatusInput,
+  OrderStatus,
 } from './types';
+
+export type { OrderStatus };
 
 /**
  * Creates a new B2B Order & line items in D1/SQLite

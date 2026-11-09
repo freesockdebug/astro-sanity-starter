@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ request }) => {
   const startTime = Date.now();
 
   try {
-    const body = await request.json();
+    const body = (await request.json().catch(() => ({}))) as Record<string, any>;
     const scope = body.scope || 'all'; // 'all' | 'products' | 'pages' | 'dicts' | 'path'
     const targetPath = body.path ? String(body.path).trim() : null;
 
@@ -38,7 +38,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (scope === 'all' || scope === 'pages') {
-      PageService.invalidateAll();
+      PageService.invalidateCache();
       purgedItems.push('Page in-memory and KV caches');
     }
 
@@ -50,11 +50,11 @@ export const POST: APIRoute = async ({ request }) => {
     if (targetPath) {
       if (targetPath.startsWith('/products/')) {
         const slug = targetPath.replace('/products/', '').replace(/\/$/, '');
-        await kvDelete(`prod:details:${slug}`, cfEnv).catch(() => {});
+        await kvDelete(`cms:product:${slug}`, cfEnv).catch(() => {});
         purgedItems.push(`Product slug KV: ${slug}`);
       } else {
         const unslashed = targetPath.replace(/^\//, '').replace(/\/$/, '');
-        await kvDelete(`page:${unslashed || 'home'}`, cfEnv).catch(() => {});
+        await kvDelete(`cms:page:${unslashed || 'home'}`, cfEnv).catch(() => {});
         purgedItems.push(`Page KV: ${targetPath}`);
       }
     }

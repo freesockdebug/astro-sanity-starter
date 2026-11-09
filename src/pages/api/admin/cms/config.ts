@@ -4,6 +4,8 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-admin';
 import { ProductService } from '@data/products';
+import { SiteConfigService } from '@data/siteConfig';
+import { RfqSettingsService } from '@data/rfqSettings';
 import { kvDelete } from '@utils/kv';
 import { computeJsonDiff, insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -68,7 +70,7 @@ export const POST: APIRoute = async ({ request }) => {
   const client = getSanityAdminClient(cfEnv);
 
   try {
-    const body = await request.json();
+    const body = (await request.json().catch(() => ({}))) as Record<string, any>;
     const doc = body.document;
     if (!doc || !VALID_CONFIG_TYPES.has(doc._type)) {
       return jsonNoCache({ error: `Invalid config document: must be one of ${Array.from(VALID_CONFIG_TYPES).join(', ')}` }, 400);
@@ -85,6 +87,11 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Invalidate local SWR & KV
     ProductService.invalidateCache();
+    if (docType === 'siteConfig') {
+      SiteConfigService.invalidate();
+    } else if (docType === 'rfqSettings') {
+      RfqSettingsService.invalidateCache();
+    }
     await kvDelete(`cms:${docType}`, cfEnv).catch(() => {});
     await kvDelete('cms:products:all', cfEnv).catch(() => {});
 

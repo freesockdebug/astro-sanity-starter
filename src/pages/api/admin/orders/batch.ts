@@ -5,7 +5,7 @@ import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
 import { hasPermission } from '@utils/rbac';
 import { batchUpdateOrderStatus, batchAssignOrders } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
-import type { OrderStatus } from '../../../db/types';
+import type { OrderStatus } from '@db/types';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 

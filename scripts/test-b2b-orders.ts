@@ -567,6 +567,7 @@ async function runSelfCheck() {
   assert.strictEqual(navBody.ok, true);
   assert.strictEqual(navBody.level, 'info');
 
+  await new Promise((resolve) => setTimeout(resolve, 50));
   const logsWithNav = await listErrorLogs({ level: 'info' });
   assert(logsWithNav.logs.some(l => l.source === 'client/navigation'));
 

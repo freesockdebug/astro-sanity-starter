@@ -68,7 +68,7 @@ export const POST: APIRoute = async ({ request }) => {
   const client = getSanityAdminClient(cfEnv);
 
   try {
-    const body = await request.json();
+    const body = (await request.json().catch(() => ({}))) as Record<string, any>;
     const doc = body.document;
     if (!doc || doc._type !== 'page') {
       return jsonNoCache({ error: 'Invalid page payload: _type must be "page".' }, 400);
@@ -88,7 +88,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Cache Invalidation
-    PageService.invalidateAll();
+    PageService.invalidateCache();
     const slugStr = result.slug?.current || (typeof result.slug === 'string' ? result.slug : '');
     const cleanSlug = slugStr.replace(/^\//, '').replace(/\/$/, '') || 'home';
     await kvDelete(`cms:page:${cleanSlug}`, cfEnv).catch(() => {});
@@ -148,7 +148,7 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     await client.delete(id);
 
     // Cache Invalidation
-    PageService.invalidateAll();
+    PageService.invalidateCache();
     const cleanSlug = slugStr.replace(/^\//, '').replace(/\/$/, '');
     await kvDelete(`cms:page:${cleanSlug}`, cfEnv).catch(() => {});
 

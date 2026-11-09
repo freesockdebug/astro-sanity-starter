@@ -185,6 +185,19 @@ const pageTitle = 'Pages & Modular Visual Builder';
 <script>
   import { escapeHtml } from '@utils/adminWorkbench';
 
+  function getEnText(val: any): string {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    return val.en || val.zh || Object.values(val)[0] || '';
+  }
+
+  function setEnText(orig: any, newStr: string): any {
+    if (typeof orig === 'object' && orig !== null) {
+      return { ...orig, _type: orig._type || 'localeString', en: newStr };
+    }
+    return { _type: 'localeString', en: newStr };
+  }
+
   let currentPages: any[] = [];
   let activePageDoc: any = null;
 
@@ -266,7 +279,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
           data-id="${p._id}"
         >
           <div class="flex items-center justify-between gap-1.5 mb-1">
-            <span class="font-semibold text-xs truncate">${escapeHtml(p.title || (isHome ? 'Homepage' : 'Untitled'))}</span>
+            <span class="font-semibold text-xs truncate">${escapeHtml(getEnText(p.title) || (isHome ? 'Homepage' : 'Untitled'))}</span>
             ${isHome ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'}">Home</span>` : ''}
           </div>
           <div class="flex items-center justify-between text-[10px] ${isSelected ? 'text-white/70' : 'text-[#86868b]'} font-mono">
@@ -296,13 +309,13 @@ const pageTitle = 'Pages & Modular Visual Builder';
       renderPagesList();
 
       const badge = document.getElementById('current-page-badge');
-      if (badge) badge.textContent = activePageDoc.title || activePageDoc.slug?.current || 'Page';
+      if (badge) badge.textContent = getEnText(activePageDoc.title) || activePageDoc.slug?.current || 'Page';
 
-      // Populate meta inputs
-      (document.getElementById('page-title-input') as HTMLInputElement).value = activePageDoc.title || '';
+      // Populate meta inputs safely supporting localeString and plain strings
+      (document.getElementById('page-title-input') as HTMLInputElement).value = getEnText(activePageDoc.title) || '';
       (document.getElementById('page-slug-input') as HTMLInputElement).value = activePageDoc.slug?.current || '/';
-      (document.getElementById('page-metatitle-input') as HTMLInputElement).value = activePageDoc.metaTitle || '';
-      (document.getElementById('page-metadesc-input') as HTMLInputElement).value = activePageDoc.metaDescription || '';
+      (document.getElementById('page-metatitle-input') as HTMLInputElement).value = getEnText(activePageDoc.metaTitle) || '';
+      (document.getElementById('page-metadesc-input') as HTMLInputElement).value = getEnText(activePageDoc.metaDescription) || '';
 
       renderSections();
     } catch (e: any) {
@@ -337,6 +350,8 @@ const pageTitle = 'Pages & Modular Visual Builder';
         customSection: '📝 Custom Section',
       };
       const typeLabel = typeIcons[type] || type;
+      const secTitle = getEnText(sec.title || sec.heading);
+      const secSub = getEnText(sec.subtitle || sec.eyebrow || sec.badge);
 
       return `
         <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3 section-block" data-idx="${idx}">
@@ -357,11 +372,11 @@ const pageTitle = 'Pages & Modular Visual Builder';
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Section Title (EN)</label>
-                <input type="text" class="sec-title w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(sec.title?.en || sec.title || '')}" />
+                <input type="text" class="sec-title w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secTitle)}" />
               </div>
               <div>
                 <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Section Subtitle / Eyebrow (EN)</label>
-                <input type="text" class="sec-sub w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(sec.subtitle?.en || sec.subtitle || sec.badge?.en || '')}" />
+                <input type="text" class="sec-sub w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secSub)}" />
               </div>
             </div>
             ${type === 'customSection' ? `
@@ -417,25 +432,19 @@ const pageTitle = 'Pages & Modular Visual Builder';
     const blocks = document.querySelectorAll('.section-block');
     blocks.forEach((block, idx) => {
       if (activePageDoc.sections[idx]) {
-        const titleVal = (block.querySelector('.sec-title') as HTMLInputElement)?.value.trim();
-        const subVal = (block.querySelector('.sec-sub') as HTMLInputElement)?.value.trim();
+        const titleVal = (block.querySelector('.sec-title') as HTMLInputElement)?.value.trim() || '';
+        const subVal = (block.querySelector('.sec-sub') as HTMLInputElement)?.value.trim() || '';
         const contentVal = (block.querySelector('.sec-content') as HTMLTextAreaElement)?.value;
 
-        if (!activePageDoc.sections[idx].title) activePageDoc.sections[idx].title = {};
-        if (typeof activePageDoc.sections[idx].title === 'object') {
-          activePageDoc.sections[idx].title.en = titleVal;
-        } else {
-          activePageDoc.sections[idx].title = titleVal;
+        if (activePageDoc.sections[idx].heading !== undefined) {
+          activePageDoc.sections[idx].heading = setEnText(activePageDoc.sections[idx].heading, titleVal);
         }
+        activePageDoc.sections[idx].title = setEnText(activePageDoc.sections[idx].title, titleVal);
 
-        if (subVal !== undefined) {
-          if (!activePageDoc.sections[idx].subtitle) activePageDoc.sections[idx].subtitle = {};
-          if (typeof activePageDoc.sections[idx].subtitle === 'object') {
-            activePageDoc.sections[idx].subtitle.en = subVal;
-          } else {
-            activePageDoc.sections[idx].subtitle = subVal;
-          }
+        if (activePageDoc.sections[idx].eyebrow !== undefined) {
+          activePageDoc.sections[idx].eyebrow = setEnText(activePageDoc.sections[idx].eyebrow, subVal);
         }
+        activePageDoc.sections[idx].subtitle = setEnText(activePageDoc.sections[idx].subtitle, subVal);
 
         if (contentVal !== undefined) {
           activePageDoc.sections[idx].content = contentVal;
@@ -495,7 +504,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       return;
     }
 
-    activePageDoc.title = title;
+    activePageDoc.title = setEnText(activePageDoc.title, title);
     activePageDoc.slug = { _type: 'slug', current: slug };
     activePageDoc.metaTitle = (document.getElementById('page-metatitle-input') as HTMLInputElement)?.value.trim();
     activePageDoc.metaDescription = (document.getElementById('page-metadesc-input') as HTMLInputElement)?.value.trim();

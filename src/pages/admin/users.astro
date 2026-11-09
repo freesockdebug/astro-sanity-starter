@@ -1100,45 +1100,6 @@ const pageTitle = 'Customer & Access Management';
           feedbackEl.textContent = data.error || 'Failed to save changes';
         }
       }
-
-      // Load customer audit timeline
-      const auditTimelineEl = document.getElementById('drawer-audit-timeline-list');
-      const auditLoadingEl = document.getElementById('drawer-audit-loading');
-      if (auditTimelineEl) {
-        auditLoadingEl?.classList.remove('hidden');
-        try {
-          const auditRes = await fetch(`/api/admin/audit?targetId=${encodeURIComponent(userId)}&limit=15`);
-          const auditData = await auditRes.json();
-          auditLoadingEl?.classList.add('hidden');
-          if (auditRes.ok && auditData.logs && auditData.logs.length > 0) {
-            auditTimelineEl.innerHTML = auditData.logs.map((log) => {
-              const date = log.created_at ? formatAdminTime(log.created_at, 'full') : '—';
-              let diffText = '';
-              try {
-                const diff = log.diff_json ? JSON.parse(log.diff_json) : null;
-                if (diff) {
-                  diffText = Object.keys(diff).map((k) => `${k}: ${JSON.stringify(diff[k].from)} → ${JSON.stringify(diff[k].to)}`).join(', ');
-                }
-              } catch {}
-              return `
-                <div class="p-2 rounded-xl bg-[#fafafa] border border-black/5 space-y-0.5">
-                  <div class="flex items-center justify-between text-[10px]">
-                    <span class="font-bold text-[#1d1d1f]">${escapeHtml(log.action)}</span>
-                    <span class="font-mono text-[#86868b]">${escapeHtml(date)}</span>
-                  </div>
-                  <div class="text-[10px] text-[#52525b] truncate">By: ${escapeHtml(log.admin_email)}</div>
-                  ${diffText ? `<div class="text-[9px] font-mono text-emerald-800">${escapeHtml(diffText)}</div>` : ''}
-                </div>
-              `;
-            }).join('');
-          } else {
-            auditTimelineEl.innerHTML = `<p class="text-[11px] text-[#86868b] italic">No administrative changes recorded for this buyer.</p>`;
-          }
-        } catch {
-          auditLoadingEl?.classList.add('hidden');
-          auditTimelineEl.innerHTML = `<p class="text-[11px] text-rose-600">Failed to load timeline.</p>`;
-        }
-      }
     } catch (err) {
       if (feedbackEl) {
         feedbackEl.className = 'p-3 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200 block';

@@ -1,13 +1,13 @@
 // src/utils/audit.ts
 // Asynchronous Operation Audit Logging Engine with 0ms Latency Impact
-import { insertAuditLog, computeJsonDiff } from '../db/audit.repo';
+import { insertAuditLog, computeJsonDiff, type AuditTargetType } from '../db/audit.repo';
 
-export { insertAuditLog, computeJsonDiff };
+export { insertAuditLog, computeJsonDiff, type AuditTargetType };
 
 export interface AuditLogParams {
   adminEmail: string;
   action: string;
-  targetType: 'ORDER' | 'USER' | 'SETTINGS' | 'MEMBER' | 'ROLE';
+  targetType: AuditTargetType;
   targetId?: string;
   before?: any;
   after?: any;
