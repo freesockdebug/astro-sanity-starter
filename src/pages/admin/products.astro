@@ -364,6 +364,24 @@ const pageTitle = 'Products & Catalog Workspace';
               </div>
             </div>
 
+            <!-- Amazon Direct Purchase Settings -->
+            <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+              <div>
+                <span class="font-bold text-xs text-[#1d1d1f] block">Amazon Direct Purchase & Sample</span>
+                <span class="text-[10px] text-[#86868b]">Buyers can purchase single-unit samples on Amazon directly</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block font-semibold mb-1">Amazon ASIN</label>
+                  <input type="text" id="p-amazon-asin" placeholder="e.g. B0CWXYZ123" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 font-mono text-xs" />
+                </div>
+                <div>
+                  <label class="block font-semibold mb-1">Custom Amazon Listing URL (Optional)</label>
+                  <input type="url" id="p-amazon-url" placeholder="https://www.amazon.com/dp/..." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                </div>
+              </div>
+            </div>
+
             <!-- Pricing Tiers Dynamic Table -->
             <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-2.5">
               <div class="flex items-center justify-between">
@@ -671,11 +689,13 @@ const pageTitle = 'Products & Catalog Workspace';
       // Price Tiers preview
       let priceText = '—';
       if (Array.isArray(p.pricingTiers) && p.pricingTiers.length > 0) {
-        const prices = p.pricingTiers.map((t: any) => t.price).filter(Boolean);
+        const prices = p.pricingTiers
+          .map((t: any) => parseFloat(String(t.price || '').replace(/[^0-9.]/g, '')))
+          .filter((n: number) => !isNaN(n));
         if (prices.length > 0) {
           const min = Math.min(...prices);
           const max = Math.max(...prices);
-          const curr = p.pricingTiers[0]?.currency || 'USD';
+          const curr = p.pricingTiers[0]?.currency || p.currency || 'USD';
           priceText = min === max ? `${curr} ${min}` : `${curr} ${min} ~ ${max}`;
         }
       }
@@ -703,7 +723,7 @@ const pageTitle = 'Products & Catalog Workspace';
           </td>
           <td class="py-2.5 px-3.5">
             <span class="font-semibold text-[#1d1d1f] block">${escapeHtml(priceText)}</span>
-            <span class="text-[10px] text-[#86868b]">MOQ: ${p.minOrderQuantity || 200}</span>
+            <span class="text-[10px] text-[#86868b]">MOQ: ${escapeHtml(p.moq || (p.minOrderQuantity ? `${p.minOrderQuantity} Pairs` : '200 Pairs'))}</span>
           </td>
           <td class="py-2.5 px-3.5">
             <div class="flex items-center gap-1">${colorDots || '<span class="text-[#86868b] text-[10px]">—</span>'}</div>
@@ -880,6 +900,23 @@ const pageTitle = 'Products & Catalog Workspace';
     (document.getElementById('p-moq') as HTMLInputElement).value = String(moqVal);
     (document.getElementById('p-leadtime') as HTMLInputElement).value = currentEditingProduct.leadTime || '';
 
+    // Currency and Unit backfill
+    const currSelect = document.getElementById('p-currency') as HTMLSelectElement | null;
+    if (currSelect) {
+      currSelect.value = currentEditingProduct.currency || currentEditingProduct.pricingTiers?.[0]?.currency || 'USD';
+    }
+    const unitSelect = document.getElementById('p-unit') as HTMLSelectElement | null;
+    if (unitSelect) {
+      const moqStr = String(currentEditingProduct.moq || '');
+      unitSelect.value = currentEditingProduct.pricingTiers?.[0]?.unit || (moqStr.toLowerCase().includes('pcs') ? 'Pcs' : 'Pairs');
+    }
+
+    // Amazon settings
+    const asinInput = document.getElementById('p-amazon-asin') as HTMLInputElement | null;
+    if (asinInput) asinInput.value = currentEditingProduct.amazonAsin || '';
+    const amazonUrlInput = document.getElementById('p-amazon-url') as HTMLInputElement | null;
+    if (amazonUrlInput) amazonUrlInput.value = currentEditingProduct.amazonUrl || '';
+
     // Main Image
     renderMainImagePreview();
     // Gallery
@@ -1014,14 +1051,18 @@ const pageTitle = 'Products & Catalog Workspace';
     const tbody = document.getElementById('tier-rows');
     if (!tbody) return;
     const tiers = currentEditingProduct.pricingTiers || [];
-    tbody.innerHTML = tiers.map((t: any, idx: number) => `
-      <tr>
-        <td class="py-1.5 pr-2"><input type="number" class="t-min w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${t.minQuantity || ''}" /></td>
-        <td class="py-1.5 pr-2"><input type="number" class="t-max w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" placeholder="∞" value="${t.maxQuantity || ''}" /></td>
-        <td class="py-1.5 pr-2"><input type="number" step="0.01" class="t-price w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${t.price || ''}" /></td>
-        <td class="py-1.5 text-right"><button type="button" class="btn-del-tier text-[#86868b] hover:text-rose-600" data-idx="${idx}">✕</button></td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = tiers.map((t: any, idx: number) => {
+      const cleanPrice = t.price !== undefined && t.price !== null ? parseFloat(String(t.price).replace(/[^0-9.]/g, '')) : '';
+      const safePrice = isNaN(cleanPrice as number) ? '' : cleanPrice;
+      return `
+        <tr>
+          <td class="py-1.5 pr-2"><input type="number" class="t-min w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${t.minQuantity || ''}" /></td>
+          <td class="py-1.5 pr-2"><input type="number" class="t-max w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" placeholder="∞" value="${t.maxQuantity || ''}" /></td>
+          <td class="py-1.5 pr-2"><input type="number" step="0.01" class="t-price w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${safePrice}" /></td>
+          <td class="py-1.5 text-right"><button type="button" class="btn-del-tier text-[#86868b] hover:text-rose-600" data-idx="${idx}">✕</button></td>
+        </tr>
+      `;
+    }).join('');
 
     tbody.querySelectorAll('.btn-del-tier').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1164,6 +1205,12 @@ const pageTitle = 'Products & Catalog Workspace';
       const value = (div.querySelector('.s-val') as HTMLInputElement)?.value.trim() || '';
       return { _key: crypto.randomUUID().slice(0, 8), label, name: label, value };
     }).filter((s) => s.label);
+
+    // Read back Amazon ASIN & Custom Amazon URL
+    const asinVal = (document.getElementById('p-amazon-asin') as HTMLInputElement)?.value.trim();
+    currentEditingProduct.amazonAsin = asinVal || undefined;
+    const amazonUrlVal = (document.getElementById('p-amazon-url') as HTMLInputElement)?.value.trim();
+    currentEditingProduct.amazonUrl = amazonUrlVal || undefined;
 
     // Clean ephemeral helper fields before sending to Sanity
     const docToSave = JSON.parse(JSON.stringify(currentEditingProduct));

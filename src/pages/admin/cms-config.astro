@@ -104,6 +104,70 @@ const pageTitle = 'CMS Site Configuration';
             <label class="block font-bold text-xs text-[#1d1d1f]">Footer & Copyright Text</label>
             <input type="text" id="site-copyright" placeholder="© 2026 Gwen & Venni Atelier. All rights reserved." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs" />
           </div>
+
+          <!-- WhatsApp & Instant Notification Integrations -->
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
+            <span class="font-bold text-xs text-[#1d1d1f] block">Instant Communication & Webhook Notifications</span>
+            
+            <div class="space-y-3">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="site-enable-whatsapp" class="rounded accent-black" />
+                <span class="font-semibold text-xs text-[#1d1d1f]">Enable Floating WhatsApp Bubble</span>
+              </label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+                <div>
+                  <label class="block font-semibold mb-1 text-[11px]">WhatsApp Phone Number</label>
+                  <input type="text" id="site-whatsapp-number" placeholder="+1 (555) 019-2834" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="block font-semibold mb-1 text-[11px]">Default Inquiry Greeting Message</label>
+                  <input type="text" id="site-whatsapp-prefill" placeholder="Hello Gwen & Venni team..." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                </div>
+              </div>
+            </div>
+
+            <div class="border-t border-black/5 pt-3 space-y-3">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="site-enable-webhook" class="rounded accent-black" />
+                <span class="font-semibold text-xs text-[#1d1d1f]">Enable Inquiry Notification Webhook</span>
+              </label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+                <div>
+                  <label class="block font-semibold mb-1 text-[11px]">Robot Webhook URL (Slack, DingTalk, Feishu, etc.)</label>
+                  <input type="url" id="site-webhook-url" placeholder="https://hooks.slack.com/services/..." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="block font-semibold mb-1 text-[11px]">Inquiry Alert Recipient Email</label>
+                  <input type="email" id="site-recipient-email" placeholder="wholesale@gwenvenni.com" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Performance & Edge Cache -->
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+            <span class="font-bold text-xs text-[#1d1d1f] block">Performance & Cloudflare Edge CDN</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="flex items-center gap-2 pt-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="site-enable-image-proxy" class="rounded accent-black" />
+                  <span class="font-semibold text-xs text-[#1d1d1f]">Enable Cloudflare Image Proxy (/cdn-image)</span>
+                </label>
+              </div>
+              <div>
+                <label class="block font-semibold mb-1 text-[11px]">HTML Edge Cache TTL (Seconds)</label>
+                <select id="site-edge-cache-ttl" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs">
+                  <option value="0">0s (Direct bypass / No cache)</option>
+                  <option value="60">60s (1 minute - Testing)</option>
+                  <option value="300">300s (5 minutes - Recommended Gold Standard)</option>
+                  <option value="900">900s (15 minutes)</option>
+                  <option value="1800">1800s (30 minutes)</option>
+                  <option value="3600">3600s (1 hour)</option>
+                  <option value="86400">86400s (24 hours)</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- PANE 2: catalogSettings -->
@@ -186,6 +250,66 @@ const pageTitle = 'CMS Site Configuration';
               </div>
             </div>
           </div>
+
+          <!-- Master Button Visibility Toggles -->
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+            <div>
+              <span class="font-bold text-xs text-[#1d1d1f] block">Global Master Button Visibility Toggles</span>
+              <span class="text-[10px] text-[#86868b]">Control visibility of call-to-action buttons across the entire website</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="rfq-toggle-swatch-kit" class="rounded accent-black" />
+                <span class="text-xs text-[#1d1d1f]">Show "Request Swatch Kit" button (Master Toggle)</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="rfq-toggle-nav-action" class="rounded accent-black" />
+                <span class="text-xs text-[#1d1d1f]">Show RFQ cart button in Navbar</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="rfq-toggle-card-quote" class="rounded accent-black" />
+                <span class="text-xs text-[#1d1d1f]">Show "Quote" button on Product Cards</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="rfq-toggle-hero-secondary" class="rounded accent-black" />
+                <span class="text-xs text-[#1d1d1f]">Show secondary CTA button in Hero</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="rfq-toggle-product-buy-sample" class="rounded accent-black" />
+                <span class="text-xs text-[#1d1d1f]">Show "Buy Sample on Amazon" on detail page</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="rfq-toggle-product-add-quote" class="rounded accent-black" />
+                <span class="text-xs text-[#1d1d1f]">Show "Add to Quote Basket" on detail page</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer sm:col-span-2">
+                <input type="checkbox" id="rfq-toggle-product-spec-sheet" class="rounded accent-black" />
+                <span class="text-xs text-[#1d1d1f]">Show "Download Spec Sheet PDF" on detail page</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Swatch Kit & Amazon Store Defaults -->
+          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
+            <div>
+              <span class="font-bold text-xs text-[#1d1d1f] block">Official Swatch Kit Defaults & Amazon Store</span>
+              <span class="text-[10px] text-[#86868b]">Default item added when buyers click sample/swatch requests</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block font-semibold mb-1 text-[11px]">Swatch Kit SKU</label>
+                <input type="text" id="rfq-swatch-sku" placeholder="SWATCH-KIT" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 font-mono text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1 text-[11px]">Swatch Kit Title (EN)</label>
+                <input type="text" id="rfq-swatch-title" placeholder="Curated Fabric Swatch Kit" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+              <div>
+                <label class="block font-semibold mb-1 text-[11px]">Default Amazon Store URL</label>
+                <input type="url" id="rfq-amazon-store-url" placeholder="https://www.amazon.com/stores/..." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -262,6 +386,24 @@ const pageTitle = 'CMS Site Configuration';
     if (brandInput) brandInput.value = s.header?.title || s.brandName || 'Gwen & Venni';
     if (tagInput) tagInput.value = getLocaleVal(s.header?.subtitle) || s.tagline || '';
     if (copyInput) copyInput.value = getLocaleVal(s.footer?.text) || s.copyright || '';
+
+    const enableWa = document.getElementById('site-enable-whatsapp') as HTMLInputElement | null;
+    const waNum = document.getElementById('site-whatsapp-number') as HTMLInputElement | null;
+    const waPrefill = document.getElementById('site-whatsapp-prefill') as HTMLInputElement | null;
+    const enableWb = document.getElementById('site-enable-webhook') as HTMLInputElement | null;
+    const wbUrl = document.getElementById('site-webhook-url') as HTMLInputElement | null;
+    const emailInput = document.getElementById('site-recipient-email') as HTMLInputElement | null;
+    const enableProxy = document.getElementById('site-enable-image-proxy') as HTMLInputElement | null;
+    const ttlSelect = document.getElementById('site-edge-cache-ttl') as HTMLSelectElement | null;
+
+    if (enableWa) enableWa.checked = Boolean(s.enableWhatsApp);
+    if (waNum) waNum.value = s.whatsAppNumber || '';
+    if (waPrefill) waPrefill.value = getLocaleVal(s.whatsAppPrefillText) || '';
+    if (enableWb) enableWb.checked = Boolean(s.enableNotificationWebhook);
+    if (wbUrl) wbUrl.value = s.notificationWebhookUrl || '';
+    if (emailInput) emailInput.value = s.notificationRecipientEmail || '';
+    if (enableProxy) enableProxy.checked = s.enableImageProxy !== undefined ? Boolean(s.enableImageProxy) : true;
+    if (ttlSelect) ttlSelect.value = String(s.edgeCacheTtl !== undefined ? s.edgeCacheTtl : 300);
 
     renderNavItems();
   }
@@ -385,6 +527,30 @@ const pageTitle = 'CMS Site Configuration';
     (document.getElementById('rfq-empty-en') as HTMLInputElement).value = getLocaleVal(r.drawerEmptyTitle) || getLocaleVal(r.emptyCartNotice) || '';
     (document.getElementById('rfq-btn-en') as HTMLInputElement).value = getLocaleVal(r.btnAddToQuoteText) || getLocaleVal(r.addToQuoteBtn) || '';
     (document.getElementById('rfq-submit-en') as HTMLInputElement).value = getLocaleVal(r.drawerSubmitButtonText) || getLocaleVal(r.submitInquiryBtn) || '';
+
+    // Master button toggles
+    const tSwatch = document.getElementById('rfq-toggle-swatch-kit') as HTMLInputElement | null;
+    if (tSwatch) tSwatch.checked = Boolean(r.showSwatchKitButton);
+    const tNav = document.getElementById('rfq-toggle-nav-action') as HTMLInputElement | null;
+    if (tNav) tNav.checked = Boolean(r.showNavActionButton);
+    const tCard = document.getElementById('rfq-toggle-card-quote') as HTMLInputElement | null;
+    if (tCard) tCard.checked = r.showCardQuoteButton !== undefined ? Boolean(r.showCardQuoteButton) : true;
+    const tHero = document.getElementById('rfq-toggle-hero-secondary') as HTMLInputElement | null;
+    if (tHero) tHero.checked = r.showHeroSecondaryButton !== undefined ? Boolean(r.showHeroSecondaryButton) : true;
+    const tBuy = document.getElementById('rfq-toggle-product-buy-sample') as HTMLInputElement | null;
+    if (tBuy) tBuy.checked = r.showProductBuySampleButton !== undefined ? Boolean(r.showProductBuySampleButton) : true;
+    const tAdd = document.getElementById('rfq-toggle-product-add-quote') as HTMLInputElement | null;
+    if (tAdd) tAdd.checked = r.showProductAddToQuoteButton !== undefined ? Boolean(r.showProductAddToQuoteButton) : true;
+    const tSpec = document.getElementById('rfq-toggle-product-spec-sheet') as HTMLInputElement | null;
+    if (tSpec) tSpec.checked = r.showProductSpecSheetButton !== undefined ? Boolean(r.showProductSpecSheetButton) : true;
+
+    // Swatch defaults & Amazon store
+    const sSku = document.getElementById('rfq-swatch-sku') as HTMLInputElement | null;
+    if (sSku) sSku.value = r.swatchKitSku || 'SWATCH-KIT';
+    const sTitle = document.getElementById('rfq-swatch-title') as HTMLInputElement | null;
+    if (sTitle) sTitle.value = getLocaleVal(r.swatchKitTitle) || '';
+    const sStore = document.getElementById('rfq-amazon-store-url') as HTMLInputElement | null;
+    if (sStore) sStore.value = r.defaultAmazonStoreUrl || '';
   }
 
   // Save handler for current active config
@@ -414,6 +580,16 @@ const pageTitle = 'CMS Site Configuration';
 
       if (!configs.siteConfig.footer) configs.siteConfig.footer = {};
       configs.siteConfig.footer.text = makeLocaleVal(copyright, configs.siteConfig.footer.text);
+
+      // WhatsApp & Integrations
+      configs.siteConfig.enableWhatsApp = (document.getElementById('site-enable-whatsapp') as HTMLInputElement)?.checked;
+      configs.siteConfig.whatsAppNumber = (document.getElementById('site-whatsapp-number') as HTMLInputElement)?.value.trim();
+      configs.siteConfig.whatsAppPrefillText = makeLocaleVal((document.getElementById('site-whatsapp-prefill') as HTMLInputElement)?.value.trim() || '', configs.siteConfig.whatsAppPrefillText);
+      configs.siteConfig.enableNotificationWebhook = (document.getElementById('site-enable-webhook') as HTMLInputElement)?.checked;
+      configs.siteConfig.notificationWebhookUrl = (document.getElementById('site-webhook-url') as HTMLInputElement)?.value.trim();
+      configs.siteConfig.notificationRecipientEmail = (document.getElementById('site-recipient-email') as HTMLInputElement)?.value.trim();
+      configs.siteConfig.enableImageProxy = (document.getElementById('site-enable-image-proxy') as HTMLInputElement)?.checked;
+      configs.siteConfig.edgeCacheTtl = parseInt((document.getElementById('site-edge-cache-ttl') as HTMLSelectElement)?.value || '300', 10);
 
       // Backwards-compatible aliases
       configs.siteConfig.brandName = brand;
@@ -468,6 +644,20 @@ const pageTitle = 'CMS Site Configuration';
       configs.rfqSettings.drawerEmptyTitle = makeLocaleVal(emptyNotice, configs.rfqSettings.drawerEmptyTitle);
       configs.rfqSettings.btnAddToQuoteText = makeLocaleVal(btnQuote, configs.rfqSettings.btnAddToQuoteText);
       configs.rfqSettings.drawerSubmitButtonText = makeLocaleVal(btnSubmit, configs.rfqSettings.drawerSubmitButtonText);
+
+      // Master button toggles
+      configs.rfqSettings.showSwatchKitButton = (document.getElementById('rfq-toggle-swatch-kit') as HTMLInputElement)?.checked;
+      configs.rfqSettings.showNavActionButton = (document.getElementById('rfq-toggle-nav-action') as HTMLInputElement)?.checked;
+      configs.rfqSettings.showCardQuoteButton = (document.getElementById('rfq-toggle-card-quote') as HTMLInputElement)?.checked;
+      configs.rfqSettings.showHeroSecondaryButton = (document.getElementById('rfq-toggle-hero-secondary') as HTMLInputElement)?.checked;
+      configs.rfqSettings.showProductBuySampleButton = (document.getElementById('rfq-toggle-product-buy-sample') as HTMLInputElement)?.checked;
+      configs.rfqSettings.showProductAddToQuoteButton = (document.getElementById('rfq-toggle-product-add-quote') as HTMLInputElement)?.checked;
+      configs.rfqSettings.showProductSpecSheetButton = (document.getElementById('rfq-toggle-product-spec-sheet') as HTMLInputElement)?.checked;
+
+      // Swatch defaults & Amazon store
+      configs.rfqSettings.swatchKitSku = (document.getElementById('rfq-swatch-sku') as HTMLInputElement)?.value.trim() || 'SWATCH-KIT';
+      configs.rfqSettings.swatchKitTitle = makeLocaleVal((document.getElementById('rfq-swatch-title') as HTMLInputElement)?.value.trim() || '', configs.rfqSettings.swatchKitTitle);
+      configs.rfqSettings.defaultAmazonStoreUrl = (document.getElementById('rfq-amazon-store-url') as HTMLInputElement)?.value.trim() || undefined;
 
       // Backward-compatible aliases
       configs.rfqSettings.emptyCartNotice = configs.rfqSettings.drawerEmptyTitle;

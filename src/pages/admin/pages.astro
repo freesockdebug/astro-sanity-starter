@@ -350,8 +350,9 @@ const pageTitle = 'Pages & Modular Visual Builder';
         customSection: '📝 Custom Section',
       };
       const typeLabel = typeIcons[type] || type;
-      const secTitle = getEnText(sec.title || sec.heading);
-      const secSub = getEnText(sec.subtitle || sec.eyebrow || sec.badge);
+      const secTitle = getEnText(sec.headline || sec.title || sec.heading || sec.adminLabel || sec.blocks?.[0]?.headline);
+      const secBadge = getEnText(sec.superTitle || sec.badge || sec.eyebrow || sec.preset || sec.blocks?.[0]?.badge);
+      const secDesc = getEnText(sec.subline || sec.description || sec.subtitle || sec.blocks?.[0]?.subtitle);
 
       return `
         <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3 section-block" data-idx="${idx}">
@@ -369,14 +370,18 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
           <!-- Section Editor Inputs -->
           <div class="space-y-3">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Section Title (EN)</label>
-                <input type="text" class="sec-title w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secTitle)}" />
+                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Headline / Title (EN)</label>
+                <input type="text" class="sec-title w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secTitle)}" placeholder="Main section headline" />
               </div>
               <div>
-                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Section Subtitle / Eyebrow (EN)</label>
-                <input type="text" class="sec-sub w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secSub)}" />
+                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Eyebrow / Badge (EN)</label>
+                <input type="text" class="sec-badge w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secBadge)}" placeholder="e.g. CRAFTSMANSHIP" />
+              </div>
+              <div>
+                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Subline / Description (EN)</label>
+                <input type="text" class="sec-desc w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secDesc)}" placeholder="Secondary description" />
               </div>
             </div>
             ${type === 'customSection' ? `
@@ -431,23 +436,33 @@ const pageTitle = 'Pages & Modular Visual Builder';
     if (!activePageDoc || !activePageDoc.sections) return;
     const blocks = document.querySelectorAll('.section-block');
     blocks.forEach((block, idx) => {
-      if (activePageDoc.sections[idx]) {
+      const sec = activePageDoc.sections[idx];
+      if (sec) {
         const titleVal = (block.querySelector('.sec-title') as HTMLInputElement)?.value.trim() || '';
-        const subVal = (block.querySelector('.sec-sub') as HTMLInputElement)?.value.trim() || '';
+        const badgeVal = (block.querySelector('.sec-badge') as HTMLInputElement)?.value.trim() || '';
+        const descVal = (block.querySelector('.sec-desc') as HTMLInputElement)?.value.trim() || '';
         const contentVal = (block.querySelector('.sec-content') as HTMLTextAreaElement)?.value;
 
-        if (activePageDoc.sections[idx].heading !== undefined) {
-          activePageDoc.sections[idx].heading = setEnText(activePageDoc.sections[idx].heading, titleVal);
+        // Headline / Title synchronization
+        sec.headline = setEnText(sec.headline, titleVal);
+        sec.title = setEnText(sec.title, titleVal);
+        sec.heading = setEnText(sec.heading, titleVal);
+        if (sec._type === 'customSection' && !sec.adminLabel) {
+          sec.adminLabel = titleVal;
         }
-        activePageDoc.sections[idx].title = setEnText(activePageDoc.sections[idx].title, titleVal);
 
-        if (activePageDoc.sections[idx].eyebrow !== undefined) {
-          activePageDoc.sections[idx].eyebrow = setEnText(activePageDoc.sections[idx].eyebrow, subVal);
-        }
-        activePageDoc.sections[idx].subtitle = setEnText(activePageDoc.sections[idx].subtitle, subVal);
+        // Eyebrow / Badge / SuperTitle synchronization
+        sec.superTitle = setEnText(sec.superTitle, badgeVal);
+        sec.badge = setEnText(sec.badge, badgeVal);
+        sec.eyebrow = setEnText(sec.eyebrow, badgeVal);
+
+        // Subline / Description / Subtitle synchronization
+        sec.subline = setEnText(sec.subline, descVal);
+        sec.description = setEnText(sec.description, descVal);
+        sec.subtitle = setEnText(sec.subtitle, descVal);
 
         if (contentVal !== undefined) {
-          activePageDoc.sections[idx].content = contentVal;
+          sec.content = contentVal;
         }
       }
     });
@@ -468,8 +483,12 @@ const pageTitle = 'Pages & Modular Visual Builder';
     activePageDoc.sections.push({
       _type: type,
       _key: crypto.randomUUID().slice(0, 8),
-      title: { en: 'New Section Title' },
-      subtitle: { en: 'Section Subtitle' },
+      title: { _type: 'localeString', en: 'New Section Title' },
+      headline: { _type: 'localeString', en: 'New Section Title' },
+      badge: { _type: 'localeString', en: '' },
+      superTitle: { _type: 'localeString', en: '' },
+      subtitle: { _type: 'localeString', en: 'Section Subtitle' },
+      subline: { _type: 'localeString', en: 'Section Subtitle' },
     });
     renderSections();
   });
