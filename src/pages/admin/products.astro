@@ -946,7 +946,7 @@ const pageTitle = 'Products & Catalog Workspace';
 
       if (!currentEditingProduct.mainImage) currentEditingProduct.mainImage = { _type: 'image' };
       currentEditingProduct.mainImage.asset = data.asset.asset;
-      currentEditingProduct.mainImage.asset.url = data.url;
+      currentEditingProduct.mainImageUrl = data.url;
       renderMainImagePreview();
       (window as any).__showToast?.('Image uploaded successfully', 'success');
     } catch (err: any) {
@@ -964,7 +964,7 @@ const pageTitle = 'Products & Catalog Workspace';
       return;
     }
     container.innerHTML = gallery.map((item: any, idx: number) => {
-      const url = item.asset?.url || '';
+      const url = item.asset?.url || currentEditingProduct?.galleryUrls?.[idx] || '';
       return `
         <div class="relative group rounded-xl overflow-hidden border border-black/10 aspect-square bg-[#f5f5f7]">
           ${url ? `<img src="${escapeHtml(url)}" class="w-full h-full object-cover" />` : `<div class="w-full h-full flex items-center justify-center text-[10px] text-[#86868b]">Img</div>`}
@@ -977,6 +977,7 @@ const pageTitle = 'Products & Catalog Workspace';
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
         currentEditingProduct.gallery.splice(idx, 1);
+        currentEditingProduct.galleryUrls?.splice(idx, 1);
         renderGalleryPreview();
       });
     });
@@ -994,11 +995,13 @@ const pageTitle = 'Products & Catalog Workspace';
       if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
 
       if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
+      if (!currentEditingProduct.galleryUrls) currentEditingProduct.galleryUrls = [];
       currentEditingProduct.gallery.push({
         _type: 'image',
         _key: crypto.randomUUID().slice(0, 8),
         asset: { ...data.asset.asset, url: data.url },
       });
+      currentEditingProduct.galleryUrls.push(data.url);
       renderGalleryPreview();
       (window as any).__showToast?.('Added image to gallery', 'success');
     } catch (err: any) {
