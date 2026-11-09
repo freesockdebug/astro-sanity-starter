@@ -14,7 +14,7 @@ export default defineConfig({
     output: 'server',
     session: false,
     build: {
-        inlineStylesheets: 'always'
+        inlineStylesheets: 'auto'
     },
     devToolbar: {
         enabled: false

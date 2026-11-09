@@ -48,11 +48,12 @@ const {
     bare = false,
 } = Astro.props;
 
+const isShellReq = Astro.request.headers.get('x-shell-request') === '1';
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
-const hreflangAlternates = getHreflangAlternates(Astro.url, Astro.site);
-const configData: SiteConfig = bare ? ({} as SiteConfig) : ((await fetchData()) || {});
-if (!bare) {
+const hreflangAlternates = isShellReq ? [] : getHreflangAlternates(Astro.url, Astro.site);
+const configData: SiteConfig = (bare || isShellReq) ? ({} as SiteConfig) : ((await fetchData()) || {});
+if (!bare && !isShellReq) {
     SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
 }
 
@@ -76,55 +77,61 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
     <head>
         <!-- High Priority Global Metadata -->
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <meta name="generator" content={Astro.generator} />
+        {isShellReq ? (
+            <title>{title ? `${title}${addTitleSuffix ? ' | GWENVENNI' : ''}` : 'GWENVENNI'}</title>
+        ) : (
+            <>
+                <meta name="viewport" content="width=device-width,initial-scale=1" />
+                <meta name="generator" content={Astro.generator} />
 
-        <!-- High-priority Responsive LCP Image Preload (Avoids downloading mismatched 1200px on mobile) -->
-        {preloadHeroImage && (
-            typeof preloadHeroImage === 'object' ? (
-                <link
-                    rel="preload"
-                    as="image"
-                    href={preloadHeroImage.src}
-                    imagesrcset={preloadHeroImage.srcset}
-                    imagesizes={preloadHeroImage.sizes}
-                    fetchpriority="high"
+                <!-- High-priority Responsive LCP Image Preload (Avoids downloading mismatched 1200px on mobile) -->
+                {preloadHeroImage && (
+                    typeof preloadHeroImage === 'object' ? (
+                        <link
+                            rel="preload"
+                            as="image"
+                            href={preloadHeroImage.src}
+                            imagesrcset={preloadHeroImage.srcset}
+                            imagesizes={preloadHeroImage.sizes}
+                            fetchpriority="high"
+                        />
+                    ) : (
+                        resolvedImage?.src && (
+                            <link rel="preload" as="image" href={resolvedImage.src} fetchpriority="high" />
+                        )
+                    )
+                )}
+
+                <!-- Reusable Sanity & Astro SEO Component (Title, Canonical, OpenGraph, Twitter Cards) -->
+                <SEO
+                    title={title}
+                    addTitleSuffix={addTitleSuffix}
+                    description={description}
+                    image={image}
+                    canonicalUrl={canonicalUrl}
+                    type={type}
+                    twitterCard={twitterCard}
+                    noindex={noindex || bare}
+                    nofollow={nofollow || bare}
+                    page={page}
+                    siteConfig={configData}
+                    structuredData={structuredData}
                 />
-            ) : (
-                resolvedImage?.src && (
-                    <link rel="preload" as="image" href={resolvedImage.src} fetchpriority="high" />
-                )
-            )
+
+                <!-- Automatic Google SEO Multilingual Hreflang Interlinking Tags (en, de, fr, es + x-default) -->
+                {hreflangAlternates.map((alt) => (
+                    <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
+                ))}
+
+                <!-- Low Priority Global Metadata -->
+                <link rel="icon" type="image/svg+xml" href={configData?.favicon?.src || "/favicon.svg"} />
+                <link rel="alternate icon" href="/favicon.ico" />
+                <link rel="sitemap" href="/sitemap-index.xml" />
+            </>
         )}
-
-        <!-- Reusable Sanity & Astro SEO Component (Title, Canonical, OpenGraph, Twitter Cards) -->
-        <SEO
-            title={title}
-            addTitleSuffix={addTitleSuffix}
-            description={description}
-            image={image}
-            canonicalUrl={canonicalUrl}
-            type={type}
-            twitterCard={twitterCard}
-            noindex={noindex || bare}
-            nofollow={nofollow || bare}
-            page={page}
-            siteConfig={configData}
-            structuredData={structuredData}
-        />
-
-        <!-- Automatic Google SEO Multilingual Hreflang Interlinking Tags (en, de, fr, es + x-default) -->
-        {hreflangAlternates.map((alt) => (
-            <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
-        ))}
-
-        <!-- Low Priority Global Metadata -->
-        <link rel="icon" type="image/svg+xml" href={configData?.favicon?.src || "/favicon.svg"} />
-        <link rel="alternate icon" href="/favicon.ico" />
-        <link rel="sitemap" href="/sitemap-index.xml" />
     </head>
     <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
-        {!bare && (
+        {!isShellReq && !bare && (
             <SectionBoundary sectionName="AppleNav">
                 <AppleNav config={configData} />
             </SectionBoundary>
@@ -132,19 +139,19 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
         <main class={mainClass}>
             <slot />
         </main>
-        {!bare && (
+        {!isShellReq && !bare && (
             <SectionBoundary sectionName="AppleFooter">
                 <AppleFooter config={configData} />
             </SectionBoundary>
         )}
-        {!bare && (
+        {!isShellReq && !bare && (
             <SectionBoundary sectionName="QuoteDrawer">
                 <QuoteDrawer />
             </SectionBoundary>
         )}
 
         <!-- 1. WhatsApp Instant Live Chat Widget (Controlled from Sanity Studio) -->
-        {!bare && configData?.enableWhatsApp && configData?.whatsAppNumber && (
+        {!isShellReq && !bare && configData?.enableWhatsApp && configData?.whatsAppNumber && (
             <SectionBoundary sectionName="WhatsAppWidget">
                 <WhatsAppWidget
                     phoneNumber={configData.whatsAppNumber}
@@ -154,8 +161,10 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             </SectionBoundary>
         )}
 
-        <!-- 2. Idle + Viewport Shimmer Hook & Global Toast Notification Stack -->
-        <script>
+        {!isShellReq && (
+            <>
+                <!-- 2. Idle + Viewport Shimmer Hook & Global Toast Notification Stack -->
+                <script>
             import { useIntersectionShimmer } from '@utils/useIntersectionShimmer';
             import { toastsStore, showToast, dismissToast, copyToClipboard } from '@stores/uiStore';
 
@@ -649,5 +658,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
             });
           }
         </script>
+            </>
+        )}
     </body>
 </html>
