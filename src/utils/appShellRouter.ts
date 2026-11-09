@@ -244,13 +244,15 @@ function updateActiveNavUI(targetUrl: URL, scope: 'admin' | 'buyer', targetTabKe
     }
   }
 
-  const allLinks = document.querySelectorAll(`a[data-shell-nav="${scope}"]`);
+  const allLinks = document.querySelectorAll(
+    `aside[id*="sidebar"] a[data-shell-nav="${scope}"], nav[aria-label*="Bottom"] a[data-shell-nav="${scope}"]`
+  );
   allLinks.forEach((linkEl) => {
     const link = linkEl as HTMLAnchorElement;
     const itemKey = link.getAttribute('data-tab-key');
     const isMatch = itemKey === key;
 
-    const isBottomBar = link.closest('nav[aria-label="Mobile Quick Bottom Navigation"]');
+    const isBottomBar = link.closest('nav[aria-label*="Bottom"]');
     if (isBottomBar) {
       if (isMatch) {
         link.classList.remove('text-[#86868b]');
@@ -275,7 +277,9 @@ function updateActiveNavUI(targetUrl: URL, scope: 'admin' | 'buyer', targetTabKe
     if (targetTabTitle) {
       breadcrumb.textContent = targetTabTitle;
     } else {
-      const matched = document.querySelector(`a[data-shell-nav="${scope}"][data-tab-key="${key}"]`);
+      const matched = document.querySelector(
+        `aside[id*="sidebar"] a[data-shell-nav="${scope}"][data-tab-key="${key}"], nav[aria-label*="Bottom"] a[data-shell-nav="${scope}"][data-tab-key="${key}"]`
+      );
       const title = matched?.getAttribute('data-tab-title');
       if (title) breadcrumb.textContent = title;
     }

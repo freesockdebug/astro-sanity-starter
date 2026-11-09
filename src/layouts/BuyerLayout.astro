@@ -76,186 +76,190 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
 
     <!-- 2. Right Main Canvas Area -->
     <div id="shell-right-col" class="relative flex-1 flex flex-col min-w-0">
-      <!-- Mobile Top Sticky Bar (< lg): 56px (h-14) Compact Header -->
-      <header class="lg:hidden h-14 flex items-center justify-between px-3.5 bg-white/95 backdrop-blur-md border-b border-black/10 sticky top-0 z-30 shadow-2xs print:hidden">
-        <div class="flex items-center gap-2">
-          <button
-            id="buyer-open-sidebar-btn"
-            type="button"
-            class="p-2 -ml-1 rounded-xl text-[#1d1d1f] hover:bg-[#f5f5f7] active:scale-95 transition-all cursor-pointer"
-            aria-label="Open Navigation Menu"
-          >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <span class="text-sm font-bold tracking-tight text-[#1d1d1f]">Buyer Portal</span>
-          <TierBadge tier={dbUser?.tier} size="sm" variant="short" />
-        </div>
-
-        <div class="flex items-center gap-2">
-          <label
-            for="quote-drawer-toggle"
-            id="mobile-header-quote-btn"
-            class="relative p-2 rounded-xl text-[#1d1d1f] hover:bg-[#f5f5f7] transition-all cursor-pointer"
-            aria-label="Open Quote Basket"
-          >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-            <span class="nav-quote-badge quote-badge hidden absolute -top-0.5 -right-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[#1d1d1f] text-white min-w-[14px] text-center shadow-xs">
-              0
-            </span>
-          </label>
-
-          <a
-            href={getLocalizedPath('/products', currentLang)}
-            class="px-2 py-1 rounded-lg bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-black text-xs font-medium"
-          >
-            {t('buyer.browseCatalog')} ↗
-          </a>
-
-          <button
-            id="buyer-account-trigger-mobile"
-            type="button"
-            aria-haspopup="true"
-            aria-expanded="false"
-            class="p-1 rounded-xl bg-[#f5f5f7] hover:bg-black/5 border border-black/10 text-xs transition-all cursor-pointer flex items-center gap-1"
-            aria-label="Account Menu"
-          >
-            <div class="w-6 h-6 rounded-lg bg-[#1d1d1f] text-white flex items-center justify-center font-mono font-semibold text-[11px] shrink-0">
-              {initial}
-            </div>
-            <svg class="w-3 h-3 text-[#86868b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
-      </header>
-
-      <!-- Desktop Top Context Breadcrumb Bar (>= lg) -->
-      <header class="hidden lg:flex items-center justify-between px-8 py-3.5 bg-white border-b border-black/5 shrink-0 print:hidden">
-        <div class="flex items-center gap-2 text-xs">
-          <span class="text-[#86868b]">{t('buyer.portal')}</span>
-          <span class="text-[#86868b]">/</span>
-          <span id="shell-breadcrumb-title" class="font-semibold text-[#1d1d1f]">{currentTabTitle}</span>
-        </div>
-
-        <div class="flex items-center gap-3 text-xs">
-          <a
-            href={getLocalizedPath('/products', currentLang)}
-            class="text-[#52525b] hover:text-[#1d1d1f] transition-colors font-medium flex items-center gap-1"
-          >
-            <span>← {t('buyer.backToCatalog')}</span>
-          </a>
-
-          <label
-            for="quote-drawer-toggle"
-            id="desktop-header-quote-btn"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1d1d1f] hover:bg-black text-white transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
-          >
-            <span>🛒 {t('buyer.openQuoteBag')}</span>
-            <span class="nav-quote-badge quote-badge hidden px-1.5 py-0.2 rounded-md text-[10px] font-bold bg-white text-[#1d1d1f]">
-              0
-            </span>
-          </label>
-
-          <div class="h-4 w-px bg-black/10 shrink-0"></div>
-
-          <button
-            id="buyer-account-trigger-desktop"
-            type="button"
-            aria-haspopup="true"
-            aria-expanded="false"
-            class="inline-flex items-center gap-2 p-1 pl-2.5 rounded-xl bg-[#f5f5f7] hover:bg-black/5 border border-black/10 text-xs transition-all cursor-pointer shadow-2xs select-none"
-          >
-            <TierBadge tier={tier} size="sm" variant="short" />
-            <span class="font-semibold text-[#1d1d1f] max-w-[120px] truncate">{displayName}</span>
-            <div class="w-6 h-6 rounded-lg bg-[#1d1d1f] text-white flex items-center justify-center font-mono font-semibold text-[11px] shrink-0">
-              {initial}
-            </div>
-            <svg class="w-3 h-3 text-[#86868b] transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
-      </header>
-
-      <!-- Buyer Account Popover Dropdown Card -->
-      <div
-        id="buyer-account-popover"
-        class="hidden fixed lg:absolute right-3.5 lg:right-8 top-14 lg:top-14 w-64 bg-white border border-black/10 rounded-2xl shadow-xl p-2 z-50 transition-all origin-top-right text-xs print:hidden"
-        role="menu"
-        aria-orientation="vertical"
-      >
-        <!-- Buyer Info Header -->
-        <div class="p-2.5 border-b border-black/5 bg-[#fafafa] rounded-xl mb-1.5">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <div class="w-8 h-8 rounded-lg bg-[#1d1d1f] text-white flex items-center justify-center font-mono font-semibold text-xs shrink-0">
-                {initial}
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="font-semibold text-[#1d1d1f] truncate">{displayName}</p>
-                {displayCompany && <p class="text-[10px] text-[#52525b] truncate">{displayCompany}</p>}
-              </div>
-            </div>
-            <TierBadge tier={tier} size="sm" variant="short" />
-          </div>
-          <p class="text-[10px] text-[#86868b] font-mono truncate mt-1.5">{sessionUser.email}</p>
-        </div>
-
-        <!-- Navigation Actions -->
-        <div class="space-y-0.5">
-          <a
-            href={getLocalizedPath('/account', currentLang)}
-            data-shell-nav="buyer"
-            data-tab-key="account"
-            data-tab-title={t('orders.tabAccountTitle')}
-            class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors font-medium buyer-popover-nav-item"
-          >
-            <span>👤</span>
-            <span>{t('orders.tabAccountTitle')}</span>
-          </a>
-
-          <a
-            href={getLocalizedPath('/orders', currentLang)}
-            data-shell-nav="buyer"
-            data-tab-key="orders"
-            data-tab-title={t('orders.tabOrdersTitle')}
-            class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors font-medium buyer-popover-nav-item"
-          >
-            <span>📦</span>
-            <span>{t('orders.tabOrdersTitle')}</span>
-          </a>
-
-          {sessionUser?.isAdmin && (
-            <a
-              href="/admin/orders"
-              class="flex items-center justify-between px-2.5 py-2 rounded-lg text-amber-900 bg-amber-50/70 hover:bg-amber-100/80 transition-colors font-semibold"
-            >
+      {
+        !isShellReq && (
+          <>
+            <!-- Mobile Top Sticky Bar (< lg): 56px (h-14) Compact Header -->
+            <header class="lg:hidden h-14 flex items-center justify-between px-3.5 bg-white/95 backdrop-blur-md border-b border-black/10 sticky top-0 z-30 shadow-2xs print:hidden">
               <div class="flex items-center gap-2">
-                <span>⚙️</span>
-                <span>Switch to Admin</span>
+                <button
+                  id="buyer-open-sidebar-btn"
+                  type="button"
+                  class="p-2 -ml-1 rounded-xl text-[#1d1d1f] hover:bg-[#f5f5f7] active:scale-95 transition-all cursor-pointer"
+                  aria-label="Open Navigation Menu"
+                >
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <span class="text-sm font-bold tracking-tight text-[#1d1d1f]">Buyer Portal</span>
+                <TierBadge tier={dbUser?.tier} size="sm" variant="short" />
               </div>
-              <span class="text-[10px] text-amber-800 font-mono">↗</span>
-            </a>
-          )}
-        </div>
 
-        <!-- Sign Out -->
-        <div class="pt-1 mt-1 border-t border-black/5">
-          <a
-            href="/api/auth/logout"
-            class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition-colors font-medium"
-          >
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span>{t('orders.signOut')}</span>
-          </a>
-        </div>
-      </div>
+              <div class="flex items-center gap-2">
+                <label
+                  for="quote-drawer-toggle"
+                  id="mobile-header-quote-btn"
+                  class="relative p-2 rounded-xl text-[#1d1d1f] hover:bg-[#f5f5f7] transition-all cursor-pointer"
+                  aria-label="Open Quote Basket"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                  <span class="nav-quote-badge quote-badge hidden absolute -top-0.5 -right-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[#1d1d1f] text-white min-w-[14px] text-center shadow-xs">
+                    0
+                  </span>
+                </label>
+
+                <a
+                  href={getLocalizedPath('/products', currentLang)}
+                  class="px-2 py-1 rounded-lg bg-[#f5f5f7] border border-black/5 text-[#52525b] hover:text-black text-xs font-medium"
+                >
+                  {t('buyer.browseCatalog')} ↗
+                </a>
+
+                <button
+                  id="buyer-account-trigger-mobile"
+                  type="button"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  class="group p-1 rounded-xl bg-[#f5f5f7] hover:bg-black/5 border border-black/10 text-xs transition-all cursor-pointer flex items-center gap-1"
+                  aria-label="Account Menu"
+                >
+                  <div class="w-6 h-6 rounded-lg bg-[#1d1d1f] text-white flex items-center justify-center font-mono font-semibold text-[11px] shrink-0">
+                    {initial}
+                  </div>
+                  <svg class="w-3 h-3 text-[#86868b] transition-transform duration-200 group-aria-expanded:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+            </header>
+
+            <!-- Desktop Top Context Breadcrumb Bar (>= lg) -->
+            <header class="hidden lg:flex items-center justify-between px-8 py-3.5 bg-white/95 backdrop-blur-md border-b border-black/5 shrink-0 print:hidden sticky top-0 z-30">
+              <div class="flex items-center gap-2 text-xs">
+                <span class="text-[#86868b]">{t('buyer.portal')}</span>
+                <span class="text-[#86868b]">/</span>
+                <span id="shell-breadcrumb-title" class="font-semibold text-[#1d1d1f]">{currentTabTitle}</span>
+              </div>
+
+              <div class="flex items-center gap-3 text-xs">
+                <a
+                  href={getLocalizedPath('/products', currentLang)}
+                  class="text-[#52525b] hover:text-[#1d1d1f] transition-colors font-medium flex items-center gap-1"
+                >
+                  <span>← {t('buyer.backToCatalog')}</span>
+                </a>
+
+                <label
+                  for="quote-drawer-toggle"
+                  id="desktop-header-quote-btn"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1d1d1f] hover:bg-black text-white transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                >
+                  <span>🛒 {t('buyer.openQuoteBag')}</span>
+                  <span class="nav-quote-badge quote-badge hidden px-1.5 py-0.2 rounded-md text-[10px] font-bold bg-white text-[#1d1d1f]">
+                    0
+                  </span>
+                </label>
+
+                <div class="h-4 w-px bg-black/10 shrink-0"></div>
+
+                <button
+                  id="buyer-account-trigger-desktop"
+                  type="button"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  class="group inline-flex items-center gap-2 p-1 pl-2.5 rounded-xl bg-[#f5f5f7] hover:bg-black/5 border border-black/10 text-xs transition-all cursor-pointer shadow-2xs select-none"
+                >
+                  <TierBadge tier={tier} size="sm" variant="short" />
+                  <span class="font-semibold text-[#1d1d1f] max-w-[120px] truncate">{displayName}</span>
+                  <div class="w-6 h-6 rounded-lg bg-[#1d1d1f] text-white flex items-center justify-center font-mono font-semibold text-[11px] shrink-0">
+                    {initial}
+                  </div>
+                  <svg class="w-3 h-3 text-[#86868b] transition-transform duration-200 group-aria-expanded:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+            </header>
+
+            <!-- Buyer Account Popover Dropdown Card -->
+            <div
+              id="buyer-account-popover"
+              class="hidden fixed lg:absolute right-3.5 lg:right-8 top-14 lg:top-14 w-64 bg-white border border-black/10 rounded-2xl shadow-xl p-2 z-50 transition-all origin-top-right text-xs print:hidden"
+              role="menu"
+              aria-orientation="vertical"
+            >
+              <!-- Buyer Info Header -->
+              <div class="p-2.5 border-b border-black/5 bg-[#fafafa] rounded-xl mb-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <div class="w-8 h-8 rounded-lg bg-[#1d1d1f] text-white flex items-center justify-center font-mono font-semibold text-xs shrink-0">
+                      {initial}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="font-semibold text-[#1d1d1f] truncate">{displayName}</p>
+                      {displayCompany && <p class="text-[10px] text-[#52525b] truncate">{displayCompany}</p>}
+                    </div>
+                  </div>
+                  <TierBadge tier={tier} size="sm" variant="short" />
+                </div>
+                <p class="text-[10px] text-[#86868b] font-mono truncate mt-1.5">{sessionUser.email}</p>
+              </div>
+
+              <!-- Navigation Actions -->
+              <div class="space-y-0.5">
+                <a
+                  href={getLocalizedPath('/account', currentLang)}
+                  data-tab-key="account"
+                  data-tab-title={t('orders.tabAccountTitle')}
+                  class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors font-medium buyer-popover-nav-item"
+                >
+                  <span>👤</span>
+                  <span>{t('orders.tabAccountTitle')}</span>
+                </a>
+
+                <a
+                  href={getLocalizedPath('/orders', currentLang)}
+                  data-tab-key="orders"
+                  data-tab-title={t('orders.tabOrdersTitle')}
+                  class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors font-medium buyer-popover-nav-item"
+                >
+                  <span>📦</span>
+                  <span>{t('orders.tabOrdersTitle')}</span>
+                </a>
+
+                {sessionUser?.isAdmin && (
+                  <a
+                    href="/admin/orders"
+                    class="flex items-center justify-between px-2.5 py-2 rounded-lg text-amber-900 bg-amber-50/70 hover:bg-amber-100/80 transition-colors font-semibold"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span>⚙️</span>
+                      <span>Switch to Admin</span>
+                    </div>
+                    <span class="text-[10px] text-amber-800 font-mono">↗</span>
+                  </a>
+                )}
+              </div>
+
+              <!-- Sign Out -->
+              <div class="pt-1 mt-1 border-t border-black/5">
+                <a
+                  href="/api/auth/logout"
+                  class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition-colors font-medium"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span>{t('orders.signOut')}</span>
+                </a>
+              </div>
+            </div>
+          </>
+        )
+      }
 
       <!-- Main Dynamic Content Canvas: Bottom padded pb-24 on mobile to clear Bottom Tab Bar -->
       <div id="shell-main-canvas" class="flex-1 p-[clamp(1rem,0.4rem+2vw,2.25rem)] pb-24 lg:pb-8 w-full max-w-[1700px] mx-auto">

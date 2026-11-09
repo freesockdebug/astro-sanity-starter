@@ -16,31 +16,11 @@ interface Props {
 
 const {
   currentTab,
-  sessionEmail,
   pendingOrdersCount = 0,
-  adminName,
-  roleName,
-  roleCode = 'super_admin',
   menus,
-  dataScope,
 } = Astro.props;
 
-const safeEmail = typeof sessionEmail === 'string' ? sessionEmail.trim() : '';
-const displayName = adminName || (safeEmail ? safeEmail.split('@')[0] : 'Admin');
-const emailInitial = displayName ? displayName.slice(0, 1).toUpperCase() : 'A';
-
 const canShow = (key: string) => !menus || menus.includes(key);
-
-const roleBadgeClasses: Record<string, string> = {
-  super_admin: 'bg-amber-50 text-amber-800 border-amber-200/80',
-  content_editor: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
-  sales_manager: 'bg-purple-50 text-purple-800 border-purple-200/80',
-  sales_rep: 'bg-blue-50 text-blue-800 border-blue-200/80',
-  auditor: 'bg-zinc-100 text-zinc-800 border-zinc-200',
-};
-
-const badgeClass = roleBadgeClasses[roleCode] || roleBadgeClasses.super_admin;
-const roleDisplay = roleName || (roleCode === 'content_editor' ? 'Content Editor' : roleCode === 'sales_manager' ? 'Sales Manager' : roleCode === 'sales_rep' ? 'Sales Rep' : roleCode === 'auditor' ? 'Auditor' : 'Super Admin');
 
 // SVG Icon definitions corresponding to menu keys
 const MENU_SVGS: Record<string, string> = {
