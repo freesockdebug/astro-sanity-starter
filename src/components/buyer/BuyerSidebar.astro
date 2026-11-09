@@ -104,7 +104,7 @@ const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to
         data-tab-key="orders"
         data-tab-title={t('orders.tabOrdersTitle')}
         class:list={[
-          'flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all',
+          'flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all group',
           currentTab === 'orders'
             ? 'bg-[#1d1d1f] text-white shadow-xs font-semibold'
             : 'text-[#52525b] hover:text-black hover:bg-[#f5f5f7]'
@@ -115,10 +115,7 @@ const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to
           <span>{t('orders.tabOrdersTitle')}</span>
         </div>
         {totalOrdersCount > 0 && (
-          <span class:list={[
-            'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold',
-            currentTab === 'orders' ? 'bg-white/20 text-white' : 'bg-black/5 text-[#52525b]'
-          ]}>
+          <span class="font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold transition-colors group-[.bg-\[\#1d1d1f\]]:bg-white/20 group-[.bg-\[\#1d1d1f\]]:text-white bg-black/5 text-[#52525b]">
             {totalOrdersCount}
           </span>
         )}

@@ -189,8 +189,22 @@ function syncShellClasses(targetDoc: Document): void {
 }
 
 async function reactivateScripts(targetDoc: Document): Promise<void> {
+  // Clean up dynamic scripts injected from prior navigations
+  document.querySelectorAll('script[data-shell-dynamic]').forEach((s) => s.remove());
+  document.querySelectorAll('script[data-shell-inline-dynamic]').forEach((s) => s.remove());
+
   // 1. Dual-Track Track A: Vite Module scripts (Astro hoisted entry points)
-  const layoutExcludes = ['Layout.', 'AppleNav.', 'AppleFooter.', 'QuoteDrawer.', 'appShellRouter.'];
+  const layoutExcludes = [
+    'Layout.',
+    'AdminLayout.',
+    'BuyerLayout.',
+    'BuyerSidebar.',
+    'AdminSidebar.',
+    'AppleNav.',
+    'AppleFooter.',
+    'QuoteDrawer.',
+    'appShellRouter.',
+  ];
   const allModuleScripts = Array.from(targetDoc.querySelectorAll('script[type="module"][src]')) as HTMLScriptElement[];
   const pageModuleScripts = allModuleScripts.filter((s) => {
     const src = s.getAttribute('src') || '';
@@ -200,28 +214,38 @@ async function reactivateScripts(targetDoc: Document): Promise<void> {
   for (const modScript of pageModuleScripts) {
     const newScript = document.createElement('script');
     newScript.type = 'module';
+    newScript.dataset.shellDynamic = 'true';
     const srcUrl = new URL(modScript.src, window.location.origin);
     srcUrl.searchParams.set('t', String(Date.now()));
     newScript.src = srcUrl.pathname + srcUrl.search;
     document.body.appendChild(newScript);
   }
 
-  // 2. Dual-Track Track B: Inline scripts inside shell-main-canvas and shell-overlays
+  // 2. Dual-Track Track B: Inline scripts anywhere in targetDoc (including define:vars placed outside layout)
+  // First strip inert non-module scripts from newly swapped containers to avoid dead script clutter
   const containers = [
     document.getElementById('shell-main-canvas'),
     document.getElementById('shell-overlays'),
   ].filter(Boolean) as HTMLElement[];
+  containers.forEach((container) => {
+    container.querySelectorAll('script:not([type="module"])').forEach((s) => s.remove());
+  });
 
-  for (const container of containers) {
-    const inlineScripts = Array.from(container.querySelectorAll('script'));
-    for (const oldScript of inlineScripts) {
-      const newScript = document.createElement('script');
-      Array.from(oldScript.attributes).forEach((attr) => {
-        newScript.setAttribute(attr.name, attr.value);
-      });
-      newScript.textContent = oldScript.textContent;
-      oldScript.parentNode?.replaceChild(newScript, oldScript);
-    }
+  // Query all non-module inline scripts that are not persistent layout scripts or JSON-LD
+  const inlineScripts = Array.from(
+    targetDoc.querySelectorAll<HTMLScriptElement>(
+      'script:not([type="module"]):not([src]):not([data-shell-persist]):not([type="application/ld+json"])'
+    )
+  );
+
+  for (const oldScript of inlineScripts) {
+    const newScript = document.createElement('script');
+    Array.from(oldScript.attributes).forEach((attr) => {
+      newScript.setAttribute(attr.name, attr.value);
+    });
+    newScript.textContent = oldScript.textContent;
+    newScript.dataset.shellInlineDynamic = 'true';
+    document.body.appendChild(newScript);
   }
 }
 

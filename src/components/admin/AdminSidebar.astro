@@ -143,10 +143,7 @@ const MENU_SVGS: Record<string, string> = {
                 </div>
 
                 {item.showPendingBadge && pendingOrdersCount > 0 && (
-                  <span class:list={[
-                    'font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold shrink-0',
-                    isActive ? 'bg-amber-400 text-amber-950' : 'bg-amber-100 text-amber-900',
-                  ]}>
+                  <span class="font-mono text-[10px] px-1.5 py-0.2 rounded-md font-bold shrink-0 transition-colors group-[.bg-\[\#1d1d1f\]]:bg-amber-400 group-[.bg-\[\#1d1d1f\]]:text-amber-950 bg-amber-100 text-amber-900">
                     {pendingOrdersCount}
                   </span>
                 )}

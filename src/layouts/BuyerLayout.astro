@@ -239,7 +239,7 @@ const currentTabTitle = tabNames[currentTab] || t('buyer.portal');
   </div>
 
   <!-- Pure Vanilla JS for Mobile Sidebar Drawer Toggle & Global openQuoteDrawer helper -->
-  <script is:inline>
+  <script is:inline data-shell-persist="true">
     (function() {
       // Global bridge for any caller triggering openQuoteDrawer()
       window.openQuoteDrawer = function() {

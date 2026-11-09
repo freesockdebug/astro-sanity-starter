@@ -253,7 +253,7 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
           </div>
         </div>
 
-        <script is:inline define:vars={{ enableClientLogs, clientLogMinLevel }}>
+        <script is:inline define:vars={{ enableClientLogs, clientLogMinLevel }} data-shell-persist="true">
           (function () {
             var isTelemetryEnabled = typeof enableClientLogs === 'boolean' ? enableClientLogs : true;
             window.__TELEMETRY_ENABLED__ = isTelemetryEnabled;
