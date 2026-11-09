@@ -435,7 +435,13 @@ const tier = dbUser?.tier || 'STANDARD';
 <script>
   import { clientCache } from '@utils/clientCache';
 
+  let pageAbort: AbortController | null = null;
+
   function initAccountPage() {
+    pageAbort?.abort();
+    pageAbort = new AbortController();
+    const { signal } = pageAbort;
+
     // Profile update handling
     const form = document.getElementById('profile-form') as HTMLFormElement | null;
   const saveBtn = document.getElementById('save-profile-btn') as HTMLButtonElement | null;
@@ -556,7 +562,7 @@ const tier = dbUser?.tier || 'STANDARD';
     if (e.key === 'Escape' && modal && !modal.classList.contains('pointer-events-none')) {
       closePasswordModal();
     }
-  });
+  }, { signal });
 
   // Toggle password visibility buttons
   document.querySelectorAll('.btn-toggle-pwd').forEach((btn) => {
@@ -624,6 +630,9 @@ initAccountPage();
 document.addEventListener('shell:page-load', () => {
   if (document.getElementById('profile-form')) {
     initAccountPage();
+  } else {
+    pageAbort?.abort();
+    pageAbort = null;
   }
 });
 </script>

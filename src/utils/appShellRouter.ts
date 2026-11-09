@@ -200,6 +200,24 @@ function syncShellClasses(targetDoc: Document): void {
   });
 }
 
+function syncHeadStyles(targetDoc: Document): void {
+  targetDoc.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]').forEach((link) => {
+    const href = link.getAttribute('href');
+    if (href && !document.head.querySelector(`link[rel="stylesheet"][href="${href}"]`)) {
+      document.head.appendChild(link.cloneNode(true));
+    }
+  });
+  targetDoc.head.querySelectorAll<HTMLStyleElement>('style').forEach((style) => {
+    const devId = style.getAttribute('data-vite-dev-id');
+    if (devId && document.head.querySelector(`style[data-vite-dev-id="${devId}"]`)) return;
+    const content = style.textContent || '';
+    const exists = Array.from(document.head.querySelectorAll('style')).some((s) => s.textContent === content);
+    if (!exists) {
+      document.head.appendChild(style.cloneNode(true));
+    }
+  });
+}
+
 async function reactivateScripts(targetDoc: Document): Promise<void> {
   // Clean up dynamic inline scripts from prior navigations
   document.querySelectorAll('script[data-shell-inline-dynamic]').forEach((s) => s.remove());
@@ -265,6 +283,12 @@ export function initAppShellRouter(options: AppShellOptions): void {
   if (typeof window === 'undefined') return;
   if (window.__appShellInitialized) return;
   window.__appShellInitialized = true;
+
+  // Register initially rendered module scripts so they are not re-inserted on SPA switch
+  document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]').forEach((s) => {
+    const src = s.getAttribute('src');
+    if (src) loadedModuleSrcs.add(src);
+  });
 
   // Intercept write-mutations and provide client-side GET API caching
   const origFetch = window.fetch;
@@ -404,6 +428,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
     }
 
     syncShellClasses(doc);
+    syncHeadStyles(doc);
 
     const curCanvas = document.getElementById('shell-main-canvas');
     if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;

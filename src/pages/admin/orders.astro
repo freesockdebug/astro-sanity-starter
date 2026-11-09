@@ -521,7 +521,13 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   import { escapeHtml, formatAdminTime, createPaginationController } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
+  let pageAbort: AbortController | null = null;
+
   function initOrdersPage() {
+    pageAbort?.abort();
+    pageAbort = new AbortController();
+    const { signal } = pageAbort;
+
     const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'select', label: 'Select', defaultWidth: 46, minWidth: 46, visible: true, canHide: false },
     { id: 'order_no', label: 'Order No / Date', defaultWidth: 160, minWidth: 120, visible: true, canHide: false },
@@ -1630,7 +1636,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
       else clearSearchBtn.classList.add('hidden');
     }
     fetchOrders(false);
-  });
+  }, { signal });
 
   // Modals confirmation logic
   // 1. Approve modal
@@ -1868,7 +1874,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
       }
       updateBatchBar();
     }
-  });
+  }, { signal });
 
   // Assign / Reassign Dialog Handling
   let assignTarget: { mode: 'single'; orderId: string } | { mode: 'batch'; count: number } | null = null;
@@ -1999,7 +2005,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
       if (!orderId) return;
       openAssignDialog({ mode: 'single', orderId, currentEmail: current });
     }
-  });
+  }, { signal });
 
   async function executeBatchAction(action: 'APPROVE' | 'REJECT') {
     if (selectedOrderIds.size === 0) return;
@@ -2064,6 +2070,9 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   document.addEventListener('shell:page-load', () => {
     if (document.getElementById('orders-app-meta')) {
       initOrdersPage();
+    } else {
+      pageAbort?.abort();
+      pageAbort = null;
     }
   });
 </script>

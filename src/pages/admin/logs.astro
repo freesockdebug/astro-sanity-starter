@@ -414,7 +414,13 @@ const pageTitle = 'System Diagnostics & Performance';
   } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
+  let pageAbort: AbortController | null = null;
+
   function initLogsPage() {
+    pageAbort?.abort();
+    pageAbort = new AbortController();
+    const { signal } = pageAbort;
+
     const DEFAULT_COLUMNS: ColumnConfig[] = [
       { id: 'time', label: 'Time', defaultWidth: 115, minWidth: 90, visible: true, canHide: false },
       { id: 'level', label: 'Level', defaultWidth: 80, minWidth: 60, visible: true, canHide: true },
@@ -1258,7 +1264,7 @@ const pageTitle = 'System Diagnostics & Performance';
         else clearSearchBtn.classList.add('hidden');
       }
       loadLogs(false);
-    });
+    }, { signal });
 
     // Initial setup - echo dropdown UI state to match initial URL parameters
     if (levelSelect) levelSelect.value = currentLevel;
@@ -1277,6 +1283,9 @@ const pageTitle = 'System Diagnostics & Performance';
   document.addEventListener('shell:page-load', () => {
     if (document.getElementById('metric-capsule-total')) {
       initLogsPage();
+    } else {
+      pageAbort?.abort();
+      pageAbort = null;
     }
   });
 </script>

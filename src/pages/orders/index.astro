@@ -340,7 +340,13 @@ const i18nClient = {
   import { clientCache } from '@utils/clientCache';
   import { getTrackingUrl } from '@utils/shipping';
 
+  let pageAbort: AbortController | null = null;
+
   function initBuyerOrdersPage() {
+    pageAbort?.abort();
+    pageAbort = new AbortController();
+    const { signal } = pageAbort;
+
     const dataEl = document.getElementById('orders-app-data');
     if (!dataEl) return;
 
@@ -1066,7 +1072,7 @@ const i18nClient = {
       } else {
         applyFilter();
       }
-    });
+    }, { signal });
 
     // Initial Load
     loadOrders();
@@ -1076,6 +1082,9 @@ const i18nClient = {
   document.addEventListener('shell:page-load', () => {
     if (document.getElementById('orders-app-data')) {
       initBuyerOrdersPage();
+    } else {
+      pageAbort?.abort();
+      pageAbort = null;
     }
   });
 </script>

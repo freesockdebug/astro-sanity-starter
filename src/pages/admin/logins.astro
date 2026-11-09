@@ -180,7 +180,13 @@ const pageTitle = 'Login Audit Logs';
   import { escapeHtml, formatAdminTime } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
+  let pageAbort: AbortController | null = null;
+
   function initLoginsPage() {
+    pageAbort?.abort();
+    pageAbort = new AbortController();
+    const { signal } = pageAbort;
+
     const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'user', label: 'User Email & ID', defaultWidth: 220, minWidth: 160, visible: true, canHide: false },
     { id: 'ip', label: 'IP Address', defaultWidth: 140, minWidth: 100, visible: true, canHide: true },
@@ -475,7 +481,7 @@ const pageTitle = 'Login Audit Logs';
     const timeSelect = document.getElementById('logins-timewindow-select') as HTMLSelectElement | null;
     if (timeSelect) timeSelect.value = currentTimeWindow;
     filterAndRender();
-  });
+  }, { signal });
 
   // Initial load
   tableSettings.renderMenu();
@@ -596,6 +602,9 @@ initLoginsPage();
 document.addEventListener('shell:page-load', () => {
   if (document.getElementById('tab-btn-logins')) {
     initLoginsPage();
+  } else {
+    pageAbort?.abort();
+    pageAbort = null;
   }
 });
 </script>

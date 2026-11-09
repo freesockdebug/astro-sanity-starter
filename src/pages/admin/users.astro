@@ -385,7 +385,13 @@ const pageTitle = 'Customer & Access Management';
   import { escapeHtml, formatAdminTime, createPaginationController } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
+  let pageAbort: AbortController | null = null;
+
   function initUsersPage() {
+    pageAbort?.abort();
+    pageAbort = new AbortController();
+    const { signal } = pageAbort;
+
     const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'profile', label: 'Customer Profile', defaultWidth: 240, minWidth: 160, visible: true, canHide: false },
     { id: 'company', label: 'Company & Location', defaultWidth: 180, minWidth: 120, visible: true, canHide: true },
@@ -1204,7 +1210,7 @@ const pageTitle = 'Customer & Access Management';
       else clearBtn.classList.add('hidden');
     }
     loadUsers(false);
-  });
+  }, { signal });
 
   // Initial load
   tableSettings.renderMenu();
@@ -1277,6 +1283,9 @@ const pageTitle = 'Customer & Access Management';
   document.addEventListener('shell:page-load', () => {
     if (document.getElementById('user-scope-container')) {
       initUsersPage();
+    } else {
+      pageAbort?.abort();
+      pageAbort = null;
     }
   });
 </script>
