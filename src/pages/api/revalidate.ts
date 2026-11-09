@@ -10,6 +10,7 @@ import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { kvGet, kvPut, kvDelete } from '@utils/kv';
+import { getSystemSettings } from '@utils/db';
 
 export const prerender = false;
 
@@ -105,7 +106,8 @@ export const POST: APIRoute = async (context) => {
 
     const isDev = Boolean(import.meta.env?.DEV);
     const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    const configuredSecret = getRuntimeEnv('REVALIDATE_SECRET', cfEnv) || getRuntimeEnv('SANITY_REVALIDATE_SECRET', cfEnv);
+    const systemSettings = await getSystemSettings(cfEnv).catch(() => null);
+    const configuredSecret = systemSettings?.revalidate_secret || getRuntimeEnv('REVALIDATE_SECRET', cfEnv) || getRuntimeEnv('SANITY_REVALIDATE_SECRET', cfEnv);
     const expectedSecret = configuredSecret || (isDev || isLocalhost ? 'itsasecret' : '');
 
     // 2. Authenticate webhook request:
@@ -279,8 +281,8 @@ export const POST: APIRoute = async (context) => {
     await Promise.all(kvPurges).catch(() => {});
 
     // 5. LAYER 2: Cloudflare Global CDN Zone Cache Purge API
-    let cfZoneId = getRuntimeEnv('CLOUDFLARE_ZONE_ID', cfEnv)?.trim();
-    const rawCfToken = getRuntimeEnv('CLOUDFLARE_API_TOKEN', cfEnv);
+    let cfZoneId = (systemSettings?.cloudflare_zone_id || getRuntimeEnv('CLOUDFLARE_ZONE_ID', cfEnv))?.trim();
+    const rawCfToken = systemSettings?.cloudflare_api_token || getRuntimeEnv('CLOUDFLARE_API_TOKEN', cfEnv);
     const cfApiToken = rawCfToken?.trim();
     let cfPurged = false;
     let cfMessage = 'Skipped (credentials not set in environment)';

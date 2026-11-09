@@ -389,7 +389,8 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
   if (isPurgeParam) {
     const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
     const isDev = Boolean(import.meta.env?.DEV);
-    const configuredSecret = getRuntimeEnv('REVALIDATE_SECRET', cfEnv) || getRuntimeEnv('SANITY_REVALIDATE_SECRET', cfEnv);
+    const sysSettings = (context.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
+    const configuredSecret = sysSettings?.revalidate_secret || getRuntimeEnv('REVALIDATE_SECRET', cfEnv) || getRuntimeEnv('SANITY_REVALIDATE_SECRET', cfEnv);
     const purgeSecret = configuredSecret || (isDev || isLocalhost ? 'itsasecret' : '');
     const providedKey =
       url.searchParams.get('key') ||

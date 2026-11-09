@@ -255,7 +255,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const isDummyTestToken = isDev && turnstileToken.includes('DUMMY.TOKEN');
     const turnstileSecret = isDummyTestToken
       ? '1x0000000000000000000000000000000AA'
-      : getVal('TURNSTILE_SECRET_KEY') ||
+      : systemSettings?.turnstile_secret_key ||
+        getVal('TURNSTILE_SECRET_KEY') ||
         getVal('TURNSTILE_SECRET') ||
         getVal('turnstile_secret_key');
 
@@ -482,7 +483,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     })();
 
     // 4. Send Email notification via Resend with timeout protection
-    const resendApiKey = getVal('RESEND_API_KEY');
+    const resendApiKey = systemSettings?.resend_api_key || getVal('RESEND_API_KEY');
     const emailTask = (async () => {
       if (!resendApiKey || systemSettings?.enable_email_notify === false) return;
       try {

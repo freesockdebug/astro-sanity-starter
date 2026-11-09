@@ -21,9 +21,10 @@ if (redirectResponse) return redirectResponse;
 const rootAdminEmails = getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '';
 const hasLogtoOidc = !!(getRuntimeEnv('LOGTO_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_ENDPOINT', cfEnv));
 const hasLogtoM2m = !!(getRuntimeEnv('LOGTO_M2M_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_M2M_APP_SECRET', cfEnv));
-const hasTurnstile = !!(getRuntimeEnv('TURNSTILE_SECRET_KEY', cfEnv) || getRuntimeEnv('PUBLIC_TURNSTILE_SITE_KEY', cfEnv) || getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv));
-const hasResend = !!getRuntimeEnv('RESEND_API_KEY', cfEnv);
+const hasTurnstile = !!(settings.turnstile_secret_key || settings.turnstile_site_key || getRuntimeEnv('TURNSTILE_SECRET_KEY', cfEnv) || getRuntimeEnv('PUBLIC_TURNSTILE_SITE_KEY', cfEnv) || getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv));
+const hasResend = !!(settings.resend_api_key || getRuntimeEnv('RESEND_API_KEY', cfEnv));
 const hasSanity = !!((getRuntimeEnv('SANITY_TOKEN', cfEnv) || getRuntimeEnv('SANITY_API_TOKEN', cfEnv)) && getRuntimeEnv('SANITY_PROJECT_ID', cfEnv));
+const hasCloudflareCdn = !!(settings.cloudflare_api_token || getRuntimeEnv('CLOUDFLARE_API_TOKEN', cfEnv));
 
 const pageTitle = 'Workspace Settings';
 ---
@@ -74,7 +75,7 @@ const pageTitle = 'Workspace Settings';
       </div>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1 text-xs">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 pt-1 text-xs">
       <!-- D1 -->
       <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
         <span class="font-medium text-[#52525b]">D1 Database</span>
@@ -140,6 +141,18 @@ const pageTitle = 'Workspace Settings';
         ]}>
           <span class:list={['w-1.5 h-1.5 rounded-full', hasSanity ? 'bg-emerald-500' : 'bg-zinc-400']}></span>
           {hasSanity ? 'Connected' : 'Unset'}
+        </span>
+      </div>
+
+      <!-- Cloudflare Global CDN -->
+      <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
+        <span class="font-medium text-[#52525b]">Edge Purge</span>
+        <span class:list={[
+          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
+          hasCloudflareCdn ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-zinc-600 bg-zinc-100 border-zinc-200'
+        ]}>
+          <span class:list={['w-1.5 h-1.5 rounded-full', hasCloudflareCdn ? 'bg-emerald-500' : 'bg-zinc-400']}></span>
+          {hasCloudflareCdn ? 'Active' : 'Unset'}
         </span>
       </div>
     </div>
@@ -218,6 +231,22 @@ const pageTitle = 'Workspace Settings';
           />
           <p class="text-[11px] text-[#86868b] mt-1">Default message draft when a buyer initiates a WhatsApp consultation.</p>
         </div>
+
+        <!-- Website Public URL -->
+        <div class="md:col-span-2">
+          <label for="app_url" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
+            Website Canonical Public URL
+          </label>
+          <input
+            type="url"
+            id="app_url"
+            name="app_url"
+            value={settings.app_url}
+            placeholder="https://gwenvenni.com"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
+          />
+          <p class="text-[11px] text-[#86868b] mt-1">Used for absolute canonical links, sitemaps, and email link generation.</p>
+        </div>
       </div>
     </div>
 
@@ -287,6 +316,23 @@ const pageTitle = 'Workspace Settings';
               class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
             />
           </div>
+        </div>
+
+        <!-- Resend API Key -->
+        <div class="pt-2">
+          <label for="resend_api_key" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
+            Resend API Key (re_...)
+          </label>
+          <input
+            type="password"
+            id="resend_api_key"
+            name="resend_api_key"
+            value={settings.resend_api_key}
+            placeholder="re_xxxxxxxxxxxxxxxxx (leave unchanged or enter new key)"
+            autocomplete="new-password"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
+          />
+          <p class="text-[11px] text-[#86868b] mt-1">Overrides the <code>RESEND_API_KEY</code> environment variable if provided.</p>
         </div>
       </div>
 
@@ -490,6 +536,39 @@ const pageTitle = 'Workspace Settings';
             Leave blank to accept requests from the current request hostname automatically.
           </p>
         </div>
+
+        <!-- Turnstile Site Key -->
+        <div>
+          <label for="turnstile_site_key" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
+            Turnstile Site Key (Client-side)
+          </label>
+          <input
+            type="text"
+            id="turnstile_site_key"
+            name="turnstile_site_key"
+            value={settings.turnstile_site_key}
+            placeholder="e.g. 0x4AAAAAA..."
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
+          />
+          <p class="text-[11px] text-[#86868b] mt-1">Public challenge key rendered in the buyer quote basket drawer.</p>
+        </div>
+
+        <!-- Turnstile Secret Key -->
+        <div class="md:col-span-2">
+          <label for="turnstile_secret_key" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
+            Turnstile Secret Key (Server-side)
+          </label>
+          <input
+            type="password"
+            id="turnstile_secret_key"
+            name="turnstile_secret_key"
+            value={settings.turnstile_secret_key}
+            placeholder="e.g. 0x4AAAAAA... (leave unchanged or enter new key)"
+            autocomplete="new-password"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
+          />
+          <p class="text-[11px] text-[#86868b] mt-1">Private key used by <code>/api/submit-quote</code> to verify challenges with Cloudflare.</p>
+        </div>
       </div>
     </div>
 
@@ -690,6 +769,66 @@ const pageTitle = 'Workspace Settings';
       </div>
     </div>
 
+    <!-- Section 7: Edge CDN & Cache Invalidation -->
+    <div class="p-5 sm:p-6 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-4">
+      <div class="border-b border-black/5 pb-3">
+        <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">7. Edge CDN Purge & Cache Invalidation</h2>
+        <p class="text-xs text-[#86868b] mt-0.5">Configure automated Cloudflare global CDN cache purging upon content updates.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Revalidate Secret -->
+        <div>
+          <label for="revalidate_secret" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
+            Revalidation Webhook Secret
+          </label>
+          <input
+            type="password"
+            id="revalidate_secret"
+            name="revalidate_secret"
+            value={settings.revalidate_secret}
+            placeholder="e.g. my-secret-revalidate-token"
+            autocomplete="new-password"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
+          />
+          <p class="text-[11px] text-[#86868b] mt-1">Shared secret for Sanity Webhook or manual <code>/api/revalidate</code> calls.</p>
+        </div>
+
+        <!-- Cloudflare Zone ID -->
+        <div>
+          <label for="cloudflare_zone_id" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
+            Cloudflare Zone ID
+          </label>
+          <input
+            type="text"
+            id="cloudflare_zone_id"
+            name="cloudflare_zone_id"
+            value={settings.cloudflare_zone_id}
+            placeholder="e.g. 023e105f4ecef8ad9ca31a8372d0c353"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
+          />
+          <p class="text-[11px] text-[#86868b] mt-1">Found on Cloudflare dashboard Overview tab for your domain.</p>
+        </div>
+
+        <!-- Cloudflare API Token -->
+        <div>
+          <label for="cloudflare_api_token" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
+            Cloudflare Purge API Token
+          </label>
+          <input
+            type="password"
+            id="cloudflare_api_token"
+            name="cloudflare_api_token"
+            value={settings.cloudflare_api_token}
+            placeholder="Bearer token with Cache:Purge permission"
+            autocomplete="new-password"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
+          />
+          <p class="text-[11px] text-[#86868b] mt-1">API Token with <code>Zone.Cache Purge</code> permissions.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Bottom Save Toolbar -->
     <div class="sticky bottom-4 z-20 flex items-center justify-between p-4 rounded-2xl bg-white/95 backdrop-blur-md border border-black/10 shadow-lg">
       <div class="text-xs text-[#86868b]">
@@ -726,10 +865,12 @@ const pageTitle = 'Workspace Settings';
         var formData = new FormData(form);
         var updates = {
           brand_name: (formData.get('brand_name') || '').toString().trim(),
+          app_url: (formData.get('app_url') || '').toString().trim(),
           contact_email: (formData.get('contact_email') || '').toString().trim(),
           whatsapp_number: (formData.get('whatsapp_number') || '').toString().trim(),
           whatsapp_prefill: (formData.get('whatsapp_prefill') || '').toString().trim(),
           enable_email_notify: form.querySelector('#enable_email_notify') ? form.querySelector('#enable_email_notify').checked : true,
+          resend_api_key: (formData.get('resend_api_key') || '').toString().trim(),
           resend_from_email: (formData.get('resend_from_email') || '').toString().trim(),
           resend_to_emails: (formData.get('resend_to_emails') || '').toString().trim(),
           resend_subject_prefix: (formData.get('resend_subject_prefix') || '').toString().trim(),
@@ -740,6 +881,8 @@ const pageTitle = 'Workspace Settings';
           print_sheet_title: (formData.get('print_sheet_title') || '').toString().trim(),
           print_sheet_footer: (formData.get('print_sheet_footer') || '').toString().trim(),
           co_admin_emails: (formData.get('co_admin_emails') || '').toString().trim(),
+          turnstile_site_key: (formData.get('turnstile_site_key') || '').toString().trim(),
+          turnstile_secret_key: (formData.get('turnstile_secret_key') || '').toString().trim(),
           turnstile_hostnames: (formData.get('turnstile_hostnames') || '').toString().trim(),
           login_retention_days: parseInt(formData.get('login_retention_days') || '90', 10),
           enable_error_logging: form.querySelector('#enable_error_logging') ? form.querySelector('#enable_error_logging').checked : true,
@@ -748,6 +891,9 @@ const pageTitle = 'Workspace Settings';
           log_retention_days: parseInt(formData.get('log_retention_days') || '30', 10),
           log_min_level: (formData.get('log_min_level') || 'warn').toString().trim().toLowerCase(),
           slow_request_threshold_ms: parseInt(formData.get('slow_request_threshold_ms') || '1000', 10),
+          revalidate_secret: (formData.get('revalidate_secret') || '').toString().trim(),
+          cloudflare_zone_id: (formData.get('cloudflare_zone_id') || '').toString().trim(),
+          cloudflare_api_token: (formData.get('cloudflare_api_token') || '').toString().trim(),
         };
         return updates;
       }

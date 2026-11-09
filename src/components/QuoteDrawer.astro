@@ -4,6 +4,9 @@ import { fetchRfqSettings } from '@data/rfqSettings';
 import { DEFAULT_RFQ } from '@data/defaults';
 import { getLangFromUrl, useTranslations, getLocalizedValue, getLocalizedPath } from '@i18n';
 import { SecurityService } from '@utils/security';
+import { getSystemSettings } from '@utils/db';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
 interface Props {
   settings?: any;
@@ -15,6 +18,7 @@ const ordersUrl = getLocalizedPath('/orders', currentLang);
 
 const { settings } = Astro.props;
 const rfqSettings = settings ?? (await fetchRfqSettings());
+const systemSettings = (Astro.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
 
 const drawerTitle = getLocalizedValue(rfqSettings?.drawerTitle, currentLang, t('rfq.drawerTitle'));
 const drawerSubtitle = getLocalizedValue(rfqSettings?.drawerSubtitle, currentLang, t('rfq.drawerSubtitle'));
@@ -30,6 +34,7 @@ const swatchKitImageUrl = rfqSettings?.swatchKitImage?.asset?.url || rfqSettings
 const swatchKitMoq = rfqSettings?.swatchKitMoq || DEFAULT_RFQ.swatchKitMoq;
 
 const turnstileSiteKey =
+  systemSettings?.turnstile_site_key ||
   import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ||
   (import.meta.env.DEV ? '1x00000000000000000000AA' : '');
 

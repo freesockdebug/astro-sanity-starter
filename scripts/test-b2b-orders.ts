@@ -313,6 +313,26 @@ async function runSelfCheck() {
   const { generateOrderNo } = await import('../src/db/client');
   const customOrderNo = generateOrderNo(updatedSettings.order_no_prefix);
   assert.ok(customOrderNo.startsWith(`${testPrefix}-`));
+
+  // Test new dynamic settings persistence (turnstile, resend, edge CDN)
+  await updateSystemSettings({
+    turnstile_site_key: '0x4AAAAAA_TEST_SITE',
+    turnstile_secret_key: '0x4AAAAAA_TEST_SECRET',
+    resend_api_key: 're_test_key_123',
+    app_url: 'https://test.atelier.com',
+    revalidate_secret: 'reval_test_token',
+    cloudflare_zone_id: 'zone_test_abc',
+    cloudflare_api_token: 'token_test_xyz',
+  }, 'admin@test.com');
+  const edgeSettings = await getSystemSettings();
+  assert.strictEqual(edgeSettings.turnstile_site_key, '0x4AAAAAA_TEST_SITE');
+  assert.strictEqual(edgeSettings.turnstile_secret_key, '0x4AAAAAA_TEST_SECRET');
+  assert.strictEqual(edgeSettings.resend_api_key, 're_test_key_123');
+  assert.strictEqual(edgeSettings.app_url, 'https://test.atelier.com');
+  assert.strictEqual(edgeSettings.revalidate_secret, 'reval_test_token');
+  assert.strictEqual(edgeSettings.cloudflare_zone_id, 'zone_test_abc');
+  assert.strictEqual(edgeSettings.cloudflare_api_token, 'token_test_xyz');
+
   console.log('✔ [PASS] D1 System Settings persistence, caching & merged admin authorization verified');
 
   // 20. Cloudflare Edge KV Caching & Graceful Degradation Engine

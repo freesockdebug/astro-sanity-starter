@@ -29,9 +29,10 @@ export const GET: APIRoute = async ({ request }) => {
     d1: d1Healthy,
     logtoOidc: !!(getRuntimeEnv('LOGTO_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_ENDPOINT', cfEnv)),
     logtoM2m: !!(getRuntimeEnv('LOGTO_M2M_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_M2M_APP_SECRET', cfEnv)),
-    turnstile: !!(getRuntimeEnv('TURNSTILE_SECRET_KEY', cfEnv) || getRuntimeEnv('PUBLIC_TURNSTILE_SITE_KEY', cfEnv) || getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv)),
-    resend: !!getRuntimeEnv('RESEND_API_KEY', cfEnv),
+    turnstile: !!(settings.turnstile_secret_key || settings.turnstile_site_key || getRuntimeEnv('TURNSTILE_SECRET_KEY', cfEnv) || getRuntimeEnv('PUBLIC_TURNSTILE_SITE_KEY', cfEnv) || getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv)),
+    resend: !!(settings.resend_api_key || getRuntimeEnv('RESEND_API_KEY', cfEnv)),
     sanity: !!((getRuntimeEnv('SANITY_TOKEN', cfEnv) || getRuntimeEnv('SANITY_API_TOKEN', cfEnv)) && getRuntimeEnv('SANITY_PROJECT_ID', cfEnv)),
+    cloudflareCdn: !!(settings.cloudflare_api_token || getRuntimeEnv('CLOUDFLARE_API_TOKEN', cfEnv)),
     rootAdminEmails: getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '',
   };
 
@@ -203,9 +204,11 @@ export const POST: APIRoute = async ({ request }) => {
     // Pass through string and boolean fields safely
     const stringKeys = [
       'brand_name',
+      'app_url',
       'contact_email',
       'whatsapp_number',
       'whatsapp_prefill',
+      'resend_api_key',
       'resend_from_email',
       'resend_to_emails',
       'resend_subject_prefix',
@@ -213,7 +216,12 @@ export const POST: APIRoute = async ({ request }) => {
       'print_sheet_title',
       'print_sheet_footer',
       'co_admin_emails',
+      'turnstile_site_key',
+      'turnstile_secret_key',
       'turnstile_hostnames',
+      'revalidate_secret',
+      'cloudflare_zone_id',
+      'cloudflare_api_token',
     ];
 
     for (const key of stringKeys) {
