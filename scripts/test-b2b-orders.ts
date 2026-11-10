@@ -1,10 +1,12 @@
 // scripts/test-b2b-orders.ts
 // Runnable self-check for B2B Orders & Idempotent Claiming logic
 
-import assert from 'node:assert';
+import 'dotenv/config';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-mock-session-secret-key-32chars';
-process.env.SANITY_PROJECT_ID = process.env.SANITY_PROJECT_ID || 'mock-proj-test';
+process.env.SANITY_PROJECT_ID = process.env.SANITY_PROJECT_ID || 'xvhhd8u0';
 process.env.SANITY_DATASET = process.env.SANITY_DATASET || 'production';
+
+import assert from 'node:assert';
 import {
   createOrder,
   claimOrdersByEmail,
@@ -35,6 +37,12 @@ import {
   checkIsAdmin,
 } from '../src/utils/auth';
 import { isScopeMatch, isNavigableLink } from '../src/utils/appShellRouter';
+import {
+  verifySanitySignature,
+  expandCanonicalUrls,
+  expandLocalizedPaths,
+  syncCmsMutation,
+} from '../src/utils/cmsSync';
 
 async function runSelfCheck() {
   console.log('🧪 Starting B2B Order & Claiming Self-Check...\n');
@@ -1042,6 +1050,83 @@ async function runSelfCheck() {
   assert.strictEqual(isNavigableLink(mockAnchor({}, 'https://gwenvenni.com/api/auth/logout'), 'admin'), false);
 
   console.log('✔ [PASS] App Shell Router Scope Matching & Navigable Link Filtering verified');
+
+  // Test Sanity Webhook HMAC-SHA256 Signature Verification
+  const testSecret = 'whsec_test_secret_12345';
+  const testBody = JSON.stringify({ _type: 'product', slug: { current: 'silk-scarf' }, operation: 'update' });
+  const validTimestamp = Math.floor(Date.now() / 1000);
+
+  // Compute test HMAC
+  const enc = new TextEncoder();
+  const hmacKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(testSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuffer = await crypto.subtle.sign('HMAC', hmacKey, enc.encode(`${validTimestamp}.${testBody}`));
+  const validHash = Array.from(new Uint8Array(sigBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+
+  const validHeader = `t=${validTimestamp},v1=${validHash}`;
+  assert.strictEqual(
+    await verifySanitySignature(testBody, validHeader, testSecret),
+    true,
+    'Valid HMAC signature should be accepted'
+  );
+
+  // Tampered payload
+  assert.strictEqual(
+    await verifySanitySignature('{"tampered":true}', validHeader, testSecret),
+    false,
+    'Tampered payload should be rejected'
+  );
+
+  // Expired timestamp (replay attack > 300s)
+  const expiredTimestamp = validTimestamp - 3600;
+  const expiredBuffer = await crypto.subtle.sign('HMAC', hmacKey, enc.encode(`${expiredTimestamp}.${testBody}`));
+  const expiredHash = Array.from(new Uint8Array(expiredBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  assert.strictEqual(
+    await verifySanitySignature(testBody, `t=${expiredTimestamp},v1=${expiredHash}`, testSecret),
+    false,
+    'Expired signature should be rejected'
+  );
+
+  // Canonical URL and Localized Path Expansion
+  const expandedUrls = expandCanonicalUrls('https://gwenvenni.com', '/products/cashmere-crew');
+  assert.deepStrictEqual(expandedUrls, [
+    'https://gwenvenni.com/products/cashmere-crew',
+    'https://gwenvenni.com/products/cashmere-crew/',
+  ]);
+
+  const localizedPaths = expandLocalizedPaths(['/', '/about']);
+  assert.ok(localizedPaths.includes('/'));
+  assert.ok(localizedPaths.includes('/de'));
+  assert.ok(localizedPaths.includes('/about'));
+  assert.ok(localizedPaths.includes('/de/about'));
+
+  // Test Selective syncCmsMutation on single path (avoids querying all 6 services)
+  const targetedSync = await syncCmsMutation({
+    targetPaths: ['/about'],
+    origin: 'https://gwenvenni.com',
+  });
+  assert.strictEqual(targetedSync.success, true);
+  assert.deepStrictEqual(targetedSync.refreshedTasks, ['refreshPageSlug(about)']);
+  assert.ok(!targetedSync.refreshedTasks.includes('refreshAllCoreServices()'));
+
+  // Test Product Deletion syncCmsMutation (evicts slug without querying Sanity)
+  const deleteSync = await syncCmsMutation({
+    docType: 'product',
+    slug: 'deleted-item',
+    operation: 'delete',
+    origin: 'https://gwenvenni.com',
+  });
+  assert.strictEqual(deleteSync.success, true);
+  assert.ok(deleteSync.refreshedTasks.includes('evictProductSlug(deleted-item)'));
+  assert.ok(deleteSync.refreshedTasks.includes('refreshProductAll()'));
+  assert.ok(!deleteSync.refreshedTasks.includes('refreshProductSlug(deleted-item)'));
+
+  console.log('✔ [PASS] Sanity Webhook HMAC Signature, URL Expansion & Selective Sync verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

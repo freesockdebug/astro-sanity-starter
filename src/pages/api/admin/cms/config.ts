@@ -6,6 +6,7 @@ import { getSanityAdminClient } from '@utils/sanity-admin';
 import { ProductService } from '@data/products';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService, DEFAULT_RFQ_SETTINGS } from '@data/rfqSettings';
+import { syncCmsMutation } from '@utils/cmsSync';
 import {
   DEFAULT_BRAND_TITLE,
   DEFAULT_COPYRIGHT_TEXT,
@@ -179,16 +180,12 @@ export const POST: APIRoute = async ({ request }) => {
 
     const result = await client.createOrReplace(doc);
 
-    // Write-Through Cache Update (directly persists updated config to permanent KV + L1 memory)
-    if (docType === 'siteConfig') {
-      await SiteConfigService.getConfig(true);
-    } else if (docType === 'rfqSettings') {
-      await RfqSettingsService.getSettings(true);
-    } else if (docType === 'catalogSettings') {
-      await ProductService.getCatalogSettings(true, cfEnv);
-    } else if (docType === 'productStorySettings') {
-      await ProductService.getProductStorySettings(true, cfEnv);
-    }
+    // Write-Through Cache Update & Edge HTML Purge
+    await syncCmsMutation({
+      docType,
+      origin: new URL(request.url).origin,
+      cfEnv,
+    }).catch((e) => console.warn('[CMS Config POST] Cache sync warning:', e));
 
     // Audit Log
     const diff = computeJsonDiff(existingDoc, result);

@@ -4,6 +4,7 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-admin';
 import { ProductService } from '@data/products';
+import { syncCmsMutation } from '@utils/cmsSync';
 import { computeJsonDiff, insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -105,15 +106,17 @@ export const POST: APIRoute = async ({ request }) => {
       result = await client.create(doc);
     }
 
-    // Write-Through Cache Update (directly overwrites permanent KV + L1 memory)
+    // Write-Through Cache Update & Edge HTML Purge
     const oldSlug = existingDoc?.slug?.current || (typeof existingDoc?.slug === 'string' ? existingDoc.slug : '');
     const slugStr = result.slug?.current || (typeof result.slug === 'string' ? result.slug : '');
-    await Promise.all([
-      ProductService.getAll(true, cfEnv),
-      ProductService.getCategories(true, cfEnv),
-      slugStr ? ProductService.refreshSlug(slugStr, cfEnv) : Promise.resolve(),
-      oldSlug && oldSlug !== slugStr ? ProductService.evictSlug(oldSlug, cfEnv) : Promise.resolve(),
-    ]).catch(() => {});
+    await syncCmsMutation({
+      docType,
+      slug: slugStr,
+      oldSlug,
+      operation: existingDoc ? 'update' : 'create',
+      origin: new URL(request.url).origin,
+      cfEnv,
+    }).catch((e) => console.warn('[CMS Products POST] Cache sync warning:', e));
 
     // Audit Logging with Differential Snapshot
     const diff = computeJsonDiff(existingDoc, result);
@@ -167,13 +170,15 @@ export const DELETE: APIRoute = async ({ request, url }) => {
 
     await client.delete(id);
 
-    // Write-Through Cache Update & Eviction
+    // Write-Through Cache Eviction & Edge HTML Purge
     const slugStr = existingDoc.slug?.current || (typeof existingDoc.slug === 'string' ? existingDoc.slug : '');
-    await Promise.all([
-      ProductService.getAll(true, cfEnv),
-      ProductService.getCategories(true, cfEnv),
-      slugStr ? ProductService.evictSlug(slugStr, cfEnv) : Promise.resolve(),
-    ]).catch(() => {});
+    await syncCmsMutation({
+      docType: existingDoc._type,
+      slug: slugStr,
+      operation: 'delete',
+      origin: new URL(request.url).origin,
+      cfEnv,
+    }).catch((e) => console.warn('[CMS Products DELETE] Cache sync warning:', e));
 
     // Audit Logging
     await insertAuditLog({

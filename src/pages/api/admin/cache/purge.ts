@@ -14,6 +14,7 @@ import {
   invalidateDashboardStatsCache,
 } from '@utils/db';
 import { insertAuditLog } from '@utils/audit';
+import { purgeEdgeHtmlCache } from '@utils/cmsSync';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -91,6 +92,33 @@ export const POST: APIRoute = async ({ request }) => {
         const unslashed = targetPath.replace(/^\//, '').replace(/\/$/, '');
         await PageService.refreshSlug(unslashed || 'home', cfEnv).catch(() => {});
         purgedItems.push(`Page KV refreshed: ${targetPath}`);
+      }
+    }
+
+    // Purge Edge HTML Cache (caches.default in middleware.ts) & Cloudflare CDN
+    const edgePaths = new Set<string>();
+    if (targetPath) {
+      edgePaths.add(targetPath);
+    }
+    if (scope === 'all' || scope === 'products' || scope === 'pages' || scope === 'config') {
+      edgePaths.add('/');
+      edgePaths.add('/products');
+      edgePaths.add('/about');
+      edgePaths.add('/private-label');
+      edgePaths.add('/contact');
+    }
+
+    if (edgePaths.size > 0) {
+      const purgeRes = await purgeEdgeHtmlCache({
+        targetPaths: edgePaths,
+        origin: new URL(request.url).origin,
+        cfEnv,
+      }).catch(() => null);
+      if (purgeRes?.edgeCachePurged) {
+        purgedItems.push(`Worker Edge HTML Cache (${purgeRes.urlsToPurge.length} URL keys purged)`);
+      }
+      if (purgeRes?.cdnPurged) {
+        purgedItems.push('Cloudflare Global CDN Zone Cache purged');
       }
     }
 

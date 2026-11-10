@@ -4,6 +4,7 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-admin';
 import { PageService } from '@data/page';
+import { syncCmsMutation } from '@utils/cmsSync';
 import { computeJsonDiff, insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -86,14 +87,18 @@ export const POST: APIRoute = async ({ request }) => {
       result = await client.create(doc);
     }
 
-    // Write-Through Cache Update (directly updates permanent KV + L1 memory)
+    // Write-Through Cache Update & Edge HTML Purge
     const oldSlug = existingDoc?.slug?.current || '';
     const slugStr = result.slug?.current || (typeof result.slug === 'string' ? result.slug : '');
     const cleanSlug = slugStr.replace(/^\//, '').replace(/\/$/, '') || 'home';
-    await Promise.all([
-      PageService.refreshSlug(cleanSlug, cfEnv),
-      oldSlug && oldSlug !== slugStr ? PageService.evictSlug(oldSlug, cfEnv) : Promise.resolve(),
-    ]).catch(() => {});
+    await syncCmsMutation({
+      docType: 'page',
+      slug: cleanSlug,
+      oldSlug,
+      operation: existingDoc ? 'update' : 'create',
+      origin: new URL(request.url).origin,
+      cfEnv,
+    }).catch((e) => console.warn('[CMS Pages POST] Cache sync warning:', e));
 
     // Audit Logging
     const diff = computeJsonDiff(existingDoc, result);
@@ -148,9 +153,15 @@ export const DELETE: APIRoute = async ({ request, url }) => {
 
     await client.delete(id);
 
-    // Evict deleted page from KV + L1 memory
+    // Evict deleted page from KV & Edge HTML Purge
     const cleanSlug = slugStr.replace(/^\//, '').replace(/\/$/, '');
-    await PageService.evictSlug(cleanSlug, cfEnv);
+    await syncCmsMutation({
+      docType: 'page',
+      slug: cleanSlug,
+      operation: 'delete',
+      origin: new URL(request.url).origin,
+      cfEnv,
+    }).catch((e) => console.warn('[CMS Pages DELETE] Cache sync warning:', e));
 
     // Audit Log
     await insertAuditLog({
