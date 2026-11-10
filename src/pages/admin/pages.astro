@@ -252,7 +252,8 @@ const pageTitle = 'Pages & Modular Visual Builder';
     let catalogProducts: any[] = [];
     let currentLang = 'en'; // 'en' | 'de' | 'fr' | 'es'
     let draggedSectionIdx: number | null = null;
-    let collapsedSections: Set<number> = new Set();
+    // Bug 3 Fix: Store collapse state using unique section _key (string)
+    let collapsedSections: Set<string> = new Set();
 
     // Multi-Language string helpers
     function getLocaleVal(val: any, lang = currentLang): string {
@@ -423,6 +424,12 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
         activePageDoc = data.page;
         if (!activePageDoc.sections) activePageDoc.sections = [];
+
+        // Ensure every section has a unique _key for stable collapse and drag state
+        activePageDoc.sections.forEach((sec: any) => {
+          if (!sec._key) sec._key = crypto.randomUUID().slice(0, 8);
+        });
+
         collapsedSections.clear();
 
         renderPagesList();
@@ -511,17 +518,18 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
     function syncMetaFromDom() {
       if (!activePageDoc) return;
-      const titleVal = (document.getElementById('page-title-input') as HTMLInputElement)?.value.trim();
-      const slugVal = (document.getElementById('page-slug-input') as HTMLInputElement)?.value.trim();
-      const metaTitleVal = (document.getElementById('page-metatitle-input') as HTMLInputElement)?.value.trim();
-      const metaDescVal = (document.getElementById('page-metadesc-input') as HTMLInputElement)?.value.trim();
-      const suffixVal = (document.getElementById('page-add-suffix-input') as HTMLInputElement)?.checked;
+      const titleInput = document.getElementById('page-title-input') as HTMLInputElement | null;
+      const slugInput = document.getElementById('page-slug-input') as HTMLInputElement | null;
+      const metaTitleInput = document.getElementById('page-metatitle-input') as HTMLInputElement | null;
+      const metaDescInput = document.getElementById('page-metadesc-input') as HTMLInputElement | null;
+      const suffixInput = document.getElementById('page-add-suffix-input') as HTMLInputElement | null;
 
-      activePageDoc.title = setLocaleVal(activePageDoc.title, titleVal);
-      activePageDoc.metaTitle = setLocaleVal(activePageDoc.metaTitle, metaTitleVal);
-      activePageDoc.metaDescription = setLocaleVal(activePageDoc.metaDescription, metaDescVal);
-      activePageDoc.slug = { _type: 'slug', current: slugVal || '/' };
-      activePageDoc.addTitleSuffix = suffixVal;
+      // Bug 2 Fix: Unconditional assignment when DOM element exists so clearing fields works
+      if (titleInput) activePageDoc.title = setLocaleVal(activePageDoc.title, titleInput.value.trim());
+      if (metaTitleInput) activePageDoc.metaTitle = setLocaleVal(activePageDoc.metaTitle, metaTitleInput.value.trim());
+      if (metaDescInput) activePageDoc.metaDescription = setLocaleVal(activePageDoc.metaDescription, metaDescInput.value.trim());
+      if (slugInput) activePageDoc.slug = { _type: 'slug', current: slugInput.value.trim() || '/' };
+      if (suffixInput) activePageDoc.addTitleSuffix = suffixInput.checked;
     }
 
     // Default 4-Language Initial Values for New Sections
@@ -563,6 +571,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
               es: 'Solicitar dossier de muestras',
             },
             primaryButtonUrl: '#inquiry',
+            swatchSku: '',
             showSecondaryButton: true,
             secondaryButtonText: {
               _type: 'localeString',
@@ -610,6 +619,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
               es: 'Solicitar kit de muestras',
             },
             actionButtonUrl: '#inquiry',
+            swatchSku: '',
             showCardQuoteButton: true,
             cardDetailsButtonText: {
               _type: 'localeString',
@@ -652,15 +662,27 @@ const pageTitle = 'Pages & Modular Visual Builder';
             bento2Tag: { _type: 'localeString', en: 'Artisan Finish', de: 'Handwerkliche Präzision', fr: 'Finition Artisanale', es: 'Acabado Artesanal' },
             bento2Title: { _type: 'localeString', en: 'Hand-Linked 0mm Seam.', de: 'Handgekettelte 0mm-Naht.', fr: 'Remaillage main 0mm.', es: 'Puntera remallada a mano 0mm.' },
             bento2Description: { _type: 'localeText', en: 'Completely flat toe seam plane eliminating pressure points.', de: 'Absolut flache Spitzenverbindung ohne Druckstellen.', fr: 'Couture parfaitement plate éliminant les frottements.', es: 'Costura plana sin rozaduras ni puntos de presión.' },
+            bento2BadgeText: { _type: 'localeString', en: 'OEKO-TEX Class 1', de: 'OEKO-TEX Klasse 1', fr: 'OEKO-TEX Classe 1', es: 'OEKO-TEX Clase 1' },
+            bento2BadgeStatus: { _type: 'localeString', en: 'Verified Safe', de: 'Zertifiziert', fr: 'Certifié Conforme', es: 'Certificado Seguro' },
             bento3Tag: { _type: 'localeString', en: 'Needle Density', de: 'Maschendichte', fr: 'Densité de Maille', es: 'Densidad de Tejido' },
             bento3Title: { _type: 'localeString', en: '200N High-Gauge Weave.', de: '200N Feinstrick-Dichte.', fr: 'Maille haute jauge 200N.', es: 'Galgas finas 200N.' },
             bento3Description: { _type: 'localeText', en: 'Dual-cylinder Italian Lonati machinery for sculpted arch fit.', de: 'Italienische Doppelzylinder-Maschinen für anatomischen Halt.', fr: 'Métiers italiens double cylindre pour un maintien anatomique.', es: 'Maquinaria italiana para un ajuste anatómico.' },
+            bento3FooterNote: { _type: 'localeString', en: 'Lonati Dual Cylinder · 200 Needle Precision', de: 'Lonati Doppelzylinder · 200-Nadel-Präzision', fr: 'Double cylindre Lonati · Précision 200 aiguilles', es: 'Doble cilindro Lonati · Precisión 200 agujas' },
             bento4Tag: { _type: 'localeString', en: 'Compression Arch', de: 'Kompressions-Passform', fr: 'Maintien Élastique', es: 'Soporte Elástico' },
             bento4Title: { _type: 'localeString', en: 'ZeroMark Lycra Rib.', de: 'ZeroMark Lycra-Bündchen.', fr: 'Bord-côtes Lycra ZeroMark.', es: 'Puño elástico Lycra ZeroMark.' },
             bento4Description: { _type: 'localeText', en: 'Gentle stay-up tension without leaving constricting marks.', de: 'Sanfter Halt ohne Druckstellen an der Wade.', fr: 'Tenue souple sans marquer le mollet.', es: 'Ajuste suave sin dejar marcas en la pantorrilla.' },
+            bento4FooterNote: { _type: 'localeString', en: 'Zero Constriction · High Elastic Memory', de: 'Druckfreier Halt · Hohe Rücksprungkraft', fr: 'Sans compression excessive · Haute mémoire élastique', es: 'Sin marcas de presión · Gran memoria elástica' },
             bento5Tag: { _type: 'localeString', en: 'Prototyping SLA', de: 'Musterungs-SLA', fr: 'SLA Prototypage', es: 'Plazos de Muestreo' },
             bento5Title: { _type: 'localeString', en: '48-Hour Rapid Dispatch.', de: '48h Express-Musterung.', fr: 'Expédition échantillons 48h.', es: 'Muestreo express 48h.' },
             bento5Description: { _type: 'localeText', en: 'Curated physical swatch cards dispatched globally via DHL.', de: 'Musterkarten weltweit per Express versendet.', fr: 'Dossiers expédiés par coursier express dans le monde entier.', es: 'Muestrarios enviados por mensajería urgente a todo el mundo.' },
+            bento5FooterNote: { _type: 'localeString', en: 'Global Courier Dispatch · Air Express', de: 'Weltweiter Expressversand', fr: 'Expédition express internationale', es: 'Envío express internacional' },
+            showPrimaryButton: true,
+            primaryButtonText: { _type: 'localeString', en: 'Request Swatch Kit', de: 'Musterdossier anfordern', fr: 'Demander le dossier', es: 'Solicitar dossier' },
+            primaryButtonUrl: '#inquiry',
+            swatchSku: '',
+            showSecondaryButton: false,
+            secondaryButtonText: { _type: 'localeString', en: 'Explore All Specs', de: 'Alle Spezifikationen', fr: 'Toutes les spécifications', es: 'Ver especificaciones' },
+            secondaryButtonUrl: '/products',
           };
 
         case 'manufacturingSection':
@@ -691,6 +713,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
             showActionButton: true,
             actionButtonText: { _type: 'localeString', en: 'Request Factory Dossier', de: 'Werksunterlagen anfordern', fr: 'Demander le dossier usine', es: 'Solicitar dossier de fábrica' },
             actionButtonUrl: '#inquiry',
+            swatchSku: '',
           };
 
         case 'inquirySection':
@@ -707,6 +730,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
             showSection: true,
             showButton: true,
             buttonText: { _type: 'localeString', en: 'Dispatch Swatch Kit', de: 'Muster-Set versenden', fr: 'Expédier le dossier', es: 'Enviar kit de muestras' },
+            swatchSku: '',
           };
 
         case 'customSection':
@@ -805,6 +829,11 @@ const pageTitle = 'Pages & Modular Visual Builder';
       const container = document.getElementById('sections-container');
       if (!container) return;
 
+      // Bug 1 Fix: Always sync current input values before wiping and rebuilding DOM
+      if (container.querySelector('.section-card')) {
+        syncSectionsFromDom();
+      }
+
       const sections = activePageDoc?.sections || [];
       if (sections.length === 0) {
         container.innerHTML = `
@@ -830,12 +859,15 @@ const pageTitle = 'Pages & Modular Visual Builder';
         const meta = typeMeta[type] || { label: type, badgeClass: 'bg-gray-100 text-gray-900 border-gray-200', icon: '📄' };
         const summary = getSectionSummary(sec);
         const thumbUrl = getSectionThumbnail(sec);
-        const isCollapsed = collapsedSections.has(idx);
+        // Bug 3 Fix: Stable collapse state based on sec._key
+        const secKey = sec._key || String(idx);
+        const isCollapsed = collapsedSections.has(secKey);
 
         return `
           <div
             class="section-card rounded-2xl bg-[#fafafc] border border-black/10 shadow-2xs overflow-hidden transition-all select-none"
             data-idx="${idx}"
+            data-key="${escapeHtml(secKey)}"
             data-type="${type}"
           >
             <!-- Card Header -->
@@ -873,7 +905,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
                 <button type="button" class="btn-sec-down p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Move Down">▼</button>
                 <button type="button" class="btn-sec-copy p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Duplicate Section">📋</button>
                 <button type="button" class="btn-sec-del p-1 rounded-md text-[#86868b] hover:text-rose-600 hover:bg-rose-50" data-idx="${idx}" title="Delete Section">✕</button>
-                <button type="button" class="btn-sec-toggle p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5 ml-1" data-idx="${idx}" title="Expand / Collapse">
+                <button type="button" class="btn-sec-toggle p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5 ml-1" data-key="${escapeHtml(secKey)}" title="Expand / Collapse">
                   ${isCollapsed ? '▾' : '▴'}
                 </button>
               </div>
@@ -1080,6 +1112,42 @@ const pageTitle = 'Pages & Modular Visual Builder';
               }).join('')}
             </div>
           </div>
+
+          <!-- Bug 4 Fix: Buttons & Card Quote Actions -->
+          <details class="p-3 rounded-xl bg-white border border-black/10" open>
+            <summary class="font-bold text-xs text-[#1d1d1f] cursor-pointer select-none">
+              🔘 Action Buttons & Card Quote Configuration
+            </summary>
+            <div class="pt-3 border-t border-black/5 mt-3 space-y-3">
+              <!-- Showcase Action Button -->
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center bg-[#fafafc] p-2.5 rounded-xl border border-black/5">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="showcase-abtn-show-${idx}" class="field-action-btn-show rounded cursor-pointer" ${sec.showActionButton ? 'checked' : ''} />
+                  <label for="showcase-abtn-show-${idx}" class="font-semibold text-xs cursor-pointer">Top Action Button</label>
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs field-action-btn-text" placeholder="Button Text (${currentLang.toUpperCase()})" value="${escapeHtml(getLocaleVal(sec.actionButtonText))}" />
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-action-btn-url" placeholder="Link (e.g. #inquiry)" value="${escapeHtml(sec.actionButtonUrl || '')}" />
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-action-btn-sku" placeholder="Custom Swatch SKU" value="${escapeHtml(sec.swatchSku || '')}" />
+                </div>
+              </div>
+
+              <!-- Card Quote & Details Text -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center bg-[#fafafc] p-2.5 rounded-xl border border-black/5">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="showcase-card-quote-${idx}" class="field-card-quote-show rounded cursor-pointer" ${sec.showCardQuoteButton !== false ? 'checked' : ''} />
+                  <label for="showcase-card-quote-${idx}" class="font-semibold text-xs cursor-pointer">Show Card "Add to Quote" Button</label>
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs field-card-details-text" placeholder="Card Details Button Text (${currentLang.toUpperCase()})" value="${escapeHtml(getLocaleVal(sec.cardDetailsButtonText))}" />
+                </div>
+              </div>
+            </div>
+          </details>
         </div>
       `;
     }
@@ -1148,36 +1216,73 @@ const pageTitle = 'Pages & Modular Visual Builder';
             </div>
           </div>
 
-          <!-- Bento 2 to 5 Compact Grid -->
+          <!-- Bug 4 Fix: Bento 2 to 5 Complete Grid with Tags, Badges & Footers -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <!-- Bento 2 -->
             <div class="p-3 rounded-xl bg-white border border-black/10 space-y-2">
-              <span class="font-bold text-xs text-[#1d1d1f] block">🍱 Bento 2: 0mm 无缝缝头</span>
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-[#1d1d1f]">🍱 Bento 2: 0mm 无缝缝头</span>
+                <input type="text" class="w-28 px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento2-tag" placeholder="Tag" value="${escapeHtml(getLocaleVal(sec.bento2Tag))}" />
+              </div>
               <input type="text" class="w-full px-2 py-1 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento2-title font-semibold" placeholder="Bento 2 Title" value="${escapeHtml(getLocaleVal(sec.bento2Title))}" />
               <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento2-desc" placeholder="Bento 2 Description">${escapeHtml(getLocaleVal(sec.bento2Description))}</textarea>
+              <div class="grid grid-cols-2 gap-2">
+                <input type="text" class="w-full px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento2-badge-text" placeholder="Badge Text" value="${escapeHtml(getLocaleVal(sec.bento2BadgeText))}" />
+                <input type="text" class="w-full px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento2-badge-status" placeholder="Badge Status" value="${escapeHtml(getLocaleVal(sec.bento2BadgeStatus))}" />
+              </div>
             </div>
 
             <!-- Bento 3 -->
             <div class="p-3 rounded-xl bg-white border border-black/10 space-y-2">
-              <span class="font-bold text-xs text-[#1d1d1f] block">🍱 Bento 3: 200N 针数密度</span>
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-[#1d1d1f]">🍱 Bento 3: 200N 针数密度</span>
+                <input type="text" class="w-28 px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento3-tag" placeholder="Tag" value="${escapeHtml(getLocaleVal(sec.bento3Tag))}" />
+              </div>
               <input type="text" class="w-full px-2 py-1 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento3-title font-semibold" placeholder="Bento 3 Title" value="${escapeHtml(getLocaleVal(sec.bento3Title))}" />
               <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento3-desc" placeholder="Bento 3 Description">${escapeHtml(getLocaleVal(sec.bento3Description))}</textarea>
+              <input type="text" class="w-full px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento3-footer" placeholder="Footer Technical Note" value="${escapeHtml(getLocaleVal(sec.bento3FooterNote))}" />
             </div>
 
             <!-- Bento 4 -->
             <div class="p-3 rounded-xl bg-white border border-black/10 space-y-2">
-              <span class="font-bold text-xs text-[#1d1d1f] block">🍱 Bento 4: ZeroMark 莱卡罗口</span>
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-[#1d1d1f]">🍱 Bento 4: ZeroMark 莱卡罗口</span>
+                <input type="text" class="w-28 px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento4-tag" placeholder="Tag" value="${escapeHtml(getLocaleVal(sec.bento4Tag))}" />
+              </div>
               <input type="text" class="w-full px-2 py-1 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento4-title font-semibold" placeholder="Bento 4 Title" value="${escapeHtml(getLocaleVal(sec.bento4Title))}" />
               <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento4-desc" placeholder="Bento 4 Description">${escapeHtml(getLocaleVal(sec.bento4Description))}</textarea>
+              <input type="text" class="w-full px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento4-footer" placeholder="Footer Technical Note" value="${escapeHtml(getLocaleVal(sec.bento4FooterNote))}" />
             </div>
 
             <!-- Bento 5 -->
             <div class="p-3 rounded-xl bg-white border border-black/10 space-y-2">
-              <span class="font-bold text-xs text-[#1d1d1f] block">🍱 Bento 5: 48h 极速打样交期</span>
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-[#1d1d1f]">🍱 Bento 5: 48h 极速打样交期</span>
+                <input type="text" class="w-28 px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento5-tag" placeholder="Tag" value="${escapeHtml(getLocaleVal(sec.bento5Tag))}" />
+              </div>
               <input type="text" class="w-full px-2 py-1 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento5-title font-semibold" placeholder="Bento 5 Title" value="${escapeHtml(getLocaleVal(sec.bento5Title))}" />
               <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento5-desc" placeholder="Bento 5 Description">${escapeHtml(getLocaleVal(sec.bento5Description))}</textarea>
+              <input type="text" class="w-full px-2 py-0.5 rounded bg-[#fafafc] border border-black/10 text-[10px] field-bento5-footer" placeholder="Footer Technical Note" value="${escapeHtml(getLocaleVal(sec.bento5FooterNote))}" />
             </div>
           </div>
+
+          <!-- Feature Matrix Buttons -->
+          <details class="p-3 rounded-xl bg-white border border-black/10">
+            <summary class="font-bold text-xs text-[#1d1d1f] cursor-pointer select-none">
+              🔘 Action Buttons Configuration
+            </summary>
+            <div class="pt-3 border-t border-black/5 mt-3 space-y-2">
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center bg-[#fafafc] p-2 rounded-xl">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="fm-pbtn-show-${idx}" class="field-fm-pbtn-show rounded cursor-pointer" ${sec.showPrimaryButton ? 'checked' : ''} />
+                  <label for="fm-pbtn-show-${idx}" class="font-semibold text-xs cursor-pointer">Primary</label>
+                </div>
+                <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs field-fm-pbtn-text" placeholder="Text" value="${escapeHtml(getLocaleVal(sec.primaryButtonText))}" />
+                <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-fm-pbtn-url" placeholder="Link" value="${escapeHtml(sec.primaryButtonUrl || '')}" />
+                <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-fm-pbtn-sku" placeholder="SKU" value="${escapeHtml(sec.swatchSku || '')}" />
+              </div>
+            </div>
+          </details>
         </div>
       `;
     }
@@ -1187,10 +1292,14 @@ const pageTitle = 'Pages & Modular Visual Builder';
       const caps = sec.capabilities || [];
       return `
         <div class="space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Admin Label</label>
               <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-admin-label" value="${escapeHtml(sec.adminLabel || '')}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Badge (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-badge" value="${escapeHtml(getLocaleVal(sec.badge))}" placeholder="${escapeHtml(getFallbackEn(sec.badge))}" />
             </div>
             <div>
               <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Headline (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
@@ -1203,7 +1312,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
             <textarea rows="2" class="w-full p-2.5 rounded-xl bg-white border border-black/10 text-xs field-subline" placeholder="${escapeHtml(getFallbackEn(sec.subline))}">${escapeHtml(getLocaleVal(sec.subline))}</textarea>
           </div>
 
-          <!-- Capabilities List -->
+          <!-- Capabilities List with Reordering -->
           <div class="p-3.5 rounded-xl bg-white border border-black/10 space-y-3">
             <div class="flex items-center justify-between">
               <span class="font-bold text-xs text-[#1d1d1f]">🏭 Manufacturing Capabilities (${caps.length} items)</span>
@@ -1217,7 +1326,11 @@ const pageTitle = 'Pages & Modular Visual Builder';
                 <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 space-y-2">
                   <div class="flex items-center justify-between">
                     <span class="text-[10px] font-mono text-[#86868b]">#${cIdx + 1} Capability Card</span>
-                    <button type="button" class="btn-del-capability text-rose-600 text-xs hover:bg-rose-50 px-1.5 py-0.5 rounded" data-sec-idx="${idx}" data-cap-idx="${cIdx}">✕ Delete</button>
+                    <div class="flex items-center gap-1">
+                      <button type="button" class="btn-cap-up p-1 text-[10px] hover:bg-black/5 rounded text-[#86868b]" data-sec-idx="${idx}" data-cap-idx="${cIdx}">▲</button>
+                      <button type="button" class="btn-cap-down p-1 text-[10px] hover:bg-black/5 rounded text-[#86868b]" data-sec-idx="${idx}" data-cap-idx="${cIdx}">▼</button>
+                      <button type="button" class="btn-del-capability text-rose-600 text-xs hover:bg-rose-50 px-1.5 py-0.5 rounded ml-1" data-sec-idx="${idx}" data-cap-idx="${cIdx}">✕</button>
+                    </div>
                   </div>
                   <input type="text" class="w-full px-2.5 py-1.5 rounded-lg bg-white border border-black/10 text-xs font-semibold field-cap-title" data-sec-idx="${idx}" data-cap-idx="${cIdx}" value="${escapeHtml(getLocaleVal(cap.title))}" placeholder="Title (${currentLang.toUpperCase()})" />
                   <textarea rows="2" class="w-full p-2 rounded-lg bg-white border border-black/10 text-xs field-cap-desc" data-sec-idx="${idx}" data-cap-idx="${cIdx}" placeholder="Description (${currentLang.toUpperCase()})">${escapeHtml(getLocaleVal(cap.description))}</textarea>
@@ -1225,6 +1338,22 @@ const pageTitle = 'Pages & Modular Visual Builder';
               `).join('')}
             </div>
           </div>
+
+          <!-- Bug 4 Fix: Manufacturing Action Button -->
+          <details class="p-3 rounded-xl bg-white border border-black/10">
+            <summary class="font-bold text-xs text-[#1d1d1f] cursor-pointer select-none">
+              🔘 Action Button Configuration
+            </summary>
+            <div class="pt-3 border-t border-black/5 mt-3 grid grid-cols-1 sm:grid-cols-4 gap-2 items-center bg-[#fafafc] p-2 rounded-xl">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" id="mfg-abtn-show-${idx}" class="field-mfg-abtn-show rounded cursor-pointer" ${sec.showActionButton ? 'checked' : ''} />
+                <label for="mfg-abtn-show-${idx}" class="font-semibold text-xs cursor-pointer">Show Button</label>
+              </div>
+              <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs field-mfg-abtn-text" placeholder="Text" value="${escapeHtml(getLocaleVal(sec.actionButtonText))}" />
+              <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-mfg-abtn-url" placeholder="Link" value="${escapeHtml(sec.actionButtonUrl || '')}" />
+              <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-mfg-abtn-sku" placeholder="SKU" value="${escapeHtml(sec.swatchSku || '')}" />
+            </div>
+          </details>
         </div>
       `;
     }
@@ -1234,10 +1363,14 @@ const pageTitle = 'Pages & Modular Visual Builder';
       const cats: string[] = sec.categories || [];
       return `
         <div class="space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Admin Label</label>
               <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-admin-label" value="${escapeHtml(sec.adminLabel || '')}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Badge (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-badge" value="${escapeHtml(getLocaleVal(sec.badge))}" placeholder="${escapeHtml(getFallbackEn(sec.badge))}" />
             </div>
             <div>
               <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Headline (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
@@ -1256,6 +1389,38 @@ const pageTitle = 'Pages & Modular Visual Builder';
             <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-[#fafafc] border border-black/10 text-xs field-inquiry-cats" value="${escapeHtml(cats.join(', '))}" placeholder="e.g. Mulberry Silk, Fine Cashmere, Merino Wool" />
             <p class="text-[10px] text-[#86868b]">Visitors can choose these fabric options when submitting a swatch request.</p>
           </div>
+
+          <!-- Bug 4 Fix: Section Switches & Submission Success Copy -->
+          <details class="p-3 rounded-xl bg-white border border-black/10" open>
+            <summary class="font-bold text-xs text-[#1d1d1f] cursor-pointer select-none">
+              ⚙️ Display Switches & Success Confirmation Copy
+            </summary>
+            <div class="pt-3 border-t border-black/5 mt-3 space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center bg-[#fafafc] p-2.5 rounded-xl">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="inq-show-sec-${idx}" class="field-inq-show-sec rounded cursor-pointer" ${sec.showSection !== false ? 'checked' : ''} />
+                  <label for="inq-show-sec-${idx}" class="font-semibold text-xs cursor-pointer">Show Section</label>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="inq-show-btn-${idx}" class="field-inq-show-btn rounded cursor-pointer" ${sec.showButton !== false ? 'checked' : ''} />
+                  <label for="inq-show-btn-${idx}" class="font-semibold text-xs cursor-pointer">Show Submit</label>
+                </div>
+                <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs field-inq-btn-text" placeholder="Submit Button Text" value="${escapeHtml(getLocaleVal(sec.buttonText))}" />
+                <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-inq-swatch-sku" placeholder="Swatch SKU" value="${escapeHtml(sec.swatchSku || '')}" />
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#fafafc] p-2.5 rounded-xl">
+                <div>
+                  <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Success Title (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+                  <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-inq-success-title" value="${escapeHtml(getLocaleVal(sec.successTitle))}" placeholder="Sample Request Dispatched" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Success Message (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+                  <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-inq-success-msg" value="${escapeHtml(getLocaleVal(sec.successMessage))}" placeholder="Our team will contact you..." />
+                </div>
+              </div>
+            </div>
+          </details>
         </div>
       `;
     }
@@ -1292,12 +1457,65 @@ const pageTitle = 'Pages & Modular Visual Builder';
             </div>
           </div>
 
+          <!-- Bug 4 Fix: Advanced Layout Settings -->
+          <details class="p-3 rounded-xl bg-white border border-black/10">
+            <summary class="font-bold text-xs text-[#1d1d1f] cursor-pointer select-none">
+              ⚙️ Advanced Viewport & Layout Settings
+            </summary>
+            <div class="pt-3 border-t border-black/5 mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div>
+                <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Height Mode</label>
+                <select class="w-full px-2 py-1 rounded bg-[#fafafc] border border-black/10 text-xs field-section-height">
+                  <option value="screen-fit" ${sec.sectionHeight === 'screen-fit' ? 'selected' : ''}>100dvh Exact Fit</option>
+                  <option value="screen-min" ${sec.sectionHeight === 'screen-min' ? 'selected' : ''}>Min 100dvh</option>
+                  <option value="screen-75" ${sec.sectionHeight === 'screen-75' ? 'selected' : ''}>75dvh Focus</option>
+                  <option value="screen-50" ${sec.sectionHeight === 'screen-50' ? 'selected' : ''}>50dvh Half</option>
+                  <option value="auto" ${sec.sectionHeight === 'auto' ? 'selected' : ''}>Auto Content</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Vertical Align</label>
+                <select class="w-full px-2 py-1 rounded bg-[#fafafc] border border-black/10 text-xs field-vertical-align">
+                  <option value="center" ${sec.verticalAlign === 'center' ? 'selected' : ''}>Center</option>
+                  <option value="top" ${sec.verticalAlign === 'top' ? 'selected' : ''}>Top</option>
+                  <option value="bottom" ${sec.verticalAlign === 'bottom' ? 'selected' : ''}>Bottom</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Container Width</label>
+                <select class="w-full px-2 py-1 rounded bg-[#fafafc] border border-black/10 text-xs field-container-width">
+                  <option value="wide" ${sec.containerWidth === 'wide' ? 'selected' : ''}>Wide (7xl)</option>
+                  <option value="narrow" ${sec.containerWidth === 'narrow' ? 'selected' : ''}>Narrow (3xl)</option>
+                  <option value="full" ${sec.containerWidth === 'full' ? 'selected' : ''}>Full Bleed</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Padding Y</label>
+                <select class="w-full px-2 py-1 rounded bg-[#fafafc] border border-black/10 text-xs field-padding-y">
+                  <option value="standard" ${sec.paddingY === 'standard' ? 'selected' : ''}>Standard (96px)</option>
+                  <option value="compact" ${sec.paddingY === 'compact' ? 'selected' : ''}>Compact (48px)</option>
+                  <option value="spacious" ${sec.paddingY === 'spacious' ? 'selected' : ''}>Spacious (144px)</option>
+                  <option value="none" ${sec.paddingY === 'none' ? 'selected' : ''}>None (0px)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Layout Mode</label>
+                <select class="w-full px-2 py-1 rounded bg-[#fafafc] border border-black/10 text-xs field-layout-mode">
+                  <option value="flow" ${sec.layoutMode === 'flow' ? 'selected' : ''}>Flow Stream</option>
+                  <option value="split-50-50" ${sec.layoutMode === 'split-50-50' ? 'selected' : ''}>Split 5:5</option>
+                  <option value="split-60-40" ${sec.layoutMode === 'split-60-40' ? 'selected' : ''}>Split 6:4</option>
+                  <option value="split-40-60" ${sec.layoutMode === 'split-40-60' ? 'selected' : ''}>Split 4:6</option>
+                </select>
+              </div>
+            </div>
+          </details>
+
           <!-- Blocks Stream Builder -->
           <div class="p-3.5 rounded-xl bg-white border border-black/10 space-y-3">
             <div class="flex items-center justify-between">
               <div>
                 <span class="block font-bold text-xs text-[#1d1d1f]">🧱 Content Blocks Stream (${blocks.length} blocks)</span>
-                <span class="text-[10px] text-[#86868b]">Add headings, media, metrics, button groups or testimonials</span>
+                <span class="text-[10px] text-[#86868b]">Compose headings, media, button groups, metrics, or quotes</span>
               </div>
               <div class="flex items-center gap-2">
                 <select class="picker-add-block h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" data-idx="${idx}">
@@ -1307,36 +1525,61 @@ const pageTitle = 'Pages & Modular Visual Builder';
                   <option value="buttonGroupBlock">🔘 Action Buttons (buttonGroupBlock)</option>
                   <option value="metricGridBlock">📊 Metrics Grid (metricGridBlock)</option>
                   <option value="quoteBlock">💬 Client Quote (quoteBlock)</option>
+                  <option value="dividerBlock">➖ Divider & Spacing (dividerBlock)</option>
                 </select>
               </div>
             </div>
 
             <!-- Block Cards -->
             <div class="space-y-2">
-              ${blocks.map((b: any, bIdx: number) => `
-                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 space-y-2">
-                  <div class="flex items-center justify-between border-b border-black/5 pb-1.5">
-                    <span class="font-bold text-[11px] text-[#1d1d1f]">#${bIdx + 1} ${escapeHtml(b._type || 'block')}</span>
-                    <button type="button" class="btn-del-block text-rose-600 text-xs hover:bg-rose-50 px-1.5 py-0.5 rounded" data-sec-idx="${idx}" data-block-idx="${bIdx}">✕ Remove</button>
-                  </div>
-                  ${b._type === 'headingBlock' ? `
-                    <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs font-bold field-block-headline" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Headline" value="${escapeHtml(b.headline || '')}" />
-                    <textarea rows="2" class="w-full p-2 rounded bg-white border border-black/10 text-xs field-block-subtitle" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Subtitle / Text">${escapeHtml(b.subtitle || '')}</textarea>
-                  ` : b._type === 'mediaBlock' ? `
-                    <div class="flex items-center justify-between p-2 rounded bg-white border border-black/10">
-                      <div class="flex items-center gap-2">
-                        <div class="w-10 h-10 rounded bg-[#f5f5f7] overflow-hidden flex items-center justify-center">
-                          ${b.image ? `<img src="${escapeHtml((window as any).resolveSanityRefUrl?.(b.image))}" class="w-full h-full object-cover" />` : `<span class="text-[8px] text-[#86868b]">No Img</span>`}
-                        </div>
-                        <span class="text-xs font-semibold">Media Image</span>
+              ${blocks.map((b: any, bIdx: number) => {
+                const bType = b._type || 'block';
+                return `
+                  <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 space-y-2 block-card" data-sec-idx="${idx}" data-block-idx="${bIdx}" data-block-type="${bType}">
+                    <div class="flex items-center justify-between border-b border-black/5 pb-1.5">
+                      <span class="font-bold text-[11px] text-[#1d1d1f]">#${bIdx + 1} ${escapeHtml(bType)}</span>
+                      <div class="flex items-center gap-1">
+                        <button type="button" class="btn-block-up p-0.5 text-[10px] hover:bg-black/5 rounded text-[#86868b]" data-sec-idx="${idx}" data-block-idx="${bIdx}">▲</button>
+                        <button type="button" class="btn-block-down p-0.5 text-[10px] hover:bg-black/5 rounded text-[#86868b]" data-sec-idx="${idx}" data-block-idx="${bIdx}">▼</button>
+                        <button type="button" class="btn-del-block text-rose-600 text-xs hover:bg-rose-50 px-1.5 py-0.5 rounded ml-1" data-sec-idx="${idx}" data-block-idx="${bIdx}">✕</button>
                       </div>
-                      <button type="button" class="btn-choose-block-image px-2.5 py-1 rounded bg-[#1d1d1f] text-white text-xs font-semibold" data-sec-idx="${idx}" data-block-idx="${bIdx}">📁 Choose</button>
                     </div>
-                  ` : `
-                    <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-block-generic" data-sec-idx="${idx}" data-block-idx="${bIdx}" value="${escapeHtml(b.headline || b.quote || b.badge || '')}" placeholder="Block Content" />
-                  `}
-                </div>
-              `).join('')}
+
+                    ${bType === 'headingBlock' ? `
+                      <div class="grid grid-cols-2 gap-2">
+                        <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-b-badge" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Eyebrow Badge" value="${escapeHtml(b.badge || '')}" />
+                        <select class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-b-align" data-sec-idx="${idx}" data-block-idx="${bIdx}">
+                          <option value="center" ${b.align === 'center' ? 'selected' : ''}>Center</option>
+                          <option value="left" ${b.align === 'left' ? 'selected' : ''}>Left</option>
+                          <option value="right" ${b.align === 'right' ? 'selected' : ''}>Right</option>
+                        </select>
+                      </div>
+                      <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs font-bold field-b-headline" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Headline" value="${escapeHtml(b.headline || '')}" />
+                      <textarea rows="2" class="w-full p-2 rounded bg-white border border-black/10 text-xs field-b-subtitle" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Subtitle / Narrative text">${escapeHtml(b.subtitle || '')}</textarea>
+                    ` : bType === 'mediaBlock' ? `
+                      <div class="flex items-center justify-between p-2 rounded bg-white border border-black/10">
+                        <div class="flex items-center gap-2">
+                          <div class="w-10 h-10 rounded bg-[#f5f5f7] overflow-hidden flex items-center justify-center shrink-0">
+                            ${b.image ? `<img src="${escapeHtml((window as any).resolveSanityRefUrl?.(b.image))}" class="w-full h-full object-cover" />` : `<span class="text-[8px] text-[#86868b]">No Img</span>`}
+                          </div>
+                          <span class="text-xs font-semibold">Primary Media Image</span>
+                        </div>
+                        <button type="button" class="btn-choose-block-image px-2.5 py-1 rounded bg-[#1d1d1f] text-white text-xs font-semibold" data-sec-idx="${idx}" data-block-idx="${bIdx}">📁 Choose</button>
+                      </div>
+                      <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-b-caption" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Image Caption / Note" value="${escapeHtml(b.caption || '')}" />
+                    ` : bType === 'quoteBlock' ? `
+                      <textarea rows="2" class="w-full p-2 rounded bg-white border border-black/10 text-xs field-b-quote" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Quote Text">${escapeHtml(b.quote || '')}</textarea>
+                      <div class="grid grid-cols-2 gap-2">
+                        <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-b-author" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Author Name" value="${escapeHtml(b.author || '')}" />
+                        <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-b-role" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Role / Company" value="${escapeHtml(b.role || '')}" />
+                      </div>
+                    ` : `
+                      <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-b-headline" data-sec-idx="${idx}" data-block-idx="${bIdx}" value="${escapeHtml(b.headline || b.text || '')}" placeholder="Headline or Content" />
+                      <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-b-subtitle" data-sec-idx="${idx}" data-block-idx="${bIdx}" value="${escapeHtml(b.subtitle || b.url || '')}" placeholder="Subtitle or Link URL" />
+                    `}
+                  </div>
+                `;
+              }).join('')}
             </div>
           </div>
         </div>
@@ -1348,15 +1591,16 @@ const pageTitle = 'Pages & Modular Visual Builder';
       const container = document.getElementById('sections-container');
       if (!container) return;
 
-      // Collapse / Expand toggle
+      // Bug 3 Fix: Collapse / Expand toggle using unique key
       container.querySelectorAll('.btn-sec-toggle').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-          if (collapsedSections.has(idx)) {
-            collapsedSections.delete(idx);
+          const key = btn.getAttribute('data-key');
+          if (!key) return;
+          if (collapsedSections.has(key)) {
+            collapsedSections.delete(key);
           } else {
-            collapsedSections.add(idx);
+            collapsedSections.add(key);
           }
           renderSections();
         });
@@ -1367,11 +1611,12 @@ const pageTitle = 'Pages & Modular Visual Builder';
         header.addEventListener('click', (e: any) => {
           if (e.target.closest('button') || e.target.closest('.drag-handle')) return;
           const card = header.closest('.section-card');
-          const idx = parseInt(card?.getAttribute('data-idx') || '0', 10);
-          if (collapsedSections.has(idx)) {
-            collapsedSections.delete(idx);
+          const key = card?.getAttribute('data-key');
+          if (!key) return;
+          if (collapsedSections.has(key)) {
+            collapsedSections.delete(key);
           } else {
-            collapsedSections.add(idx);
+            collapsedSections.add(key);
           }
           renderSections();
         });
@@ -1381,7 +1626,6 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-up').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           if (idx > 0) {
             const item = activePageDoc.sections.splice(idx, 1)[0];
@@ -1395,7 +1639,6 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-down').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           if (idx < activePageDoc.sections.length - 1) {
             const item = activePageDoc.sections.splice(idx, 1)[0];
@@ -1409,7 +1652,6 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-copy').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           const cloned = JSON.parse(JSON.stringify(activePageDoc.sections[idx]));
           cloned._key = crypto.randomUUID().slice(0, 8);
@@ -1424,7 +1666,6 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-del').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           activePageDoc.sections.splice(idx, 1);
           renderSections();
@@ -1465,7 +1706,6 @@ const pageTitle = 'Pages & Modular Visual Builder';
           card.classList.remove('ring-2', 'ring-black');
           const targetIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
           if (draggedSectionIdx !== null && draggedSectionIdx !== targetIdx) {
-            syncSectionsFromDom();
             const item = activePageDoc.sections.splice(draggedSectionIdx, 1)[0];
             activePageDoc.sections.splice(targetIdx, 0, item);
             renderSections();
@@ -1574,7 +1814,32 @@ const pageTitle = 'Pages & Modular Visual Builder';
         });
       });
 
-      // Manufacturing Delete Capability
+      // Manufacturing Move Up/Down & Delete Capability
+      container.querySelectorAll('.btn-cap-up').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const cIdx = parseInt(btn.getAttribute('data-cap-idx') || '0', 10);
+          if (cIdx > 0) {
+            const item = activePageDoc.sections[sIdx].capabilities.splice(cIdx, 1)[0];
+            activePageDoc.sections[sIdx].capabilities.splice(cIdx - 1, 0, item);
+            renderSections();
+          }
+        });
+      });
+
+      container.querySelectorAll('.btn-cap-down').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const cIdx = parseInt(btn.getAttribute('data-cap-idx') || '0', 10);
+          const list = activePageDoc.sections[sIdx].capabilities;
+          if (cIdx < list.length - 1) {
+            const item = list.splice(cIdx, 1)[0];
+            list.splice(cIdx + 1, 0, item);
+            renderSections();
+          }
+        });
+      });
+
       container.querySelectorAll('.btn-del-capability').forEach((btn) => {
         btn.addEventListener('click', () => {
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
@@ -1596,9 +1861,36 @@ const pageTitle = 'Pages & Modular Visual Builder';
           if (blockType === 'headingBlock') {
             newBlock.headline = 'New Section Heading';
             newBlock.subtitle = 'Supporting paragraph text.';
+            newBlock.align = 'center';
           }
           activePageDoc.sections[sIdx].blocks.push(newBlock);
           renderSections();
+        });
+      });
+
+      // Custom Section Block Reorder & Delete
+      container.querySelectorAll('.btn-block-up').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const bIdx = parseInt(btn.getAttribute('data-block-idx') || '0', 10);
+          if (bIdx > 0) {
+            const item = activePageDoc.sections[sIdx].blocks.splice(bIdx, 1)[0];
+            activePageDoc.sections[sIdx].blocks.splice(bIdx - 1, 0, item);
+            renderSections();
+          }
+        });
+      });
+
+      container.querySelectorAll('.btn-block-down').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const bIdx = parseInt(btn.getAttribute('data-block-idx') || '0', 10);
+          const list = activePageDoc.sections[sIdx].blocks;
+          if (bIdx < list.length - 1) {
+            const item = list.splice(bIdx, 1)[0];
+            list.splice(bIdx + 1, 0, item);
+            renderSections();
+          }
         });
       });
 
@@ -1637,6 +1929,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
     }
 
     // Read Form Values from DOM back into activePageDoc.sections
+    // Bug 2 Fix: Unconditional assignment when input element exists in DOM (allows clearing text to "")
     function syncSectionsFromDom() {
       if (!activePageDoc || !activePageDoc.sections) return;
       const cards = document.querySelectorAll('.section-card');
@@ -1655,20 +1948,23 @@ const pageTitle = 'Pages & Modular Visual Builder';
             const superInput = card.querySelector('.field-super-title') as HTMLInputElement | null;
             const headlineInput = card.querySelector('.field-headline') as HTMLInputElement | null;
             const sublineInput = card.querySelector('.field-subline') as HTMLTextAreaElement | null;
-            if (superInput && superInput.value.trim()) sec.superTitle = setLocaleVal(sec.superTitle, superInput.value.trim());
-            if (headlineInput && headlineInput.value.trim()) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
-            if (sublineInput && sublineInput.value.trim()) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
+            if (superInput) sec.superTitle = setLocaleVal(sec.superTitle, superInput.value.trim());
+            if (headlineInput) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
+            if (sublineInput) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
 
-            sec.showPrimaryButton = (card.querySelector('.field-primary-btn-show') as HTMLInputElement)?.checked;
-            const pBtnText = (card.querySelector('.field-primary-btn-text') as HTMLInputElement)?.value.trim();
-            if (pBtnText) sec.primaryButtonText = setLocaleVal(sec.primaryButtonText, pBtnText);
-            sec.primaryButtonUrl = (card.querySelector('.field-primary-btn-url') as HTMLInputElement)?.value.trim();
-            sec.swatchSku = (card.querySelector('.field-primary-btn-sku') as HTMLInputElement)?.value.trim();
+            sec.showPrimaryButton = Boolean((card.querySelector('.field-primary-btn-show') as HTMLInputElement)?.checked);
+            const pBtnText = card.querySelector('.field-primary-btn-text') as HTMLInputElement | null;
+            if (pBtnText) sec.primaryButtonText = setLocaleVal(sec.primaryButtonText, pBtnText.value.trim());
+            const pBtnUrl = card.querySelector('.field-primary-btn-url') as HTMLInputElement | null;
+            if (pBtnUrl) sec.primaryButtonUrl = pBtnUrl.value.trim();
+            const pBtnSku = card.querySelector('.field-primary-btn-sku') as HTMLInputElement | null;
+            if (pBtnSku) sec.swatchSku = pBtnSku.value.trim();
 
-            sec.showSecondaryButton = (card.querySelector('.field-secondary-btn-show') as HTMLInputElement)?.checked;
-            const sBtnText = (card.querySelector('.field-secondary-btn-text') as HTMLInputElement)?.value.trim();
-            if (sBtnText) sec.secondaryButtonText = setLocaleVal(sec.secondaryButtonText, sBtnText);
-            sec.secondaryButtonUrl = (card.querySelector('.field-secondary-btn-url') as HTMLInputElement)?.value.trim();
+            sec.showSecondaryButton = Boolean((card.querySelector('.field-secondary-btn-show') as HTMLInputElement)?.checked);
+            const sBtnText = card.querySelector('.field-secondary-btn-text') as HTMLInputElement | null;
+            if (sBtnText) sec.secondaryButtonText = setLocaleVal(sec.secondaryButtonText, sBtnText.value.trim());
+            const sBtnUrl = card.querySelector('.field-secondary-btn-url') as HTMLInputElement | null;
+            if (sBtnUrl) sec.secondaryButtonUrl = sBtnUrl.value.trim();
             break;
           }
 
@@ -1676,9 +1972,22 @@ const pageTitle = 'Pages & Modular Visual Builder';
             const badgeInput = card.querySelector('.field-badge') as HTMLInputElement | null;
             const titleInput = card.querySelector('.field-title') as HTMLInputElement | null;
             const subInput = card.querySelector('.field-subtitle') as HTMLTextAreaElement | null;
-            if (badgeInput && badgeInput.value.trim()) sec.badge = setLocaleVal(sec.badge, badgeInput.value.trim());
-            if (titleInput && titleInput.value.trim()) sec.title = setLocaleVal(sec.title, titleInput.value.trim());
-            if (subInput && subInput.value.trim()) sec.subtitle = setLocaleVal(sec.subtitle, subInput.value.trim());
+            if (badgeInput) sec.badge = setLocaleVal(sec.badge, badgeInput.value.trim());
+            if (titleInput) sec.title = setLocaleVal(sec.title, titleInput.value.trim());
+            if (subInput) sec.subtitle = setLocaleVal(sec.subtitle, subInput.value.trim());
+
+            // Bug 4 Fix: Showcase Buttons & Card Quote
+            sec.showActionButton = Boolean((card.querySelector('.field-action-btn-show') as HTMLInputElement)?.checked);
+            const aBtnText = card.querySelector('.field-action-btn-text') as HTMLInputElement | null;
+            if (aBtnText) sec.actionButtonText = setLocaleVal(sec.actionButtonText, aBtnText.value.trim());
+            const aBtnUrl = card.querySelector('.field-action-btn-url') as HTMLInputElement | null;
+            if (aBtnUrl) sec.actionButtonUrl = aBtnUrl.value.trim();
+            const aBtnSku = card.querySelector('.field-action-btn-sku') as HTMLInputElement | null;
+            if (aBtnSku) sec.swatchSku = aBtnSku.value.trim();
+
+            sec.showCardQuoteButton = Boolean((card.querySelector('.field-card-quote-show') as HTMLInputElement)?.checked);
+            const cardDetailsText = card.querySelector('.field-card-details-text') as HTMLInputElement | null;
+            if (cardDetailsText) sec.cardDetailsButtonText = setLocaleVal(sec.cardDetailsButtonText, cardDetailsText.value.trim());
             break;
           }
 
@@ -1686,66 +1995,124 @@ const pageTitle = 'Pages & Modular Visual Builder';
             const badgeInput = card.querySelector('.field-badge') as HTMLInputElement | null;
             const titleInput = card.querySelector('.field-title') as HTMLInputElement | null;
             const descInput = card.querySelector('.field-description') as HTMLTextAreaElement | null;
-            if (badgeInput && badgeInput.value.trim()) sec.badge = setLocaleVal(sec.badge, badgeInput.value.trim());
-            if (titleInput && titleInput.value.trim()) sec.title = setLocaleVal(sec.title, titleInput.value.trim());
-            if (descInput && descInput.value.trim()) sec.description = setLocaleVal(sec.description, descInput.value.trim());
+            if (badgeInput) sec.badge = setLocaleVal(sec.badge, badgeInput.value.trim());
+            if (titleInput) sec.title = setLocaleVal(sec.title, titleInput.value.trim());
+            if (descInput) sec.description = setLocaleVal(sec.description, descInput.value.trim());
 
-            const b1Tag = (card.querySelector('.field-bento1-tag') as HTMLInputElement)?.value.trim();
-            const b1Title = (card.querySelector('.field-bento1-title') as HTMLInputElement)?.value.trim();
-            const b1Desc = (card.querySelector('.field-bento1-desc') as HTMLTextAreaElement)?.value.trim();
-            if (b1Tag) sec.bento1Tag = setLocaleVal(sec.bento1Tag, b1Tag);
-            if (b1Title) sec.bento1Title = setLocaleVal(sec.bento1Title, b1Title);
-            if (b1Desc) sec.bento1Description = setLocaleVal(sec.bento1Description, b1Desc);
+            // Bento 1
+            const b1Tag = card.querySelector('.field-bento1-tag') as HTMLInputElement | null;
+            const b1Title = card.querySelector('.field-bento1-title') as HTMLInputElement | null;
+            const b1Desc = card.querySelector('.field-bento1-desc') as HTMLTextAreaElement | null;
+            if (b1Tag) sec.bento1Tag = setLocaleVal(sec.bento1Tag, b1Tag.value.trim());
+            if (b1Title) sec.bento1Title = setLocaleVal(sec.bento1Title, b1Title.value.trim());
+            if (b1Desc) sec.bento1Description = setLocaleVal(sec.bento1Description, b1Desc.value.trim());
 
-            const b2Title = (card.querySelector('.field-bento2-title') as HTMLInputElement)?.value.trim();
-            const b2Desc = (card.querySelector('.field-bento2-desc') as HTMLTextAreaElement)?.value.trim();
-            if (b2Title) sec.bento2Title = setLocaleVal(sec.bento2Title, b2Title);
-            if (b2Desc) sec.bento2Description = setLocaleVal(sec.bento2Description, b2Desc);
+            // Bug 4 Fix: Bento 2
+            const b2Tag = card.querySelector('.field-bento2-tag') as HTMLInputElement | null;
+            const b2Title = card.querySelector('.field-bento2-title') as HTMLInputElement | null;
+            const b2Desc = card.querySelector('.field-bento2-desc') as HTMLTextAreaElement | null;
+            const b2BadgeText = card.querySelector('.field-bento2-badge-text') as HTMLInputElement | null;
+            const b2BadgeStatus = card.querySelector('.field-bento2-badge-status') as HTMLInputElement | null;
+            if (b2Tag) sec.bento2Tag = setLocaleVal(sec.bento2Tag, b2Tag.value.trim());
+            if (b2Title) sec.bento2Title = setLocaleVal(sec.bento2Title, b2Title.value.trim());
+            if (b2Desc) sec.bento2Description = setLocaleVal(sec.bento2Description, b2Desc.value.trim());
+            if (b2BadgeText) sec.bento2BadgeText = setLocaleVal(sec.bento2BadgeText, b2BadgeText.value.trim());
+            if (b2BadgeStatus) sec.bento2BadgeStatus = setLocaleVal(sec.bento2BadgeStatus, b2BadgeStatus.value.trim());
 
-            const b3Title = (card.querySelector('.field-bento3-title') as HTMLInputElement)?.value.trim();
-            const b3Desc = (card.querySelector('.field-bento3-desc') as HTMLTextAreaElement)?.value.trim();
-            if (b3Title) sec.bento3Title = setLocaleVal(sec.bento3Title, b3Title);
-            if (b3Desc) sec.bento3Description = setLocaleVal(sec.bento3Description, b3Desc);
+            // Bug 4 Fix: Bento 3
+            const b3Tag = card.querySelector('.field-bento3-tag') as HTMLInputElement | null;
+            const b3Title = card.querySelector('.field-bento3-title') as HTMLInputElement | null;
+            const b3Desc = card.querySelector('.field-bento3-desc') as HTMLTextAreaElement | null;
+            const b3Footer = card.querySelector('.field-bento3-footer') as HTMLInputElement | null;
+            if (b3Tag) sec.bento3Tag = setLocaleVal(sec.bento3Tag, b3Tag.value.trim());
+            if (b3Title) sec.bento3Title = setLocaleVal(sec.bento3Title, b3Title.value.trim());
+            if (b3Desc) sec.bento3Description = setLocaleVal(sec.bento3Description, b3Desc.value.trim());
+            if (b3Footer) sec.bento3FooterNote = setLocaleVal(sec.bento3FooterNote, b3Footer.value.trim());
 
-            const b4Title = (card.querySelector('.field-bento4-title') as HTMLInputElement)?.value.trim();
-            const b4Desc = (card.querySelector('.field-bento4-desc') as HTMLTextAreaElement)?.value.trim();
-            if (b4Title) sec.bento4Title = setLocaleVal(sec.bento4Title, b4Title);
-            if (b4Desc) sec.bento4Description = setLocaleVal(sec.bento4Description, b4Desc);
+            // Bug 4 Fix: Bento 4
+            const b4Tag = card.querySelector('.field-bento4-tag') as HTMLInputElement | null;
+            const b4Title = card.querySelector('.field-bento4-title') as HTMLInputElement | null;
+            const b4Desc = card.querySelector('.field-bento4-desc') as HTMLTextAreaElement | null;
+            const b4Footer = card.querySelector('.field-bento4-footer') as HTMLInputElement | null;
+            if (b4Tag) sec.bento4Tag = setLocaleVal(sec.bento4Tag, b4Tag.value.trim());
+            if (b4Title) sec.bento4Title = setLocaleVal(sec.bento4Title, b4Title.value.trim());
+            if (b4Desc) sec.bento4Description = setLocaleVal(sec.bento4Description, b4Desc.value.trim());
+            if (b4Footer) sec.bento4FooterNote = setLocaleVal(sec.bento4FooterNote, b4Footer.value.trim());
 
-            const b5Title = (card.querySelector('.field-bento5-title') as HTMLInputElement)?.value.trim();
-            const b5Desc = (card.querySelector('.field-bento5-desc') as HTMLTextAreaElement)?.value.trim();
-            if (b5Title) sec.bento5Title = setLocaleVal(sec.bento5Title, b5Title);
-            if (b5Desc) sec.bento5Description = setLocaleVal(sec.bento5Description, b5Desc);
+            // Bug 4 Fix: Bento 5
+            const b5Tag = card.querySelector('.field-bento5-tag') as HTMLInputElement | null;
+            const b5Title = card.querySelector('.field-bento5-title') as HTMLInputElement | null;
+            const b5Desc = card.querySelector('.field-bento5-desc') as HTMLTextAreaElement | null;
+            const b5Footer = card.querySelector('.field-bento5-footer') as HTMLInputElement | null;
+            if (b5Tag) sec.bento5Tag = setLocaleVal(sec.bento5Tag, b5Tag.value.trim());
+            if (b5Title) sec.bento5Title = setLocaleVal(sec.bento5Title, b5Title.value.trim());
+            if (b5Desc) sec.bento5Description = setLocaleVal(sec.bento5Description, b5Desc.value.trim());
+            if (b5Footer) sec.bento5FooterNote = setLocaleVal(sec.bento5FooterNote, b5Footer.value.trim());
+
+            // Buttons
+            sec.showPrimaryButton = Boolean((card.querySelector('.field-fm-pbtn-show') as HTMLInputElement)?.checked);
+            const fmPBtnText = card.querySelector('.field-fm-pbtn-text') as HTMLInputElement | null;
+            if (fmPBtnText) sec.primaryButtonText = setLocaleVal(sec.primaryButtonText, fmPBtnText.value.trim());
+            const fmPBtnUrl = card.querySelector('.field-fm-pbtn-url') as HTMLInputElement | null;
+            if (fmPBtnUrl) sec.primaryButtonUrl = fmPBtnUrl.value.trim();
+            const fmPBtnSku = card.querySelector('.field-fm-pbtn-sku') as HTMLInputElement | null;
+            if (fmPBtnSku) sec.swatchSku = fmPBtnSku.value.trim();
             break;
           }
 
           case 'manufacturingSection': {
+            const badgeInput = card.querySelector('.field-badge') as HTMLInputElement | null;
             const headlineInput = card.querySelector('.field-headline') as HTMLInputElement | null;
             const sublineInput = card.querySelector('.field-subline') as HTMLTextAreaElement | null;
-            if (headlineInput && headlineInput.value.trim()) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
-            if (sublineInput && sublineInput.value.trim()) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
+            if (badgeInput) sec.badge = setLocaleVal(sec.badge, badgeInput.value.trim());
+            if (headlineInput) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
+            if (sublineInput) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
 
             // Capabilities items
             if (sec.capabilities) {
               sec.capabilities.forEach((cap: any, cIdx: number) => {
-                const cTitle = (card.querySelector(`.field-cap-title[data-cap-idx="${cIdx}"]`) as HTMLInputElement)?.value.trim();
-                const cDesc = (card.querySelector(`.field-cap-desc[data-cap-idx="${cIdx}"]`) as HTMLTextAreaElement)?.value.trim();
-                if (cTitle) cap.title = setLocaleVal(cap.title, cTitle);
-                if (cDesc) cap.description = setLocaleVal(cap.description, cDesc);
+                const cTitle = card.querySelector(`.field-cap-title[data-cap-idx="${cIdx}"]`) as HTMLInputElement | null;
+                const cDesc = card.querySelector(`.field-cap-desc[data-cap-idx="${cIdx}"]`) as HTMLTextAreaElement | null;
+                if (cTitle) cap.title = setLocaleVal(cap.title, cTitle.value.trim());
+                if (cDesc) cap.description = setLocaleVal(cap.description, cDesc.value.trim());
               });
             }
+
+            // Action Button
+            sec.showActionButton = Boolean((card.querySelector('.field-mfg-abtn-show') as HTMLInputElement)?.checked);
+            const mfgABtnText = card.querySelector('.field-mfg-abtn-text') as HTMLInputElement | null;
+            if (mfgABtnText) sec.actionButtonText = setLocaleVal(sec.actionButtonText, mfgABtnText.value.trim());
+            const mfgABtnUrl = card.querySelector('.field-mfg-abtn-url') as HTMLInputElement | null;
+            if (mfgABtnUrl) sec.actionButtonUrl = mfgABtnUrl.value.trim();
+            const mfgABtnSku = card.querySelector('.field-mfg-abtn-sku') as HTMLInputElement | null;
+            if (mfgABtnSku) sec.swatchSku = mfgABtnSku.value.trim();
             break;
           }
 
           case 'inquirySection': {
+            const badgeInput = card.querySelector('.field-badge') as HTMLInputElement | null;
             const headlineInput = card.querySelector('.field-headline') as HTMLInputElement | null;
             const sublineInput = card.querySelector('.field-subline') as HTMLTextAreaElement | null;
             const catsInput = card.querySelector('.field-inquiry-cats') as HTMLInputElement | null;
-            if (headlineInput && headlineInput.value.trim()) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
-            if (sublineInput && sublineInput.value.trim()) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
+            if (badgeInput) sec.badge = setLocaleVal(sec.badge, badgeInput.value.trim());
+            if (headlineInput) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
+            if (sublineInput) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
             if (catsInput) {
               sec.categories = catsInput.value.split(',').map((c) => c.trim()).filter(Boolean);
             }
+
+            // Bug 4 Fix: Inquiry switches and confirmation copy
+            sec.showSection = Boolean((card.querySelector('.field-inq-show-sec') as HTMLInputElement)?.checked);
+            sec.showButton = Boolean((card.querySelector('.field-inq-show-btn') as HTMLInputElement)?.checked);
+            const inqBtnText = card.querySelector('.field-inq-btn-text') as HTMLInputElement | null;
+            if (inqBtnText) sec.buttonText = setLocaleVal(sec.buttonText, inqBtnText.value.trim());
+            const inqSku = card.querySelector('.field-inq-swatch-sku') as HTMLInputElement | null;
+            if (inqSku) sec.swatchSku = inqSku.value.trim();
+
+            const succTitle = card.querySelector('.field-inq-success-title') as HTMLInputElement | null;
+            if (succTitle) sec.successTitle = setLocaleVal(sec.successTitle, succTitle.value.trim());
+            const succMsg = card.querySelector('.field-inq-success-msg') as HTMLInputElement | null;
+            if (succMsg) sec.successMessage = setLocaleVal(sec.successMessage, succMsg.value.trim());
             break;
           }
 
@@ -1755,14 +2122,41 @@ const pageTitle = 'Pages & Modular Visual Builder';
             if (presetSelect) sec.preset = presetSelect.value;
             if (themeSelect) sec.theme = themeSelect.value;
 
+            // Bug 4 Fix: Layout settings
+            const sHeight = card.querySelector('.field-section-height') as HTMLSelectElement | null;
+            const vAlign = card.querySelector('.field-vertical-align') as HTMLSelectElement | null;
+            const cWidth = card.querySelector('.field-container-width') as HTMLSelectElement | null;
+            const pY = card.querySelector('.field-padding-y') as HTMLSelectElement | null;
+            const lMode = card.querySelector('.field-layout-mode') as HTMLSelectElement | null;
+            if (sHeight) sec.sectionHeight = sHeight.value;
+            if (vAlign) sec.verticalAlign = vAlign.value;
+            if (cWidth) sec.containerWidth = cWidth.value;
+            if (pY) sec.paddingY = pY.value;
+            if (lMode) sec.layoutMode = lMode.value;
+
+            // Bug 4 Fix: Synchronize all block types
             if (sec.blocks) {
               sec.blocks.forEach((b: any, bIdx: number) => {
-                if (b._type === 'headingBlock') {
-                  const hVal = (card.querySelector(`.field-block-headline[data-block-idx="${bIdx}"]`) as HTMLInputElement)?.value;
-                  const sVal = (card.querySelector(`.field-block-subtitle[data-block-idx="${bIdx}"]`) as HTMLTextAreaElement)?.value;
-                  if (hVal !== undefined) b.headline = hVal;
-                  if (sVal !== undefined) b.subtitle = sVal;
-                }
+                const bCard = card.querySelector(`.block-card[data-block-idx="${bIdx}"]`);
+                if (!bCard) return;
+
+                const hVal = (bCard.querySelector('.field-b-headline') as HTMLInputElement)?.value;
+                const sVal = (bCard.querySelector('.field-b-subtitle') as HTMLInputElement | HTMLTextAreaElement)?.value;
+                const badgeVal = (bCard.querySelector('.field-b-badge') as HTMLInputElement)?.value;
+                const alignVal = (bCard.querySelector('.field-b-align') as HTMLSelectElement)?.value;
+                const captionVal = (bCard.querySelector('.field-b-caption') as HTMLInputElement)?.value;
+                const quoteVal = (bCard.querySelector('.field-b-quote') as HTMLTextAreaElement)?.value;
+                const authorVal = (bCard.querySelector('.field-b-author') as HTMLInputElement)?.value;
+                const roleVal = (bCard.querySelector('.field-b-role') as HTMLInputElement)?.value;
+
+                if (hVal !== undefined) b.headline = hVal.trim();
+                if (sVal !== undefined) b.subtitle = sVal.trim();
+                if (badgeVal !== undefined) b.badge = badgeVal.trim();
+                if (alignVal !== undefined) b.align = alignVal;
+                if (captionVal !== undefined) b.caption = captionVal.trim();
+                if (quoteVal !== undefined) b.quote = quoteVal.trim();
+                if (authorVal !== undefined) b.author = authorVal.trim();
+                if (roleVal !== undefined) b.role = roleVal.trim();
               });
             }
             break;
