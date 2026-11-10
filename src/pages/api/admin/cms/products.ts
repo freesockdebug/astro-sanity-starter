@@ -4,7 +4,6 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-admin';
 import { ProductService } from '@data/products';
-import { kvDelete } from '@utils/kv';
 import { computeJsonDiff, insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -106,14 +105,15 @@ export const POST: APIRoute = async ({ request }) => {
       result = await client.create(doc);
     }
 
-    // Automated Cache Invalidation
-    ProductService.invalidateCache();
-    await kvDelete('cms:products:all', cfEnv).catch(() => {});
-    await kvDelete('cms:categories:all', cfEnv).catch(() => {});
+    // Write-Through Cache Update (directly overwrites permanent KV + L1 memory)
+    const oldSlug = existingDoc?.slug?.current || (typeof existingDoc?.slug === 'string' ? existingDoc.slug : '');
     const slugStr = result.slug?.current || (typeof result.slug === 'string' ? result.slug : '');
-    if (slugStr) {
-      await kvDelete(`cms:product:${slugStr}`, cfEnv).catch(() => {});
-    }
+    await Promise.all([
+      ProductService.getAll(true, cfEnv),
+      ProductService.getCategories(true, cfEnv),
+      slugStr ? ProductService.refreshSlug(slugStr, cfEnv) : Promise.resolve(),
+      oldSlug && oldSlug !== slugStr ? ProductService.evictSlug(oldSlug, cfEnv) : Promise.resolve(),
+    ]).catch(() => {});
 
     // Audit Logging with Differential Snapshot
     const diff = computeJsonDiff(existingDoc, result);
@@ -167,14 +167,13 @@ export const DELETE: APIRoute = async ({ request, url }) => {
 
     await client.delete(id);
 
-    // Automated Cache Invalidation
-    ProductService.invalidateCache();
-    await kvDelete('cms:products:all', cfEnv).catch(() => {});
-    await kvDelete('cms:categories:all', cfEnv).catch(() => {});
+    // Write-Through Cache Update & Eviction
     const slugStr = existingDoc.slug?.current || (typeof existingDoc.slug === 'string' ? existingDoc.slug : '');
-    if (slugStr) {
-      await kvDelete(`cms:product:${slugStr}`, cfEnv).catch(() => {});
-    }
+    await Promise.all([
+      ProductService.getAll(true, cfEnv),
+      ProductService.getCategories(true, cfEnv),
+      slugStr ? ProductService.evictSlug(slugStr, cfEnv) : Promise.resolve(),
+    ]).catch(() => {});
 
     // Audit Logging
     await insertAuditLog({

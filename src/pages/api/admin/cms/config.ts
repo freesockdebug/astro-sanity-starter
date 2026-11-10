@@ -12,7 +12,6 @@ import {
   DEFAULT_CATALOG,
   DEFAULT_RFQ,
 } from '@data/defaults';
-import { kvDelete } from '@utils/kv';
 import { computeJsonDiff, insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -180,15 +179,16 @@ export const POST: APIRoute = async ({ request }) => {
 
     const result = await client.createOrReplace(doc);
 
-    // Invalidate local SWR & KV
-    ProductService.invalidateCache();
+    // Write-Through Cache Update (directly persists updated config to permanent KV + L1 memory)
     if (docType === 'siteConfig') {
-      SiteConfigService.invalidate();
+      await SiteConfigService.getConfig(true);
     } else if (docType === 'rfqSettings') {
-      RfqSettingsService.invalidateCache();
+      await RfqSettingsService.getSettings(true);
+    } else if (docType === 'catalogSettings') {
+      await ProductService.getCatalogSettings(true, cfEnv);
+    } else if (docType === 'productStorySettings') {
+      await ProductService.getProductStorySettings(true, cfEnv);
     }
-    await kvDelete(`cms:${docType}`, cfEnv).catch(() => {});
-    await kvDelete('cms:products:all', cfEnv).catch(() => {});
 
     // Audit Log
     const diff = computeJsonDiff(existingDoc, result);

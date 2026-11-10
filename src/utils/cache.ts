@@ -1,5 +1,5 @@
 import { waitUntil as cfWaitUntil } from 'cloudflare:workers';
-import { kvGet, kvPut } from './kv';
+import { kvGet, kvPut, kvDelete } from './kv';
 
 export function runInBackground(promise: Promise<any>) {
   if (typeof cfWaitUntil === 'function') {
@@ -11,133 +11,235 @@ export function runInBackground(promise: Promise<any>) {
   promise.catch(() => {});
 }
 
-/**
- * Lightweight multi-tier SWR (Stale-While-Revalidate) & Single-Flight Cache
- * L1: In-memory isolate cache (Fresh TTL + Stale TTL non-blocking background revalidation)
- * L2: Cloudflare Edge KV cache (Optional, 1~5ms)
- * L3: Upstream CMS fetch with concurrent deduplication
- */
-export interface SwrCache<T> {
+export interface CmsCache<T> {
   seed(val?: T | null): void;
   invalidate(): void;
-  get(forceRefresh?: boolean): Promise<T>;
+  get(forceRefresh?: boolean, customEnv?: any): Promise<T>;
+  refresh(customEnv?: any): Promise<T>;
+  evict(customEnv?: any): Promise<void>;
   peek(): T | null;
 }
 
-export interface SwrCacheOptions {
+export interface CmsCacheOptions<T> {
   kvKey?: string;
-  kvTtlSeconds?: number;
-  staleTtlMs?: number;
+  ttlMs?: number;
+  onUpdate?: (val: T) => void;
 }
 
-export function createSwrCache<T>(
+/**
+ * Zero-polling multi-tier CMS cache (L1 Isolate Memory 5m -> L2 Permanent Edge KV -> L3 Sanity)
+ * - L1 fresh window (default 5 min): 0ms in-memory return
+ * - L1 expired: reads shared L2 KV (1~3ms) and refreshes L1 without calling Sanity
+ * - Upstream Sanity fetcher only runs on explicit refresh (CMS save / Webhook) or KV cold miss
+ */
+export function createCmsCache<T>(
   fetcher: () => Promise<T>,
   fallback: T,
-  ttlMs = 30_000,
-  onUpdate?: (val: T) => void,
-  options?: SwrCacheOptions
-): SwrCache<T> {
+  options?: CmsCacheOptions<T>
+): CmsCache<T> {
   let value: T | null = null;
-  let lastSerialized: string | null = null;
   let timestamp = 0;
   let inflight: Promise<T> | null = null;
   const kvKey = options?.kvKey;
-  const kvTtl = options?.kvTtlSeconds || 86400;
-  const staleTtlMs = options?.staleTtlMs || Math.max(ttlMs * 10, 300_000); // Default stale tolerance window (5m)
+  const ttlMs = options?.ttlMs ?? 300_000;
+  const onUpdate = options?.onUpdate;
 
-  const revalidate = async (forceRefresh = false): Promise<T> => {
+  const load = async (forceRefresh = false, customEnv?: any): Promise<T> => {
     if (!forceRefresh && inflight) return inflight;
-    inflight = (async () => {
+
+    const task = (async (): Promise<T> => {
       try {
-        // 1. Check L2 KV on cold boot
-        if (!forceRefresh && value === null && kvKey) {
-          const kvVal = await kvGet<T>(kvKey).catch(() => null);
+        // 1. L1 expired -> sync from shared L2 KV (never poll Sanity on timer!)
+        if (!forceRefresh && kvKey) {
+          const kvVal = await kvGet<T>(kvKey, customEnv).catch(() => null);
           if (kvVal !== null && kvVal !== undefined) {
             value = kvVal;
-            try {
-              lastSerialized = JSON.stringify(kvVal);
-            } catch {
-              lastSerialized = null;
-            }
             timestamp = Date.now();
-            if (onUpdate && value) onUpdate(value);
+            if (onUpdate) onUpdate(value);
             return value;
           }
         }
 
-        // 2. Upstream fetch
+        // 2. Upstream Sanity fetch (Write-Through on forceRefresh, or first-ever KV miss)
         const res = await fetcher();
         const hasValidData =
           res !== undefined &&
           res !== null &&
-          (!Array.isArray(res) || res.length > 0);
+          (forceRefresh || !Array.isArray(res) || res.length > 0);
+
         if (hasValidData) {
-          let newSerialized: string | null = null;
-          try {
-            newSerialized = JSON.stringify(res);
-          } catch {}
-
-          // Smart Diff Check: only write to KV if data actually changed or forceRefresh!
-          const isChanged =
-            forceRefresh ||
-            lastSerialized === null ||
-            (newSerialized !== null && newSerialized !== lastSerialized);
-
           value = res;
-          lastSerialized = newSerialized;
           timestamp = Date.now();
-          if (onUpdate && value) onUpdate(value);
+          if (onUpdate) onUpdate(value);
 
-          // Non-blocking KV write in background ONLY if changed
-          if (kvKey && isChanged) {
-            runInBackground(kvPut(kvKey, value, { expirationTtl: kvTtl }));
+          if (kvKey) {
+            if (forceRefresh) {
+              await kvPut(kvKey, value, undefined, customEnv).catch(() => {});
+            } else {
+              runInBackground(kvPut(kvKey, value, undefined, customEnv));
+            }
           }
         } else if (value === null) {
           value = fallback;
         }
         return (value ?? fallback) as T;
       } catch (err) {
-        console.error('[createSwrCache] Fetch failed, falling back to cached value:', err);
+        console.error('[createCmsCache] Fetch failed, falling back to cached value:', err);
         return (value ?? fallback) as T;
       } finally {
-        inflight = null;
+        if (!forceRefresh) inflight = null;
       }
     })();
-    return inflight;
+
+    if (!forceRefresh) inflight = task;
+    return task;
   };
 
   return {
     seed(val?: T | null) {
       value = val !== undefined && val !== null ? val : fallback;
-      try {
-        lastSerialized = JSON.stringify(value);
-      } catch {
-        lastSerialized = null;
-      }
       timestamp = Date.now();
       if (onUpdate && value) onUpdate(value);
     },
     invalidate() {
       value = null;
-      lastSerialized = null;
       timestamp = 0;
     },
     peek() {
       return value;
     },
-    async get(forceRefresh = false): Promise<T> {
-      const age = Date.now() - timestamp;
-      if (!forceRefresh && value !== null) {
-        // 1. Fresh window: instant return
-        if (age < ttlMs) return value;
-        // 2. Stale window: instant return + non-blocking background revalidation
-        if (age < staleTtlMs) {
-          runInBackground(revalidate(false));
-          return value;
+    async get(forceRefresh = false, customEnv?: any): Promise<T> {
+      if (!forceRefresh && value !== null && Date.now() - timestamp < ttlMs) {
+        return value;
+      }
+      return load(forceRefresh, customEnv);
+    },
+    async refresh(customEnv?: any): Promise<T> {
+      return load(true, customEnv);
+    },
+    async evict(customEnv?: any): Promise<void> {
+      value = null;
+      timestamp = 0;
+      if (kvKey) {
+        await kvDelete(kvKey, customEnv).catch(() => {});
+      }
+    },
+  };
+}
+
+export interface CmsKeyedCache<T> {
+  get(key: string, customEnv?: any, forceRefresh?: boolean): Promise<T | null>;
+  refresh(key: string, customEnv?: any): Promise<T | null>;
+  evict(key: string, customEnv?: any): Promise<void>;
+  seed(key: string, data: T): void;
+  invalidate(): void;
+}
+
+export interface CmsKeyedCacheOptions {
+  ttlMs?: number;
+  negativeTtlMs?: number;
+  maxL1Entries?: number;
+}
+
+/**
+ * Keyed multi-tier CMS cache with Single-Flight deduplication & 404 negative L1 caching
+ * Replaces bespoke slug caches across products and pages.
+ */
+export function createCmsKeyedCache<T>(
+  keyPrefix: string,
+  fetcher: (key: string) => Promise<T | null>,
+  options?: CmsKeyedCacheOptions
+): CmsKeyedCache<T> {
+  const ttlMs = options?.ttlMs ?? 300_000;
+  const negativeTtlMs = options?.negativeTtlMs ?? 30_000;
+  const maxEntries = options?.maxL1Entries ?? 500;
+  const l1Map = new Map<string, { data: T | null; timestamp: number }>();
+  const inflightMap = new Map<string, Promise<T | null>>();
+
+  const setL1 = (key: string, data: T | null) => {
+    l1Map.set(key, { data, timestamp: Date.now() });
+    if (l1Map.size > maxEntries) {
+      const oldest = l1Map.keys().next().value;
+      if (oldest !== undefined) l1Map.delete(oldest);
+    }
+  };
+
+  const get = async (rawKey: string, customEnv?: any, forceRefresh = false): Promise<T | null> => {
+    if (!rawKey) return null;
+    const now = Date.now();
+
+    if (!forceRefresh) {
+      const hit = l1Map.get(rawKey);
+      if (hit) {
+        const age = now - hit.timestamp;
+        if (hit.data === null) {
+          if (age < negativeTtlMs) return null;
+        } else if (age < ttlMs) {
+          return structuredClone(hit.data);
         }
       }
-      // 3. Cold boot, explicit refresh, or expired beyond stale window: await
-      return revalidate(forceRefresh);
+
+      const existing = inflightMap.get(rawKey);
+      if (existing) return existing;
+    }
+
+    const cacheKey = `${keyPrefix}:${rawKey}`;
+    const task = (async (): Promise<T | null> => {
+      try {
+        if (!forceRefresh) {
+          try {
+            const kvHit = await kvGet<any>(cacheKey, customEnv);
+            if (kvHit && !kvHit.notFound) {
+              setL1(rawKey, kvHit);
+              return structuredClone(kvHit);
+            }
+          } catch {}
+        }
+
+        const data = await fetcher(rawKey);
+        if (data) {
+          setL1(rawKey, data);
+          if (forceRefresh) {
+            await kvPut(cacheKey, data, undefined, customEnv).catch(() => {});
+          } else {
+            runInBackground(kvPut(cacheKey, data, undefined, customEnv));
+          }
+          return structuredClone(data);
+        } else {
+          setL1(rawKey, null);
+          if (forceRefresh) {
+            await kvDelete(cacheKey, customEnv).catch(() => {});
+          }
+          return null;
+        }
+      } catch (err: any) {
+        console.error(`[createCmsKeyedCache:${keyPrefix}] Fetch failed for ${rawKey}:`, err?.message);
+        const stale = l1Map.get(rawKey);
+        return stale && stale.data ? structuredClone(stale.data) : null;
+      } finally {
+        if (!forceRefresh) inflightMap.delete(rawKey);
+      }
+    })();
+
+    if (!forceRefresh) inflightMap.set(rawKey, task);
+    return task;
+  };
+
+  return {
+    get,
+    async refresh(key: string, customEnv?: any): Promise<T | null> {
+      return get(key, customEnv, true);
+    },
+    async evict(key: string, customEnv?: any): Promise<void> {
+      l1Map.delete(key);
+      await kvDelete(`${keyPrefix}:${key}`, customEnv).catch(() => {});
+    },
+    seed(key: string, data: T) {
+      setL1(key, data);
+    },
+    invalidate() {
+      l1Map.clear();
+      inflightMap.clear();
     },
   };
 }

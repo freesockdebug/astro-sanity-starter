@@ -1,5 +1,5 @@
 import { client } from '@utils/sanity-client';
-import { createSwrCache } from '@utils/cache';
+import { createCmsCache } from '@utils/cache';
 import { DEFAULT_RFQ } from './defaults';
 import type { RfqSettings } from 'types';
 
@@ -32,7 +32,7 @@ export interface ButtonVisibilityOptions {
   buttonText?: string;
 }
 
-const rfqCache = createSwrCache<RfqSettings>(
+const rfqCache = createCmsCache<RfqSettings>(
   async () => {
     const directDoc = await client.fetch<any>('*[_type == "rfqSettings"][0]');
     if (directDoc && Object.keys(directDoc).length > 2) {
@@ -41,9 +41,7 @@ const rfqCache = createSwrCache<RfqSettings>(
     return { ...DEFAULT_RFQ_SETTINGS };
   },
   { ...DEFAULT_RFQ_SETTINGS },
-  10_000,
-  undefined,
-  { kvKey: 'cms:rfqSettings', kvTtlSeconds: 86400 }
+  { kvKey: 'cms:rfqSettings' }
 );
 
 /**

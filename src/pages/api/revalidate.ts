@@ -9,7 +9,7 @@ import { ProductService } from '@data/products';
 import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
-import { kvGet, kvPut, kvDelete } from '@utils/kv';
+import { kvGet, kvPut } from '@utils/kv';
 import { getSystemSettings } from '@utils/db';
 
 export const prerender = false;
@@ -255,30 +255,49 @@ export const POST: APIRoute = async (context) => {
       }
     }
 
-    // Invalidate in-memory SWR caches within this Worker isolate
-    ProductService.invalidateCache();
-    PageService.invalidateCache();
-    SiteConfigService.invalidate();
-    RfqSettingsService.invalidateCache();
-
-    // Invalidate CMS KV cache keys across Cloudflare Edge
-    const kvPurges: Promise<any>[] = [
-      kvDelete('cms:siteConfig', cfEnv),
-      kvDelete('cms:rfqSettings', cfEnv),
-      kvDelete('cms:products:all', cfEnv),
-      kvDelete('cms:categories:all', cfEnv),
-      kvDelete('cms:catalogSettings', cfEnv),
-      kvDelete('cms:productStorySettings', cfEnv),
-      kvDelete('cms:page:home', cfEnv),
-    ];
-    if (docType === 'product' && docSlug) {
-      kvPurges.push(kvDelete(`cms:product:${docSlug}`, cfEnv));
+    // Write-Through CMS KV + L1 sync based on webhook docType (falls back to full core refresh)
+    const refreshTasks: Promise<any>[] = [];
+    switch (docType) {
+      case 'product':
+        refreshTasks.push(ProductService.refreshAll(cfEnv));
+        if (docSlug) refreshTasks.push(ProductService.refreshSlug(docSlug, cfEnv));
+        break;
+      case 'category':
+        refreshTasks.push(ProductService.refreshAll(cfEnv));
+        break;
+      case 'catalogSettings':
+        refreshTasks.push(ProductService.getCatalogSettings(true, cfEnv));
+        break;
+      case 'productStorySettings':
+        refreshTasks.push(ProductService.getProductStorySettings(true, cfEnv));
+        break;
+      case 'page':
+        if (docSlug) {
+          refreshTasks.push(PageService.refreshSlug(docSlug, cfEnv));
+        } else {
+          refreshTasks.push(PageService.getHomePage(true, cfEnv));
+        }
+        break;
+      case 'siteConfig':
+      case 'header':
+      case 'footer':
+        refreshTasks.push(SiteConfigService.getConfig(true));
+        break;
+      case 'rfqSettings':
+        refreshTasks.push(RfqSettingsService.getSettings(true));
+        break;
+      default:
+        refreshTasks.push(
+          SiteConfigService.getConfig(true),
+          RfqSettingsService.getSettings(true),
+          ProductService.refreshAll(cfEnv),
+          ProductService.getCatalogSettings(true, cfEnv),
+          ProductService.getProductStorySettings(true, cfEnv),
+          PageService.getHomePage(true, cfEnv)
+        );
+        break;
     }
-    if (docType === 'page' && docSlug) {
-      const cleanSlug = docSlug.replace(/^\//, '');
-      kvPurges.push(kvDelete(`cms:page:${cleanSlug || 'home'}`, cfEnv));
-    }
-    await Promise.all(kvPurges).catch(() => {});
+    await Promise.allSettled(refreshTasks);
 
     // 5. LAYER 2: Cloudflare Global CDN Zone Cache Purge API
     let cfZoneId = (systemSettings?.cloudflare_zone_id || getRuntimeEnv('CLOUDFLARE_ZONE_ID', cfEnv))?.trim();

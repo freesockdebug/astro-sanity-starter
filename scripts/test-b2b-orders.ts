@@ -705,18 +705,79 @@ async function runSelfCheck() {
 
   console.log('✔ [PASS] Global UI Toast Store (nanostores queue & deduplication) verified');
 
-  // 24. Product Detail Multi-tier SWR & Single-Flight Cache
+  // 24. Product Detail Multi-tier Write-Through & Zero-Polling CMS Cache
   const { ProductService } = await import('../src/data/products');
+  const { createCmsCache, createCmsKeyedCache } = await import('../src/utils/cache');
   const mockProduct: any = { _id: 'prod_1', slug: 'test-slug', title: 'Test Product' };
   ProductService.seedSlug('test-slug', mockProduct);
   const p1 = await ProductService.getBySlug('test-slug');
   assert.strictEqual(p1?.title, 'Test Product');
-  // Verify fresh cache returns cloned data
   const p2 = await ProductService.getBySlug('test-slug');
   assert.strictEqual(p2?.title, 'Test Product');
   ProductService.invalidateCache();
 
-  console.log('✔ [PASS] Product Detail Multi-tier SWR & Single-Flight Cache verified');
+  // Verify zero-polling: L1 expiration reads from KV without triggering Sanity fetcher
+  const cmsKvStore = new Map<string, string>();
+  const mockCmsEnv = {
+    CACHE_KV: {
+      async get(k: string, type?: string) {
+        const val = cmsKvStore.get(k);
+        if (!val) return null;
+        return type === 'json' ? JSON.parse(val) : val;
+      },
+      async put(k: string, v: string) {
+        cmsKvStore.set(k, v);
+      },
+      async delete(k: string) {
+        cmsKvStore.delete(k);
+      },
+    },
+  };
+
+  let fetchCalls = 0;
+  const cmsTestCache = createCmsCache<{ ver: number }>(
+    async () => {
+      fetchCalls++;
+      return { ver: fetchCalls };
+    },
+    { ver: 0 },
+    { kvKey: 'test:cms:singleton', ttlMs: 1 } // 1ms L1 TTL to force L1 expiry immediately
+  );
+
+  // First call: KV cold miss -> calls fetcher once (ver: 1) & populates KV
+  const v1 = await cmsTestCache.get(false, mockCmsEnv);
+  assert.strictEqual(v1.ver, 1);
+  assert.strictEqual(fetchCalls, 1);
+
+  // Wait >1ms for L1 to expire; KV still has ver: 1 (or external update in KV ver: 99)
+  await new Promise((r) => setTimeout(r, 5));
+  cmsKvStore.set('test:cms:singleton', JSON.stringify({ ver: 99 }));
+  const v2 = await cmsTestCache.get(false, mockCmsEnv);
+  assert.strictEqual(v2.ver, 99, 'L1 expiry must sync from L2 KV without calling Sanity fetcher');
+  assert.strictEqual(fetchCalls, 1, 'Sanity fetcher must NOT be called when KV hits');
+
+  // Explicit Write-Through refresh(): calls fetcher (ver: 2) and overwrites KV
+  const v3 = await cmsTestCache.refresh(mockCmsEnv);
+  assert.strictEqual(v3.ver, 2);
+  assert.strictEqual(fetchCalls, 2);
+  assert.strictEqual(JSON.parse(cmsKvStore.get('test:cms:singleton')!).ver, 2);
+
+  // Verify createCmsKeyedCache write-through & eviction
+  let keyedCalls = 0;
+  const keyedCache = createCmsKeyedCache<{ name: string }>('test:item', async (slug) => {
+    keyedCalls++;
+    return { name: `${slug}-${keyedCalls}` };
+  }, { ttlMs: 1 });
+  const k1 = await keyedCache.get('alpha', mockCmsEnv);
+  assert.strictEqual(k1?.name, 'alpha-1');
+  await new Promise((r) => setTimeout(r, 5));
+  const k2 = await keyedCache.get('alpha', mockCmsEnv);
+  assert.strictEqual(k2?.name, 'alpha-1');
+  assert.strictEqual(keyedCalls, 1, 'Keyed L1 expiry must read KV and NOT re-fetch upstream');
+  await keyedCache.evict('alpha', mockCmsEnv);
+  assert.strictEqual(cmsKvStore.has('test:item:alpha'), false);
+
+  console.log('✔ [PASS] Product Detail & Zero-Polling Write-Through CMS Cache verified');
 
   // 25. Vulnerability Probe Scanner Interception & Page Negative Caching
   const SCANNER_EXTENSIONS = /\.(php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do)$/i;

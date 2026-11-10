@@ -1,6 +1,6 @@
 import { client } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
-import { createSwrCache } from '@utils/cache';
+import { createCmsCache } from '@utils/cache';
 import { IMAGE } from './blocks';
 import type { SiteConfig } from 'types';
 
@@ -26,12 +26,13 @@ export const CONFIG_QUERY_OBJ = `{
   notificationRecipientEmail
 }`;
 
-const configCache = createSwrCache<SiteConfig | null>(
+const configCache = createCmsCache<SiteConfig | null>(
   () => client.fetch<SiteConfig>(`*[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ}`),
   {} as SiteConfig,
-  10_000,
-  (cfg) => SanityImageService.setStudioProxyConfig(cfg?.enableImageProxy),
-  { kvKey: 'cms:siteConfig', kvTtlSeconds: 86400 }
+  {
+    kvKey: 'cms:siteConfig',
+    onUpdate: (cfg) => SanityImageService.setStudioProxyConfig(cfg?.enableImageProxy),
+  }
 );
 
 /**

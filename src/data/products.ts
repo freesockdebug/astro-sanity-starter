@@ -1,7 +1,6 @@
 import { client } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
-import { createSwrCache, runInBackground } from '@utils/cache';
-import { kvGet, kvPut } from '@utils/kv';
+import { createCmsCache, createCmsKeyedCache } from '@utils/cache';
 import { DEFAULT_CATALOG } from './defaults';
 import { getLocalizedPath } from '@i18n';
 import type { Product } from 'types';
@@ -238,45 +237,39 @@ export interface CatalogCategoryItem {
   count: number;
 }
 
-const productsCache = createSwrCache<Product[]>(
+const productsCache = createCmsCache<Product[]>(
   () => client.fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`),
   [],
-  10_000,
-  undefined,
-  { kvKey: 'cms:products:all', kvTtlSeconds: 86400 }
+  { kvKey: 'cms:products:all' }
 );
 
-const categoriesCache = createSwrCache<any[]>(
+const categoriesCache = createCmsCache<any[]>(
   () => client.fetch<any[]>(`*[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS}`),
   [],
-  10_000,
-  undefined,
-  { kvKey: 'cms:categories:all', kvTtlSeconds: 86400 }
+  { kvKey: 'cms:categories:all' }
 );
 
-const catalogSettingsCache = createSwrCache<any | null>(
+const catalogSettingsCache = createCmsCache<any | null>(
   () => client.fetch<any>(`*[_type == "catalogSettings"][0]`),
   null,
-  10_000,
-  undefined,
-  { kvKey: 'cms:catalogSettings', kvTtlSeconds: 86400 }
+  { kvKey: 'cms:catalogSettings' }
 );
 
-const storySettingsCache = createSwrCache<any | null>(
+const storySettingsCache = createCmsCache<any | null>(
   () => client.fetch<any>(`*[_type == "productStorySettings"][0]`),
   null,
-  10_000,
-  undefined,
-  { kvKey: 'cms:productStorySettings', kvTtlSeconds: 86400 }
+  { kvKey: 'cms:productStorySettings' }
+);
+
+const productBySlugCache = createCmsKeyedCache<Product>(
+  'cms:product',
+  (slug) => client.fetch<Product | null>(`*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`, { slug })
 );
 
 /**
  * Service class handling Product querying, caching, and fallback resolution
  */
 export class ProductService {
-  private static productSlugCache = new Map<string, { data: Product | null; timestamp: number }>();
-  private static inflightSlug = new Map<string, Promise<Product | null>>();
-
   public static seed(data: { products?: Product[]; categories?: any[]; catalogSettings?: any; productStorySettings?: any }): void {
     if (data.products !== undefined) productsCache.seed(data.products);
     if (data.categories !== undefined) categoriesCache.seed(data.categories);
@@ -285,7 +278,7 @@ export class ProductService {
   }
 
   public static seedSlug(slug: string, product: Product): void {
-    this.productSlugCache.set(slug, { data: product, timestamp: Date.now() });
+    productBySlugCache.seed(slug, product);
   }
 
   /**
@@ -374,119 +367,60 @@ export class ProductService {
   /**
    * Fetch all products from Sanity with short-lived in-memory caching for SSR deduplication
    */
-  public static async getAll(forceRefresh = false): Promise<Product[]> {
-    return productsCache.get(forceRefresh);
+  public static async getAll(forceRefresh = false, customEnv?: any): Promise<Product[]> {
+    return productsCache.get(forceRefresh, customEnv);
   }
 
   /**
    * Fetch all product categories from Sanity
    */
-  public static async getCategories(forceRefresh = false): Promise<any[]> {
-    return categoriesCache.get(forceRefresh);
+  public static async getCategories(forceRefresh = false, customEnv?: any): Promise<any[]> {
+    return categoriesCache.get(forceRefresh, customEnv);
   }
 
   /**
-   * Fetch a single product by slug with multi-tier SWR caching (L1 memory SWR -> L2 KV -> L3 Sanity)
-   * Fresh window: 60s (0ms instant memory return)
-   * Stale window: 1h (0ms instant memory return + non-blocking background revalidate)
-   * Single-flight concurrency deduplication & non-blocking background KV writes
+   * Fetch a single product by slug (L1 Memory 5m -> L2 Permanent KV -> L3 Sanity)
    */
   public static async getBySlug(slug: string, customEnv?: any): Promise<Product | null> {
-    if (!slug) return null;
-    const cacheKey = `cms:product:${slug}`;
-    const now = Date.now();
-    const memHit = this.productSlugCache.get(slug);
-
-    if (memHit) {
-      const age = now - memHit.timestamp;
-      // 0. Negative 404 cache in memory: 30s fresh window
-      if (memHit.data === null) {
-        if (age < 30_000) return null;
-      } else {
-        // 1. Fresh window (60s): 0ms instant memory return
-        if (age < 60_000) {
-          return structuredClone(memHit.data);
-        }
-        // 2. Stale tolerance window (1 hour): instant memory return + non-blocking background revalidate
-        if (age < 3_600_000) {
-          runInBackground(this.revalidateSlug(slug, cacheKey, customEnv));
-          return structuredClone(memHit.data);
-        }
-      }
-    }
-
-    // 3. Cold boot, expired beyond stale window, or first fetch: await single-flight
-    return this.revalidateSlug(slug, cacheKey, customEnv);
-  }
-
-  private static async revalidateSlug(slug: string, cacheKey: string, customEnv?: any): Promise<Product | null> {
-    const existing = this.inflightSlug.get(slug);
-    if (existing) return existing;
-
-    const task = (async () => {
-      const now = Date.now();
-      // 1. Check L2 KV on cold boot
-      try {
-        const kvHit = await kvGet<any>(cacheKey, customEnv);
-        if (kvHit && !kvHit.notFound) {
-          this.productSlugCache.set(slug, { data: kvHit, timestamp: now });
-          return structuredClone(kvHit);
-        }
-      } catch {}
-
-      // 2. Upstream Sanity fetch with PRODUCT_FIELDS
-      try {
-        const data = await client.fetch<Product | null>(
-          `*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`,
-          { slug }
-        );
-        if (data) {
-          const memHit = this.productSlugCache.get(slug);
-          const isChanged = !memHit?.data || JSON.stringify(memHit.data) !== JSON.stringify(data);
-          this.productSlugCache.set(slug, { data, timestamp: now });
-          // Non-blocking L2 KV write in background ONLY if changed
-          if (isChanged) {
-            runInBackground(kvPut(cacheKey, data, { expirationTtl: 86400 }, customEnv));
-          }
-          return structuredClone(data);
-        } else {
-          // Negative cache in L1 Memory ONLY (30s) to prevent upstream penetration from bot scans,
-          // without writing to KV (saving KV writes and ensuring new products go live immediately)
-          this.productSlugCache.set(slug, { data: null, timestamp: now });
-          if (this.productSlugCache.size > 500) {
-            const oldestKey = this.productSlugCache.keys().next().value;
-            if (oldestKey) this.productSlugCache.delete(oldestKey);
-          }
-          return null;
-        }
-      } catch (err: any) {
-        console.error(`ProductService.getBySlug failed for ${slug}:`, err?.message);
-        // Fallback to stale memory if available during upstream outage
-        const stale = this.productSlugCache.get(slug);
-        return stale && stale.data ? structuredClone(stale.data) : null;
-      }
-    })();
-
-    this.inflightSlug.set(slug, task);
-    try {
-      return await task;
-    } finally {
-      this.inflightSlug.delete(slug);
-    }
+    return productBySlugCache.get(slug, customEnv);
   }
 
   /**
-   * Fetch product story settings from Sanity with SWR and KV caching
+   * Write-Through refresh for a single product slug into KV and L1 memory
    */
-  public static async getProductStorySettings(forceRefresh = false): Promise<any> {
-    return storySettingsCache.get(forceRefresh);
+  public static async refreshSlug(slug: string, customEnv?: any): Promise<Product | null> {
+    return productBySlugCache.refresh(slug, customEnv);
+  }
+
+  /**
+   * Remove a deleted product slug from KV and L1 memory
+   */
+  public static async evictSlug(slug: string, customEnv?: any): Promise<void> {
+    await productBySlugCache.evict(slug, customEnv);
+  }
+
+  /**
+   * Write-Through refresh of product lists, categories, and settings
+   */
+  public static async refreshAll(customEnv?: any): Promise<void> {
+    await Promise.all([
+      productsCache.get(true, customEnv),
+      categoriesCache.get(true, customEnv),
+    ]);
+  }
+
+  /**
+   * Fetch product story settings from Sanity
+   */
+  public static async getProductStorySettings(forceRefresh = false, customEnv?: any): Promise<any> {
+    return storySettingsCache.get(forceRefresh, customEnv);
   }
 
   /**
    * Fetch catalog hall settings from Sanity
    */
-  public static async getCatalogSettings(forceRefresh = false): Promise<any> {
-    return catalogSettingsCache.get(forceRefresh);
+  public static async getCatalogSettings(forceRefresh = false, customEnv?: any): Promise<any> {
+    return catalogSettingsCache.get(forceRefresh, customEnv);
   }
 
   /**
@@ -535,8 +469,7 @@ export class ProductService {
     categoriesCache.invalidate();
     catalogSettingsCache.invalidate();
     storySettingsCache.invalidate();
-    this.productSlugCache.clear();
-    this.inflightSlug.clear();
+    productBySlugCache.invalidate();
   }
 }
 

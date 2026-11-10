@@ -4,6 +4,8 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { ProductService } from '@data/products';
 import { PageService } from '@data/page';
+import { SiteConfigService } from '@data/siteConfig';
+import { RfqSettingsService } from '@data/rfqSettings';
 import { invalidateDictCache } from '@utils/dicts';
 import {
   invalidateSettingsCache,
@@ -11,7 +13,6 @@ import {
   invalidatePendingOrdersCountCache,
   invalidateDashboardStatsCache,
 } from '@utils/db';
-import { kvDelete } from '@utils/kv';
 import { insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -38,14 +39,26 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (scope === 'all' || scope === 'products') {
       ProductService.invalidateCache();
-      await kvDelete('cms:products:all', cfEnv).catch(() => {});
-      await kvDelete('cms:categories:all', cfEnv).catch(() => {});
-      purgedItems.push('Product in-memory and KV lists');
+      await Promise.all([
+        ProductService.refreshAll(cfEnv),
+        ProductService.getCatalogSettings(true, cfEnv),
+        ProductService.getProductStorySettings(true, cfEnv),
+      ]).catch(() => {});
+      purgedItems.push('Product lists, categories & settings refreshed in KV');
     }
 
     if (scope === 'all' || scope === 'pages') {
       PageService.invalidateCache();
-      purgedItems.push('Page in-memory and KV caches');
+      await PageService.getHomePage(true, cfEnv).catch(() => {});
+      purgedItems.push('Page L1 memory cleared & homepage refreshed in KV');
+    }
+
+    if (scope === 'all' || scope === 'config') {
+      await Promise.all([
+        SiteConfigService.getConfig(true),
+        RfqSettingsService.getSettings(true),
+      ]).catch(() => {});
+      purgedItems.push('SiteConfig & RFQ Settings refreshed in KV');
     }
 
     if (scope === 'all' || scope === 'dicts') {
@@ -72,12 +85,12 @@ export const POST: APIRoute = async ({ request }) => {
     if (targetPath) {
       if (targetPath.startsWith('/products/')) {
         const slug = targetPath.replace('/products/', '').replace(/\/$/, '');
-        await kvDelete(`cms:product:${slug}`, cfEnv).catch(() => {});
-        purgedItems.push(`Product slug KV: ${slug}`);
+        await ProductService.refreshSlug(slug, cfEnv).catch(() => {});
+        purgedItems.push(`Product slug KV refreshed: ${slug}`);
       } else {
         const unslashed = targetPath.replace(/^\//, '').replace(/\/$/, '');
-        await kvDelete(`cms:page:${unslashed || 'home'}`, cfEnv).catch(() => {});
-        purgedItems.push(`Page KV: ${targetPath}`);
+        await PageService.refreshSlug(unslashed || 'home', cfEnv).catch(() => {});
+        purgedItems.push(`Page KV refreshed: ${targetPath}`);
       }
     }
 
