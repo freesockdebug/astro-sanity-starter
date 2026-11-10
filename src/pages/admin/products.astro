@@ -3,6 +3,7 @@
 // Native Cloudflare SSR Product & Category CMS Workbench (Replaces Sanity Studio)
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
+import MediaLibraryModal from '@components/admin/MediaLibraryModal.astro';
 import { requireAdminContext } from '@utils/auth';
 import { getDictItems } from '@utils/dicts';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -307,15 +308,31 @@ const pageTitle = 'Products & Catalog Workspace';
             <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
               <label class="block font-bold text-xs text-[#1d1d1f]">Main Catalog Image *</label>
               <div class="flex items-center gap-4">
-                <div id="main-image-preview" class="w-24 h-24 rounded-xl bg-white border border-black/10 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                <div id="main-image-preview" class="w-24 h-24 rounded-2xl bg-white border border-black/10 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                   <span class="text-[10px] text-[#86868b]">No Image</span>
                 </div>
                 <div class="space-y-2 flex-1">
-                  <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1d1d1f] text-white text-xs font-semibold hover:bg-black cursor-pointer shadow-2xs">
-                    <span>Upload Image</span>
-                    <input type="file" id="upload-main-image" accept="image/*" class="hidden" />
-                  </label>
-                  <p class="text-[10px] text-[#86868b]">Uploaded directly to Sanity CDN Asset Store.</p>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      id="btn-choose-main-media"
+                      class="px-3 py-1.5 rounded-xl bg-[#1d1d1f] text-white text-xs font-semibold hover:bg-black cursor-pointer shadow-2xs flex items-center gap-1.5"
+                    >
+                      <span>📁 From Media Library</span>
+                    </button>
+                    <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-[#1d1d1f] text-xs font-semibold hover:border-black cursor-pointer shadow-2xs">
+                      <span>⬆️ Upload Local</span>
+                      <input type="file" id="upload-main-image" accept="image/*" class="hidden" />
+                    </label>
+                    <button
+                      type="button"
+                      id="btn-remove-main-image"
+                      class="px-2.5 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-medium cursor-pointer transition-colors hidden"
+                    >
+                      🗑️ Remove
+                    </button>
+                  </div>
+                  <p class="text-[10px] text-[#86868b]">Select high-res image from cloud library or upload directly to Sanity CDN.</p>
                 </div>
               </div>
             </div>
@@ -323,11 +340,23 @@ const pageTitle = 'Products & Catalog Workspace';
             <!-- Gallery Images -->
             <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
               <div class="flex items-center justify-between">
-                <label class="block font-bold text-xs text-[#1d1d1f]">Product Gallery & Detail Views</label>
-                <label class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
-                  <span>＋ Add to Gallery</span>
-                  <input type="file" id="upload-gallery-image" accept="image/*" class="hidden" />
-                </label>
+                <div>
+                  <label class="block font-bold text-xs text-[#1d1d1f]">Product Gallery & Detail Views</label>
+                  <span class="text-[10px] text-[#86868b]">Drag to reorder · Click ★ to set as main image</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    id="btn-choose-gallery-media"
+                    class="px-2.5 py-1 rounded-lg bg-[#1d1d1f] text-white text-[11px] font-semibold cursor-pointer shadow-2xs hover:bg-black"
+                  >
+                    <span>📁 + From Library</span>
+                  </button>
+                  <label class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
+                    <span>⬆️ + Upload Local</span>
+                    <input type="file" id="upload-gallery-image" accept="image/*" class="hidden" multiple />
+                  </label>
+                </div>
               </div>
               <div id="gallery-container" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 <!-- Gallery thumbs injected here -->
@@ -511,6 +540,9 @@ const pageTitle = 'Products & Catalog Workspace';
     data-can-write={canWrite ? 'true' : 'false'}
     data-can-delete={canDelete ? 'true' : 'false'}
   ></div>
+
+  <!-- Global Cloud Media Library Modal -->
+  <MediaLibraryModal />
 </AdminLayout>
 
 <script>
@@ -959,16 +991,53 @@ const pageTitle = 'Products & Catalog Workspace';
   // Main Image preview render
   function renderMainImagePreview() {
     const el = document.getElementById('main-image-preview');
+    const btnRemove = document.getElementById('btn-remove-main-image');
     if (!el) return;
-    const imgUrl = currentEditingProduct?.mainImageUrl || currentEditingProduct?.mainImage?.asset?.url || '';
+
+    const imgUrl = (window as any).resolveSanityRefUrl?.(currentEditingProduct?.mainImage) ||
+      currentEditingProduct?.mainImageUrl ||
+      currentEditingProduct?.mainImage?.asset?.url || '';
+
     if (imgUrl) {
       el.innerHTML = `<img src="${escapeHtml(imgUrl)}" class="w-full h-full object-cover" />`;
+      btnRemove?.classList.remove('hidden');
     } else {
       el.innerHTML = `<span class="text-[10px] text-[#86868b]">No Image</span>`;
+      btnRemove?.classList.add('hidden');
     }
   }
 
-  // Upload Main Image
+  // Choose Main Image from Cloud Media Library
+  document.getElementById('btn-choose-main-media')?.addEventListener('click', () => {
+    (window as any).__openMediaLibrary?.({
+      mode: 'single',
+      title: 'Choose Main Cover Image',
+      selectedIds: currentEditingProduct?.mainImage?.asset?._ref ? [currentEditingProduct.mainImage.asset._ref] : [],
+      onSelect: (selectedAssets: any[]) => {
+        if (!selectedAssets || selectedAssets.length === 0) return;
+        const asset = selectedAssets[0];
+        if (!currentEditingProduct.mainImage) currentEditingProduct.mainImage = { _type: 'image' };
+        currentEditingProduct.mainImage.asset = {
+          _type: 'reference',
+          _ref: asset._id,
+          url: asset.url,
+        };
+        currentEditingProduct.mainImageUrl = asset.url;
+        renderMainImagePreview();
+        (window as any).__showToast?.('Updated main product cover image', 'success');
+      },
+    });
+  });
+
+  // Remove Main Image
+  document.getElementById('btn-remove-main-image')?.addEventListener('click', () => {
+    currentEditingProduct.mainImage = null;
+    currentEditingProduct.mainImageUrl = '';
+    renderMainImagePreview();
+    (window as any).__showToast?.('Removed main cover image', 'info');
+  });
+
+  // Upload Local Main Image
   document.getElementById('upload-main-image')?.addEventListener('change', async (e: any) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -989,62 +1058,216 @@ const pageTitle = 'Products & Catalog Workspace';
       (window as any).__showToast?.('Image uploaded successfully', 'success');
     } catch (err: any) {
       (window as any).__showToast?.(err.message, 'error');
+    } finally {
+      e.target.value = '';
     }
   });
 
-  // Gallery render & upload
+  // Choose Gallery Images from Cloud Media Library (Batch Select)
+  document.getElementById('btn-choose-gallery-media')?.addEventListener('click', () => {
+    (window as any).__openMediaLibrary?.({
+      mode: 'multiple',
+      title: 'Batch Select Gallery Images',
+      onSelect: (selectedAssets: any[]) => {
+        if (!selectedAssets || selectedAssets.length === 0) return;
+        if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
+        if (!currentEditingProduct.galleryUrls) currentEditingProduct.galleryUrls = [];
+
+        selectedAssets.forEach((asset: any) => {
+          currentEditingProduct.gallery.push({
+            _type: 'image',
+            _key: crypto.randomUUID().slice(0, 8),
+            asset: {
+              _type: 'reference',
+              _ref: asset._id,
+              url: asset.url,
+            },
+          });
+          currentEditingProduct.galleryUrls.push(asset.url);
+        });
+
+        renderGalleryPreview();
+        (window as any).__showToast?.(`Added ${selectedAssets.length} image(s) to gallery`, 'success');
+      },
+    });
+  });
+
+  // Drag and drop state for gallery reordering
+  let draggedGalleryIdx: number | null = null;
+
+  // Gallery render & drag/swap handlers
   function renderGalleryPreview() {
     const container = document.getElementById('gallery-container');
     if (!container) return;
     const gallery = currentEditingProduct?.gallery || [];
     if (gallery.length === 0) {
-      container.innerHTML = `<div class="col-span-4 py-4 text-center text-[#86868b] text-[11px]">No gallery images added yet.</div>`;
+      container.innerHTML = `<div class="col-span-full py-6 text-center text-[#86868b] text-[11px] bg-white rounded-xl border border-dashed border-black/10">No gallery images added yet. Click "+ From Library" or "+ Upload Local".</div>`;
       return;
     }
+
     container.innerHTML = gallery.map((item: any, idx: number) => {
-      const url = item.asset?.url || currentEditingProduct?.galleryUrls?.[idx] || '';
+      const url = (window as any).resolveSanityRefUrl?.(item) ||
+        item.asset?.url ||
+        currentEditingProduct?.galleryUrls?.[idx] || '';
+
       return `
-        <div class="relative group rounded-xl overflow-hidden border border-black/10 aspect-square bg-[#f5f5f7]">
-          ${url ? `<img src="${escapeHtml(url)}" class="w-full h-full object-cover" />` : `<div class="w-full h-full flex items-center justify-center text-[10px] text-[#86868b]">Img</div>`}
-          <button type="button" class="btn-del-gallery absolute top-1 right-1 p-1 rounded-md bg-black/60 text-white hover:bg-rose-600 transition-colors opacity-0 group-hover:opacity-100" data-idx="${idx}">✕</button>
+        <div
+          class="gallery-card relative group rounded-xl overflow-hidden border border-black/10 aspect-square bg-[#f5f5f7] cursor-grab active:cursor-grabbing transition-all select-none"
+          draggable="true"
+          data-idx="${idx}"
+        >
+          ${url ? `<img src="${escapeHtml(url)}" class="w-full h-full object-cover pointer-events-none" />` : `<div class="w-full h-full flex items-center justify-center text-[10px] text-[#86868b]">Img</div>`}
+
+          <!-- Drag Handle Badge -->
+          <div class="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/50 text-white text-[9px] font-mono pointer-events-none">
+            #${idx + 1}
+          </div>
+
+          <!-- Actions Toolbar -->
+          <div class="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              class="btn-make-main p-1 rounded-md bg-black/70 hover:bg-amber-500 text-white text-[10px] font-bold shadow-xs transition-colors cursor-pointer"
+              data-idx="${idx}"
+              title="Set as Main Cover Image (Swap)"
+            >
+              ★ Main
+            </button>
+            <button
+              type="button"
+              class="btn-del-gallery p-1 rounded-md bg-black/70 hover:bg-rose-600 text-white text-[10px] shadow-xs transition-colors cursor-pointer"
+              data-idx="${idx}"
+              title="Remove from Gallery"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       `;
     }).join('');
 
+    // Set as Main Image (Swap losslessly)
+    container.querySelectorAll('.btn-make-main').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+        const chosenGalleryItem = currentEditingProduct.gallery[idx];
+        if (!chosenGalleryItem) return;
+
+        const previousMain = currentEditingProduct.mainImage;
+        const previousMainUrl = currentEditingProduct.mainImageUrl;
+
+        // Swap: if old main existed, put old main into this gallery slot; otherwise remove from gallery
+        if (previousMain && (previousMain.asset?._ref || previousMain.asset?.url || previousMainUrl)) {
+          currentEditingProduct.gallery[idx] = {
+            _type: 'image',
+            _key: chosenGalleryItem._key || crypto.randomUUID().slice(0, 8),
+            asset: previousMain.asset,
+          };
+          if (currentEditingProduct.galleryUrls) {
+            currentEditingProduct.galleryUrls[idx] = previousMainUrl || (window as any).resolveSanityRefUrl?.(previousMain) || '';
+          }
+        } else {
+          currentEditingProduct.gallery.splice(idx, 1);
+          currentEditingProduct.galleryUrls?.splice(idx, 1);
+        }
+
+        // Set chosen as main
+        currentEditingProduct.mainImage = {
+          _type: 'image',
+          asset: chosenGalleryItem.asset,
+        };
+        currentEditingProduct.mainImageUrl = (window as any).resolveSanityRefUrl?.(chosenGalleryItem) || chosenGalleryItem.asset?.url || '';
+
+        renderMainImagePreview();
+        renderGalleryPreview();
+        (window as any).__showToast?.('Swapped gallery image with main product cover', 'success');
+      });
+    });
+
+    // Delete gallery item
     container.querySelectorAll('.btn-del-gallery').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
         currentEditingProduct.gallery.splice(idx, 1);
         currentEditingProduct.galleryUrls?.splice(idx, 1);
         renderGalleryPreview();
       });
     });
+
+    // HTML5 Drag and Drop Reordering
+    const cards = container.querySelectorAll('.gallery-card');
+    cards.forEach((card) => {
+      card.addEventListener('dragstart', (e: any) => {
+        draggedGalleryIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
+        e.dataTransfer.effectAllowed = 'move';
+        card.classList.add('opacity-40');
+      });
+
+      card.addEventListener('dragend', () => {
+        draggedGalleryIdx = null;
+        card.classList.remove('opacity-40');
+        cards.forEach((c) => c.classList.remove('ring-2', 'ring-black', 'scale-105'));
+      });
+
+      card.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer!.dropEffect = 'move';
+        card.classList.add('ring-2', 'ring-black', 'scale-105');
+      });
+
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('ring-2', 'ring-black', 'scale-105');
+      });
+
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        card.classList.remove('ring-2', 'ring-black', 'scale-105');
+        const targetIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
+        if (draggedGalleryIdx !== null && draggedGalleryIdx !== targetIdx) {
+          const item = currentEditingProduct.gallery.splice(draggedGalleryIdx, 1)[0];
+          currentEditingProduct.gallery.splice(targetIdx, 0, item);
+          if (currentEditingProduct.galleryUrls) {
+            const urlItem = currentEditingProduct.galleryUrls.splice(draggedGalleryIdx, 1)[0];
+            currentEditingProduct.galleryUrls.splice(targetIdx, 0, urlItem);
+          }
+          renderGalleryPreview();
+        }
+      });
+    });
   }
 
+  // Upload Local to Gallery
   document.getElementById('upload-gallery-image')?.addEventListener('change', async (e: any) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    const fd = new FormData();
-    fd.append('file', file);
-    try {
-      const res = await fetch('/api/admin/cms/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const res = await fetch('/api/admin/cms/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
 
-      if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
-      if (!currentEditingProduct.galleryUrls) currentEditingProduct.galleryUrls = [];
-      currentEditingProduct.gallery.push({
-        _type: 'image',
-        _key: crypto.randomUUID().slice(0, 8),
-        asset: { ...data.asset.asset, url: data.url },
-      });
-      currentEditingProduct.galleryUrls.push(data.url);
-      renderGalleryPreview();
-      (window as any).__showToast?.('Added image to gallery', 'success');
-    } catch (err: any) {
-      (window as any).__showToast?.(err.message, 'error');
+        if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
+        if (!currentEditingProduct.galleryUrls) currentEditingProduct.galleryUrls = [];
+        currentEditingProduct.gallery.push({
+          _type: 'image',
+          _key: crypto.randomUUID().slice(0, 8),
+          asset: { ...data.asset.asset, url: data.url },
+        });
+        currentEditingProduct.galleryUrls.push(data.url);
+      } catch (err: any) {
+        (window as any).__showToast?.(err.message, 'error');
+      }
     }
+
+    renderGalleryPreview();
+    (window as any).__showToast?.(`Added ${files.length} image(s) to gallery`, 'success');
+    e.target.value = '';
   });
 
   // Dynamic Tiers Table

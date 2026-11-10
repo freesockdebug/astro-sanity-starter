@@ -1,8 +1,9 @@
 ---
 // src/pages/admin/pages.astro
-// Native Cloudflare SSR Page Builder & Visual Live Editor (Replaces Sanity Studio PageLivePreview)
+// Native Cloudflare SSR Modular Page Builder & Visual Canvas (1:1 Native Sanity Studio Port)
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
+import MediaLibraryModal from '@components/admin/MediaLibraryModal.astro';
 import { requireAdminContext } from '@utils/auth';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -54,7 +55,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       </div>
     </AdminPageToolbar>
 
-    <!-- Split-Pane Workspace: Left Pages List (320px) | Right Builder & Canvas -->
+    <!-- Split-Pane Workspace: Left Pages Directory (300px) | Right Builder & Canvas -->
     <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 overflow-hidden">
       <!-- Left: Pages Directory -->
       <div class="w-full lg:w-80 shrink-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden">
@@ -69,7 +70,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
       <!-- Right: Modular Block Builder & Live Responsive Canvas -->
       <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden">
-        <!-- Editor Sub-Header: Mode & Device Switcher -->
+        <!-- Editor Sub-Header: Mode, Device & Multi-Language Switcher -->
         <div class="p-3 border-b border-black/5 flex flex-wrap items-center justify-between gap-3 bg-[#fafafc] shrink-0">
           <div class="flex items-center gap-2">
             <span id="current-page-badge" class="font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-[#1d1d1f] text-white shadow-2xs">
@@ -85,20 +86,36 @@ const pageTitle = 'Pages & Modular Visual Builder';
             </div>
           </div>
 
-          <!-- Responsive Viewport Switcher -->
-          <div id="device-switcher" class="hidden flex items-center gap-1.5 bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
-            <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer" data-width="100%">
-              🖥️ Desktop
-            </button>
-            <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-width="1280px">
-              💻 1280px
-            </button>
-            <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-width="390px">
-              📱 Mobile
-            </button>
-          </div>
-
+          <!-- Multi-Language Tab Switcher (EN / DE / FR / ES) -->
           <div class="flex items-center gap-2">
+            <div id="lang-switcher" class="flex items-center bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
+              <button type="button" class="btn-lang px-2.5 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer" data-lang="en">
+                🇬🇧 EN
+              </button>
+              <button type="button" class="btn-lang px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-lang="de">
+                🇩🇪 DE
+              </button>
+              <button type="button" class="btn-lang px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-lang="fr">
+                🇫🇷 FR
+              </button>
+              <button type="button" class="btn-lang px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-lang="es">
+                🇪🇸 ES
+              </button>
+            </div>
+
+            <!-- Responsive Viewport Switcher -->
+            <div id="device-switcher" class="hidden flex items-center gap-1.5 bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
+              <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer" data-width="100%">
+                🖥️ Desktop
+              </button>
+              <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-width="1280px">
+                💻 1280px
+              </button>
+              <button type="button" class="btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer" data-width="390px">
+                📱 Mobile
+              </button>
+            </div>
+
             {canWrite && (
               <button
                 type="button"
@@ -113,51 +130,92 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
         <!-- Mode A: Blocks Editor Pane -->
         <div id="builder-pane" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 text-xs">
-          <!-- Page Meta Form -->
-          <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
-            <span class="font-bold text-xs text-[#1d1d1f] block">1. Page URL & SEO Metadata</span>
+          <!-- Page Meta Form (URL & SEO) -->
+          <div class="p-4 sm:p-5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
+            <div class="flex items-center justify-between border-b border-black/5 pb-2">
+              <span class="font-bold text-xs text-[#1d1d1f] flex items-center gap-1.5">
+                <span>🌐</span> 1. Page URL & SEO Metadata
+              </span>
+              <span id="seo-lang-indicator" class="text-[10px] font-mono text-[#86868b]">Editing Language: EN</span>
+            </div>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label class="block font-semibold mb-1">Page Title *</label>
+                <label class="block font-semibold mb-1 text-[#1d1d1f]">Page Title * (<span class="current-lang-label">EN</span>)</label>
                 <input type="text" id="page-title-input" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs" />
               </div>
               <div>
-                <label class="block font-semibold mb-1">URL Path Slug *</label>
+                <label class="block font-semibold mb-1 text-[#1d1d1f]">URL Path Slug *</label>
                 <input type="text" id="page-slug-input" placeholder="/ or /about" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black font-mono text-xs" />
               </div>
               <div>
-                <label class="block font-semibold mb-1">SEO Meta Title</label>
+                <label class="block font-semibold mb-1 text-[#1d1d1f]">SEO Meta Title (<span class="current-lang-label">EN</span>)</label>
                 <input type="text" id="page-metatitle-input" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
               </div>
               <div>
-                <label class="block font-semibold mb-1">SEO Meta Description</label>
+                <label class="block font-semibold mb-1 text-[#1d1d1f]">SEO Meta Description (<span class="current-lang-label">EN</span>)</label>
                 <input type="text" id="page-metadesc-input" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+              </div>
+            </div>
+
+            <!-- Social Share Image & Suffix Toggle -->
+            <div class="pt-3 border-t border-black/5 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              <div class="flex items-center gap-3">
+                <div id="social-image-preview" class="w-16 h-16 rounded-xl bg-white border border-black/10 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                  <span class="text-[9px] text-[#86868b]">No Image</span>
+                </div>
+                <div class="space-y-1">
+                  <label class="block font-semibold text-[11px] text-[#1d1d1f]">Social Sharing Image (socialImage)</label>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      id="btn-choose-social-image"
+                      class="px-2.5 py-1 rounded-lg bg-[#1d1d1f] text-white text-[11px] font-semibold cursor-pointer shadow-2xs hover:bg-black"
+                    >
+                      📁 From Media Library
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-remove-social-image"
+                      class="px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 text-[11px] cursor-pointer hidden"
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <input type="checkbox" id="page-add-suffix-input" class="rounded border-black/20 text-[#1d1d1f] focus:ring-0 cursor-pointer" />
+                <label for="page-add-suffix-input" class="font-medium text-xs text-[#1d1d1f] cursor-pointer">
+                  Append site title suffix automatically (addTitleSuffix)
+                </label>
               </div>
             </div>
           </div>
 
           <!-- Modular Sections Array -->
           <div class="space-y-4">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span class="font-bold text-xs text-[#1d1d1f] block">2. Modular Page Sections</span>
-                <span class="text-[10px] text-[#86868b]">Drag, reorder and customize full-bleed sections</span>
+                <span class="font-bold text-xs text-[#1d1d1f] block">2. Modular Page Sections (Sections Stream)</span>
+                <span class="text-[10px] text-[#86868b]">Drag handle ⠿ to reorder · 1:1 Isolated dedicated forms with zero field bleed</span>
               </div>
               <div class="flex items-center gap-2">
-                <select id="select-new-section" class="h-8 px-2.5 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs cursor-pointer">
-                  <option value="heroSection">＋ Hero Banner (heroSection)</option>
-                  <option value="productShowcaseSection">＋ Product Showcase (productShowcaseSection)</option>
-                  <option value="featureMatrixSection">＋ Feature Matrix (featureMatrixSection)</option>
-                  <option value="manufacturingSection">＋ Manufacturing Power (manufacturingSection)</option>
-                  <option value="inquirySection">＋ Inquiry Callout (inquirySection)</option>
-                  <option value="customSection">＋ Custom Markdown/HTML (customSection)</option>
+                <select id="select-new-section" class="h-8 px-2.5 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs cursor-pointer font-medium">
+                  <option value="heroSection">🌟 主视觉首屏 (heroSection)</option>
+                  <option value="productShowcaseSection">🗂️ 精选产品展廊 (productShowcaseSection)</option>
+                  <option value="featureMatrixSection">📐 核心工艺矩阵 (featureMatrixSection)</option>
+                  <option value="manufacturingSection">🏭 制造实力工坊 (manufacturingSection)</option>
+                  <option value="inquirySection">📩 商务咨询与转化 (inquirySection)</option>
+                  <option value="customSection">🎨 自由积木排版 (customSection)</option>
                 </select>
                 <button
                   type="button"
                   id="btn-add-section"
-                  class="h-8 px-3 rounded-xl bg-white border border-black/10 hover:border-black text-xs font-semibold shadow-2xs cursor-pointer"
+                  class="h-8 px-3.5 rounded-xl bg-[#1d1d1f] text-white hover:bg-black text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1"
                 >
-                  Add Block
+                  <span>＋ Add Section</span>
                 </button>
               </div>
             </div>
@@ -179,383 +237,1606 @@ const pageTitle = 'Pages & Modular Visual Builder';
         </div>
       </div>
     </div>
+
+    <!-- Global Cloud Media Library Modal -->
+    <MediaLibraryModal />
   </div>
 </AdminLayout>
 
 <script>
   import { escapeHtml } from '@utils/adminWorkbench';
 
-  function initPagesPage() {
-    function getEnText(val: any): string {
-    if (!val) return '';
-    if (typeof val === 'string') return val;
-    return val.en || val.zh || Object.values(val)[0] || '';
-  }
+  function initPagesWorkbench() {
+    let currentPages: any[] = [];
+    let activePageDoc: any = null;
+    let catalogProducts: any[] = [];
+    let currentLang = 'en'; // 'en' | 'de' | 'fr' | 'es'
+    let draggedSectionIdx: number | null = null;
+    let collapsedSections: Set<number> = new Set();
 
-  function setEnText(orig: any, newStr: string): any {
-    if (typeof orig === 'object' && orig !== null) {
-      return { ...orig, _type: orig._type || 'localeString', en: newStr };
+    // Multi-Language string helpers
+    function getLocaleVal(val: any, lang = currentLang): string {
+      if (!val) return '';
+      if (typeof val === 'string') return val;
+      return val[lang] || '';
     }
-    return { _type: 'localeString', en: newStr };
-  }
 
-  let currentPages: any[] = [];
-  let activePageDoc: any = null;
+    function getFallbackEn(val: any): string {
+      if (!val) return '';
+      if (typeof val === 'string') return val;
+      return val.en || Object.values(val)[0] || '';
+    }
 
-  // View Mode Switcher
-  const btnModeBuilder = document.getElementById('btn-mode-builder');
-  const btnModeCanvas = document.getElementById('btn-mode-canvas');
-  const builderPane = document.getElementById('builder-pane');
-  const canvasPane = document.getElementById('canvas-pane');
-  const deviceSwitcher = document.getElementById('device-switcher');
-  const previewFrame = document.getElementById('live-preview-frame') as HTMLIFrameElement | null;
-  const canvasWrapper = document.getElementById('canvas-wrapper');
-
-  btnModeBuilder?.addEventListener('click', () => {
-    btnModeBuilder.className = 'px-3 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
-    if (btnModeCanvas) btnModeCanvas.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
-    builderPane?.classList.remove('hidden');
-    canvasPane?.classList.add('hidden');
-    deviceSwitcher?.classList.add('hidden');
-  });
-
-  btnModeCanvas?.addEventListener('click', () => {
-    btnModeCanvas.className = 'px-3 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
-    if (btnModeBuilder) btnModeBuilder.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
-    canvasPane?.classList.remove('hidden');
-    builderPane?.classList.add('hidden');
-    deviceSwitcher?.classList.remove('hidden');
-
-    const slug = activePageDoc?.slug?.current || '/';
-    if (previewFrame) previewFrame.src = slug === '/' ? '/' : `${slug}`;
-  });
-
-  // Device Width Buttons
-  document.querySelectorAll('.btn-device').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.btn-device').forEach((b) => {
-        b.className = 'btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
-      });
-      btn.className = 'btn-device px-2.5 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
-      const width = btn.getAttribute('data-width') || '100%';
-      if (canvasWrapper) canvasWrapper.style.width = width;
-    });
-  });
-
-  // Load Pages
-  async function loadPages() {
-    try {
-      const res = await fetch('/api/admin/cms/pages');
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to fetch pages');
-
-      currentPages = data.pages || [];
-      const badge = document.getElementById('pages-count-badge');
-      if (badge) badge.textContent = String(currentPages.length);
-
-      renderPagesList();
-
-      // Automatically select Homepage or first page if not selected
-      if (!activePageDoc && currentPages.length > 0) {
-        const home = currentPages.find((p: any) => p.slug?.current === '/' || p.slug?.current === '') || currentPages[0];
-        selectPage(home._id);
+    function setLocaleVal(orig: any, text: string, lang = currentLang): any {
+      if (typeof orig === 'object' && orig !== null) {
+        return { ...orig, _type: orig._type || 'localeString', [lang]: text };
       }
-    } catch (e: any) {
-      (window as any).__showToast?.(e.message, 'error');
+      return { _type: 'localeString', [lang]: text };
     }
-  }
 
-  function renderPagesList() {
-    const list = document.getElementById('pages-list');
-    if (!list) return;
+    // View Mode Switcher
+    const btnModeBuilder = document.getElementById('btn-mode-builder');
+    const btnModeCanvas = document.getElementById('btn-mode-canvas');
+    const builderPane = document.getElementById('builder-pane');
+    const canvasPane = document.getElementById('canvas-pane');
+    const deviceSwitcher = document.getElementById('device-switcher');
+    const previewFrame = document.getElementById('live-preview-frame') as HTMLIFrameElement | null;
+    const canvasWrapper = document.getElementById('canvas-wrapper');
 
-    list.innerHTML = currentPages.map((p: any) => {
-      const slug = p.slug?.current || '/';
-      const isHome = slug === '/' || slug === '';
-      const isSelected = activePageDoc?._id === p._id;
-
-      return `
-        <div
-          class="p-2.5 rounded-xl cursor-pointer transition-all page-list-item ${isSelected ? 'bg-[#1d1d1f] text-white shadow-2xs' : 'hover:bg-[#f5f5f7] text-[#1d1d1f]'}"
-          data-id="${p._id}"
-        >
-          <div class="flex items-center justify-between gap-1.5 mb-1">
-            <span class="font-semibold text-xs truncate">${escapeHtml(getEnText(p.title) || (isHome ? 'Homepage' : 'Untitled'))}</span>
-            ${isHome ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'}">Home</span>` : ''}
-          </div>
-          <div class="flex items-center justify-between text-[10px] ${isSelected ? 'text-white/70' : 'text-[#86868b]'} font-mono">
-            <span>${escapeHtml(slug)}</span>
-            <span>${p.sectionCount || 0} blocks</span>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    list.querySelectorAll('.page-list-item').forEach((item) => {
-      item.addEventListener('click', () => {
-        const id = item.getAttribute('data-id');
-        if (id) selectPage(id);
-      });
+    btnModeBuilder?.addEventListener('click', () => {
+      btnModeBuilder.className = 'px-3 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
+      if (btnModeCanvas) btnModeCanvas.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
+      builderPane?.classList.remove('hidden');
+      canvasPane?.classList.add('hidden');
+      deviceSwitcher?.classList.add('hidden');
     });
-  }
 
-  // Select a page and load its full document with sections
-  async function selectPage(id: string) {
-    try {
-      const res = await fetch(`/api/admin/cms/pages?id=${encodeURIComponent(id)}`);
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load page');
+    btnModeCanvas?.addEventListener('click', () => {
+      btnModeCanvas.className = 'px-3 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
+      if (btnModeBuilder) btnModeBuilder.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
+      canvasPane?.classList.remove('hidden');
+      builderPane?.classList.add('hidden');
+      deviceSwitcher?.classList.remove('hidden');
 
-      activePageDoc = data.page;
-      renderPagesList();
+      const slug = activePageDoc?.slug?.current || '/';
+      const cleanSlug = slug === '/' ? '' : (slug.startsWith('/') ? slug : `/${slug}`);
+      const langPrefix = currentLang === 'en' ? '' : `/${currentLang}`;
+      if (previewFrame) previewFrame.src = `${langPrefix}${cleanSlug}` || '/';
+    });
 
-      const badge = document.getElementById('current-page-badge');
-      if (badge) badge.textContent = getEnText(activePageDoc.title) || activePageDoc.slug?.current || 'Page';
-
-      // Populate meta inputs safely supporting localeString and plain strings
-      (document.getElementById('page-title-input') as HTMLInputElement).value = getEnText(activePageDoc.title) || '';
-      (document.getElementById('page-slug-input') as HTMLInputElement).value = activePageDoc.slug?.current || '/';
-      (document.getElementById('page-metatitle-input') as HTMLInputElement).value = getEnText(activePageDoc.metaTitle) || '';
-      (document.getElementById('page-metadesc-input') as HTMLInputElement).value = getEnText(activePageDoc.metaDescription) || '';
-
-      renderSections();
-    } catch (e: any) {
-      (window as any).__showToast?.(e.message, 'error');
-    }
-  }
-
-  // Render modular blocks in Sections Container
-  function renderSections() {
-    const container = document.getElementById('sections-container');
-    if (!container) return;
-
-    const sections = activePageDoc.sections || [];
-    if (sections.length === 0) {
-      container.innerHTML = `
-        <div class="p-8 text-center text-[#86868b] border border-dashed border-black/10 rounded-2xl space-y-2">
-          <p>This page has no sections yet.</p>
-          <p class="text-[11px]">Select a block type from the dropdown above and click "Add Block".</p>
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = sections.map((sec: any, idx: number) => {
-      const type = sec._type || 'customSection';
-      const typeIcons: Record<string, string> = {
-        heroSection: '🖼️ Hero Banner',
-        productShowcaseSection: '🛍️ Product Showcase',
-        featureMatrixSection: '✨ Feature Matrix',
-        manufacturingSection: '🏭 Manufacturing Power',
-        inquirySection: '📬 RFQ Inquiry',
-        customSection: '📝 Custom Section',
-      };
-      const typeLabel = typeIcons[type] || type;
-      const secTitle = getEnText(sec.headline || sec.title || sec.heading || sec.adminLabel || sec.blocks?.[0]?.headline);
-      const secBadge = getEnText(sec.superTitle || sec.badge || sec.eyebrow || sec.preset || sec.blocks?.[0]?.badge);
-      const secDesc = getEnText(sec.subline || sec.description || sec.subtitle || sec.blocks?.[0]?.subtitle);
-
-      return `
-        <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3 section-block" data-idx="${idx}">
-          <div class="flex items-center justify-between border-b border-black/5 pb-2">
-            <div class="flex items-center gap-2">
-              <span class="font-bold text-xs text-[#1d1d1f]">${escapeHtml(typeLabel)}</span>
-              <span class="font-mono text-[10px] text-[#86868b]">#${idx + 1}</span>
-            </div>
-            <div class="flex items-center gap-1">
-              <button type="button" class="btn-sec-up p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Move Up">▲</button>
-              <button type="button" class="btn-sec-down p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Move Down">▼</button>
-              <button type="button" class="btn-sec-del p-1 rounded-md text-[#86868b] hover:text-rose-600 hover:bg-rose-50" data-idx="${idx}" title="Delete Section">✕</button>
-            </div>
-          </div>
-
-          <!-- Section Editor Inputs -->
-          <div class="space-y-3">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Headline / Title (EN)</label>
-                <input type="text" class="sec-title w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secTitle)}" placeholder="Main section headline" />
-              </div>
-              <div>
-                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Eyebrow / Badge (EN)</label>
-                <input type="text" class="sec-badge w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secBadge)}" placeholder="e.g. CRAFTSMANSHIP" />
-              </div>
-              <div>
-                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Subline / Description (EN)</label>
-                <input type="text" class="sec-desc w-full px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" value="${escapeHtml(secDesc)}" placeholder="Secondary description" />
-              </div>
-            </div>
-            ${type === 'customSection' ? `
-              <div>
-                <label class="block font-semibold text-[10px] text-[#52525b] mb-1">Custom Content / Markdown</label>
-                <textarea rows="3" class="sec-content w-full p-2.5 rounded-xl bg-white border border-black/10 font-mono text-xs">${escapeHtml(sec.content || '')}</textarea>
-              </div>
-            ` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    // Reorder & Delete actions
-    container.querySelectorAll('.btn-sec-up').forEach((btn) => {
+    // Device Switcher
+    document.querySelectorAll('.btn-device').forEach((btn) => {
       btn.addEventListener('click', () => {
-        syncSectionsFromDom();
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        if (idx > 0) {
-          const temp = activePageDoc.sections[idx];
-          activePageDoc.sections[idx] = activePageDoc.sections[idx - 1];
-          activePageDoc.sections[idx - 1] = temp;
-          renderSections();
-        }
+        document.querySelectorAll('.btn-device').forEach((b) => {
+          b.className = 'btn-device px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
+        });
+        btn.className = 'btn-device px-2.5 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
+        const width = btn.getAttribute('data-width') || '100%';
+        if (canvasWrapper) canvasWrapper.style.width = width;
       });
     });
 
-    container.querySelectorAll('.btn-sec-down').forEach((btn) => {
+    // Language Tab Switcher
+    document.querySelectorAll('.btn-lang').forEach((btn) => {
       btn.addEventListener('click', () => {
-        syncSectionsFromDom();
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        if (idx < activePageDoc.sections.length - 1) {
-          const temp = activePageDoc.sections[idx];
-          activePageDoc.sections[idx] = activePageDoc.sections[idx + 1];
-          activePageDoc.sections[idx + 1] = temp;
-          renderSections();
-        }
-      });
-    });
+        const targetLang = btn.getAttribute('data-lang');
+        if (!targetLang || targetLang === currentLang) return;
 
-    container.querySelectorAll('.btn-sec-del').forEach((btn) => {
-      btn.addEventListener('click', () => {
+        // 1. Sync current DOM inputs to memory for currentLang
+        syncMetaFromDom();
         syncSectionsFromDom();
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        activePageDoc.sections.splice(idx, 1);
+
+        // 2. Switch language
+        currentLang = targetLang;
+        document.querySelectorAll('.btn-lang').forEach((b) => {
+          b.className = 'btn-lang px-2.5 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer';
+        });
+        btn.className = 'btn-lang px-2.5 py-1 rounded-lg font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer';
+
+        document.querySelectorAll('.current-lang-label').forEach((el) => {
+          el.textContent = currentLang.toUpperCase();
+        });
+        const seoLang = document.getElementById('seo-lang-indicator');
+        if (seoLang) seoLang.textContent = `Editing Language: ${currentLang.toUpperCase()}`;
+
+        // 3. Re-render forms with new language values
+        populateMetaInputs();
         renderSections();
+        (window as any).__showToast?.(`Switched editing language to ${currentLang.toUpperCase()}`, 'info');
       });
     });
-  }
 
-  function syncSectionsFromDom() {
-    if (!activePageDoc || !activePageDoc.sections) return;
-    const blocks = document.querySelectorAll('.section-block');
-    blocks.forEach((block, idx) => {
-      const sec = activePageDoc.sections[idx];
-      if (sec) {
-        const titleVal = (block.querySelector('.sec-title') as HTMLInputElement)?.value.trim() || '';
-        const badgeVal = (block.querySelector('.sec-badge') as HTMLInputElement)?.value.trim() || '';
-        const descVal = (block.querySelector('.sec-desc') as HTMLInputElement)?.value.trim() || '';
-        const contentVal = (block.querySelector('.sec-content') as HTMLTextAreaElement)?.value;
-
-        // Headline / Title synchronization
-        sec.headline = setEnText(sec.headline, titleVal);
-        sec.title = setEnText(sec.title, titleVal);
-        sec.heading = setEnText(sec.heading, titleVal);
-        if (sec._type === 'customSection' && !sec.adminLabel) {
-          sec.adminLabel = titleVal;
+    // Load Catalog Products for Product Showcase Section
+    async function loadCatalogProducts() {
+      try {
+        const res = await fetch('/api/admin/cms/products');
+        const data = await res.json();
+        if (res.ok && data.success) {
+          catalogProducts = data.products || [];
         }
+      } catch (e) {
+        console.warn('Failed to load products for picker:', e);
+      }
+    }
 
-        // Eyebrow / Badge / SuperTitle synchronization
-        sec.superTitle = setEnText(sec.superTitle, badgeVal);
-        sec.badge = setEnText(sec.badge, badgeVal);
-        sec.eyebrow = setEnText(sec.eyebrow, badgeVal);
+    // Load Site Pages
+    async function loadPages() {
+      try {
+        const res = await fetch('/api/admin/cms/pages');
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to fetch pages');
 
-        // Subline / Description / Subtitle synchronization
-        sec.subline = setEnText(sec.subline, descVal);
-        sec.description = setEnText(sec.description, descVal);
-        sec.subtitle = setEnText(sec.subtitle, descVal);
+        currentPages = data.pages || [];
+        const badge = document.getElementById('pages-count-badge');
+        if (badge) badge.textContent = String(currentPages.length);
 
-        if (contentVal !== undefined) {
-          sec.content = contentVal;
+        renderPagesList();
+
+        if (!activePageDoc && currentPages.length > 0) {
+          const home = currentPages.find((p: any) => p.slug?.current === '/' || p.slug?.current === '' || p.slug?.current === 'home') || currentPages[0];
+          selectPage(home._id);
         }
+      } catch (e: any) {
+        (window as any).__showToast?.(e.message, 'error');
+      }
+    }
+
+    function renderPagesList() {
+      const list = document.getElementById('pages-list');
+      if (!list) return;
+
+      list.innerHTML = currentPages.map((p: any) => {
+        const slug = p.slug?.current || '/';
+        const isHome = slug === '/' || slug === '' || slug === 'home';
+        const isSelected = activePageDoc?._id === p._id;
+
+        return `
+          <div
+            class="p-2.5 rounded-xl cursor-pointer transition-all page-list-item ${isSelected ? 'bg-[#1d1d1f] text-white shadow-2xs' : 'hover:bg-[#f5f5f7] text-[#1d1d1f]'}"
+            data-id="${p._id}"
+          >
+            <div class="flex items-center justify-between gap-1.5 mb-1">
+              <span class="font-semibold text-xs truncate">${escapeHtml(getFallbackEn(p.title) || (isHome ? 'Homepage' : 'Untitled Page'))}</span>
+              ${isHome ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'}">Home</span>` : ''}
+            </div>
+            <div class="flex items-center justify-between text-[10px] ${isSelected ? 'text-white/70' : 'text-[#86868b]'} font-mono">
+              <span>${escapeHtml(slug)}</span>
+              <span>${p.sectionCount || 0} sections</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      list.querySelectorAll('.page-list-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          const id = item.getAttribute('data-id');
+          if (id) selectPage(id);
+        });
+      });
+    }
+
+    async function selectPage(id: string) {
+      try {
+        const res = await fetch(`/api/admin/cms/pages?id=${encodeURIComponent(id)}`);
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load page');
+
+        activePageDoc = data.page;
+        if (!activePageDoc.sections) activePageDoc.sections = [];
+        collapsedSections.clear();
+
+        renderPagesList();
+
+        const badge = document.getElementById('current-page-badge');
+        if (badge) badge.textContent = getFallbackEn(activePageDoc.title) || activePageDoc.slug?.current || 'Page';
+
+        populateMetaInputs();
+        renderSocialImagePreview();
+        renderSections();
+      } catch (e: any) {
+        (window as any).__showToast?.(e.message, 'error');
+      }
+    }
+
+    function populateMetaInputs() {
+      if (!activePageDoc) return;
+      const titleInput = document.getElementById('page-title-input') as HTMLInputElement | null;
+      const slugInput = document.getElementById('page-slug-input') as HTMLInputElement | null;
+      const metaTitleInput = document.getElementById('page-metatitle-input') as HTMLInputElement | null;
+      const metaDescInput = document.getElementById('page-metadesc-input') as HTMLInputElement | null;
+      const suffixInput = document.getElementById('page-add-suffix-input') as HTMLInputElement | null;
+
+      if (titleInput) {
+        titleInput.value = getLocaleVal(activePageDoc.title);
+        titleInput.placeholder = currentLang !== 'en' ? `(EN: ${getFallbackEn(activePageDoc.title)})` : 'Enter page title...';
+      }
+      if (slugInput) {
+        slugInput.value = activePageDoc.slug?.current || '/';
+      }
+      if (metaTitleInput) {
+        metaTitleInput.value = getLocaleVal(activePageDoc.metaTitle);
+        metaTitleInput.placeholder = currentLang !== 'en' ? `(EN: ${getFallbackEn(activePageDoc.metaTitle)})` : 'SEO Page Title...';
+      }
+      if (metaDescInput) {
+        metaDescInput.value = getLocaleVal(activePageDoc.metaDescription);
+        metaDescInput.placeholder = currentLang !== 'en' ? `(EN: ${getFallbackEn(activePageDoc.metaDescription)})` : 'SEO Meta Description...';
+      }
+      if (suffixInput) {
+        suffixInput.checked = activePageDoc.addTitleSuffix !== false;
+      }
+    }
+
+    function renderSocialImagePreview() {
+      const el = document.getElementById('social-image-preview');
+      const btnRemove = document.getElementById('btn-remove-social-image');
+      if (!el) return;
+
+      const imgUrl = (window as any).resolveSanityRefUrl?.(activePageDoc?.socialImage) ||
+        activePageDoc?.socialImage?.asset?.url || '';
+
+      if (imgUrl) {
+        el.innerHTML = `<img src="${escapeHtml(imgUrl)}" class="w-full h-full object-cover" />`;
+        btnRemove?.classList.remove('hidden');
+      } else {
+        el.innerHTML = `<span class="text-[9px] text-[#86868b]">No Image</span>`;
+        btnRemove?.classList.add('hidden');
+      }
+    }
+
+    document.getElementById('btn-choose-social-image')?.addEventListener('click', () => {
+      (window as any).__openMediaLibrary?.({
+        mode: 'single',
+        title: 'Choose Social Sharing Preview Image (socialImage)',
+        onSelect: (selectedAssets: any[]) => {
+          if (!selectedAssets || selectedAssets.length === 0) return;
+          const asset = selectedAssets[0];
+          activePageDoc.socialImage = {
+            _type: 'image',
+            asset: {
+              _type: 'reference',
+              _ref: asset._id,
+              url: asset.url,
+            },
+          };
+          renderSocialImagePreview();
+          (window as any).__showToast?.('Updated social sharing image', 'success');
+        },
+      });
+    });
+
+    document.getElementById('btn-remove-social-image')?.addEventListener('click', () => {
+      activePageDoc.socialImage = null;
+      renderSocialImagePreview();
+    });
+
+    function syncMetaFromDom() {
+      if (!activePageDoc) return;
+      const titleVal = (document.getElementById('page-title-input') as HTMLInputElement)?.value.trim();
+      const slugVal = (document.getElementById('page-slug-input') as HTMLInputElement)?.value.trim();
+      const metaTitleVal = (document.getElementById('page-metatitle-input') as HTMLInputElement)?.value.trim();
+      const metaDescVal = (document.getElementById('page-metadesc-input') as HTMLInputElement)?.value.trim();
+      const suffixVal = (document.getElementById('page-add-suffix-input') as HTMLInputElement)?.checked;
+
+      activePageDoc.title = setLocaleVal(activePageDoc.title, titleVal);
+      activePageDoc.metaTitle = setLocaleVal(activePageDoc.metaTitle, metaTitleVal);
+      activePageDoc.metaDescription = setLocaleVal(activePageDoc.metaDescription, metaDescVal);
+      activePageDoc.slug = { _type: 'slug', current: slugVal || '/' };
+      activePageDoc.addTitleSuffix = suffixVal;
+    }
+
+    // Default 4-Language Initial Values for New Sections
+    function getSectionInitialValues(type: string) {
+      const baseKey = crypto.randomUUID().slice(0, 8);
+      switch (type) {
+        case 'heroSection':
+          return {
+            _key: baseKey,
+            _type: 'heroSection',
+            adminLabel: '主视觉首屏',
+            superTitle: {
+              _type: 'localeString',
+              en: 'B2B Manufacturing & Private Label Atelier',
+              de: 'B2B-Herstellung & Private-Label-Atelier',
+              fr: 'Fabrication B2B & Atelier Marque Blanche',
+              es: 'Fabricación B2B y Taller de Marca Blanca',
+            },
+            headline: {
+              _type: 'localeString',
+              en: 'Engineered Elegance. 200-Needle Micro Weave.',
+              de: 'Raffinierte Eleganz. 200-Nadel-Mikrostrick.',
+              fr: 'Élégance de Pointe. Maille 200 Aiguilles.',
+              es: 'Elegancia Técnica. Tejido Micro de 200 Agujas.',
+            },
+            subline: {
+              _type: 'localeText',
+              en: 'Knitted on Italian Lonati machinery with 100% artisan hand-linked seamless toes. Built for modern private-label brands and luxury retail.',
+              de: 'Gestrickt auf italienischen Lonati-Maschinen mit 100% handgekettelter, nahtloser Spitze.',
+              fr: 'Tricoté sur des métiers circulaires italiens Lonati avec pointes remaillées main sans couture.',
+              es: 'Tejido en maquinaria italiana Lonati con punteras remalladas a mano 100% sin costuras.',
+            },
+            showPrimaryButton: true,
+            primaryButtonText: {
+              _type: 'localeString',
+              en: 'Request Swatch Kit',
+              de: 'Musterdossier anfordern',
+              fr: 'Demander le dossier d’échantillons',
+              es: 'Solicitar dossier de muestras',
+            },
+            primaryButtonUrl: '#inquiry',
+            showSecondaryButton: true,
+            secondaryButtonText: {
+              _type: 'localeString',
+              en: 'Explore Capsule Lines',
+              de: 'Kapselkollektionen entdecken',
+              fr: 'Découvrir nos lignes capsule',
+              es: 'Explorar líneas cápsula',
+            },
+            secondaryButtonUrl: '/products',
+          };
+
+        case 'productShowcaseSection':
+          return {
+            _key: baseKey,
+            _type: 'productShowcaseSection',
+            adminLabel: '精选订货系列展廊',
+            badge: {
+              _type: 'localeString',
+              en: 'Capsule Catalog 2026',
+              de: 'Kapsel-Katalog 2026',
+              fr: 'Catalogue Capsule 2026',
+              es: 'Catálogo Cápsula 2026',
+            },
+            title: {
+              _type: 'localeString',
+              en: 'Ready-to-Order Line Sheets',
+              de: 'Sofort bestellbare Line-Sheets',
+              fr: 'Dossiers de Collections Prêts à Commander',
+              es: 'Líneas Listas para Pedido',
+            },
+            subtitle: {
+              _type: 'localeText',
+              en: 'Proprietary silhouettes developed for white-labeling, brand customization, and low-MOQ rapid wholesale reordering.',
+              de: 'Exklusive Modelle, maßgeschneidert für White-Labeling und flexible Nachbestellungen.',
+              fr: 'Silhouettes exclusives créées pour la marque blanche et le réassort rapide.',
+              es: 'Siluetas exclusivas desarrolladas para marca blanca y reposiciones mayoristas rápidas.',
+            },
+            products: [],
+            showActionButton: true,
+            actionButtonText: {
+              _type: 'localeString',
+              en: 'Request Swatch Kit',
+              de: 'Muster-Set anfordern',
+              fr: 'Demander un kit d’échantillons',
+              es: 'Solicitar kit de muestras',
+            },
+            actionButtonUrl: '#inquiry',
+            showCardQuoteButton: true,
+            cardDetailsButtonText: {
+              _type: 'localeString',
+              en: 'Inspect Specs',
+              de: 'Spezifikationen prüfen',
+              fr: 'Voir les spécifications',
+              es: 'Ver especificaciones',
+            },
+          };
+
+        case 'featureMatrixSection':
+          return {
+            _key: baseKey,
+            _type: 'featureMatrixSection',
+            adminLabel: '核心工艺与规格矩阵',
+            badge: {
+              _type: 'localeString',
+              en: 'Engineered Construction',
+              de: 'Technische Architektur',
+              fr: 'Architecture Technique',
+              es: 'Arquitectura Técnica',
+            },
+            title: {
+              _type: 'localeString',
+              en: 'Specification Matrix',
+              de: 'Präzision bis auf den Mikrometer.',
+              fr: 'Façonné au micron près.',
+              es: 'Diseñado al milímetro.',
+            },
+            description: {
+              _type: 'localeText',
+              en: 'Every seam, tension zone, and yarn twist is calibrated for zero friction.',
+              de: 'Jeder Faden ist auf maximale Langlebigkeit im Einzelhandel ausgelegt.',
+              fr: 'Chaque fil est conçu pour une longévité commerciale irréprochable.',
+              es: 'Cada fibra está optimizada para ofrecer máxima durabilidad comercial.',
+            },
+            bento1Tag: { _type: 'localeString', en: 'Yarn Architecture', de: 'Garn-Architektur', fr: 'Architecture du Fil', es: 'Estructura del Hilo' },
+            bento1Title: { _type: 'localeString', en: '60s/2 Double-Ply Combed Cotton.', de: '60s/2 Zweifach gekämmte Baumwolle.', fr: 'Coton peigné double retors 60s/2.', es: 'Algodón peinado de doble cabo 60s/2.' },
+            bento1Description: { _type: 'localeText', en: 'Long-staple fibers singed and mercerized for pill-free lustre.', de: 'Gekämmte Langstapelfasern mit seidenmattem Glanz.', fr: 'Fibres longues peignées et mercerisées pour un éclat soyeux.', es: 'Fibras largas peinadas y mercerizadas para un brillo sedoso.' },
+            bento2Tag: { _type: 'localeString', en: 'Artisan Finish', de: 'Handwerkliche Präzision', fr: 'Finition Artisanale', es: 'Acabado Artesanal' },
+            bento2Title: { _type: 'localeString', en: 'Hand-Linked 0mm Seam.', de: 'Handgekettelte 0mm-Naht.', fr: 'Remaillage main 0mm.', es: 'Puntera remallada a mano 0mm.' },
+            bento2Description: { _type: 'localeText', en: 'Completely flat toe seam plane eliminating pressure points.', de: 'Absolut flache Spitzenverbindung ohne Druckstellen.', fr: 'Couture parfaitement plate éliminant les frottements.', es: 'Costura plana sin rozaduras ni puntos de presión.' },
+            bento3Tag: { _type: 'localeString', en: 'Needle Density', de: 'Maschendichte', fr: 'Densité de Maille', es: 'Densidad de Tejido' },
+            bento3Title: { _type: 'localeString', en: '200N High-Gauge Weave.', de: '200N Feinstrick-Dichte.', fr: 'Maille haute jauge 200N.', es: 'Galgas finas 200N.' },
+            bento3Description: { _type: 'localeText', en: 'Dual-cylinder Italian Lonati machinery for sculpted arch fit.', de: 'Italienische Doppelzylinder-Maschinen für anatomischen Halt.', fr: 'Métiers italiens double cylindre pour un maintien anatomique.', es: 'Maquinaria italiana para un ajuste anatómico.' },
+            bento4Tag: { _type: 'localeString', en: 'Compression Arch', de: 'Kompressions-Passform', fr: 'Maintien Élastique', es: 'Soporte Elástico' },
+            bento4Title: { _type: 'localeString', en: 'ZeroMark Lycra Rib.', de: 'ZeroMark Lycra-Bündchen.', fr: 'Bord-côtes Lycra ZeroMark.', es: 'Puño elástico Lycra ZeroMark.' },
+            bento4Description: { _type: 'localeText', en: 'Gentle stay-up tension without leaving constricting marks.', de: 'Sanfter Halt ohne Druckstellen an der Wade.', fr: 'Tenue souple sans marquer le mollet.', es: 'Ajuste suave sin dejar marcas en la pantorrilla.' },
+            bento5Tag: { _type: 'localeString', en: 'Prototyping SLA', de: 'Musterungs-SLA', fr: 'SLA Prototypage', es: 'Plazos de Muestreo' },
+            bento5Title: { _type: 'localeString', en: '48-Hour Rapid Dispatch.', de: '48h Express-Musterung.', fr: 'Expédition échantillons 48h.', es: 'Muestreo express 48h.' },
+            bento5Description: { _type: 'localeText', en: 'Curated physical swatch cards dispatched globally via DHL.', de: 'Musterkarten weltweit per Express versendet.', fr: 'Dossiers expédiés par coursier express dans le monde entier.', es: 'Muestrarios enviados por mensajería urgente a todo el mundo.' },
+          };
+
+        case 'manufacturingSection':
+          return {
+            _key: baseKey,
+            _type: 'manufacturingSection',
+            adminLabel: '智能制造与产能工坊',
+            badge: { _type: 'localeString', en: 'OEM / ODM & Private Label', de: 'OEM / ODM & Private Label', fr: 'OEM / ODM & Marque Blanche', es: 'OEM / ODM y Marca Blanca' },
+            headline: { _type: 'localeString', en: 'Vertical Knitting Infrastructure', de: 'Vertikale Strick-Infrastruktur', fr: 'Infrastructure de Tricotage Intégrée', es: 'Infraestructura de Tejido Vertical' },
+            subline: { _type: 'localeText', en: 'From spinning fiber selection to finished packaging, our smart line delivers bespoke solutions with rapid prototyping.', de: 'Von der Faser bis zur Verpackung liefert unsere Fertigungslinie maßgeschneiderte Lösungen.', fr: 'De la fibre au conditionnement, notre ligne intégrée livre des solutions complètes.', es: 'De la fibra al empaque final, nuestra línea vertical ofrece soluciones completas.' },
+            capabilities: [
+              {
+                _key: crypto.randomUUID().slice(0, 8),
+                title: { _type: 'localeString', en: 'Lonati 200N Machine Fleet', de: 'Lonati 200N Maschinenpark', fr: 'Parc Métiers Lonati 200N', es: 'Flota de Máquinas Lonati 200N' },
+                description: { _type: 'localeText', en: '350+ automated dual-cylinder Italian circular knitting units with optical yarn sensors.', de: 'Über 350 italienische Doppelzylinder-Strickmaschinen mit optischen Sensoren.', fr: 'Plus de 350 métiers circulaires italiens avec capteurs optiques.', es: 'Más de 350 telares circulares italianos con sensores ópticos.' }
+              },
+              {
+                _key: crypto.randomUUID().slice(0, 8),
+                title: { _type: 'localeString', en: 'Artisan Hand-Linking Atelier', de: 'Handkettel-Manufaktur', fr: 'Atelier de Remaillage Main', es: 'Taller de Remallado Artesanal' },
+                description: { _type: 'localeText', en: 'Zero-ridge seamless toe closures inspected one-by-one by master craftsmen.', de: 'Nahtlose Spitzenverbindung von Handwerksmeistern einzeln geprüft.', fr: 'Pointes remaillées main contrôlées à l’unité par des artisans experts.', es: 'Remallado plano inspeccionado individualmente por artesanos.' }
+              },
+              {
+                _key: crypto.randomUUID().slice(0, 8),
+                title: { _type: 'localeString', en: 'OEKO-TEX & BSCI Certified', de: 'OEKO-TEX & BSCI Zertifiziert', fr: 'Certifié OEKO-TEX & BSCI', es: 'Certificación OEKO-TEX y BSCI' },
+                description: { _type: 'localeText', en: 'Non-toxic eco-reactive dyes complying with EU REACH luxury standards.', de: 'Umweltfreundliche Reaktivfarbstoffe nach EU-REACH-Luxusstandards.', fr: 'Teintures réactives écologiques conformes aux exigences européennes REACH.', es: 'Tintes reactivos ecológicos que cumplen la estricta normativa EU REACH.' }
+              }
+            ],
+            showActionButton: true,
+            actionButtonText: { _type: 'localeString', en: 'Request Factory Dossier', de: 'Werksunterlagen anfordern', fr: 'Demander le dossier usine', es: 'Solicitar dossier de fábrica' },
+            actionButtonUrl: '#inquiry',
+          };
+
+        case 'inquirySection':
+          return {
+            _key: baseKey,
+            _type: 'inquirySection',
+            adminLabel: '商务咨询与样卡申领',
+            badge: { _type: 'localeString', en: 'B2B Sample Room', de: 'B2B-Musterraum', fr: 'Showroom Échantillons B2B', es: 'Sala de Muestras B2B' },
+            headline: { _type: 'localeString', en: 'Request Your Curated Swatch Kit', de: 'Fordern Sie Ihr kuratiertes Muster-Set an', fr: 'Commandez Votre Kit d’Échantillons Dédié', es: 'Solicite su Kit de Muestras Personalizado' },
+            subline: { _type: 'localeText', en: 'Verified fashion labels receive curated swatch books dispatched within 48 hours.', de: 'Verifizierte Modemarken erhalten Musterbücher innerhalb von 48 Stunden.', fr: 'Les marques vérifiées reçoivent un dossier d’échantillons offert en 48h.', es: 'Las marcas verificadas reciben muestrarios sin coste en 48 horas.' },
+            categories: ['Mulberry Silk', 'Fine Cashmere', 'Combed Cotton 60s', 'Merino Wool'],
+            successTitle: { _type: 'localeString', en: 'Sample Request Dispatched', de: 'Musteranforderung übermittelt', fr: 'Demande d’échantillons transmise', es: 'Solicitud de muestra enviada' },
+            successMessage: { _type: 'localeText', en: 'Our B2B trade desk has received your request and will contact you via WhatsApp / Email.', de: 'Unser B2B-Team wird Sie kontaktieren.', fr: 'Notre équipe B2B prendra contact avec vous.', es: 'Nuestro equipo se pondrá en contacto.' },
+            showSection: true,
+            showButton: true,
+            buttonText: { _type: 'localeString', en: 'Dispatch Swatch Kit', de: 'Muster-Set versenden', fr: 'Expédier le dossier', es: 'Enviar kit de muestras' },
+          };
+
+        case 'customSection':
+        default:
+          return {
+            _key: baseKey,
+            _type: 'customSection',
+            adminLabel: '自由积木排版版块',
+            preset: 'dual-compare',
+            theme: 'light',
+            sectionHeight: 'screen-fit',
+            verticalAlign: 'center',
+            containerWidth: 'wide',
+            paddingY: 'standard',
+            layoutMode: 'flow',
+            blocks: [
+              {
+                _key: crypto.randomUUID().slice(0, 8),
+                _type: 'headingBlock',
+                badge: 'ATELIER SHOWCASE',
+                headline: 'Bespoke Private Label Craftsmanship.',
+                subtitle: 'Precision gauge knitting tailored for premier apparel houses.',
+                align: 'center',
+                size: 'medium',
+              }
+            ],
+          };
+      }
+    }
+
+    // Add Section button
+    document.getElementById('btn-add-section')?.addEventListener('click', () => {
+      if (!activePageDoc) {
+        (window as any).__showToast?.('Please select a page first', 'warning');
+        return;
+      }
+      syncSectionsFromDom();
+      const select = document.getElementById('select-new-section') as HTMLSelectElement;
+      const type = select?.value || 'heroSection';
+      const newSec = getSectionInitialValues(type);
+      activePageDoc.sections.push(newSec);
+      renderSections();
+      (window as any).__showToast?.(`Added new ${type} section with multi-language copy`, 'success');
+    });
+
+    // Resolve Section Thumbnail for Header
+    function getSectionThumbnail(sec: any): string {
+      if (sec._type === 'heroSection' && sec.heroImage) {
+        return (window as any).resolveSanityRefUrl?.(sec.heroImage);
+      }
+      if (sec._type === 'featureMatrixSection' && sec.macroImage) {
+        return (window as any).resolveSanityRefUrl?.(sec.macroImage);
+      }
+      if (sec._type === 'customSection' && sec.blocks) {
+        const mediaB = sec.blocks.find((b: any) => b._type === 'mediaBlock' && b.image);
+        if (mediaB) return (window as any).resolveSanityRefUrl?.(mediaB.image);
+      }
+      return '';
+    }
+
+    // Render Section Card Header Preview Info
+    function getSectionSummary(sec: any): { title: string; subtitle: string } {
+      const adminName = sec.adminLabel || '';
+      const headline = getLocaleVal(sec.headline || sec.title || sec.superTitle);
+      const title = adminName || headline || 'Untitled Section';
+
+      let subtitle = '';
+      switch (sec._type) {
+        case 'heroSection':
+          subtitle = `Buttons: ${sec.showPrimaryButton ? 'Primary On' : 'Off'} · ${sec.showSecondaryButton ? 'Secondary On' : 'Off'}`;
+          break;
+        case 'productShowcaseSection':
+          subtitle = `Showcase: ${sec.products?.length || 0} products selected`;
+          break;
+        case 'featureMatrixSection':
+          subtitle = `Bento: 5 spec cards configured`;
+          break;
+        case 'manufacturingSection':
+          subtitle = `Capabilities: ${sec.capabilities?.length || 0} power items`;
+          break;
+        case 'inquirySection':
+          subtitle = `Categories: ${sec.categories?.join(', ') || 'Default'}`;
+          break;
+        case 'customSection':
+          subtitle = `Preset: ${sec.preset || 'custom'} · ${sec.blocks?.length || 0} blocks`;
+          break;
+        default:
+          subtitle = sec._type;
+      }
+
+      return { title, subtitle };
+    }
+
+    // Render Modular Sections Container
+    function renderSections() {
+      const container = document.getElementById('sections-container');
+      if (!container) return;
+
+      const sections = activePageDoc?.sections || [];
+      if (sections.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center text-[#86868b] border border-dashed border-black/10 rounded-2xl space-y-2 bg-[#fafafc]">
+            <p class="font-medium text-xs text-[#1d1d1f]">This page has no sections yet.</p>
+            <p class="text-[11px]">Select a block type from the dropdown above and click "＋ Add Section".</p>
+          </div>
+        `;
+        return;
+      }
+
+      const typeMeta: Record<string, { label: string; badgeClass: string; icon: string }> = {
+        heroSection: { label: '主视觉首屏 · heroSection', badgeClass: 'bg-amber-100 text-amber-900 border-amber-200', icon: '🌟' },
+        productShowcaseSection: { label: '精选产品展廊 · productShowcase', badgeClass: 'bg-blue-100 text-blue-900 border-blue-200', icon: '🗂️' },
+        featureMatrixSection: { label: '核心工艺矩阵 · featureMatrix', badgeClass: 'bg-indigo-100 text-indigo-900 border-indigo-200', icon: '📐' },
+        manufacturingSection: { label: '制造实力工坊 · manufacturing', badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', icon: '🏭' },
+        inquirySection: { label: '商务咨询转化 · inquirySection', badgeClass: 'bg-rose-100 text-rose-900 border-rose-200', icon: '📩' },
+        customSection: { label: '自由积木排版 · customSection', badgeClass: 'bg-purple-100 text-purple-900 border-purple-200', icon: '🎨' },
+      };
+
+      container.innerHTML = sections.map((sec: any, idx: number) => {
+        const type = sec._type || 'customSection';
+        const meta = typeMeta[type] || { label: type, badgeClass: 'bg-gray-100 text-gray-900 border-gray-200', icon: '📄' };
+        const summary = getSectionSummary(sec);
+        const thumbUrl = getSectionThumbnail(sec);
+        const isCollapsed = collapsedSections.has(idx);
+
+        return `
+          <div
+            class="section-card rounded-2xl bg-[#fafafc] border border-black/10 shadow-2xs overflow-hidden transition-all select-none"
+            data-idx="${idx}"
+            data-type="${type}"
+          >
+            <!-- Card Header -->
+            <div class="p-3 sm:px-4 bg-white border-b border-black/5 flex items-center justify-between gap-3 cursor-pointer select-none card-header-row hover:bg-[#fafafc]">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <!-- Drag Handle -->
+                <div class="drag-handle p-1 text-[#86868b] hover:text-[#1d1d1f] cursor-grab active:cursor-grabbing text-xs" title="Drag to reorder">
+                  ⠿
+                </div>
+                <span class="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#f5f5f7] border border-black/5 text-[#52525b]">
+                  #${idx + 1}
+                </span>
+
+                <!-- Thumbnail Preview (if present) -->
+                ${thumbUrl ? `
+                  <img src="${escapeHtml(thumbUrl)}?w=80&h=80&fit=crop" class="w-9 h-9 rounded-lg object-cover border border-black/10 shrink-0" />
+                ` : ''}
+
+                <!-- Titles and Status Summary -->
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold border ${meta.badgeClass} flex items-center gap-1">
+                      <span>${meta.icon}</span>
+                      <span>${meta.label}</span>
+                    </span>
+                    <h4 class="font-bold text-xs text-[#1d1d1f] truncate">${escapeHtml(summary.title)}</h4>
+                  </div>
+                  <p class="text-[10px] text-[#86868b] truncate mt-0.5">${escapeHtml(summary.subtitle)}</p>
+                </div>
+              </div>
+
+              <!-- Card Actions -->
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" class="btn-sec-up p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Move Up">▲</button>
+                <button type="button" class="btn-sec-down p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Move Down">▼</button>
+                <button type="button" class="btn-sec-copy p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5" data-idx="${idx}" title="Duplicate Section">📋</button>
+                <button type="button" class="btn-sec-del p-1 rounded-md text-[#86868b] hover:text-rose-600 hover:bg-rose-50" data-idx="${idx}" title="Delete Section">✕</button>
+                <button type="button" class="btn-sec-toggle p-1 rounded-md text-[#86868b] hover:text-black hover:bg-black/5 ml-1" data-idx="${idx}" title="Expand / Collapse">
+                  ${isCollapsed ? '▾' : '▴'}
+                </button>
+              </div>
+            </div>
+
+            <!-- Card Body (Dedicated Form per _type) -->
+            <div class="section-card-body p-4 sm:p-5 space-y-4 ${isCollapsed ? 'hidden' : ''}">
+              ${renderSectionForm(sec, idx)}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      attachSectionEvents();
+    }
+
+    // Render Dedicated Forms per _type (Strictly Isolated, Zero Field Bleed)
+    function renderSectionForm(sec: any, idx: number): string {
+      const type = sec._type;
+      switch (type) {
+        case 'heroSection':
+          return renderHeroSectionForm(sec, idx);
+        case 'productShowcaseSection':
+          return renderProductShowcaseForm(sec, idx);
+        case 'featureMatrixSection':
+          return renderFeatureMatrixForm(sec, idx);
+        case 'manufacturingSection':
+          return renderManufacturingForm(sec, idx);
+        case 'inquirySection':
+          return renderInquiryForm(sec, idx);
+        case 'customSection':
+          return renderCustomSectionForm(sec, idx);
+        default:
+          return `<div class="p-4 text-xs text-[#86868b]">Unknown section type: ${escapeHtml(type)}</div>`;
+      }
+    }
+
+    // 1. HERO SECTION FORM
+    function renderHeroSectionForm(sec: any, idx: number): string {
+      const heroImgUrl = (window as any).resolveSanityRefUrl?.(sec.heroImage);
+      return `
+        <div class="space-y-4">
+          <!-- Admin Label & Super Title -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Admin Label (后台别名备注)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-admin-label" value="${escapeHtml(sec.adminLabel || '')}" placeholder="e.g. 首页首屏主视觉" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Super Title (顶部眉标 - <span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-super-title" value="${escapeHtml(getLocaleVal(sec.superTitle))}" placeholder="${escapeHtml(getFallbackEn(sec.superTitle))}" />
+            </div>
+          </div>
+
+          <!-- Headline & Subline -->
+          <div class="space-y-3">
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Main Headline (主标题 - <span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-headline font-bold" value="${escapeHtml(getLocaleVal(sec.headline))}" placeholder="${escapeHtml(getFallbackEn(sec.headline))}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Subline Narrative (叙事副标题 - <span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <textarea rows="2" class="w-full p-2.5 rounded-xl bg-white border border-black/10 text-xs field-subline" placeholder="${escapeHtml(getFallbackEn(sec.subline))}">${escapeHtml(getLocaleVal(sec.subline))}</textarea>
+            </div>
+          </div>
+
+          <!-- Hero Cover Image -->
+          <div class="p-3 rounded-xl bg-white border border-black/10 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-14 h-14 rounded-lg bg-[#f5f5f7] border border-black/10 overflow-hidden flex items-center justify-center shrink-0">
+                ${heroImgUrl ? `<img src="${escapeHtml(heroImgUrl)}" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#86868b]">No Image</span>`}
+              </div>
+              <div>
+                <span class="block font-semibold text-xs text-[#1d1d1f]">Hero Cover Image (首屏大图)</span>
+                <span class="text-[10px] text-[#86868b]">Select high-res visual from cloud media library</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" class="btn-sec-choose-image px-3 py-1.5 rounded-xl bg-[#1d1d1f] text-white text-xs font-semibold hover:bg-black cursor-pointer shadow-2xs" data-target="heroImage" data-idx="${idx}">
+                📁 From Media Library
+              </button>
+              ${heroImgUrl ? `
+                <button type="button" class="btn-sec-clear-image px-2 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs cursor-pointer" data-target="heroImage" data-idx="${idx}">
+                  ✕
+                </button>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Buttons Group Accordion -->
+          <details class="p-3 rounded-xl bg-white border border-black/10" open>
+            <summary class="font-bold text-xs text-[#1d1d1f] cursor-pointer select-none">
+              🔘 Action Buttons Configuration (行动呼吁按钮配置)
+            </summary>
+            <div class="pt-3 border-t border-black/5 mt-3 space-y-3">
+              <!-- Primary Button -->
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center bg-[#fafafc] p-2.5 rounded-xl border border-black/5">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="hero-pbtn-show-${idx}" class="field-primary-btn-show rounded cursor-pointer" ${sec.showPrimaryButton ? 'checked' : ''} />
+                  <label for="hero-pbtn-show-${idx}" class="font-semibold text-xs cursor-pointer">Primary Button</label>
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs field-primary-btn-text" placeholder="Button Text (${currentLang.toUpperCase()})" value="${escapeHtml(getLocaleVal(sec.primaryButtonText))}" />
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-primary-btn-url" placeholder="Link (e.g. #inquiry)" value="${escapeHtml(sec.primaryButtonUrl || '')}" />
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-primary-btn-sku" placeholder="Custom Swatch SKU" value="${escapeHtml(sec.swatchSku || '')}" />
+                </div>
+              </div>
+
+              <!-- Secondary Button -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center bg-[#fafafc] p-2.5 rounded-xl border border-black/5">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="hero-sbtn-show-${idx}" class="field-secondary-btn-show rounded cursor-pointer" ${sec.showSecondaryButton ? 'checked' : ''} />
+                  <label for="hero-sbtn-show-${idx}" class="font-semibold text-xs cursor-pointer">Secondary Button</label>
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs field-secondary-btn-text" placeholder="Button Text (${currentLang.toUpperCase()})" value="${escapeHtml(getLocaleVal(sec.secondaryButtonText))}" />
+                </div>
+                <div>
+                  <input type="text" class="w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono field-secondary-btn-url" placeholder="Link (e.g. /products)" value="${escapeHtml(sec.secondaryButtonUrl || '')}" />
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      `;
+    }
+
+    // 2. PRODUCT SHOWCASE SECTION FORM
+    function renderProductShowcaseForm(sec: any, idx: number): string {
+      const selectedRefs: any[] = sec.products || [];
+
+      return `
+        <div class="space-y-4">
+          <!-- Admin Label, Badge & Title -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Admin Label (后台别名备注)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-admin-label" value="${escapeHtml(sec.adminLabel || '')}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Badge (上标 - <span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-badge" value="${escapeHtml(getLocaleVal(sec.badge))}" placeholder="${escapeHtml(getFallbackEn(sec.badge))}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Section Title (标题 - <span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-title font-bold" value="${escapeHtml(getLocaleVal(sec.title))}" placeholder="${escapeHtml(getFallbackEn(sec.title))}" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Subtitle (简介说明 - <span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+            <textarea rows="2" class="w-full p-2.5 rounded-xl bg-white border border-black/10 text-xs field-subtitle" placeholder="${escapeHtml(getFallbackEn(sec.subtitle))}">${escapeHtml(getLocaleVal(sec.subtitle))}</textarea>
+          </div>
+
+          <!-- Products Reference Selection & Reordering -->
+          <div class="p-3.5 rounded-xl bg-white border border-black/10 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="block font-bold text-xs text-[#1d1d1f]">🧦 Showcase Products (已选展示款式: ${selectedRefs.length})</span>
+                <span class="text-[10px] text-[#86868b]">Drag or click arrows to reorder items inside this showcase block</span>
+              </div>
+
+              <!-- Add Product Dropdown Picker -->
+              <div class="flex items-center gap-2">
+                <select class="picker-add-product h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" data-idx="${idx}">
+                  <option value="">＋ Add Product to Showcase...</option>
+                  ${catalogProducts.map((p) => `
+                    <option value="${p._id}">${escapeHtml(p.sku || '')} · ${escapeHtml(getFallbackEn(p.title))}</option>
+                  `).join('')}
+                </select>
+              </div>
+            </div>
+
+            <!-- Selected Products List -->
+            <div class="space-y-1.5 max-h-56 overflow-y-auto divide-y divide-black/5 bg-[#fafafc] p-2 rounded-xl border border-black/5">
+              ${selectedRefs.length === 0 ? `
+                <div class="py-4 text-center text-[#86868b] text-[11px]">No products added to this showcase. Select one above.</div>
+              ` : selectedRefs.map((refItem: any, pIdx: number) => {
+                const refId = refItem._ref || refItem._id;
+                const prod = catalogProducts.find((p) => p._id === refId);
+                const thumb = prod ? (window as any).resolveSanityRefUrl?.(prod.mainImage) || prod.mainImageUrl : '';
+                const title = prod ? getFallbackEn(prod.title) : refId;
+                const sku = prod?.sku || '';
+
+                return `
+                  <div class="flex items-center justify-between p-1.5 rounded-lg bg-white border border-black/5 gap-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-[10px] font-mono text-[#86868b]">#${pIdx + 1}</span>
+                      ${thumb ? `<img src="${escapeHtml(thumb)}?w=60&h=60&fit=crop" class="w-6 h-6 rounded object-cover border border-black/10 shrink-0" />` : ''}
+                      <span class="font-bold text-xs truncate text-[#1d1d1f]">${escapeHtml(title)}</span>
+                      ${sku ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-[#f5f5f7] text-[#52525b]">${escapeHtml(sku)}</span>` : ''}
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <button type="button" class="btn-prod-up p-1 text-[10px] hover:bg-black/5 rounded text-[#86868b]" data-sec-idx="${idx}" data-prod-idx="${pIdx}">▲</button>
+                      <button type="button" class="btn-prod-down p-1 text-[10px] hover:bg-black/5 rounded text-[#86868b]" data-sec-idx="${idx}" data-prod-idx="${pIdx}">▼</button>
+                      <button type="button" class="btn-prod-del p-1 text-[10px] hover:bg-rose-50 text-rose-600 rounded" data-sec-idx="${idx}" data-prod-idx="${pIdx}">✕</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 3. FEATURE MATRIX SECTION FORM
+    function renderFeatureMatrixForm(sec: any, idx: number): string {
+      const macroImgUrl = (window as any).resolveSanityRefUrl?.(sec.macroImage);
+      return `
+        <div class="space-y-4">
+          <!-- Admin Label, Badge & Title -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Admin Label</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-admin-label" value="${escapeHtml(sec.adminLabel || '')}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Badge (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-badge" value="${escapeHtml(getLocaleVal(sec.badge))}" placeholder="${escapeHtml(getFallbackEn(sec.badge))}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Matrix Title (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-title font-bold" value="${escapeHtml(getLocaleVal(sec.title))}" placeholder="${escapeHtml(getFallbackEn(sec.title))}" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Description (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+            <textarea rows="2" class="w-full p-2.5 rounded-xl bg-white border border-black/10 text-xs field-description" placeholder="${escapeHtml(getFallbackEn(sec.description))}">${escapeHtml(getLocaleVal(sec.description))}</textarea>
+          </div>
+
+          <!-- Bento 1 Main Card (Yarn & Macro Image) -->
+          <div class="p-3.5 rounded-xl bg-white border border-black/10 space-y-3">
+            <span class="block font-bold text-xs text-[#1d1d1f]">🍱 Bento Card 1: 纱线材质与微距大图 (占2列主卡)</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Bento 1 Tag</label>
+                <input type="text" class="w-full px-2.5 py-1.5 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento1-tag" value="${escapeHtml(getLocaleVal(sec.bento1Tag))}" placeholder="${escapeHtml(getFallbackEn(sec.bento1Tag))}" />
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Bento 1 Title</label>
+                <input type="text" class="w-full px-2.5 py-1.5 rounded-lg bg-[#fafafc] border border-black/10 text-xs font-semibold field-bento1-title" value="${escapeHtml(getLocaleVal(sec.bento1Title))}" placeholder="${escapeHtml(getFallbackEn(sec.bento1Title))}" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-semibold text-[#52525b] mb-1">Bento 1 Description</label>
+              <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento1-desc" placeholder="${escapeHtml(getFallbackEn(sec.bento1Description))}">${escapeHtml(getLocaleVal(sec.bento1Description))}</textarea>
+            </div>
+            <!-- Macro Image Picker -->
+            <div class="p-2.5 rounded-lg bg-[#fafafc] border border-black/5 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-white border border-black/10 overflow-hidden flex items-center justify-center shrink-0">
+                  ${macroImgUrl ? `<img src="${escapeHtml(macroImgUrl)}" class="w-full h-full object-cover" />` : `<span class="text-[8px] text-[#86868b]">No Img</span>`}
+                </div>
+                <div>
+                  <span class="text-xs font-semibold text-[#1d1d1f]">Macro Feature Image (macroImage)</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" class="btn-sec-choose-image px-2.5 py-1 rounded-lg bg-[#1d1d1f] text-white text-[11px] font-semibold hover:bg-black cursor-pointer shadow-2xs" data-target="macroImage" data-idx="${idx}">
+                  📁 Choose Image
+                </button>
+                ${macroImgUrl ? `
+                  <button type="button" class="btn-sec-clear-image px-1.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 text-xs cursor-pointer" data-target="macroImage" data-idx="${idx}">✕</button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+
+          <!-- Bento 2 to 5 Compact Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Bento 2 -->
+            <div class="p-3 rounded-xl bg-white border border-black/10 space-y-2">
+              <span class="font-bold text-xs text-[#1d1d1f] block">🍱 Bento 2: 0mm 无缝缝头</span>
+              <input type="text" class="w-full px-2 py-1 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento2-title font-semibold" placeholder="Bento 2 Title" value="${escapeHtml(getLocaleVal(sec.bento2Title))}" />
+              <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento2-desc" placeholder="Bento 2 Description">${escapeHtml(getLocaleVal(sec.bento2Description))}</textarea>
+            </div>
+
+            <!-- Bento 3 -->
+            <div class="p-3 rounded-xl bg-white border border-black/10 space-y-2">
+              <span class="font-bold text-xs text-[#1d1d1f] block">🍱 Bento 3: 200N 针数密度</span>
+              <input type="text" class="w-full px-2 py-1 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento3-title font-semibold" placeholder="Bento 3 Title" value="${escapeHtml(getLocaleVal(sec.bento3Title))}" />
+              <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento3-desc" placeholder="Bento 3 Description">${escapeHtml(getLocaleVal(sec.bento3Description))}</textarea>
+            </div>
+
+            <!-- Bento 4 -->
+            <div class="p-3 rounded-xl bg-white border border-black/10 space-y-2">
+              <span class="font-bold text-xs text-[#1d1d1f] block">🍱 Bento 4: ZeroMark 莱卡罗口</span>
+              <input type="text" class="w-full px-2 py-1 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento4-title font-semibold" placeholder="Bento 4 Title" value="${escapeHtml(getLocaleVal(sec.bento4Title))}" />
+              <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento4-desc" placeholder="Bento 4 Description">${escapeHtml(getLocaleVal(sec.bento4Description))}</textarea>
+            </div>
+
+            <!-- Bento 5 -->
+            <div class="p-3 rounded-xl bg-white border border-black/10 space-y-2">
+              <span class="font-bold text-xs text-[#1d1d1f] block">🍱 Bento 5: 48h 极速打样交期</span>
+              <input type="text" class="w-full px-2 py-1 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento5-title font-semibold" placeholder="Bento 5 Title" value="${escapeHtml(getLocaleVal(sec.bento5Title))}" />
+              <textarea rows="2" class="w-full p-2 rounded-lg bg-[#fafafc] border border-black/10 text-xs field-bento5-desc" placeholder="Bento 5 Description">${escapeHtml(getLocaleVal(sec.bento5Description))}</textarea>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 4. MANUFACTURING SECTION FORM
+    function renderManufacturingForm(sec: any, idx: number): string {
+      const caps = sec.capabilities || [];
+      return `
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Admin Label</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-admin-label" value="${escapeHtml(sec.adminLabel || '')}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Headline (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-headline font-bold" value="${escapeHtml(getLocaleVal(sec.headline))}" placeholder="${escapeHtml(getFallbackEn(sec.headline))}" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Subline (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+            <textarea rows="2" class="w-full p-2.5 rounded-xl bg-white border border-black/10 text-xs field-subline" placeholder="${escapeHtml(getFallbackEn(sec.subline))}">${escapeHtml(getLocaleVal(sec.subline))}</textarea>
+          </div>
+
+          <!-- Capabilities List -->
+          <div class="p-3.5 rounded-xl bg-white border border-black/10 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-[#1d1d1f]">🏭 Manufacturing Capabilities (${caps.length} items)</span>
+              <button type="button" class="btn-add-capability px-2.5 py-1 rounded-lg bg-[#1d1d1f] text-white text-[11px] font-semibold hover:bg-black cursor-pointer shadow-2xs" data-idx="${idx}">
+                ＋ Add Capability Card
+              </button>
+            </div>
+
+            <div class="space-y-2">
+              ${caps.map((cap: any, cIdx: number) => `
+                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-mono text-[#86868b]">#${cIdx + 1} Capability Card</span>
+                    <button type="button" class="btn-del-capability text-rose-600 text-xs hover:bg-rose-50 px-1.5 py-0.5 rounded" data-sec-idx="${idx}" data-cap-idx="${cIdx}">✕ Delete</button>
+                  </div>
+                  <input type="text" class="w-full px-2.5 py-1.5 rounded-lg bg-white border border-black/10 text-xs font-semibold field-cap-title" data-sec-idx="${idx}" data-cap-idx="${cIdx}" value="${escapeHtml(getLocaleVal(cap.title))}" placeholder="Title (${currentLang.toUpperCase()})" />
+                  <textarea rows="2" class="w-full p-2 rounded-lg bg-white border border-black/10 text-xs field-cap-desc" data-sec-idx="${idx}" data-cap-idx="${cIdx}" placeholder="Description (${currentLang.toUpperCase()})">${escapeHtml(getLocaleVal(cap.description))}</textarea>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 5. INQUIRY SECTION FORM
+    function renderInquiryForm(sec: any, idx: number): string {
+      const cats: string[] = sec.categories || [];
+      return `
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Admin Label</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-admin-label" value="${escapeHtml(sec.adminLabel || '')}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Headline (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-headline font-bold" value="${escapeHtml(getLocaleVal(sec.headline))}" placeholder="${escapeHtml(getFallbackEn(sec.headline))}" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Subline (<span class="current-lang-label">${currentLang.toUpperCase()}</span>)</label>
+            <textarea rows="2" class="w-full p-2.5 rounded-xl bg-white border border-black/10 text-xs field-subline" placeholder="${escapeHtml(getFallbackEn(sec.subline))}">${escapeHtml(getLocaleVal(sec.subline))}</textarea>
+          </div>
+
+          <!-- Categories Tags -->
+          <div class="p-3.5 rounded-xl bg-white border border-black/10 space-y-2">
+            <label class="block font-bold text-xs text-[#1d1d1f]">🏷️ Sample Swatch Categories Chips (逗号分隔标签)</label>
+            <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-[#fafafc] border border-black/10 text-xs field-inquiry-cats" value="${escapeHtml(cats.join(', '))}" placeholder="e.g. Mulberry Silk, Fine Cashmere, Merino Wool" />
+            <p class="text-[10px] text-[#86868b]">Visitors can choose these fabric options when submitting a swatch request.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    // 6. CUSTOM SECTION FORM (Modular Blocks Builder)
+    function renderCustomSectionForm(sec: any, idx: number): string {
+      const blocks = sec.blocks || [];
+      return `
+        <div class="space-y-4">
+          <!-- Preset & Theme Controls -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Admin Label</label>
+              <input type="text" class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-admin-label" value="${escapeHtml(sec.adminLabel || '')}" />
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Screen Preset (场景预设)</label>
+              <select class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-preset">
+                <option value="dual-compare" ${sec.preset === 'dual-compare' ? 'selected' : ''}>🔬 双图工坊对比屏 (Dual Compare)</option>
+                <option value="cinematic-hero" ${sec.preset === 'cinematic-hero' ? 'selected' : ''}>🎬 宽幅大片沉浸屏 (Cinematic)</option>
+                <option value="split-showcase" ${sec.preset === 'split-showcase' ? 'selected' : ''}>⚖️ 左右双栏工坊屏 (Split 6:4)</option>
+                <option value="bento-grid" ${sec.preset === 'bento-grid' ? 'selected' : ''}>🍱 Bento 苹果风矩阵 (Bento Grid)</option>
+                <option value="custom-free" ${sec.preset === 'custom-free' ? 'selected' : ''}>🧩 自由原子拼接 (Custom)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold text-[11px] text-[#52525b] mb-1">Theme (背景基调)</label>
+              <select class="w-full px-3 py-1.5 rounded-xl bg-white border border-black/10 text-xs field-theme">
+                <option value="light" ${sec.theme === 'light' ? 'selected' : ''}>⚪ 纯白极简 (Clean White)</option>
+                <option value="subtle" ${sec.theme === 'subtle' ? 'selected' : ''}>🔘 浅灰微质感 (Subtle Gray)</option>
+                <option value="dark" ${sec.theme === 'dark' ? 'selected' : ''}>⚫ 极夜深黑 (Onyx Black)</option>
+                <option value="gradient-dark" ${sec.theme === 'gradient-dark' ? 'selected' : ''}>🌌 极夜冷光微渐变 (Obsidian Gradient)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Blocks Stream Builder -->
+          <div class="p-3.5 rounded-xl bg-white border border-black/10 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="block font-bold text-xs text-[#1d1d1f]">🧱 Content Blocks Stream (${blocks.length} blocks)</span>
+                <span class="text-[10px] text-[#86868b]">Add headings, media, metrics, button groups or testimonials</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <select class="picker-add-block h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" data-idx="${idx}">
+                  <option value="">＋ Add Content Block...</option>
+                  <option value="headingBlock">✍️ Heading & Text (headingBlock)</option>
+                  <option value="mediaBlock">🖼️ Image & Media (mediaBlock)</option>
+                  <option value="buttonGroupBlock">🔘 Action Buttons (buttonGroupBlock)</option>
+                  <option value="metricGridBlock">📊 Metrics Grid (metricGridBlock)</option>
+                  <option value="quoteBlock">💬 Client Quote (quoteBlock)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Block Cards -->
+            <div class="space-y-2">
+              ${blocks.map((b: any, bIdx: number) => `
+                <div class="p-3 rounded-xl bg-[#fafafc] border border-black/5 space-y-2">
+                  <div class="flex items-center justify-between border-b border-black/5 pb-1.5">
+                    <span class="font-bold text-[11px] text-[#1d1d1f]">#${bIdx + 1} ${escapeHtml(b._type || 'block')}</span>
+                    <button type="button" class="btn-del-block text-rose-600 text-xs hover:bg-rose-50 px-1.5 py-0.5 rounded" data-sec-idx="${idx}" data-block-idx="${bIdx}">✕ Remove</button>
+                  </div>
+                  ${b._type === 'headingBlock' ? `
+                    <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs font-bold field-block-headline" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Headline" value="${escapeHtml(b.headline || '')}" />
+                    <textarea rows="2" class="w-full p-2 rounded bg-white border border-black/10 text-xs field-block-subtitle" data-sec-idx="${idx}" data-block-idx="${bIdx}" placeholder="Subtitle / Text">${escapeHtml(b.subtitle || '')}</textarea>
+                  ` : b._type === 'mediaBlock' ? `
+                    <div class="flex items-center justify-between p-2 rounded bg-white border border-black/10">
+                      <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 rounded bg-[#f5f5f7] overflow-hidden flex items-center justify-center">
+                          ${b.image ? `<img src="${escapeHtml((window as any).resolveSanityRefUrl?.(b.image))}" class="w-full h-full object-cover" />` : `<span class="text-[8px] text-[#86868b]">No Img</span>`}
+                        </div>
+                        <span class="text-xs font-semibold">Media Image</span>
+                      </div>
+                      <button type="button" class="btn-choose-block-image px-2.5 py-1 rounded bg-[#1d1d1f] text-white text-xs font-semibold" data-sec-idx="${idx}" data-block-idx="${bIdx}">📁 Choose</button>
+                    </div>
+                  ` : `
+                    <input type="text" class="w-full px-2 py-1 rounded bg-white border border-black/10 text-xs field-block-generic" data-sec-idx="${idx}" data-block-idx="${bIdx}" value="${escapeHtml(b.headline || b.quote || b.badge || '')}" placeholder="Block Content" />
+                  `}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Attach Event Listeners to Section Card Elements
+    function attachSectionEvents() {
+      const container = document.getElementById('sections-container');
+      if (!container) return;
+
+      // Collapse / Expand toggle
+      container.querySelectorAll('.btn-sec-toggle').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          if (collapsedSections.has(idx)) {
+            collapsedSections.delete(idx);
+          } else {
+            collapsedSections.add(idx);
+          }
+          renderSections();
+        });
+      });
+
+      // Card Header click to toggle
+      container.querySelectorAll('.card-header-row').forEach((header) => {
+        header.addEventListener('click', (e: any) => {
+          if (e.target.closest('button') || e.target.closest('.drag-handle')) return;
+          const card = header.closest('.section-card');
+          const idx = parseInt(card?.getAttribute('data-idx') || '0', 10);
+          if (collapsedSections.has(idx)) {
+            collapsedSections.delete(idx);
+          } else {
+            collapsedSections.add(idx);
+          }
+          renderSections();
+        });
+      });
+
+      // Move Up
+      container.querySelectorAll('.btn-sec-up').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          syncSectionsFromDom();
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          if (idx > 0) {
+            const item = activePageDoc.sections.splice(idx, 1)[0];
+            activePageDoc.sections.splice(idx - 1, 0, item);
+            renderSections();
+          }
+        });
+      });
+
+      // Move Down
+      container.querySelectorAll('.btn-sec-down').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          syncSectionsFromDom();
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          if (idx < activePageDoc.sections.length - 1) {
+            const item = activePageDoc.sections.splice(idx, 1)[0];
+            activePageDoc.sections.splice(idx + 1, 0, item);
+            renderSections();
+          }
+        });
+      });
+
+      // Duplicate Section
+      container.querySelectorAll('.btn-sec-copy').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          syncSectionsFromDom();
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          const cloned = JSON.parse(JSON.stringify(activePageDoc.sections[idx]));
+          cloned._key = crypto.randomUUID().slice(0, 8);
+          if (cloned.adminLabel) cloned.adminLabel = `${cloned.adminLabel} (Copy)`;
+          activePageDoc.sections.splice(idx + 1, 0, cloned);
+          renderSections();
+          (window as any).__showToast?.('Section duplicated', 'success');
+        });
+      });
+
+      // Delete Section
+      container.querySelectorAll('.btn-sec-del').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          syncSectionsFromDom();
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          activePageDoc.sections.splice(idx, 1);
+          renderSections();
+        });
+      });
+
+      // HTML5 Drag and Drop Reorder
+      const cards = container.querySelectorAll('.section-card');
+      cards.forEach((card) => {
+        const handle = card.querySelector('.drag-handle');
+        handle?.addEventListener('mouseenter', () => card.setAttribute('draggable', 'true'));
+        handle?.addEventListener('mouseleave', () => card.removeAttribute('draggable'));
+
+        card.addEventListener('dragstart', (e: any) => {
+          draggedSectionIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
+          e.dataTransfer.effectAllowed = 'move';
+          card.classList.add('opacity-40');
+        });
+
+        card.addEventListener('dragend', () => {
+          draggedSectionIdx = null;
+          card.classList.remove('opacity-40');
+          cards.forEach((c) => c.classList.remove('ring-2', 'ring-black'));
+        });
+
+        card.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer!.dropEffect = 'move';
+          card.classList.add('ring-2', 'ring-black');
+        });
+
+        card.addEventListener('dragleave', () => {
+          card.classList.remove('ring-2', 'ring-black');
+        });
+
+        card.addEventListener('drop', (e) => {
+          e.preventDefault();
+          card.classList.remove('ring-2', 'ring-black');
+          const targetIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
+          if (draggedSectionIdx !== null && draggedSectionIdx !== targetIdx) {
+            syncSectionsFromDom();
+            const item = activePageDoc.sections.splice(draggedSectionIdx, 1)[0];
+            activePageDoc.sections.splice(targetIdx, 0, item);
+            renderSections();
+          }
+        });
+      });
+
+      // Section Image Picker (heroImage, macroImage)
+      container.querySelectorAll('.btn-sec-choose-image').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          const target = btn.getAttribute('data-target') || 'heroImage';
+          (window as any).__openMediaLibrary?.({
+            mode: 'single',
+            title: `Select Image for ${target}`,
+            onSelect: (assets: any[]) => {
+              if (!assets || assets.length === 0) return;
+              const asset = assets[0];
+              activePageDoc.sections[idx][target] = {
+                _type: 'image',
+                asset: {
+                  _type: 'reference',
+                  _ref: asset._id,
+                  url: asset.url,
+                },
+              };
+              renderSections();
+              (window as any).__showToast?.('Updated section image', 'success');
+            },
+          });
+        });
+      });
+
+      container.querySelectorAll('.btn-sec-clear-image').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          const target = btn.getAttribute('data-target') || 'heroImage';
+          activePageDoc.sections[idx][target] = null;
+          renderSections();
+        });
+      });
+
+      // Product Showcase Picker Add
+      container.querySelectorAll('.picker-add-product').forEach((select: any) => {
+        select.addEventListener('change', () => {
+          const idx = parseInt(select.getAttribute('data-idx') || '0', 10);
+          const prodId = select.value;
+          if (!prodId) return;
+          if (!activePageDoc.sections[idx].products) activePageDoc.sections[idx].products = [];
+          activePageDoc.sections[idx].products.push({
+            _key: crypto.randomUUID().slice(0, 8),
+            _type: 'reference',
+            _ref: prodId,
+          });
+          renderSections();
+          (window as any).__showToast?.('Added product to showcase', 'success');
+        });
+      });
+
+      // Product Showcase Reorder & Delete
+      container.querySelectorAll('.btn-prod-up').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const pIdx = parseInt(btn.getAttribute('data-prod-idx') || '0', 10);
+          if (pIdx > 0) {
+            const item = activePageDoc.sections[sIdx].products.splice(pIdx, 1)[0];
+            activePageDoc.sections[sIdx].products.splice(pIdx - 1, 0, item);
+            renderSections();
+          }
+        });
+      });
+
+      container.querySelectorAll('.btn-prod-down').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const pIdx = parseInt(btn.getAttribute('data-prod-idx') || '0', 10);
+          const list = activePageDoc.sections[sIdx].products;
+          if (pIdx < list.length - 1) {
+            const item = list.splice(pIdx, 1)[0];
+            list.splice(pIdx + 1, 0, item);
+            renderSections();
+          }
+        });
+      });
+
+      container.querySelectorAll('.btn-prod-del').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const pIdx = parseInt(btn.getAttribute('data-prod-idx') || '0', 10);
+          activePageDoc.sections[sIdx].products.splice(pIdx, 1);
+          renderSections();
+        });
+      });
+
+      // Manufacturing Add Capability
+      container.querySelectorAll('.btn-add-capability').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          if (!activePageDoc.sections[sIdx].capabilities) activePageDoc.sections[sIdx].capabilities = [];
+          activePageDoc.sections[sIdx].capabilities.push({
+            _key: crypto.randomUUID().slice(0, 8),
+            title: { _type: 'localeString', en: 'New Manufacturing Capability' },
+            description: { _type: 'localeText', en: 'High capacity apparel fabrication line.' },
+          });
+          renderSections();
+        });
+      });
+
+      // Manufacturing Delete Capability
+      container.querySelectorAll('.btn-del-capability').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const cIdx = parseInt(btn.getAttribute('data-cap-idx') || '0', 10);
+          activePageDoc.sections[sIdx].capabilities.splice(cIdx, 1);
+          renderSections();
+        });
+      });
+
+      // Custom Section Add Block
+      container.querySelectorAll('.picker-add-block').forEach((select: any) => {
+        select.addEventListener('change', () => {
+          const sIdx = parseInt(select.getAttribute('data-idx') || '0', 10);
+          const blockType = select.value;
+          if (!blockType) return;
+          if (!activePageDoc.sections[sIdx].blocks) activePageDoc.sections[sIdx].blocks = [];
+
+          let newBlock: any = { _key: crypto.randomUUID().slice(0, 8), _type: blockType };
+          if (blockType === 'headingBlock') {
+            newBlock.headline = 'New Section Heading';
+            newBlock.subtitle = 'Supporting paragraph text.';
+          }
+          activePageDoc.sections[sIdx].blocks.push(newBlock);
+          renderSections();
+        });
+      });
+
+      container.querySelectorAll('.btn-del-block').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const bIdx = parseInt(btn.getAttribute('data-block-idx') || '0', 10);
+          activePageDoc.sections[sIdx].blocks.splice(bIdx, 1);
+          renderSections();
+        });
+      });
+
+      // Custom Section Choose MediaBlock Image
+      container.querySelectorAll('.btn-choose-block-image').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
+          const bIdx = parseInt(btn.getAttribute('data-block-idx') || '0', 10);
+          (window as any).__openMediaLibrary?.({
+            mode: 'single',
+            title: 'Select Media Block Image',
+            onSelect: (assets: any[]) => {
+              if (!assets || assets.length === 0) return;
+              activePageDoc.sections[sIdx].blocks[bIdx].image = {
+                _type: 'image',
+                asset: {
+                  _type: 'reference',
+                  _ref: assets[0]._id,
+                  url: assets[0].url,
+                },
+              };
+              renderSections();
+            },
+          });
+        });
+      });
+    }
+
+    // Read Form Values from DOM back into activePageDoc.sections
+    function syncSectionsFromDom() {
+      if (!activePageDoc || !activePageDoc.sections) return;
+      const cards = document.querySelectorAll('.section-card');
+
+      cards.forEach((card, idx) => {
+        const sec = activePageDoc.sections[idx];
+        if (!sec) return;
+
+        // Common Admin Label
+        const adminLabelInput = card.querySelector('.field-admin-label') as HTMLInputElement | null;
+        if (adminLabelInput) sec.adminLabel = adminLabelInput.value.trim();
+
+        // Type specific synchronization
+        switch (sec._type) {
+          case 'heroSection': {
+            const superInput = card.querySelector('.field-super-title') as HTMLInputElement | null;
+            const headlineInput = card.querySelector('.field-headline') as HTMLInputElement | null;
+            const sublineInput = card.querySelector('.field-subline') as HTMLTextAreaElement | null;
+            if (superInput && superInput.value.trim()) sec.superTitle = setLocaleVal(sec.superTitle, superInput.value.trim());
+            if (headlineInput && headlineInput.value.trim()) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
+            if (sublineInput && sublineInput.value.trim()) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
+
+            sec.showPrimaryButton = (card.querySelector('.field-primary-btn-show') as HTMLInputElement)?.checked;
+            const pBtnText = (card.querySelector('.field-primary-btn-text') as HTMLInputElement)?.value.trim();
+            if (pBtnText) sec.primaryButtonText = setLocaleVal(sec.primaryButtonText, pBtnText);
+            sec.primaryButtonUrl = (card.querySelector('.field-primary-btn-url') as HTMLInputElement)?.value.trim();
+            sec.swatchSku = (card.querySelector('.field-primary-btn-sku') as HTMLInputElement)?.value.trim();
+
+            sec.showSecondaryButton = (card.querySelector('.field-secondary-btn-show') as HTMLInputElement)?.checked;
+            const sBtnText = (card.querySelector('.field-secondary-btn-text') as HTMLInputElement)?.value.trim();
+            if (sBtnText) sec.secondaryButtonText = setLocaleVal(sec.secondaryButtonText, sBtnText);
+            sec.secondaryButtonUrl = (card.querySelector('.field-secondary-btn-url') as HTMLInputElement)?.value.trim();
+            break;
+          }
+
+          case 'productShowcaseSection': {
+            const badgeInput = card.querySelector('.field-badge') as HTMLInputElement | null;
+            const titleInput = card.querySelector('.field-title') as HTMLInputElement | null;
+            const subInput = card.querySelector('.field-subtitle') as HTMLTextAreaElement | null;
+            if (badgeInput && badgeInput.value.trim()) sec.badge = setLocaleVal(sec.badge, badgeInput.value.trim());
+            if (titleInput && titleInput.value.trim()) sec.title = setLocaleVal(sec.title, titleInput.value.trim());
+            if (subInput && subInput.value.trim()) sec.subtitle = setLocaleVal(sec.subtitle, subInput.value.trim());
+            break;
+          }
+
+          case 'featureMatrixSection': {
+            const badgeInput = card.querySelector('.field-badge') as HTMLInputElement | null;
+            const titleInput = card.querySelector('.field-title') as HTMLInputElement | null;
+            const descInput = card.querySelector('.field-description') as HTMLTextAreaElement | null;
+            if (badgeInput && badgeInput.value.trim()) sec.badge = setLocaleVal(sec.badge, badgeInput.value.trim());
+            if (titleInput && titleInput.value.trim()) sec.title = setLocaleVal(sec.title, titleInput.value.trim());
+            if (descInput && descInput.value.trim()) sec.description = setLocaleVal(sec.description, descInput.value.trim());
+
+            const b1Tag = (card.querySelector('.field-bento1-tag') as HTMLInputElement)?.value.trim();
+            const b1Title = (card.querySelector('.field-bento1-title') as HTMLInputElement)?.value.trim();
+            const b1Desc = (card.querySelector('.field-bento1-desc') as HTMLTextAreaElement)?.value.trim();
+            if (b1Tag) sec.bento1Tag = setLocaleVal(sec.bento1Tag, b1Tag);
+            if (b1Title) sec.bento1Title = setLocaleVal(sec.bento1Title, b1Title);
+            if (b1Desc) sec.bento1Description = setLocaleVal(sec.bento1Description, b1Desc);
+
+            const b2Title = (card.querySelector('.field-bento2-title') as HTMLInputElement)?.value.trim();
+            const b2Desc = (card.querySelector('.field-bento2-desc') as HTMLTextAreaElement)?.value.trim();
+            if (b2Title) sec.bento2Title = setLocaleVal(sec.bento2Title, b2Title);
+            if (b2Desc) sec.bento2Description = setLocaleVal(sec.bento2Description, b2Desc);
+
+            const b3Title = (card.querySelector('.field-bento3-title') as HTMLInputElement)?.value.trim();
+            const b3Desc = (card.querySelector('.field-bento3-desc') as HTMLTextAreaElement)?.value.trim();
+            if (b3Title) sec.bento3Title = setLocaleVal(sec.bento3Title, b3Title);
+            if (b3Desc) sec.bento3Description = setLocaleVal(sec.bento3Description, b3Desc);
+
+            const b4Title = (card.querySelector('.field-bento4-title') as HTMLInputElement)?.value.trim();
+            const b4Desc = (card.querySelector('.field-bento4-desc') as HTMLTextAreaElement)?.value.trim();
+            if (b4Title) sec.bento4Title = setLocaleVal(sec.bento4Title, b4Title);
+            if (b4Desc) sec.bento4Description = setLocaleVal(sec.bento4Description, b4Desc);
+
+            const b5Title = (card.querySelector('.field-bento5-title') as HTMLInputElement)?.value.trim();
+            const b5Desc = (card.querySelector('.field-bento5-desc') as HTMLTextAreaElement)?.value.trim();
+            if (b5Title) sec.bento5Title = setLocaleVal(sec.bento5Title, b5Title);
+            if (b5Desc) sec.bento5Description = setLocaleVal(sec.bento5Description, b5Desc);
+            break;
+          }
+
+          case 'manufacturingSection': {
+            const headlineInput = card.querySelector('.field-headline') as HTMLInputElement | null;
+            const sublineInput = card.querySelector('.field-subline') as HTMLTextAreaElement | null;
+            if (headlineInput && headlineInput.value.trim()) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
+            if (sublineInput && sublineInput.value.trim()) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
+
+            // Capabilities items
+            if (sec.capabilities) {
+              sec.capabilities.forEach((cap: any, cIdx: number) => {
+                const cTitle = (card.querySelector(`.field-cap-title[data-cap-idx="${cIdx}"]`) as HTMLInputElement)?.value.trim();
+                const cDesc = (card.querySelector(`.field-cap-desc[data-cap-idx="${cIdx}"]`) as HTMLTextAreaElement)?.value.trim();
+                if (cTitle) cap.title = setLocaleVal(cap.title, cTitle);
+                if (cDesc) cap.description = setLocaleVal(cap.description, cDesc);
+              });
+            }
+            break;
+          }
+
+          case 'inquirySection': {
+            const headlineInput = card.querySelector('.field-headline') as HTMLInputElement | null;
+            const sublineInput = card.querySelector('.field-subline') as HTMLTextAreaElement | null;
+            const catsInput = card.querySelector('.field-inquiry-cats') as HTMLInputElement | null;
+            if (headlineInput && headlineInput.value.trim()) sec.headline = setLocaleVal(sec.headline, headlineInput.value.trim());
+            if (sublineInput && sublineInput.value.trim()) sec.subline = setLocaleVal(sec.subline, sublineInput.value.trim());
+            if (catsInput) {
+              sec.categories = catsInput.value.split(',').map((c) => c.trim()).filter(Boolean);
+            }
+            break;
+          }
+
+          case 'customSection': {
+            const presetSelect = card.querySelector('.field-preset') as HTMLSelectElement | null;
+            const themeSelect = card.querySelector('.field-theme') as HTMLSelectElement | null;
+            if (presetSelect) sec.preset = presetSelect.value;
+            if (themeSelect) sec.theme = themeSelect.value;
+
+            if (sec.blocks) {
+              sec.blocks.forEach((b: any, bIdx: number) => {
+                if (b._type === 'headingBlock') {
+                  const hVal = (card.querySelector(`.field-block-headline[data-block-idx="${bIdx}"]`) as HTMLInputElement)?.value;
+                  const sVal = (card.querySelector(`.field-block-subtitle[data-block-idx="${bIdx}"]`) as HTMLTextAreaElement)?.value;
+                  if (hVal !== undefined) b.headline = hVal;
+                  if (sVal !== undefined) b.subtitle = sVal;
+                }
+              });
+            }
+            break;
+          }
+        }
+      });
+    }
+
+    // Save & Publish Page to Sanity CMS
+    document.getElementById('btn-save-page')?.addEventListener('click', async () => {
+      if (!activePageDoc) {
+        (window as any).__showToast?.('No page loaded', 'error');
+        return;
+      }
+
+      syncMetaFromDom();
+      syncSectionsFromDom();
+
+      (window as any).__showToast?.('Saving page & synchronizing KV/Edge cache...', 'info');
+
+      try {
+        const payload = { document: activePageDoc };
+        const res = await fetch('/api/admin/cms/pages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save page');
+
+        (window as any).__showToast?.('Page saved & published successfully!', 'success');
+        loadPages();
+      } catch (e: any) {
+        (window as any).__showToast?.(e.message, 'error');
       }
     });
-  }
 
-  // Add Block Handler
-  document.getElementById('btn-add-section')?.addEventListener('click', () => {
-    if (!activePageDoc) {
-      (window as any).__showToast?.('Please select or create a page first', 'error');
-      return;
-    }
-    syncSectionsFromDom();
-    if (!activePageDoc.sections) activePageDoc.sections = [];
+    // Create New Page
+    document.getElementById('btn-create-page')?.addEventListener('click', () => {
+      const titlePrompt = prompt('Enter new page title:');
+      if (!titlePrompt || !titlePrompt.trim()) return;
 
-    const select = document.getElementById('select-new-section') as HTMLSelectElement | null;
-    const type = select?.value || 'customSection';
+      const slugPrompt = prompt('Enter URL slug (e.g. /custom-line or custom-line):', titlePrompt.toLowerCase().replace(/\s+/g, '-'));
+      if (!slugPrompt) return;
 
-    activePageDoc.sections.push({
-      _type: type,
-      _key: crypto.randomUUID().slice(0, 8),
-      title: { _type: 'localeString', en: 'New Section Title' },
-      headline: { _type: 'localeString', en: 'New Section Title' },
-      badge: { _type: 'localeString', en: '' },
-      superTitle: { _type: 'localeString', en: '' },
-      subtitle: { _type: 'localeString', en: 'Section Subtitle' },
-      subline: { _type: 'localeString', en: 'Section Subtitle' },
+      const cleanSlug = slugPrompt.startsWith('/') ? slugPrompt : `/${slugPrompt}`;
+
+      activePageDoc = {
+        _type: 'page',
+        title: { _type: 'localeString', en: titlePrompt.trim() },
+        slug: { _type: 'slug', current: cleanSlug },
+        metaTitle: { _type: 'localeString', en: `${titlePrompt.trim()} | Gwen & Venni Luxury Apparel` },
+        metaDescription: { _type: 'localeText', en: 'B2B Wholesale & Luxury Apparel Manufacturing' },
+        addTitleSuffix: true,
+        sections: [getSectionInitialValues('heroSection')],
+      };
+
+      currentPages.push(activePageDoc);
+      renderPagesList();
+      populateMetaInputs();
+      renderSocialImagePreview();
+      renderSections();
+      (window as any).__showToast?.('Created draft page. Click Save to publish.', 'info');
     });
-    renderSections();
-  });
 
-  // Create New Page
-  document.getElementById('btn-create-page')?.addEventListener('click', () => {
-    activePageDoc = {
-      _type: 'page',
-      title: 'New Landing Page',
-      slug: { _type: 'slug', current: `/page-${Date.now().toString().slice(-4)}` },
-      metaTitle: 'Landing Page',
-      metaDescription: '',
-      sections: [],
-    };
-    (document.getElementById('page-title-input') as HTMLInputElement).value = activePageDoc.title;
-    (document.getElementById('page-slug-input') as HTMLInputElement).value = activePageDoc.slug.current;
-    (document.getElementById('page-metatitle-input') as HTMLInputElement).value = activePageDoc.metaTitle;
-    (document.getElementById('page-metadesc-input') as HTMLInputElement).value = '';
-    renderSections();
-    (window as any).__showToast?.('Draft page created. Add sections and click Save.', 'info');
-  });
-
-  // Save Page
-  document.getElementById('btn-save-page')?.addEventListener('click', async () => {
-    if (!activePageDoc) return;
-    syncSectionsFromDom();
-
-    const title = (document.getElementById('page-title-input') as HTMLInputElement)?.value.trim();
-    const slug = (document.getElementById('page-slug-input') as HTMLInputElement)?.value.trim();
-    if (!title || !slug) {
-      (window as any).__showToast?.('Page Title and Slug are required.', 'error');
-      return;
-    }
-
-    activePageDoc.title = setEnText(activePageDoc.title, title);
-    activePageDoc.slug = { _type: 'slug', current: slug };
-    activePageDoc.metaTitle = (document.getElementById('page-metatitle-input') as HTMLInputElement)?.value.trim();
-    activePageDoc.metaDescription = (document.getElementById('page-metadesc-input') as HTMLInputElement)?.value.trim();
-
-    (window as any).__showToast?.('Publishing page to Sanity CMS...', 'info');
-
-    try {
-      const res = await fetch('/api/admin/cms/pages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document: activePageDoc }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save page');
-
-      (window as any).__showToast?.('Page successfully saved and published!', 'success');
-      loadPages();
-    } catch (err: any) {
-      (window as any).__showToast?.(err.message, 'error');
-    }
-  });
-
-    // Boot
+    // Initialize
+    loadCatalogProducts();
     loadPages();
   }
 
-  initPagesPage();
-  document.addEventListener('shell:page-load', () => {
-    if (document.getElementById('builder-pane') || document.getElementById('btn-create-page')) {
-      initPagesPage();
-    }
-  });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPagesWorkbench);
+  } else {
+    initPagesWorkbench();
+  }
 </script>
-
