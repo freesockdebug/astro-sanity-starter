@@ -5,6 +5,12 @@ import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { ProductService } from '@data/products';
 import { PageService } from '@data/page';
 import { invalidateDictCache } from '@utils/dicts';
+import {
+  invalidateSettingsCache,
+  invalidateRbacCache,
+  invalidatePendingOrdersCountCache,
+  invalidateDashboardStatsCache,
+} from '@utils/db';
 import { kvDelete } from '@utils/kv';
 import { insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -45,6 +51,22 @@ export const POST: APIRoute = async ({ request }) => {
     if (scope === 'all' || scope === 'dicts') {
       await invalidateDictCache(cfEnv);
       purgedItems.push('Data Dictionaries (sys:dicts:all)');
+    }
+
+    if (scope === 'all' || scope === 'settings') {
+      await invalidateSettingsCache(cfEnv);
+      purgedItems.push('System Settings (sys:settings:v1 & memory)');
+    }
+
+    if (scope === 'all' || scope === 'rbac') {
+      invalidateRbacCache();
+      purgedItems.push('RBAC Roles & Team Members L1 memory');
+    }
+
+    if (scope === 'all' || scope === 'orders') {
+      invalidatePendingOrdersCountCache();
+      invalidateDashboardStatsCache();
+      purgedItems.push('Orders Pending Count & Dashboard Stats L1 memory');
     }
 
     if (targetPath) {

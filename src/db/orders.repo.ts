@@ -7,9 +7,19 @@ import { invalidateUserStatusCache } from './users.repo';
 import type { DataScope } from './rbac.repo';
 
 let pendingOrdersCountCache: { count: number; exp: number } | null = null;
+let dashboardStatsCache: { data: any; exp: number } | null = null;
+const claimedUsersDebounce = new Map<string, number>();
 
 export function invalidatePendingOrdersCountCache(): void {
   pendingOrdersCountCache = null;
+}
+
+export function invalidateDashboardStatsCache(): void {
+  dashboardStatsCache = null;
+}
+
+export function invalidateClaimedUsersCache(): void {
+  claimedUsersDebounce.clear();
 }
 import type {
   OrderRecord,
@@ -39,7 +49,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
     let assignedAt: string | null = null;
     try {
       const existingUser = await db.first<{ assigned_to: string }>(
-        `SELECT assigned_to FROM users WHERE LOWER(email) = ? OR (id IS NOT NULL AND id != '' AND id = ?) LIMIT 1`,
+        `SELECT assigned_to FROM users WHERE email = ? OR (id IS NOT NULL AND id != '' AND id = ?) LIMIT 1`,
         [normalizedEmail, input.userId || '']
       );
       if (existingUser?.assigned_to) {
@@ -102,7 +112,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
     if (safeCompany || safeCountry || safePhone) {
       try {
         const targetId = input.userId ? input.userId.trim() : '';
-        const whereClause = targetId ? `id = ?` : `LOWER(email) = ?`;
+        const whereClause = targetId ? `id = ?` : `email = ?`;
         const param = targetId || normalizedEmail;
         await db.execute(
           `UPDATE users
@@ -119,7 +129,11 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
       }
     }
 
+    if (!input.userId) {
+      invalidateClaimedUsersCache();
+    }
     invalidatePendingOrdersCountCache();
+    invalidateDashboardStatsCache();
     return { orderId, orderNo };
   });
 }
@@ -131,6 +145,13 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
   if (!buyerEmail || !userId) return 0;
   const normalizedEmail = buyerEmail.trim().toLowerCase();
 
+  const debounceKey = `${userId}:${normalizedEmail}`;
+  const now = Date.now();
+  const lastClaimed = claimedUsersDebounce.get(debounceKey);
+  if (lastClaimed && now < lastClaimed) {
+    return 0;
+  }
+
   return executeWithAutoSchema(async (db: DbClient) => {
     const res = await db.execute(
       `UPDATE orders
@@ -138,9 +159,15 @@ export async function claimOrdersByEmail(buyerEmail: string, userId: string): Pr
            claimed_at = datetime('now'),
            updated_at = datetime('now')
        WHERE (user_id IS NULL OR user_id = '')
-         AND LOWER(buyer_email) = LOWER(?)`,
+         AND buyer_email = ?`,
       [userId, normalizedEmail]
     );
+
+    claimedUsersDebounce.set(debounceKey, Date.now() + 300_000); // 5 min debounce
+    if (res.changes > 0) {
+      invalidatePendingOrdersCountCache();
+      invalidateDashboardStatsCache();
+    }
     return res.changes;
   });
 }
@@ -413,6 +440,7 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
 
     if (res.changes > 0) {
       invalidatePendingOrdersCountCache();
+      invalidateDashboardStatsCache();
     }
 
     return res.changes > 0;
@@ -452,6 +480,10 @@ export async function assignOrder(orderId: string, assignedTo: string | null): P
       }
     }
 
+    if (res.changes > 0) {
+      invalidateDashboardStatsCache();
+    }
+
     return res.changes > 0;
   });
 }
@@ -481,6 +513,10 @@ export async function batchAssignOrders(orderIds: string[], assignedTo: string |
            AND (assigned_to IS NULL OR assigned_to = '')`,
         [clean, ...orderIds, ...orderIds]
       ).catch(() => {});
+    }
+
+    if (res.changes > 0) {
+      invalidateDashboardStatsCache();
     }
 
     return res.changes;
@@ -525,6 +561,7 @@ export async function batchUpdateOrderStatus(
 
     if (res.changes > 0) {
       invalidatePendingOrdersCountCache();
+      invalidateDashboardStatsCache();
     }
 
     return res.changes;
@@ -576,9 +613,15 @@ export interface DashboardStats {
 }
 
 /**
- * Aggregates business overview statistics for the executive dashboard in a single roundtrip
+ * Aggregates business overview statistics for the executive dashboard in a single roundtrip.
+ * Cached for 30s in L1 memory.
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
+  const now = Date.now();
+  if (dashboardStatsCache && dashboardStatsCache.exp > now) {
+    return dashboardStatsCache.data;
+  }
+
   return executeWithAutoSchema(async (db: DbClient) => {
     const [
       totalsRow,
@@ -669,7 +712,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       assignedCustomers: Number(r.assigned_customers || 0),
     }));
 
-    return {
+    const result: DashboardStats = {
       totalOrders: total,
       orders7Days: Number(totalsRow?.orders_7d || 0),
       pendingReview: Number(totalsRow?.pending_review || 0),
@@ -679,6 +722,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       topSkus,
       repWorkloads,
     };
+
+    dashboardStatsCache = { data: result, exp: Date.now() + 30_000 };
+    return result;
   });
 }
 

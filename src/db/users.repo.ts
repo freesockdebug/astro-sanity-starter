@@ -111,20 +111,20 @@ export async function upsertUserOnLogin(user: {
     // 1-3. Atomically migrate ID, sync historical orders/logins, and upsert user record via batch
     await db.batch([
       {
-        sql: `UPDATE users SET id = ? WHERE LOWER(email) = LOWER(?) AND id != ?`,
+        sql: `UPDATE users SET id = ? WHERE email = ? AND id != ?`,
         params: [user.id, normalizedEmail, user.id],
       },
       {
         sql: `UPDATE orders
          SET user_id = ?, updated_at = datetime('now')
-         WHERE LOWER(buyer_email) = LOWER(?)
+         WHERE buyer_email = ?
            AND user_id IS NOT NULL AND user_id != '' AND user_id != ?`,
         params: [user.id, normalizedEmail, user.id],
       },
       {
         sql: `UPDATE user_logins
          SET user_id = ?
-         WHERE LOWER(email) = LOWER(?)
+         WHERE email = ?
            AND user_id != ?`,
         params: [user.id, normalizedEmail, user.id],
       },
@@ -145,13 +145,13 @@ export async function upsertUserOnLogin(user: {
     await db.execute(
       `UPDATE users
        SET company = CASE WHEN (company IS NULL OR company = '') THEN
-             COALESCE((SELECT company_name FROM orders WHERE (user_id = ? OR LOWER(buyer_email) = LOWER(?)) AND company_name IS NOT NULL AND company_name != '' ORDER BY created_at DESC LIMIT 1), '')
+             COALESCE((SELECT company_name FROM orders WHERE (user_id = ? OR buyer_email = ?) AND company_name IS NOT NULL AND company_name != '' ORDER BY created_at DESC LIMIT 1), '')
              ELSE company END,
            country = CASE WHEN (country IS NULL OR country = '') THEN
-             COALESCE((SELECT destination_country FROM orders WHERE (user_id = ? OR LOWER(buyer_email) = LOWER(?)) AND destination_country IS NOT NULL AND destination_country != '' ORDER BY created_at DESC LIMIT 1), '')
+             COALESCE((SELECT destination_country FROM orders WHERE (user_id = ? OR buyer_email = ?) AND destination_country IS NOT NULL AND destination_country != '' ORDER BY created_at DESC LIMIT 1), '')
              ELSE country END,
            phone = CASE WHEN (phone IS NULL OR phone = '') THEN
-             COALESCE((SELECT whatsapp FROM orders WHERE (user_id = ? OR LOWER(buyer_email) = LOWER(?)) AND whatsapp IS NOT NULL AND whatsapp != '' ORDER BY created_at DESC LIMIT 1), '')
+             COALESCE((SELECT whatsapp FROM orders WHERE (user_id = ? OR buyer_email = ?) AND whatsapp IS NOT NULL AND whatsapp != '' ORDER BY created_at DESC LIMIT 1), '')
              ELSE phone END
        WHERE id = ?`,
       [user.id, normalizedEmail, user.id, normalizedEmail, user.id, normalizedEmail, user.id]
@@ -352,7 +352,7 @@ export async function assignUser(identifier: string, assignedTo: string | null):
       `UPDATE users
        SET assigned_to = ?,
            updated_at = datetime('now')
-       WHERE id = ? OR LOWER(email) = ?`,
+       WHERE id = ? OR email = ?`,
       [cleanAssignedTo, identifier, identifier.toLowerCase()]
     );
     invalidateUserStatusCache(identifier, identifier);

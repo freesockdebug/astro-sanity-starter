@@ -95,6 +95,8 @@ async function runSelfCheck() {
   // 4. Idempotency Check: Second claim with a different user must NOT re-claim
   const secondClaimCount = await claimOrdersByEmail(guestEmail, 'usr_impostor_999');
   assert.strictEqual(secondClaimCount, 0, 'Already claimed order must NOT be claimed by another user');
+  const debouncedClaim = await claimOrdersByEmail(guestEmail, buyerUserId);
+  assert.strictEqual(debouncedClaim, 0, 'Debounced claim should return 0 in 0ms');
   console.log('✔ [PASS] Idempotent claiming guard confirmed (0 re-claimed)');
 
   // 5. Buyer Order List Retrieval
