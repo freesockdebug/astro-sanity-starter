@@ -163,20 +163,28 @@ export async function recordErrorLog(
     }
 
     return await executeWithAutoSchema(async (db: DbClient) => {
-      await db.execute(
-        `INSERT INTO system_error_logs (
-          level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-        [level, source, errorCode, message, contextJson, userId, userEmail, rayId, path, latencyMs, method, statusCode, clientIp, country, city]
-      );
+      const ops: { sql: string; params: any[] }[] = [
+        {
+          sql: `INSERT INTO system_error_logs (
+            level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+          params: [level, source, errorCode, message, contextJson, userId, userEmail, rayId, path, latencyMs, method, statusCode, clientIp, country, city],
+        },
+      ];
 
-      // Probabilistic retention cleanup (5% sampling)
+      // Probabilistic retention cleanup (5% sampling) merged into same batch
       if (Math.random() < 0.05) {
         const retentionDays = settings?.log_retention_days || 30;
-        await db.execute(
-          `DELETE FROM system_error_logs WHERE created_at < datetime('now', ?)`,
-          [`-${retentionDays} days`]
-        ).catch(() => {});
+        ops.push({
+          sql: `DELETE FROM system_error_logs WHERE created_at < datetime('now', ?)`,
+          params: [`-${retentionDays} days`],
+        });
+      }
+
+      if (ops.length > 1) {
+        await db.batch(ops);
+      } else {
+        await db.execute(ops[0].sql, ops[0].params);
       }
 
       return true;
@@ -277,17 +285,16 @@ export async function recordErrorLogsBatch(
 
   try {
     return await executeWithAutoSchema(async (db: DbClient) => {
-      await db.batch(validOps);
-
-      // Probabilistic retention cleanup (5% sampling)
+      // Probabilistic retention cleanup (5% sampling) appended to same batch
       if (Math.random() < 0.05) {
         const retentionDays = settings?.log_retention_days || 30;
-        await db.execute(
-          `DELETE FROM system_error_logs WHERE created_at < datetime('now', ?)`,
-          [`-${retentionDays} days`]
-        ).catch(() => {});
+        validOps.push({
+          sql: `DELETE FROM system_error_logs WHERE created_at < datetime('now', ?)`,
+          params: [`-${retentionDays} days`],
+        });
       }
 
+      await db.batch(validOps);
       return true;
     });
   } catch {

@@ -58,7 +58,7 @@ export async function getUserByIdOrEmail(userId?: string | null, email?: string 
       // 2. Secondary fallback by email if ID not matched or not provided
       if (!found && normalizedEmail) {
         found = await db.first<UserRecord>(
-          `SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1`,
+          `SELECT * FROM users WHERE email = ? LIMIT 1`,
           [normalizedEmail]
         );
       }
@@ -206,21 +206,21 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
         if (filter.assignedTo === 'UNASSIGNED') {
           targetWhere.push(`(${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
         } else if (filter.assignedTo) {
-          targetWhere.push(`LOWER(${prefix}assigned_to) = ?`);
+          targetWhere.push(`${prefix}assigned_to = ?`);
           targetParams.push(email);
         } else {
-          targetWhere.push(`(LOWER(${prefix}assigned_to) = ? OR ${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
+          targetWhere.push(`(${prefix}assigned_to = ? OR ${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
           targetParams.push(email);
         }
       } else if (filter.dataScope === 'SELF_ONLY') {
         const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
-        targetWhere.push(`LOWER(${prefix}assigned_to) = ?`);
+        targetWhere.push(`${prefix}assigned_to = ?`);
         targetParams.push(email);
       } else if (filter.assignedTo) {
         if (filter.assignedTo === 'UNASSIGNED') {
           targetWhere.push(`(${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
         } else {
-          targetWhere.push(`LOWER(${prefix}assigned_to) = ?`);
+          targetWhere.push(`${prefix}assigned_to = ?`);
           targetParams.push(filter.assignedTo.trim().toLowerCase());
         }
       }
@@ -255,16 +255,9 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
         COUNT(DISTINCT o.id) as total_orders,
         COUNT(DISTINCT CASE WHEN o.status = 'PENDING_APPROVAL' THEN o.id END) as pending_orders,
         COUNT(DISTINCT CASE WHEN o.status = 'SHIPPED' THEN o.id END) as shipped_orders,
-        MAX(o.created_at) as latest_order_date,
-        latest_login.ip as last_login_ip,
-        latest_login.country as last_login_country
+        MAX(o.created_at) as latest_order_date
       FROM users u
-      LEFT JOIN orders o ON (o.user_id = u.id OR LOWER(o.buyer_email) = LOWER(u.email))
-      LEFT JOIN (
-        SELECT user_id, ip, country,
-               ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) as rn
-        FROM user_logins
-      ) latest_login ON latest_login.user_id = u.id AND latest_login.rn = 1
+      LEFT JOIN orders o ON (o.user_id = u.id OR o.buyer_email = u.email)
       ${whereSql}
       GROUP BY u.id
       ORDER BY u.last_login_at DESC, u.created_at DESC
@@ -275,7 +268,7 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
 
     const adminEmails = getAdminEmailList();
     const adminEmailsClause = adminEmails.length > 0
-      ? ` OR LOWER(email) IN (${adminEmails.map((e) => `'${e.replace(/'/g, "''")}'`).join(',')})`
+      ? ` OR email IN (${adminEmails.map((e) => `'${e.replace(/'/g, "''")}'`).join(',')})`
       : '';
 
     const statsSql = `SELECT
@@ -301,6 +294,37 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       db.first<any>(statsSql, statsParams),
       db.first<{ unclaimed: number }>(unclaimedSql, unclaimedParams),
     ]);
+
+    // Batch-hydrate latest login info only for the retrieved page of users (avoids full-table scan on user_logins)
+    if (users && users.length > 0) {
+      const userIds = users.map((u) => u.id).filter(Boolean);
+      if (userIds.length > 0) {
+        const ph = userIds.map(() => '?').join(',');
+        const loginRows = await db.query<any>(
+          `SELECT user_id, ip, country
+           FROM (
+             SELECT user_id, ip, country,
+                    ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) as rn
+             FROM user_logins
+             WHERE user_id IN (${ph})
+           ) WHERE rn = 1`,
+          userIds
+        ).catch(() => []);
+
+        const loginMap = new Map<string, { ip: string; country: string }>();
+        for (const row of loginRows) {
+          loginMap.set(row.user_id, { ip: row.ip || '', country: row.country || '' });
+        }
+
+        for (const u of users) {
+          const login = loginMap.get(u.id);
+          if (login) {
+            u.last_login_ip = login.ip;
+            u.last_login_country = login.country;
+          }
+        }
+      }
+    }
 
     const total = Number(countRow?.cnt || 0);
 

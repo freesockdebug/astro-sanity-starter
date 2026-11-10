@@ -7,7 +7,7 @@ import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell
 import TableColumnController from '@components/admin/TableColumnController.astro';
 import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
-import { listAdminMembers } from '@utils/db';
+import { listActiveTeamMembersLite } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -21,13 +21,7 @@ const { sessionUser, adminContext, systemSettings, redirectResponse } = await re
 );
 if (redirectResponse) return redirectResponse;
 
-const teamMembers = (await listAdminMembers().catch(() => []))
-  .filter((m: any) => m.status === 'ACTIVE')
-  .map((m: any) => ({
-    email: m.email,
-    name: m.name || m.email.split('@')[0],
-    roleName: m.role?.name || m.role_code,
-  }));
+const teamMembers = await listActiveTeamMembersLite().catch(() => []);
 
 import { getDictItems } from '@utils/dicts';
 

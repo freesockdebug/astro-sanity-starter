@@ -5,6 +5,12 @@ import { getDb, generateOrderNo, generateUuid, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { invalidateUserStatusCache } from './users.repo';
 import type { DataScope } from './rbac.repo';
+
+let pendingOrdersCountCache: { count: number; exp: number } | null = null;
+
+export function invalidatePendingOrdersCountCache(): void {
+  pendingOrdersCountCache = null;
+}
 import type {
   OrderRecord,
   OrderItem,
@@ -113,6 +119,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
       }
     }
 
+    invalidatePendingOrdersCountCache();
     return { orderId, orderNo };
   });
 }
@@ -150,7 +157,7 @@ export async function getOrdersByUserId(userId: string, buyerEmail?: string): Pr
     if (normalizedEmail && userId) {
       orders = await db.query<OrderRecord>(
         `SELECT * FROM orders
-         WHERE user_id = ? OR LOWER(buyer_email) = LOWER(?)
+         WHERE user_id = ? OR buyer_email = ?
          ORDER BY created_at DESC`,
         [userId, normalizedEmail]
       );
@@ -291,21 +298,21 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
         if (filter.assignedTo === 'UNASSIGNED') {
           targetWhere.push('(assigned_to IS NULL OR assigned_to = "")');
         } else if (filter.assignedTo) {
-          targetWhere.push('LOWER(assigned_to) = ?');
+          targetWhere.push('assigned_to = ?');
           targetParams.push(email);
         } else {
-          targetWhere.push('(LOWER(assigned_to) = ? OR assigned_to IS NULL OR assigned_to = "")');
+          targetWhere.push('(assigned_to = ? OR assigned_to IS NULL OR assigned_to = "")');
           targetParams.push(email);
         }
       } else if (filter.dataScope === 'SELF_ONLY') {
         const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
-        targetWhere.push('LOWER(assigned_to) = ?');
+        targetWhere.push('assigned_to = ?');
         targetParams.push(email);
       } else if (filter.assignedTo) {
         if (filter.assignedTo === 'UNASSIGNED') {
           targetWhere.push('(assigned_to IS NULL OR assigned_to = "")');
         } else {
-          targetWhere.push('LOWER(assigned_to) = ?');
+          targetWhere.push('assigned_to = ?');
           targetParams.push(filter.assignedTo.trim().toLowerCase());
         }
       }
@@ -404,6 +411,10 @@ export async function updateOrderStatus(orderId: string, input: UpdateOrderStatu
       ]
     );
 
+    if (res.changes > 0) {
+      invalidatePendingOrdersCountCache();
+    }
+
     return res.changes > 0;
   });
 }
@@ -433,7 +444,7 @@ export async function assignOrder(orderId: string, assignedTo: string | null): P
         await db.execute(
           `UPDATE users
            SET assigned_to = ?, updated_at = datetime('now')
-           WHERE (id = ? OR LOWER(email) = ?)
+           WHERE (id = ? OR email = ?)
              AND (assigned_to IS NULL OR assigned_to = '')`,
           [clean, orderRow.user_id || '', (orderRow.buyer_email || '').toLowerCase()]
         ).catch(() => {});
@@ -466,7 +477,7 @@ export async function batchAssignOrders(orderIds: string[], assignedTo: string |
       await db.execute(
         `UPDATE users
          SET assigned_to = ?, updated_at = datetime('now')
-         WHERE (id IN (SELECT user_id FROM orders WHERE id IN (${placeholders})) OR LOWER(email) IN (SELECT LOWER(buyer_email) FROM orders WHERE id IN (${placeholders})))
+         WHERE (id IN (SELECT user_id FROM orders WHERE id IN (${placeholders})) OR email IN (SELECT buyer_email FROM orders WHERE id IN (${placeholders})))
            AND (assigned_to IS NULL OR assigned_to = '')`,
         [clean, ...orderIds, ...orderIds]
       ).catch(() => {});
@@ -493,10 +504,10 @@ export async function batchUpdateOrderStatus(
 
     let scopeSql = '';
     if (scope && scope.dataScope === 'SELF_ONLY') {
-      scopeSql = ' AND LOWER(assigned_to) = ?';
+      scopeSql = ' AND assigned_to = ?';
       params.push(scope.email.toLowerCase());
     } else if (scope && scope.dataScope === 'SELF_AND_POOL') {
-      scopeSql = ' AND (LOWER(assigned_to) = ? OR assigned_to IS NULL OR assigned_to = \'\')';
+      scopeSql = ' AND (assigned_to = ? OR assigned_to IS NULL OR assigned_to = \'\')';
       params.push(scope.email.toLowerCase());
     }
 
@@ -511,19 +522,32 @@ export async function batchUpdateOrderStatus(
        WHERE id IN (${placeholders})${scopeSql}`,
       params
     );
+
+    if (res.changes > 0) {
+      invalidatePendingOrdersCountCache();
+    }
+
     return res.changes;
   });
 }
 
 /**
  * Fast indexed lookup for count of pending orders (used for admin badges without executing full list query)
+ * Cached for 30s in L1 memory.
  */
 export async function getPendingOrdersCount(): Promise<number> {
+  const now = Date.now();
+  if (pendingOrdersCountCache && pendingOrdersCountCache.exp > now) {
+    return pendingOrdersCountCache.count;
+  }
+
   return executeWithAutoSchema(async (db: DbClient) => {
     const row = await db.first<{ count: number }>(
       `SELECT COUNT(*) as count FROM orders WHERE status = 'PENDING_APPROVAL'`
     );
-    return Number(row?.count || 0);
+    const count = Number(row?.count || 0);
+    pendingOrdersCountCache = { count, exp: Date.now() + 30_000 };
+    return count;
   });
 }
 
@@ -590,10 +614,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       `),
       db.query<any>(`
         SELECT m.email, m.name, m.role_code,
-               (SELECT COUNT(*) FROM orders o WHERE LOWER(o.assigned_to) = LOWER(m.email)) as total_orders,
-               (SELECT COUNT(*) FROM orders o WHERE LOWER(o.assigned_to) = LOWER(m.email) AND o.status = 'PENDING_APPROVAL') as pending_orders,
-               (SELECT COUNT(*) FROM orders o WHERE LOWER(o.assigned_to) = LOWER(m.email) AND o.status = 'SHIPPED') as shipped_orders,
-               (SELECT COUNT(*) FROM users u WHERE LOWER(u.assigned_to) = LOWER(m.email)) as assigned_customers
+               (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email) as total_orders,
+               (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email AND o.status = 'PENDING_APPROVAL') as pending_orders,
+               (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email AND o.status = 'SHIPPED') as shipped_orders,
+               (SELECT COUNT(*) FROM users u WHERE u.assigned_to = m.email) as assigned_customers
         FROM admin_members m
         WHERE m.status = 'ACTIVE'
         ORDER BY total_orders DESC

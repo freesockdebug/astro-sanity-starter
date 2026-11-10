@@ -7,7 +7,7 @@ import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell
 import TableColumnController from '@components/admin/TableColumnController.astro';
 import TableFilter from '@components/admin/TableFilter.astro';
 import { requireAdminContext } from '@utils/auth';
-import { listAdminMembers } from '@utils/db';
+import { listActiveTeamMembersLite } from '@utils/db';
 import { getDictItems } from '@utils/dicts';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -22,19 +22,11 @@ const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectR
 );
 if (redirectResponse) return redirectResponse;
 
-const [teamMembersList, customerTiers, customerTags] = await Promise.all([
-  listAdminMembers().catch(() => []),
+const [teamMembers, customerTiers, customerTags] = await Promise.all([
+  listActiveTeamMembersLite().catch(() => []),
   getDictItems(cfEnv, 'customer_tiers', true).catch(() => []),
   getDictItems(cfEnv, 'customer_tags', true).catch(() => []),
 ]);
-
-const teamMembers = teamMembersList
-  .filter((m: any) => m.status === 'ACTIVE')
-  .map((m: any) => ({
-    email: m.email,
-    name: m.name || m.email.split('@')[0],
-    roleName: m.role?.name || m.role_code,
-  }));
 
 const canBlock = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('users:block'));
 const canEditTier = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('users:edit_tier'));

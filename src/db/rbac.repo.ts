@@ -127,12 +127,72 @@ function parseRoleRow(row: any): AdminRole {
   };
 }
 
+let cachedAdminRoles: { data: AdminRole[]; exp: number } | null = null;
+let cachedAdminMembers: { data: AdminMemberWithRole[]; exp: number } | null = null;
+let cachedActiveMembersLite: { data: ActiveTeamMemberLite[]; exp: number } | null = null;
+
+export function invalidateRbacCache(): void {
+  cachedAdminRoles = null;
+  cachedAdminMembers = null;
+  cachedActiveMembersLite = null;
+}
+
+export interface ActiveTeamMemberLite {
+  email: string;
+  name: string;
+  roleName: string;
+}
+
+/**
+ * Lightweight active team member lookup for dropdown filters (orders, users).
+ * Cached in L1 memory for 60s; avoids running 5 correlated subqueries.
+ */
+export async function listActiveTeamMembersLite(): Promise<ActiveTeamMemberLite[]> {
+  const now = Date.now();
+  if (cachedActiveMembersLite && cachedActiveMembersLite.exp > now) {
+    return cachedActiveMembersLite.data;
+  }
+
+  return executeWithAutoSchema(async (db: DbClient) => {
+    try {
+      const rows = await db.query<any>(
+        `SELECT m.email, m.name, COALESCE(r.name, m.role_code) as role_name
+         FROM admin_members m
+         LEFT JOIN admin_roles r ON m.role_code = r.code
+         WHERE m.status = 'ACTIVE'
+         ORDER BY m.created_at ASC`
+      );
+      const list = (rows || []).map((r) => ({
+        email: r.email.toLowerCase(),
+        name: r.name || r.email.split('@')[0],
+        roleName: r.role_name || '',
+      }));
+      cachedActiveMembersLite = { data: list, exp: Date.now() + 60_000 };
+      return list;
+    } catch (e: any) {
+      const msg = (e?.message || String(e)).toLowerCase();
+      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
+        throw e;
+      }
+      console.error('[RBAC] listActiveTeamMembersLite failed:', e);
+      return [];
+    }
+  });
+}
+
 export async function listAdminRoles(): Promise<AdminRole[]> {
+  const now = Date.now();
+  if (cachedAdminRoles && cachedAdminRoles.exp > now) {
+    return cachedAdminRoles.data;
+  }
+
   return executeWithAutoSchema(async (db: DbClient) => {
     try {
       const res = await db.query<any>('SELECT * FROM admin_roles ORDER BY is_system DESC, code ASC');
       if (res && res.length > 0) {
-        return res.map(parseRoleRow);
+        const roles = res.map(parseRoleRow);
+        cachedAdminRoles = { data: roles, exp: Date.now() + 60_000 };
+        return roles;
       }
     } catch (e: any) {
       const msg = (e?.message || String(e)).toLowerCase();
@@ -161,6 +221,11 @@ export async function getAdminRole(code: string): Promise<AdminRole> {
 }
 
 export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
+  const now = Date.now();
+  if (cachedAdminMembers && cachedAdminMembers.exp > now) {
+    return cachedAdminMembers.data;
+  }
+
   return executeWithAutoSchema(async (db: DbClient) => {
     try {
       const rows = await db.query<any>(
@@ -168,19 +233,19 @@ export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
            m.*,
            r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system,
            u.id as user_id, u.last_login_at,
-           (SELECT COUNT(*) FROM orders o WHERE LOWER(o.assigned_to) = LOWER(m.email)) as assigned_orders,
-           (SELECT COUNT(*) FROM users cu WHERE LOWER(cu.assigned_to) = LOWER(m.email)) as assigned_customers,
-           (SELECT ul.ip FROM user_logins ul WHERE LOWER(ul.email) = LOWER(m.email) ORDER BY ul.created_at DESC LIMIT 1) as last_ip,
-           (SELECT ul.city FROM user_logins ul WHERE LOWER(ul.email) = LOWER(m.email) ORDER BY ul.created_at DESC LIMIT 1) as last_city,
-           (SELECT ul.country FROM user_logins ul WHERE LOWER(ul.email) = LOWER(m.email) ORDER BY ul.created_at DESC LIMIT 1) as last_country
+           (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email) as assigned_orders,
+           (SELECT COUNT(*) FROM users cu WHERE cu.assigned_to = m.email) as assigned_customers,
+           (SELECT ul.ip || '|' || COALESCE(ul.city, '') || '|' || COALESCE(ul.country, '')
+            FROM user_logins ul WHERE ul.email = m.email ORDER BY ul.created_at DESC LIMIT 1) as last_login_meta
          FROM admin_members m
          LEFT JOIN admin_roles r ON m.role_code = r.code
-         LEFT JOIN users u ON LOWER(m.email) = LOWER(u.email)
+         LEFT JOIN users u ON m.email = u.email
          ORDER BY m.created_at ASC`
       );
 
-      return (rows || []).map((row) => {
-        const loc = [row.last_city, row.last_country].filter(Boolean).join(', ') || '';
+      const list = (rows || []).map((row) => {
+        const [lastIp = '', lastCity = '', lastCountry = ''] = (row.last_login_meta || '').split('|');
+        const loc = [lastCity, lastCountry].filter(Boolean).join(', ') || '';
         return {
           email: row.email.toLowerCase(),
           name: row.name || (row.email.split('@')[0]),
@@ -193,7 +258,7 @@ export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
           assigned_orders: Number(row.assigned_orders || 0),
           assigned_customers: Number(row.assigned_customers || 0),
           last_login_at: row.last_login_at || '',
-          last_ip: row.last_ip || '',
+          last_ip: lastIp,
           last_location: loc,
           role: row.role_name
             ? parseRoleRow({
@@ -208,6 +273,9 @@ export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
             : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
         };
       });
+
+      cachedAdminMembers = { data: list, exp: Date.now() + 60_000 };
+      return list;
     } catch (e: any) {
       const msg = (e?.message || String(e)).toLowerCase();
       if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
@@ -229,7 +297,7 @@ export async function getAdminMember(email: string): Promise<AdminMemberWithRole
         `SELECT m.*, r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system
          FROM admin_members m
          LEFT JOIN admin_roles r ON m.role_code = r.code
-         WHERE LOWER(m.email) = ?`,
+         WHERE m.email = ?`,
         [cleanEmail]
       );
 
@@ -292,13 +360,15 @@ export async function upsertAdminMember(data: {
          updated_at = datetime('now')`,
       [email, name, roleCode, status, createdBy, name, roleCode]
     );
+    invalidateRbacCache();
   });
 }
 
 export async function deleteAdminMember(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
   await executeWithAutoSchema(async (db: DbClient) => {
-    await db.execute('DELETE FROM admin_members WHERE LOWER(email) = ?', [cleanEmail]);
+    await db.execute('DELETE FROM admin_members WHERE email = ?', [cleanEmail]);
+    invalidateRbacCache();
   });
 }
 
@@ -340,6 +410,7 @@ export async function upsertAdminRole(role: {
          updated_at = datetime('now')`,
       [code, name, dataScope, menusJson, permissionsJson, desc, finalIsSystem]
     );
+    invalidateRbacCache();
     return true;
   });
 }
@@ -360,6 +431,7 @@ export async function deleteAdminRole(code: string): Promise<{ success: boolean;
     }
 
     await db.execute('DELETE FROM admin_roles WHERE code = ? AND is_system = 0', [cleanCode]);
+    invalidateRbacCache();
     return { success: true };
   });
 }
@@ -392,7 +464,7 @@ export async function listCandidateLogtoUsers(search?: string): Promise<{ id: st
       `SELECT u.id, u.email, u.name, u.last_login_at,
               CASE WHEN m.email IS NOT NULL THEN 1 ELSE 0 END as is_member
        FROM users u
-       LEFT JOIN admin_members m ON LOWER(u.email) = LOWER(m.email)
+       LEFT JOIN admin_members m ON u.email = m.email
        ${whereClause}
        ORDER BY is_member ASC, u.last_login_at DESC
        LIMIT 50`,
@@ -421,13 +493,13 @@ export async function syncLegacyCoAdmins(coAdminEmailsStr?: string): Promise<voi
   if (emails.length === 0) return;
 
   await executeWithAutoSchema(async (db: DbClient) => {
-    for (const email of emails) {
-      await db.execute(
-        `INSERT OR IGNORE INTO admin_members (email, name, role_code, status, created_by)
-         VALUES (?, ?, 'sales_manager', 'ACTIVE', 'legacy_import')`,
-        [email, email.split('@')[0]]
-      );
-    }
+    const ops = emails.map((email) => ({
+      sql: `INSERT OR IGNORE INTO admin_members (email, name, role_code, status, created_by)
+            VALUES (?, ?, 'sales_manager', 'ACTIVE', 'legacy_import')`,
+      params: [email, email.split('@')[0]],
+    }));
+    await db.batch(ops);
+    invalidateRbacCache();
   });
 }
 

@@ -846,7 +846,8 @@ async function runSelfCheck() {
   console.log('✔ [PASS] RBAC Engine, DataScope Isolation, Customer Auto-Binding & Audit Diff verified');
 
   // 29. RBAC Custom Role Upsert/Delete Guard, Member Workload Fields & Logto Candidate Picker
-  const { upsertAdminRole, deleteAdminRole, getMemberEmailsByRole, listCandidateLogtoUsers, listAdminMembers } = await import('../src/db/rbac.repo');
+  const { upsertAdminRole, deleteAdminRole, getMemberEmailsByRole, listCandidateLogtoUsers, listAdminMembers, listActiveTeamMembersLite } = await import('../src/db/rbac.repo');
+  const { getPendingOrdersCount } = await import('../src/db/orders.repo');
 
   const customRoleCode = `custom_finance_${Date.now()}`;
   await upsertAdminRole({
@@ -894,6 +895,15 @@ async function runSelfCheck() {
   assert.strictEqual(typeof repInList.assigned_orders, 'number');
   assert.strictEqual(typeof repInList.assigned_customers, 'number');
   assert.strictEqual(typeof repInList.is_logto_synced, 'boolean');
+
+  const activeLite = await listActiveTeamMembersLite();
+  assert.ok(Array.isArray(activeLite), 'listActiveTeamMembersLite should return array');
+  const repInLite = activeLite.find(m => m.email.toLowerCase() === testRepEmail.toLowerCase());
+  assert.ok(repInLite, 'testRepEmail should be in active lite team member list');
+  assert.strictEqual(typeof repInLite.roleName, 'string');
+
+  const pendingCount = await getPendingOrdersCount();
+  assert.strictEqual(typeof pendingCount, 'number');
 
   console.log('✔ [PASS] RBAC Custom Role Upsert/Delete Guard, Member Workload Fields & Logto Candidate Picker verified');
 

@@ -97,7 +97,7 @@ export async function listAuditLogs(options: {
       params.push(options.targetId);
     }
     if (options.adminEmail) {
-      where.push('LOWER(admin_email) = ?');
+      where.push('admin_email = ?');
       params.push(options.adminEmail.toLowerCase());
     }
     if (options.action) {

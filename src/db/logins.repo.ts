@@ -37,33 +37,27 @@ export async function recordUserLogin(
     }
 
     return await executeWithAutoSchema(async (db: DbClient) => {
-      await db.execute(
-        `INSERT INTO user_logins (user_id, email, ip, country, city, user_agent, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
-        [input.userId, normalizedEmail, safeIp, safeCountry, safeCity, safeUA]
-      );
+      const ops: { sql: string; params: any[] }[] = [
+        {
+          sql: `INSERT INTO user_logins (user_id, email, ip, country, city, user_agent, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+          params: [input.userId, normalizedEmail, safeIp, safeCountry, safeCity, safeUA],
+        },
+      ];
 
-      // Probabilistic retention cleanup (10% sampling) to prevent hammering D1 on every single login
+      // Probabilistic retention cleanup (10% sampling) reusing cached system settings
       if (Math.random() < 0.1) {
-        let retentionDays = 90;
-        try {
-          const row = await db.first<{ value: string }>(
-            `SELECT value FROM system_settings WHERE key = 'login_retention_days' LIMIT 1`
-          );
-          if (row?.value) {
-            const parsed = parseInt(row.value, 10);
-            if (!isNaN(parsed) && parsed > 0) {
-              retentionDays = parsed;
-            }
-          }
-        } catch {
-          // Fallback to default 90 days
-        }
+        const retentionDays = settings?.login_retention_days || 90;
+        ops.push({
+          sql: `DELETE FROM user_logins WHERE created_at < datetime('now', ?)`,
+          params: [`-${retentionDays} days`],
+        });
+      }
 
-        await db.execute(
-          `DELETE FROM user_logins WHERE created_at < datetime('now', ?)`,
-          [`-${retentionDays} days`]
-        );
+      if (ops.length > 1) {
+        await db.batch(ops);
+      } else {
+        await db.execute(ops[0].sql, ops[0].params);
       }
       return true;
     });

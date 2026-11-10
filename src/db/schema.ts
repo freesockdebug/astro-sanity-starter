@@ -253,7 +253,12 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_dict_items_group ON sys_dict_items(group_code)`,
   `CREATE INDEX IF NOT EXISTS idx_dict_items_enabled ON sys_dict_items(is_enabled)`,
   `CREATE INDEX IF NOT EXISTS idx_dict_items_group_sort ON sys_dict_items(group_code, sort_order, id)`,
-  `CREATE INDEX IF NOT EXISTS idx_dict_items_sort ON sys_dict_items(sort_order, id)`
+  `CREATE INDEX IF NOT EXISTS idx_dict_items_sort ON sys_dict_items(sort_order, id)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_logins_user_created ON user_logins(user_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_logins_email_created ON user_logins(email, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_assigned_status ON orders(assigned_to, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_email ON admin_audit_logs(admin_email)`
 ];
 
 export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
