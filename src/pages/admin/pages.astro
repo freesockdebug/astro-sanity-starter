@@ -824,15 +824,10 @@ const pageTitle = 'Pages & Modular Visual Builder';
       return { title, subtitle };
     }
 
-    // Render Modular Sections Container
+    // Render Modular Sections Container (Pure Rendering)
     function renderSections() {
       const container = document.getElementById('sections-container');
       if (!container) return;
-
-      // Bug 1 Fix: Always sync current input values before wiping and rebuilding DOM
-      if (container.querySelector('.section-card')) {
-        syncSectionsFromDom();
-      }
 
       const sections = activePageDoc?.sections || [];
       if (sections.length === 0) {
@@ -1595,6 +1590,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-toggle').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
+          syncSectionsFromDom();
           const key = btn.getAttribute('data-key');
           if (!key) return;
           if (collapsedSections.has(key)) {
@@ -1610,6 +1606,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.card-header-row').forEach((header) => {
         header.addEventListener('click', (e: any) => {
           if (e.target.closest('button') || e.target.closest('.drag-handle')) return;
+          syncSectionsFromDom();
           const card = header.closest('.section-card');
           const key = card?.getAttribute('data-key');
           if (!key) return;
@@ -1626,6 +1623,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-up').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
+          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           if (idx > 0) {
             const item = activePageDoc.sections.splice(idx, 1)[0];
@@ -1639,6 +1637,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-down').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
+          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           if (idx < activePageDoc.sections.length - 1) {
             const item = activePageDoc.sections.splice(idx, 1)[0];
@@ -1652,6 +1651,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-copy').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
+          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           const cloned = JSON.parse(JSON.stringify(activePageDoc.sections[idx]));
           cloned._key = crypto.randomUUID().slice(0, 8);
@@ -1666,6 +1666,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       container.querySelectorAll('.btn-sec-del').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
+          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           activePageDoc.sections.splice(idx, 1);
           renderSections();
@@ -1704,6 +1705,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
         card.addEventListener('drop', (e) => {
           e.preventDefault();
           card.classList.remove('ring-2', 'ring-black');
+          syncSectionsFromDom();
           const targetIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
           if (draggedSectionIdx !== null && draggedSectionIdx !== targetIdx) {
             const item = activePageDoc.sections.splice(draggedSectionIdx, 1)[0];
@@ -1716,6 +1718,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       // Section Image Picker (heroImage, macroImage)
       container.querySelectorAll('.btn-sec-choose-image').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           const target = btn.getAttribute('data-target') || 'heroImage';
           (window as any).__openMediaLibrary?.({
@@ -1741,6 +1744,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
       container.querySelectorAll('.btn-sec-clear-image').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           const target = btn.getAttribute('data-target') || 'heroImage';
           activePageDoc.sections[idx][target] = null;
@@ -1751,6 +1755,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       // Product Showcase Picker Add
       container.querySelectorAll('.picker-add-product').forEach((select: any) => {
         select.addEventListener('change', () => {
+          syncSectionsFromDom();
           const idx = parseInt(select.getAttribute('data-idx') || '0', 10);
           const prodId = select.value;
           if (!prodId) return;
@@ -1768,6 +1773,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       // Product Showcase Reorder & Delete
       container.querySelectorAll('.btn-prod-up').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const pIdx = parseInt(btn.getAttribute('data-prod-idx') || '0', 10);
           if (pIdx > 0) {
@@ -1780,6 +1786,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
       container.querySelectorAll('.btn-prod-down').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const pIdx = parseInt(btn.getAttribute('data-prod-idx') || '0', 10);
           const list = activePageDoc.sections[sIdx].products;
@@ -1793,6 +1800,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
       container.querySelectorAll('.btn-prod-del').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const pIdx = parseInt(btn.getAttribute('data-prod-idx') || '0', 10);
           activePageDoc.sections[sIdx].products.splice(pIdx, 1);
@@ -1803,6 +1811,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       // Manufacturing Add Capability
       container.querySelectorAll('.btn-add-capability').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-idx') || '0', 10);
           if (!activePageDoc.sections[sIdx].capabilities) activePageDoc.sections[sIdx].capabilities = [];
           activePageDoc.sections[sIdx].capabilities.push({
@@ -1817,6 +1826,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       // Manufacturing Move Up/Down & Delete Capability
       container.querySelectorAll('.btn-cap-up').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const cIdx = parseInt(btn.getAttribute('data-cap-idx') || '0', 10);
           if (cIdx > 0) {
@@ -1829,6 +1839,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
       container.querySelectorAll('.btn-cap-down').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const cIdx = parseInt(btn.getAttribute('data-cap-idx') || '0', 10);
           const list = activePageDoc.sections[sIdx].capabilities;
@@ -1842,6 +1853,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
       container.querySelectorAll('.btn-del-capability').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const cIdx = parseInt(btn.getAttribute('data-cap-idx') || '0', 10);
           activePageDoc.sections[sIdx].capabilities.splice(cIdx, 1);
@@ -1852,6 +1864,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       // Custom Section Add Block
       container.querySelectorAll('.picker-add-block').forEach((select: any) => {
         select.addEventListener('change', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(select.getAttribute('data-idx') || '0', 10);
           const blockType = select.value;
           if (!blockType) return;
@@ -1871,6 +1884,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       // Custom Section Block Reorder & Delete
       container.querySelectorAll('.btn-block-up').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const bIdx = parseInt(btn.getAttribute('data-block-idx') || '0', 10);
           if (bIdx > 0) {
@@ -1883,6 +1897,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
       container.querySelectorAll('.btn-block-down').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const bIdx = parseInt(btn.getAttribute('data-block-idx') || '0', 10);
           const list = activePageDoc.sections[sIdx].blocks;
@@ -1896,6 +1911,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 
       container.querySelectorAll('.btn-del-block').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const bIdx = parseInt(btn.getAttribute('data-block-idx') || '0', 10);
           activePageDoc.sections[sIdx].blocks.splice(bIdx, 1);
@@ -1906,6 +1922,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
       // Custom Section Choose MediaBlock Image
       container.querySelectorAll('.btn-choose-block-image').forEach((btn) => {
         btn.addEventListener('click', () => {
+          syncSectionsFromDom();
           const sIdx = parseInt(btn.getAttribute('data-sec-idx') || '0', 10);
           const bIdx = parseInt(btn.getAttribute('data-block-idx') || '0', 10);
           (window as any).__openMediaLibrary?.({
@@ -1935,7 +1952,8 @@ const pageTitle = 'Pages & Modular Visual Builder';
       const cards = document.querySelectorAll('.section-card');
 
       cards.forEach((card, idx) => {
-        const sec = activePageDoc.sections[idx];
+        const key = card.getAttribute('data-key');
+        const sec = (key && activePageDoc.sections.find((s: any) => s._key === key)) || activePageDoc.sections[idx];
         if (!sec) return;
 
         // Common Admin Label

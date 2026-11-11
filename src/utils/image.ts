@@ -39,6 +39,10 @@ export class SanityImageService {
       return this._studioConfigOverride;
     }
 
+    if (typeof window !== 'undefined' && typeof (window as any).__ENABLE_IMAGE_PROXY__ === 'boolean') {
+      return (window as any).__ENABLE_IMAGE_PROXY__;
+    }
+
     const envVal =
       (import.meta.env && import.meta.env.ENABLE_IMAGE_PROXY) ||
       (typeof process !== 'undefined' && process.env && process.env.ENABLE_IMAGE_PROXY);

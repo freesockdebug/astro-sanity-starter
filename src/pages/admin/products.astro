@@ -714,7 +714,7 @@ const pageTitle = 'Products & Catalog Workspace';
     }
 
     tbody.innerHTML = filtered.map((p: any) => {
-      const imgUrl = p.mainImageUrl || p.mainImage?.asset?.url || '';
+      const imgUrl = (window as any).resolveSanityRefUrl?.(p.mainImage || p.mainImageUrl, { width: 120 }) || p.mainImageUrl || p.mainImage?.asset?.url || '';
       const title = p.title?.en || p.shortTitle?.en || 'Untitled Product';
       const sku = p.sku || 'NO-SKU';
       const catName = p.category?.title?.en || p.category?.slug?.current || '—';
@@ -994,7 +994,8 @@ const pageTitle = 'Products & Catalog Workspace';
     const btnRemove = document.getElementById('btn-remove-main-image');
     if (!el) return;
 
-    const imgUrl = (window as any).resolveSanityRefUrl?.(currentEditingProduct?.mainImage) ||
+    const imgUrl = (window as any).resolveSanityRefUrl?.(currentEditingProduct?.mainImage, { width: 600 }) ||
+      (window as any).resolveSanityRefUrl?.(currentEditingProduct?.mainImageUrl, { width: 600 }) ||
       currentEditingProduct?.mainImageUrl ||
       currentEditingProduct?.mainImage?.asset?.url || '';
 
@@ -1106,7 +1107,8 @@ const pageTitle = 'Products & Catalog Workspace';
     }
 
     container.innerHTML = gallery.map((item: any, idx: number) => {
-      const url = (window as any).resolveSanityRefUrl?.(item) ||
+      const url = (window as any).resolveSanityRefUrl?.(item, { width: 300 }) ||
+        (window as any).resolveSanityRefUrl?.(currentEditingProduct?.galleryUrls?.[idx], { width: 300 }) ||
         item.asset?.url ||
         currentEditingProduct?.galleryUrls?.[idx] || '';
 

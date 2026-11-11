@@ -681,6 +681,9 @@ const pageTitle = 'CMS Site Configuration';
       if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save config');
 
       (window as any).__showToast?.(`Saved ${targetDocType} & refreshed caches!`, 'success');
+      if (activeTab === 'site' && typeof configs.siteConfig.enableImageProxy === 'boolean') {
+        (window as any).__ENABLE_IMAGE_PROXY__ = configs.siteConfig.enableImageProxy;
+      }
       loadConfigs();
     } catch (e: any) {
       (window as any).__showToast?.(e.message, 'error');

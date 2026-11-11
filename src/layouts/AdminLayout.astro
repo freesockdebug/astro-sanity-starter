@@ -4,6 +4,8 @@
 import Layout from './Layout.astro';
 import AdminSidebar from '@components/admin/AdminSidebar.astro';
 import { getTabTitle, getAllMenuItems, type AdminMenuItem } from '@config/adminNavigation';
+import { SiteConfigService } from '@data/siteConfig';
+import { SanityImageService } from '@utils/image';
 
 interface Props {
   title: string;
@@ -50,6 +52,10 @@ const roleBadgeClasses: Record<string, string> = {
 };
 const badgeClass = roleBadgeClasses[roleCode] || roleBadgeClasses.super_admin;
 const roleDisplay = roleName || (roleCode === 'content_editor' ? 'Content Editor' : roleCode === 'sales_manager' ? 'Sales Manager' : roleCode === 'sales_rep' ? 'Sales Rep' : roleCode === 'auditor' ? 'Auditor' : 'Super Admin');
+
+const siteCfg = await SiteConfigService.getConfig();
+SanityImageService.setStudioProxyConfig(siteCfg?.enableImageProxy);
+const enableImageProxy = SanityImageService.isProxyEnabled();
 ---
 
 <Layout
@@ -59,6 +65,9 @@ const roleDisplay = roleName || (roleCode === 'content_editor' ? 'Content Editor
   nofollow={true}
   bodyClass="bg-[#f5f5f7] text-[#1d1d1f] font-sans antialiased selection:bg-zinc-900 selection:text-white min-h-screen"
 >
+  <script is:inline define:vars={{ enableImageProxy }}>
+    window.__ENABLE_IMAGE_PROXY__ = enableImageProxy;
+  </script>
   <div id="shell-root" class:list={['flex flex-col lg:flex-row', fullscreenWorkbench ? 'h-[100dvh] overflow-hidden' : 'min-h-screen']}>
     <!-- 1. Left Grouped Vertical Sidebar (Fixed on Mobile/Tablet, Sticky on Desktop >= lg) -->
     {
