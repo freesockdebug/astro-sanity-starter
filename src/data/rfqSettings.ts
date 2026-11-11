@@ -101,6 +101,10 @@ export class RfqSettingsService {
   public static invalidateCache(): void {
     rfqCache.invalidate();
   }
+
+  public static invalidate(): void {
+    this.invalidateCache();
+  }
 }
 
 // Backward-compatible function exports

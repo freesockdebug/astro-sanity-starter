@@ -34,7 +34,24 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
     return localRouteRevs;
   }
   const kvRevs = await kvGet<Record<string, number>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
-  localRouteRevs = kvRevs && typeof kvRevs === 'object' ? kvRevs : {};
+  if (kvRevs && typeof kvRevs === 'object') {
+    const hasChanged = Boolean(
+      localRouteRevs &&
+      Object.keys(localRouteRevs).length > 0 &&
+      JSON.stringify(kvRevs) !== JSON.stringify(localRouteRevs)
+    );
+    localRouteRevs = kvRevs;
+    if (hasChanged) {
+      // Cross-Isolate version drift detected: flush local L1 memory caches
+      // to ensure next SSR render reads fresh data from shared L2 KV
+      ProductService.invalidateCache();
+      PageService.invalidateCache();
+      SiteConfigService.invalidate();
+      RfqSettingsService.invalidate();
+    }
+  } else if (!localRouteRevs) {
+    localRouteRevs = {};
+  }
   localRouteRevsLoadedAt = now;
   return localRouteRevs;
 }
@@ -555,10 +572,20 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
         collectedPaths.add('/about');
         collectedPaths.add('/private-label');
         collectedPaths.add('/contact');
-        // Include all product detail pages dynamically so global header/footer updates never leave them stale
-        const allProds = await ProductService.getAll(false, cfEnv).catch(() => []);
+        // Include all product detail pages and dynamic custom CMS pages
+        const [allProds, allPages] = await Promise.all([
+          ProductService.getAll(false, cfEnv).catch(() => []),
+          PageService.getAll(false, cfEnv).catch(() => []),
+        ]);
         for (const p of allProds) {
           if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
+        }
+        for (const pg of allPages) {
+          const pgSlug = pg.slug?.current || (typeof pg.slug === 'string' ? pg.slug : '');
+          const clean = pgSlug.replace(/^\/+/, '').replace(/\/+$/, '');
+          if (clean && clean !== 'home' && clean !== 'index') {
+            collectedPaths.add(`/${clean}`);
+          }
         }
         refreshTasks.push(SiteConfigService.getConfig(true));
         taskDescriptions.push('refreshSiteConfig()');
@@ -630,13 +657,29 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
     collectedPaths.add('/private-label');
     collectedPaths.add('/contact');
 
+    const [allProds, allPages] = await Promise.all([
+      ProductService.getAll(false, cfEnv).catch(() => []),
+      PageService.getAll(false, cfEnv).catch(() => []),
+    ]);
+    for (const p of allProds) {
+      if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
+    }
+    for (const pg of allPages) {
+      const pgSlug = pg.slug?.current || (typeof pg.slug === 'string' ? pg.slug : '');
+      const clean = pgSlug.replace(/^\/+/, '').replace(/\/+$/, '');
+      if (clean && clean !== 'home' && clean !== 'index') {
+        collectedPaths.add(`/${clean}`);
+      }
+    }
+
     refreshTasks.push(
       SiteConfigService.getConfig(true),
       RfqSettingsService.getSettings(true),
       ProductService.refreshAll(cfEnv),
       ProductService.getCatalogSettings(true, cfEnv),
       ProductService.getProductStorySettings(true, cfEnv),
-      PageService.getHomePage(true, cfEnv)
+      PageService.getHomePage(true, cfEnv),
+      PageService.refreshAll(cfEnv)
     );
     taskDescriptions.push('refreshAllCoreServices()');
   }

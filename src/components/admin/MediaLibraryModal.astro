@@ -262,6 +262,7 @@
   let mediaAssets: MediaAsset[] = [];
   let totalAssets = 0;
   let currentPage = 1;
+  let pendingSelectedIds: string[] = [];
   let currentSelection: Map<string, MediaAsset> = new Map();
   let currentOptions: OpenMediaOptions | null = null;
   let isLoading = false;
@@ -554,6 +555,14 @@
 
       mediaAssets = data.assets || [];
       totalAssets = typeof data.total === 'number' ? data.total : mediaAssets.length;
+
+      // Restore pre-selected assets if selectedIds were passed on modal open
+      if (pendingSelectedIds.length > 0) {
+        pendingSelectedIds.forEach((id) => {
+          const found = mediaAssets.find((a) => a._id === id);
+          if (found) currentSelection.set(id, found);
+        });
+      }
     } catch (e: any) {
       if (countLabel) countLabel.textContent = 'Failed to load';
       (window as any).__showToast?.(e.message, 'error');
@@ -563,6 +572,7 @@
       isLoading = false;
       updatePaginationControls();
       renderGrid();
+      updateFooterSelection();
       if (mediaGridScroll) {
         mediaGridScroll.scrollTop = 0;
       }
@@ -669,15 +679,20 @@
 
     (window as any).__showToast?.(`Uploaded ${uploadedCount} image(s) to cloud library`, 'success');
 
-    // Prepend newly uploaded assets to current list
-    mediaAssets = [...newAssets, ...mediaAssets];
+    if (newAssets.length > 0) {
+      totalAssets += newAssets.length;
+      // Prepend newly uploaded assets to current page, capped to PAGE_SIZE
+      mediaAssets = [...newAssets, ...mediaAssets].slice(0, PAGE_SIZE);
 
-    // Auto-select newly uploaded in currentSelection
-    if (currentOptions?.mode === 'multiple') {
-      newAssets.forEach((a) => currentSelection.set(a._id, a));
-    } else if (newAssets.length > 0) {
-      currentSelection.clear();
-      currentSelection.set(newAssets[0]._id, newAssets[0]);
+      // Auto-select newly uploaded in currentSelection
+      if (currentOptions?.mode === 'multiple') {
+        newAssets.forEach((a) => currentSelection.set(a._id, a));
+      } else {
+        currentSelection.clear();
+        currentSelection.set(newAssets[0]._id, newAssets[0]);
+      }
+
+      updatePaginationControls();
     }
 
     // Switch to Browse tab
@@ -724,9 +739,10 @@
       modalTitle.textContent = options.title || 'Cloud Media Library';
     }
 
-    // Pre-populate selections if IDs passed
-    if (options.selectedIds && options.selectedIds.length > 0) {
-      options.selectedIds.forEach((id) => {
+    // Track requested pre-selections
+    pendingSelectedIds = Array.isArray(options.selectedIds) ? options.selectedIds : [];
+    if (pendingSelectedIds.length > 0 && mediaAssets.length > 0) {
+      pendingSelectedIds.forEach((id) => {
         const found = mediaAssets.find((a) => a._id === id);
         if (found) currentSelection.set(id, found);
       });

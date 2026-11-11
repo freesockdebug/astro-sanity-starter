@@ -39,12 +39,15 @@ export const liveClient = createClient({
     perspective: 'published',
 });
 
-/**
- * Returns either the cached API CDN client (default) or the Live API client (when forceLive = true)
- */
-export function getSanityClient(forceLive = false): SanityClient {
-    return forceLive ? liveClient : client;
-}
+// Public Live API fallback client if SANITY_TOKEN is expired or 401 Unauthorized
+export const publicLiveClient = createClient({
+    projectId: SANITY_PROJECT_ID,
+    dataset: SANITY_DATASET,
+    useCdn: false,
+    apiVersion: '2024-01-31',
+    token: undefined,
+    perspective: 'published',
+});
 
 // Public CDN fallback client if a configured SANITY_TOKEN is expired or unauthorized (401)
 const publicClient = createClient({
@@ -56,41 +59,53 @@ const publicClient = createClient({
     perspective: 'published'
 });
 
-let usePublicFallback = false;
+/**
+ * Returns either the cached API CDN client (default) or the Live API client (when forceLive = true)
+ */
+export function getSanityClient(forceLive = false): SanityClient {
+    return forceLive ? liveClient : client;
+}
 
-// Telemetry & Audit Logger to track exact API call volume and CDN status
+// Telemetry & Audit Logger to track exact API call volume, span profiler, and 401 token fallback
 let apiCallCount = 0;
-const rawFetch = client.fetch.bind(client);
-const publicFetch = publicClient.fetch.bind(publicClient);
-(client as any).fetch = async (query: string, ...rest: any[]) => {
-    apiCallCount++;
-    const querySummary = typeof query === 'string' 
-        ? query.replace(/[\r\n\s]+/g, ' ').trim().slice(0, 90)
-        : 'dynamic query';
-    const isUsingCdn = usePublicFallback || (sanityConfig.useCdn && !sanityConfig.token);
-    const endpointType = isUsingCdn ? 'API CDN (5,000,000 Free/mo)' : 'LIVE API (Paid Quota)';
-    if (isDev) {
-        console.log(`[SANITY API CALL #${apiCallCount}] [${endpointType}] ${querySummary}...`);
-    }
 
-    const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    try {
-        if (usePublicFallback) {
-            return await (publicFetch as any)(query, ...rest);
+function wrapSanityClient(targetClient: SanityClient, fallbackClient: SanityClient, label: string) {
+    let useFallback = false;
+    const rawFetch = targetClient.fetch.bind(targetClient);
+    const fallbackFetch = fallbackClient.fetch.bind(fallbackClient);
+
+    (targetClient as any).fetch = async (query: string, ...rest: any[]) => {
+        apiCallCount++;
+        const querySummary = typeof query === 'string'
+            ? query.replace(/[\r\n\s]+/g, ' ').trim().slice(0, 80)
+            : 'dynamic query';
+        if (isDev) {
+            console.log(`[SANITY:${label} #${apiCallCount}] ${querySummary}...`);
         }
+
+        const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
         try {
-            return await (rawFetch as any)(query, ...rest);
-        } catch (err: any) {
-            if (err?.statusCode === 401 || err?.status === 401 || String(err?.message || '').includes('Unauthorized')) {
-                usePublicFallback = true;
-                return await (publicFetch as any)(query, ...rest);
+            if (useFallback) {
+                return await (fallbackFetch as any)(query, ...rest);
             }
-            throw err;
+            try {
+                return await (rawFetch as any)(query, ...rest);
+            } catch (err: any) {
+                if (err?.statusCode === 401 || err?.status === 401 || String(err?.message || '').includes('Unauthorized') || String(err?.message || '').includes('401')) {
+                    console.warn(`⚠️ [Sanity:${label}] 401 Unauthorized with token. Falling back to public client...`);
+                    useFallback = true;
+                    return await (fallbackFetch as any)(query, ...rest);
+                }
+                throw err;
+            }
+        } finally {
+            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            const dur = Math.max(0, Math.round(now - t0));
+            getActiveProfiler()?.addSpan('sanity', dur);
         }
-    } finally {
-        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        const dur = Math.max(0, Math.round(now - t0));
-        getActiveProfiler()?.addSpan('sanity', dur);
-    }
-};
+    };
+}
+
+wrapSanityClient(client, publicClient, 'CDN');
+wrapSanityClient(liveClient, publicLiveClient, 'Live');
 
