@@ -1,5 +1,5 @@
-import { client } from '@utils/sanity-client';
-import { createCmsKeyedCache } from '@utils/cache';
+import { client, getSanityClient } from '@utils/sanity-client';
+import { createCmsCache, createCmsKeyedCache } from '@utils/cache';
 import { SECTIONS } from './blocks';
 import type { Page } from 'types';
 
@@ -27,15 +27,21 @@ function normalizePageSlug(slug?: string | null): string {
 
 const pageBySlugCache = createCmsKeyedCache<Page>(
   'cms:page',
-  async (cacheSlug: string) => {
+  async (cacheSlug: string, forceRefresh?: boolean) => {
     const formattedSlug = cacheSlug === 'home' ? '/' : `/${cacheSlug}`;
     const unslashed = cacheSlug === 'home' ? 'home' : cacheSlug;
-    const data = await client.fetch<Page[]>(
+    const data = await getSanityClient(forceRefresh).fetch<Page[]>(
       `*[_type == "page" && (slug.current == $formattedSlug || slug.current == $unslashed)] ${PAGE_QUERY_OBJ}`,
       { formattedSlug, unslashed }
     );
     return data && data.length > 0 ? data[0] : null;
   }
+);
+
+const allPagesCache = createCmsCache<Page[]>(
+  (forceRefresh) => getSanityClient(forceRefresh).fetch<Page[]>(`*[_type == "page"] ${PAGE_QUERY_OBJ}`),
+  [],
+  { kvKey: 'cms:pages:all' }
 );
 
 /**
@@ -51,6 +57,7 @@ export class PageService {
 
   public static invalidateCache(): void {
     pageBySlugCache.invalidate();
+    allPagesCache.invalidate();
   }
 
   public static invalidateAll(): void {
@@ -58,16 +65,14 @@ export class PageService {
   }
 
   /**
-   * Fetch all pages
+   * Fetch all pages (L1 Memory 5m -> L2 Permanent KV -> L3 Sanity)
    */
-  public static async getAll(): Promise<Page[]> {
-    try {
-      const data = await client.fetch<Page[]>(`*[_type == "page"] ${PAGE_QUERY_OBJ}`);
-      return data || [];
-    } catch (err: any) {
-      console.error('PageService.getAll failed:', err?.message);
-      return [];
-    }
+  public static async getAll(forceRefresh = false, customEnv?: any): Promise<Page[]> {
+    return allPagesCache.get(forceRefresh, customEnv);
+  }
+
+  public static async refreshAll(customEnv?: any): Promise<Page[]> {
+    return allPagesCache.refresh(customEnv);
   }
 
   /**

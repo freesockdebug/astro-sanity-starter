@@ -23,31 +23,43 @@ export const GET: APIRoute = async ({ request, url }) => {
 
   try {
     const q = url.searchParams.get('q')?.trim() || '';
-    const limitParam = parseInt(url.searchParams.get('limit') || '120', 10);
-    const limit = Math.min(Math.max(isNaN(limitParam) ? 120 : limitParam, 1), 500);
+    const offsetParam = parseInt(url.searchParams.get('offset') || '0', 10);
+    const limitParam = parseInt(url.searchParams.get('limit') || '40', 10);
+    const offset = Math.max(isNaN(offsetParam) ? 0 : offsetParam, 0);
+    const limit = Math.min(Math.max(isNaN(limitParam) ? 40 : limitParam, 1), 200);
+    const end = offset + limit;
 
     const client = getSanityAdminClient(cfEnv);
     const qFilter = q ? `*${q}*` : '*';
 
-    const assets = await client.fetch(
-      `*[_type == "sanity.imageAsset" && ($q == "" || originalFilename match $qFilter || title match $qFilter)]
-        | order(_createdAt desc)[0...$limit] {
-          _id,
-          url,
-          originalFilename,
-          size,
-          mimeType,
-          "width": metadata.dimensions.width,
-          "height": metadata.dimensions.height,
-          _createdAt
-        }`,
-      { q, qFilter, limit }
+    const result = await client.fetch<{ assets: any[]; total: number }>(
+      `{
+        "assets": *[_type == "sanity.imageAsset" && ($q == "" || originalFilename match $qFilter || title match $qFilter)]
+          | order(_createdAt desc)[$offset...$end] {
+            _id,
+            url,
+            originalFilename,
+            size,
+            mimeType,
+            "width": metadata.dimensions.width,
+            "height": metadata.dimensions.height,
+            _createdAt
+          },
+        "total": count(*[_type == "sanity.imageAsset" && ($q == "" || originalFilename match $qFilter || title match $qFilter)])
+      }`,
+      { q, qFilter, offset, end }
     );
+
+    const assets = result?.assets || [];
+    const total = typeof result?.total === 'number' ? result.total : assets.length;
 
     return jsonNoCache({
       success: true,
-      assets: assets || [],
-      total: assets?.length || 0,
+      assets,
+      total,
+      offset,
+      limit,
+      hasMore: offset + assets.length < total,
     });
   } catch (err: any) {
     console.error('[CMS Upload GET API] Failed to fetch assets from Sanity:', err);

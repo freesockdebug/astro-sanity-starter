@@ -28,6 +28,24 @@ export const sanityConfig: ClientConfig = {
 
 export const client = createClient(sanityConfig);
 
+// Dedicated Live API client bypassing API CDN 1~10s eventual consistency lag
+// Used exclusively during forceRefresh (CMS write-through & Webhook cache rebuild)
+export const liveClient = createClient({
+    projectId: SANITY_PROJECT_ID,
+    dataset: SANITY_DATASET,
+    useCdn: false,
+    apiVersion: '2024-01-31',
+    token: SANITY_TOKEN || undefined,
+    perspective: 'published',
+});
+
+/**
+ * Returns either the cached API CDN client (default) or the Live API client (when forceLive = true)
+ */
+export function getSanityClient(forceLive = false): SanityClient {
+    return forceLive ? liveClient : client;
+}
+
 // Public CDN fallback client if a configured SANITY_TOKEN is expired or unauthorized (401)
 const publicClient = createClient({
     projectId: SANITY_PROJECT_ID,

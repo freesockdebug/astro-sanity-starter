@@ -1,4 +1,4 @@
-import { client } from '@utils/sanity-client';
+import { client, getSanityClient } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
 import { createCmsCache } from '@utils/cache';
 import { IMAGE } from './blocks';
@@ -27,7 +27,7 @@ export const CONFIG_QUERY_OBJ = `{
 }`;
 
 const configCache = createCmsCache<SiteConfig | null>(
-  () => client.fetch<SiteConfig>(`*[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ}`),
+  (forceRefresh) => getSanityClient(forceRefresh).fetch<SiteConfig>(`*[_type == "siteConfig"][0] ${CONFIG_QUERY_OBJ}`),
   {} as SiteConfig,
   {
     kvKey: 'cms:siteConfig',

@@ -33,7 +33,7 @@ export interface CmsCacheOptions<T> {
  * - Upstream Sanity fetcher only runs on explicit refresh (CMS save / Webhook) or KV cold miss
  */
 export function createCmsCache<T>(
-  fetcher: () => Promise<T>,
+  fetcher: (forceRefresh?: boolean) => Promise<T>,
   fallback: T,
   options?: CmsCacheOptions<T>
 ): CmsCache<T> {
@@ -61,7 +61,7 @@ export function createCmsCache<T>(
         }
 
         // 2. Upstream Sanity fetch (Write-Through on forceRefresh, or first-ever KV miss)
-        const res = await fetcher();
+        const res = await fetcher(forceRefresh);
         const hasValidData =
           res !== undefined &&
           res !== null &&
@@ -147,7 +147,7 @@ export interface CmsKeyedCacheOptions {
  */
 export function createCmsKeyedCache<T>(
   keyPrefix: string,
-  fetcher: (key: string) => Promise<T | null>,
+  fetcher: (key: string, forceRefresh?: boolean) => Promise<T | null>,
   options?: CmsKeyedCacheOptions
 ): CmsKeyedCache<T> {
   const ttlMs = options?.ttlMs ?? 300_000;
@@ -196,7 +196,7 @@ export function createCmsKeyedCache<T>(
           } catch {}
         }
 
-        const data = await fetcher(rawKey);
+        const data = await fetcher(rawKey, forceRefresh);
         if (data) {
           setL1(rawKey, data);
           if (forceRefresh) {

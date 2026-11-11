@@ -74,7 +74,33 @@
         </div>
 
         <div class="flex items-center gap-2">
-          <span id="media-count-label" class="text-[11px] text-[#86868b]">Loading assets...</span>
+          <span id="media-count-label" class="text-[11px] text-[#86868b] mr-1">Loading assets...</span>
+
+          <!-- Pagination Controls -->
+          <div class="flex items-center gap-1 bg-[#f5f5f7] p-0.5 rounded-lg border border-black/5">
+            <button
+              type="button"
+              id="btn-media-prev"
+              disabled
+              class="h-6 px-2 rounded-md text-[11px] font-medium text-[#1d1d1f] hover:bg-white disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Previous page"
+            >
+              ◀ Prev
+            </button>
+            <span id="media-page-label" class="px-2 text-[11px] font-mono text-[#52525b]">
+              Page 1 / 1
+            </span>
+            <button
+              type="button"
+              id="btn-media-next"
+              disabled
+              class="h-6 px-2 rounded-md text-[11px] font-medium text-[#1d1d1f] hover:bg-white disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Next page"
+            >
+              Next ▶
+            </button>
+          </div>
+
           <button
             type="button"
             id="btn-refresh-media"
@@ -87,7 +113,7 @@
       </div>
 
       <!-- Assets Grid Container: Outer scroll container + inner grid container -->
-      <div class="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 bg-[#fcfcfd]">
+      <div id="media-grid-scroll" class="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 bg-[#fcfcfd]">
         <div id="media-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 items-start">
           <!-- Skeleton loaders or items rendered via JS -->
         </div>
@@ -232,7 +258,10 @@
     onSelect: (selectedAssets: MediaAsset[]) => void;
   }
 
+  const PAGE_SIZE = 40;
   let mediaAssets: MediaAsset[] = [];
+  let totalAssets = 0;
+  let currentPage = 1;
   let currentSelection: Map<string, MediaAsset> = new Map();
   let currentOptions: OpenMediaOptions | null = null;
   let isLoading = false;
@@ -276,6 +305,10 @@
   const modeBadge = document.getElementById('media-modal-mode-badge');
   const searchInput = document.getElementById('media-search-input') as HTMLInputElement | null;
   const countLabel = document.getElementById('media-count-label');
+  const pageLabel = document.getElementById('media-page-label');
+  const btnPrev = document.getElementById('btn-media-prev') as HTMLButtonElement | null;
+  const btnNext = document.getElementById('btn-media-next') as HTMLButtonElement | null;
+  const mediaGridScroll = document.getElementById('media-grid-scroll');
   const mediaGrid = document.getElementById('media-grid');
   const selectionInfo = document.getElementById('media-selection-info');
   const btnClear = document.getElementById('btn-media-clear');
@@ -316,6 +349,28 @@
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
+  function updatePaginationControls() {
+    const totalPages = Math.max(1, Math.ceil(totalAssets / PAGE_SIZE));
+    if (pageLabel) {
+      pageLabel.textContent = `Page ${currentPage} / ${totalPages}`;
+    }
+    if (btnPrev) {
+      btnPrev.disabled = isLoading || currentPage <= 1;
+    }
+    if (btnNext) {
+      btnNext.disabled = isLoading || currentPage >= totalPages;
+    }
+    if (countLabel && !isLoading) {
+      if (totalAssets === 0) {
+        countLabel.textContent = '0 assets';
+      } else {
+        const start = (currentPage - 1) * PAGE_SIZE + 1;
+        const end = Math.min(currentPage * PAGE_SIZE, totalAssets);
+        countLabel.textContent = `${start}–${end} of ${totalAssets} assets`;
+      }
+    }
+  }
+
   function updateFooterSelection() {
     const count = currentSelection.size;
     if (count === 0) {
@@ -338,6 +393,36 @@
         btnConfirm.textContent = `Insert Selected (${count})`;
       }
     }
+  }
+
+  function updateGridSelectionDom() {
+    if (!mediaGrid) return;
+    const isMultiple = currentOptions?.mode === 'multiple';
+
+    mediaGrid.querySelectorAll('.media-card').forEach((card) => {
+      const id = card.getAttribute('data-id');
+      if (!id) return;
+      const isSelected = currentSelection.has(id);
+      const badge = card.querySelector('.media-card-badge');
+
+      if (isSelected) {
+        card.classList.add('border-[#1d1d1f]', 'ring-2', 'ring-black', 'ring-offset-1', 'shadow-md');
+        card.classList.remove('border-black/10', 'hover:border-black/30', 'hover:shadow-xs');
+        if (badge) {
+          badge.classList.add('bg-[#1d1d1f]', 'text-white', 'shadow-md');
+          badge.classList.remove('bg-black/30', 'text-white/70', 'group-hover:bg-black/50');
+          badge.textContent = '✓';
+        }
+      } else {
+        card.classList.remove('border-[#1d1d1f]', 'ring-2', 'ring-black', 'ring-offset-1', 'shadow-md');
+        card.classList.add('border-black/10', 'hover:border-black/30', 'hover:shadow-xs');
+        if (badge) {
+          badge.classList.remove('bg-[#1d1d1f]', 'text-white', 'shadow-md');
+          badge.classList.add('bg-black/30', 'text-white/70', 'group-hover:bg-black/50');
+          badge.textContent = isMultiple ? '＋' : '';
+        }
+      }
+    });
   }
 
   function renderGrid() {
@@ -376,6 +461,7 @@
               ? 'border-[#1d1d1f] ring-2 ring-black ring-offset-1 shadow-md'
               : 'border-black/10 hover:border-black/30 hover:shadow-xs'
           }"
+          style="content-visibility: auto; contain-intrinsic-size: 200px;"
           data-id="${escapeHtml(asset._id)}"
         >
           <!-- Image Thumbnail (aspect-square on container, absolute inset-0 img) -->
@@ -384,11 +470,12 @@
               src="${escapeHtml(resolveSanityRefUrl(asset.url, { width: 360 }))}"
               alt="${escapeHtml(filename)}"
               loading="lazy"
+              decoding="async"
               class="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
             
             <!-- Selection Badge -->
-            <div class="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+            <div class="media-card-badge absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
               isSelected
                 ? 'bg-[#1d1d1f] text-white shadow-md'
                 : 'bg-black/30 text-white/70 group-hover:bg-black/50'
@@ -433,7 +520,7 @@
           currentSelection.clear();
           currentSelection.set(id, asset);
         }
-        renderGrid();
+        updateGridSelectionDom();
         updateFooterSelection();
       });
 
@@ -451,47 +538,66 @@
     });
   }
 
-  async function fetchAssets(query = '') {
+  async function fetchAssets(query = '', page = 1) {
     isLoading = true;
+    currentPage = Math.max(1, page);
+    updatePaginationControls();
     renderGrid();
     if (countLabel) countLabel.textContent = 'Loading...';
 
     try {
+      const offset = (currentPage - 1) * PAGE_SIZE;
       const qParam = query.trim() ? `&q=${encodeURIComponent(query.trim())}` : '';
-      const res = await fetch(`/api/admin/cms/upload?limit=120${qParam}`);
+      const res = await fetch(`/api/admin/cms/upload?offset=${offset}&limit=${PAGE_SIZE}${qParam}`);
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Failed to fetch assets');
 
       mediaAssets = data.assets || [];
-      if (countLabel) {
-        countLabel.textContent = `${mediaAssets.length} assets`;
-      }
+      totalAssets = typeof data.total === 'number' ? data.total : mediaAssets.length;
     } catch (e: any) {
       if (countLabel) countLabel.textContent = 'Failed to load';
       (window as any).__showToast?.(e.message, 'error');
       mediaAssets = [];
+      totalAssets = 0;
     } finally {
       isLoading = false;
+      updatePaginationControls();
       renderGrid();
+      if (mediaGridScroll) {
+        mediaGridScroll.scrollTop = 0;
+      }
     }
   }
+
+  btnPrev?.addEventListener('click', () => {
+    if (currentPage > 1 && !isLoading) {
+      fetchAssets(searchInput?.value || '', currentPage - 1);
+    }
+  });
+
+  btnNext?.addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(totalAssets / PAGE_SIZE));
+    if (currentPage < totalPages && !isLoading) {
+      fetchAssets(searchInput?.value || '', currentPage + 1);
+    }
+  });
 
   // Search input handler
   searchInput?.addEventListener('input', (e: any) => {
     clearTimeout(searchDebounceTimer);
     const val = e.target.value;
     searchDebounceTimer = setTimeout(() => {
-      fetchAssets(val);
+      fetchAssets(val, 1);
     }, 300);
   });
 
   document.getElementById('btn-refresh-media')?.addEventListener('click', () => {
-    fetchAssets(searchInput?.value || '');
+    fetchAssets(searchInput?.value || '', currentPage);
   });
 
   btnClear?.addEventListener('click', () => {
     currentSelection.clear();
-    renderGrid();
+    updateGridSelectionDom();
     updateFooterSelection();
   });
 

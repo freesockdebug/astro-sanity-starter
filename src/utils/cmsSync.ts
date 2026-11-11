@@ -9,6 +9,7 @@ import { SecurityService } from '@utils/security';
 import { getSystemSettings } from '@utils/db';
 import { getRuntimeEnv } from '@utils/auth';
 import { kvGet, kvPut } from '@utils/kv';
+import { runInBackground } from '@utils/cache';
 
 export interface CmsSyncOptions {
   docType?: string;
@@ -19,6 +20,89 @@ export interface CmsSyncOptions {
   origin: string;
   cfEnv?: any;
   isDebug?: boolean;
+  cardFieldsChanged?: boolean;
+}
+
+export const ROUTE_REVS_KV_KEY = 'cms:route_revs';
+let localRouteRevs: Record<string, number> | null = null;
+let localRouteRevsLoadedAt = 0;
+const ROUTE_REVS_SYNC_INTERVAL_MS = 5_000;
+
+export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Record<string, number>> {
+  const now = Date.now();
+  if (!force && localRouteRevs && now - localRouteRevsLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
+    return localRouteRevs;
+  }
+  const kvRevs = await kvGet<Record<string, number>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+  localRouteRevs = kvRevs && typeof kvRevs === 'object' ? kvRevs : {};
+  localRouteRevsLoadedAt = now;
+  return localRouteRevs;
+}
+
+/**
+ * Increment revision timestamps for specific base paths (e.g. ['/products/cashmere', '/products'])
+ */
+export async function bumpRouteRevisions(basePaths: Iterable<string>, bumpGlobalLayout = false, cfEnv?: any): Promise<Record<string, number>> {
+  const current = await getRouteRevisions(cfEnv, true);
+  const now = Date.now();
+  const updated = { ...current };
+
+  if (bumpGlobalLayout) {
+    updated['__layout'] = now;
+  }
+  for (const rawPath of basePaths) {
+    if (!rawPath) continue;
+    const clean = rawPath === '/' ? '/' : `/${rawPath.replace(/^\/+|\/+$/g, '')}`;
+    updated[clean] = now;
+  }
+
+  localRouteRevs = updated;
+  localRouteRevsLoadedAt = now;
+  await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
+  return updated;
+}
+
+/**
+ * Resolves the effective route revision timestamp for a given pathname
+ */
+export function resolvePathRevision(pathname: string, revs: Record<string, number>, supportedLocales: readonly string[]): number {
+  let basePath = pathname.replace(/\/+$/, '') || '/';
+  for (const loc of supportedLocales) {
+    if (basePath === `/${loc}`) {
+      basePath = '/';
+      break;
+    }
+    if (basePath.startsWith(`/${loc}/`)) {
+      basePath = basePath.slice(loc.length + 1) || '/';
+      break;
+    }
+  }
+  const routeRev = revs[basePath] || 0;
+  const layoutRev = revs['__layout'] || 0;
+  return Math.max(routeRev, layoutRev);
+}
+
+const CARD_IMPACT_KEYS = [
+  'title', 'shortTitle', 'slug', 'sku', 'currency', 'tagline',
+  'moq', 'leadTime', 'mainImage', 'colors', 'pricingTiers', 'category'
+];
+
+/**
+ * Compares two product documents to check if listing card attributes changed
+ */
+export function hasProductCardFieldsChanged(beforeDoc: any, afterDoc: any): boolean {
+  if (!beforeDoc || !afterDoc) return true;
+  for (const key of CARD_IMPACT_KEYS) {
+    if (JSON.stringify(beforeDoc[key]) !== JSON.stringify(afterDoc[key])) {
+      return true;
+    }
+  }
+  const specBefore = (beforeDoc.specifications || []).slice(0, 2);
+  const specAfter = (afterDoc.specifications || []).slice(0, 2);
+  if (JSON.stringify(specBefore) !== JSON.stringify(specAfter)) {
+    return true;
+  }
+  return false;
 }
 
 export interface CmsPurgeResult {
@@ -349,10 +433,33 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
   if (docType) {
     switch (docType) {
       case 'product': {
-        collectedPaths.add('/');
-        collectedPaths.add('/products');
+        const prevProductList = await ProductService.getAll(false, cfEnv).catch(() => []);
+        const addNeighborPaths = (targetSlug: string) => {
+          const idx = prevProductList.findIndex((p: any) => p.slug === targetSlug);
+          if (idx !== -1 && prevProductList.length > 1) {
+            const prevSlug = prevProductList[(idx - 1 + prevProductList.length) % prevProductList.length]?.slug;
+            const nextSlug = prevProductList[(idx + 1) % prevProductList.length]?.slug;
+            if (prevSlug) collectedPaths.add(`/products/${prevSlug}`);
+            if (nextSlug) collectedPaths.add(`/products/${nextSlug}`);
+          }
+        };
+
         if (slug) collectedPaths.add(`/products/${slug}`);
-        if (oldSlug && oldSlug !== slug) collectedPaths.add(`/products/${oldSlug}`);
+        if (oldSlug && oldSlug !== slug) {
+          collectedPaths.add(`/products/${oldSlug}`);
+          addNeighborPaths(oldSlug);
+        }
+
+        // Assess if listing cards need refresh or only detail page
+        const cardChanged = options.cardFieldsChanged ?? true;
+        if (isDelete || operation === 'create' || (oldSlug && oldSlug !== slug)) {
+          if (slug) addNeighborPaths(slug);
+          collectedPaths.add('/');
+          collectedPaths.add('/products');
+        } else if (cardChanged) {
+          collectedPaths.add('/');
+          collectedPaths.add('/products');
+        }
 
         if (isDelete) {
           // On delete: strictly evict from KV, do NOT query Sanity!
@@ -372,8 +479,10 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
             refreshTasks.push(ProductService.refreshSlug(slug, cfEnv));
             taskDescriptions.push(`refreshProductSlug(${slug})`);
           }
-          refreshTasks.push(ProductService.refreshAll(cfEnv));
-          taskDescriptions.push('refreshProductAll()');
+          if (cardChanged || operation === 'create' || (oldSlug && oldSlug !== slug)) {
+            refreshTasks.push(ProductService.refreshAll(cfEnv));
+            taskDescriptions.push('refreshProductAll()');
+          }
         }
         break;
       }
@@ -395,10 +504,12 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
       }
 
       case 'productStorySettings': {
-        collectedPaths.add('/');
-        collectedPaths.add('/products');
         refreshTasks.push(ProductService.getProductStorySettings(true, cfEnv));
         taskDescriptions.push('refreshProductStorySettings()');
+        const allProds = await ProductService.getAll(false, cfEnv).catch(() => []);
+        for (const p of allProds) {
+          if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
+        }
         break;
       }
 
@@ -444,6 +555,11 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
         collectedPaths.add('/about');
         collectedPaths.add('/private-label');
         collectedPaths.add('/contact');
+        // Include all product detail pages dynamically so global header/footer updates never leave them stale
+        const allProds = await ProductService.getAll(false, cfEnv).catch(() => []);
+        for (const p of allProds) {
+          if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
+        }
         refreshTasks.push(SiteConfigService.getConfig(true));
         taskDescriptions.push('refreshSiteConfig()');
         break;
@@ -528,6 +644,10 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
   // Execute KV sync
   await Promise.allSettled(refreshTasks);
 
+  // Bump route revisions for all affected paths in KV so global edge PoPs transition to the new cacheKey version instantly
+  const isGlobalLayout = docType === 'siteConfig' || docType === 'header' || docType === 'footer' || !docType;
+  await bumpRouteRevisions(collectedPaths, isGlobalLayout, cfEnv).catch(() => {});
+
   // Execute Edge HTML Cache & Cloudflare CDN purge
   const purgeResult = await purgeEdgeHtmlCache({
     targetPaths: collectedPaths,
@@ -535,6 +655,21 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
     cfEnv,
     isDebug,
   });
+
+  // Background Edge Warmup (Purge & Warm via waitUntil / runInBackground)
+  if (!isDelete && collectedPaths.size > 0) {
+    const warmPaths = Array.from(collectedPaths).slice(0, 5);
+    runInBackground(
+      Promise.allSettled(
+        warmPaths.map((p) =>
+          fetch(`${origin}${p.startsWith('/') ? p : `/${p}`}`, {
+            method: 'GET',
+            headers: { 'User-Agent': 'Cloudflare-Edge-Warmup/1.0' },
+          })
+        )
+      )
+    );
+  }
 
   return {
     success: true,

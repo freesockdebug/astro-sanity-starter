@@ -2,6 +2,8 @@
 import { defineMiddleware } from 'astro:middleware';
 import { env as cfEnv } from 'cloudflare:workers';
 import { SiteConfigService } from '@data/siteConfig';
+import { NON_DEFAULT_LOCALES } from '@i18n';
+import { getRouteRevisions, resolvePathRevision } from './utils/cmsSync';
 import { SESSION_COOKIE_NAME, getCookieValue, getRuntimeEnv, verifySessionToken } from './utils/auth';
 import { SecurityService } from './utils/security';
 import { logger } from './utils/logger';
@@ -82,6 +84,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       },
     });
   }
+
+  // Preload SiteConfig in L1 memory so SanityImageService.studioEnableProxy is accurate across cold starts
+  SiteConfigService.getConfig().catch(() => {});
 
   const startTime = performance.now();
   const profiler = new RequestProfiler();
@@ -379,7 +384,14 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     ? (caches as any).default
     : null;
 
+  // Resolve versioned cache key: binds page route revision to ensure instant global edge invalidation
+  const revs = await getRouteRevisions(cfEnv).catch(() => ({}));
+  const pathRev = resolvePathRevision(pathname, revs, NON_DEFAULT_LOCALES);
+
   const canonicalUrl = new URL(pathname, url.origin);
+  if (pathRev > 0) {
+    canonicalUrl.searchParams.set('__rev', String(pathRev));
+  }
   const cacheKey = new Request(canonicalUrl.toString(), {
     method: 'GET',
   });

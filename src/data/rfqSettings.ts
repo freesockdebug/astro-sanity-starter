@@ -1,4 +1,4 @@
-import { client } from '@utils/sanity-client';
+import { client, getSanityClient } from '@utils/sanity-client';
 import { createCmsCache } from '@utils/cache';
 import { DEFAULT_RFQ } from './defaults';
 import type { RfqSettings } from 'types';
@@ -33,8 +33,8 @@ export interface ButtonVisibilityOptions {
 }
 
 const rfqCache = createCmsCache<RfqSettings>(
-  async () => {
-    const directDoc = await client.fetch<any>('*[_type == "rfqSettings"][0]');
+  async (forceRefresh) => {
+    const directDoc = await getSanityClient(forceRefresh).fetch<any>('*[_type == "rfqSettings"][0]');
     if (directDoc && Object.keys(directDoc).length > 2) {
       return { ...DEFAULT_RFQ_SETTINGS, ...directDoc };
     }
