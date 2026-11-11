@@ -382,6 +382,38 @@ async function syncHeadStyles(targetDoc: Document): Promise<void> {
   }
 }
 
+function detectDeploymentDrift(targetDoc: Document): boolean {
+  const currentScripts = Array.from(document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]'));
+  const targetScripts = Array.from(targetDoc.querySelectorAll<HTMLScriptElement>('script[type="module"][src]'));
+
+  const getScriptBase = (src: string) => {
+    const filename = src.split('/').pop()?.split('?')[0] || '';
+    return filename.replace(/\.[a-zA-Z0-9_-]+\.js$/, '');
+  };
+
+  const currentBases = new Map<string, string>();
+  for (const s of currentScripts) {
+    const src = s.getAttribute('src');
+    if (src) {
+      const base = getScriptBase(src);
+      if (base) currentBases.set(base, src);
+    }
+  }
+
+  for (const s of targetScripts) {
+    const src = s.getAttribute('src');
+    if (src) {
+      const base = getScriptBase(src);
+      const existingSrc = currentBases.get(base);
+      if (existingSrc && existingSrc !== src) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 async function reactivateScripts(targetDoc: Document): Promise<void> {
   // Clean up dynamic inline scripts from prior navigations
   document.querySelectorAll('script[data-shell-inline-dynamic]').forEach((s) => s.remove());
@@ -637,6 +669,15 @@ export function initAppShellRouter(options: AppShellOptions): void {
       const newCanvas = doc.getElementById('shell-main-canvas');
       if (!newCanvas) {
         clearDimming();
+        window.location.href = targetUrl.href;
+        return;
+      }
+
+      // 5.5. Deployment Drift Protection:
+      // If server deployed new build hashes while client was browsing, perform clean native reload
+      if (detectDeploymentDrift(doc)) {
+        clearDimming();
+        snapshotCache.clear();
         window.location.href = targetUrl.href;
         return;
       }
