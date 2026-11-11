@@ -1138,26 +1138,32 @@ const pageTitle = 'Products & Catalog Workspace';
         item.asset?.url ||
         currentEditingProduct?.galleryUrls?.[idx] || '';
 
+      const isCurrentMain = Boolean(
+        (item.asset?._ref && item.asset._ref === currentEditingProduct?.mainImage?.asset?._ref) ||
+        (item.asset?.url && item.asset.url === currentEditingProduct?.mainImageUrl) ||
+        (url && currentEditingProduct?.mainImageUrl && url === currentEditingProduct.mainImageUrl)
+      );
+
       return `
         <div
-          class="gallery-card relative group rounded-xl overflow-hidden border border-black/10 aspect-square bg-[#f5f5f7] cursor-grab active:cursor-grabbing transition-all select-none"
+          class="gallery-card relative group rounded-xl overflow-hidden border ${isCurrentMain ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-black/10'} aspect-square bg-[#f5f5f7] cursor-grab active:cursor-grabbing transition-all select-none"
           draggable="true"
           data-idx="${idx}"
         >
           ${url ? `<img src="${escapeHtml(url)}" class="w-full h-full object-cover pointer-events-none" />` : `<div class="w-full h-full flex items-center justify-center text-[10px] text-[#86868b]">Img</div>`}
 
-          <!-- Drag Handle Badge -->
-          <div class="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/50 text-white text-[9px] font-mono pointer-events-none">
-            #${idx + 1}
+          <!-- Drag Handle / Main Indicator Badge -->
+          <div class="absolute top-1 left-1 px-1.5 py-0.5 rounded-md ${isCurrentMain ? 'bg-amber-500 text-white font-bold' : 'bg-black/50 text-white font-mono'} text-[9px] pointer-events-none flex items-center gap-1">
+            ${isCurrentMain ? '★ Cover' : `#${idx + 1}`}
           </div>
 
           <!-- Actions Toolbar -->
           <div class="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               type="button"
-              class="btn-make-main p-1 rounded-md bg-black/70 hover:bg-amber-500 text-white text-[10px] font-bold shadow-xs transition-colors cursor-pointer"
+              class="btn-make-main p-1 rounded-md ${isCurrentMain ? 'bg-amber-500 text-white' : 'bg-black/70 hover:bg-amber-500 text-white'} text-[10px] font-bold shadow-xs transition-colors cursor-pointer"
               data-idx="${idx}"
-              title="Set as Main Cover Image (Swap)"
+              title="Set as Main Cover Image"
             >
               ★ Main
             </button>
@@ -1174,42 +1180,29 @@ const pageTitle = 'Products & Catalog Workspace';
       `;
     }).join('');
 
-    // Set as Main Image (Swap losslessly)
+    // Set as Main Image (Copy reference to mainImage, keep gallery untouched)
     container.querySelectorAll('.btn-make-main').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
+        if (!Array.isArray(currentEditingProduct.gallery)) currentEditingProduct.gallery = [];
+
         const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
         const chosenGalleryItem = currentEditingProduct.gallery[idx];
         if (!chosenGalleryItem) return;
 
-        const previousMain = currentEditingProduct.mainImage;
-        const previousMainUrl = currentEditingProduct.mainImageUrl;
-
-        // Swap: if old main existed, put old main into this gallery slot; otherwise remove from gallery
-        if (previousMain && (previousMain.asset?._ref || previousMain.asset?.url || previousMainUrl)) {
-          currentEditingProduct.gallery[idx] = {
-            _type: 'image',
-            _key: chosenGalleryItem._key || crypto.randomUUID().slice(0, 8),
-            asset: previousMain.asset,
-          };
-          if (currentEditingProduct.galleryUrls) {
-            currentEditingProduct.galleryUrls[idx] = previousMainUrl || (window as any).resolveSanityRefUrl?.(previousMain) || '';
-          }
-        } else {
-          currentEditingProduct.gallery.splice(idx, 1);
-          currentEditingProduct.galleryUrls?.splice(idx, 1);
-        }
-
-        // Set chosen as main
+        // Set chosen gallery image as main image directly (preserves gallery content intact)
         currentEditingProduct.mainImage = {
           _type: 'image',
           asset: chosenGalleryItem.asset,
         };
-        currentEditingProduct.mainImageUrl = (window as any).resolveSanityRefUrl?.(chosenGalleryItem) || chosenGalleryItem.asset?.url || '';
+        currentEditingProduct.mainImageUrl = (window as any).resolveSanityRefUrl?.(chosenGalleryItem) ||
+          chosenGalleryItem.asset?.url ||
+          currentEditingProduct.galleryUrls?.[idx] || '';
 
         renderMainImagePreview();
         renderGalleryPreview();
-        (window as any).__showToast?.('Swapped gallery image with main product cover', 'success');
+        (window as any).__showToast?.('Set selected image as main catalog cover', 'success');
       });
     });
 
