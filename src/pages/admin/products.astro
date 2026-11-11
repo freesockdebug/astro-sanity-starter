@@ -549,14 +549,17 @@ const pageTitle = 'Products & Catalog Workspace';
   import { escapeHtml } from '@utils/adminWorkbench';
 
   function initProductsPage() {
-    let currentProducts: any[] = [];
-  let currentCategories: any[] = [];
-  let currentEditingProduct: any = null;
-  let activeLanguage = 'en';
+    const metaEl = document.getElementById('catalog-app-meta');
+    if (!metaEl || (metaEl as any).__initialized) return;
+    (metaEl as any).__initialized = true;
 
-  const metaEl = document.getElementById('catalog-app-meta');
-  const canWrite = metaEl?.getAttribute('data-can-write') === 'true';
-  const canDelete = metaEl?.getAttribute('data-can-delete') === 'true';
+    let currentProducts: any[] = [];
+    let currentCategories: any[] = [];
+    let currentEditingProduct: any = null;
+    let activeLanguage = 'en';
+
+    const canWrite = metaEl?.getAttribute('data-can-write') === 'true';
+    const canDelete = metaEl?.getAttribute('data-can-delete') === 'true';
 
   // UI Tabs Switcher
   const tabProductsBtn = document.getElementById('tab-btn-products');
@@ -633,7 +636,25 @@ const pageTitle = 'Products & Catalog Workspace';
   });
 
   function syncInputsToActiveDoc() {
-    if (!currentEditingProduct) return;
+    if (!currentEditingProduct) {
+      const pId = (document.getElementById('p-id') as HTMLInputElement)?.value.trim();
+      currentEditingProduct = {
+        _type: 'product',
+        _id: pId || undefined,
+        title: {},
+        shortTitle: {},
+        tagline: {},
+        story: {},
+        pricingTiers: [],
+        colors: [],
+        specifications: [],
+        minOrderQuantity: 200,
+        moq: '200 Pairs',
+        currency: 'USD',
+        isDraft: false,
+        isArchived: false,
+      };
+    }
     if (!currentEditingProduct.title) currentEditingProduct.title = {};
     if (!currentEditingProduct.shortTitle) currentEditingProduct.shortTitle = {};
     if (!currentEditingProduct.tagline) currentEditingProduct.tagline = {};
@@ -1017,6 +1038,7 @@ const pageTitle = 'Products & Catalog Workspace';
       onSelect: (selectedAssets: any[]) => {
         if (!selectedAssets || selectedAssets.length === 0) return;
         const asset = selectedAssets[0];
+        if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
         if (!currentEditingProduct.mainImage) currentEditingProduct.mainImage = { _type: 'image' };
         currentEditingProduct.mainImage.asset = {
           _type: 'reference',
@@ -1032,8 +1054,10 @@ const pageTitle = 'Products & Catalog Workspace';
 
   // Remove Main Image
   document.getElementById('btn-remove-main-image')?.addEventListener('click', () => {
-    currentEditingProduct.mainImage = null;
-    currentEditingProduct.mainImageUrl = '';
+    if (currentEditingProduct) {
+      currentEditingProduct.mainImage = null;
+      currentEditingProduct.mainImageUrl = '';
+    }
     renderMainImagePreview();
     (window as any).__showToast?.('Removed main cover image', 'info');
   });
@@ -1052,6 +1076,7 @@ const pageTitle = 'Products & Catalog Workspace';
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
 
+      if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
       if (!currentEditingProduct.mainImage) currentEditingProduct.mainImage = { _type: 'image' };
       currentEditingProduct.mainImage.asset = data.asset.asset;
       currentEditingProduct.mainImageUrl = data.url;
@@ -1071,6 +1096,7 @@ const pageTitle = 'Products & Catalog Workspace';
       title: 'Batch Select Gallery Images',
       onSelect: (selectedAssets: any[]) => {
         if (!selectedAssets || selectedAssets.length === 0) return;
+        if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
         if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
         if (!currentEditingProduct.galleryUrls) currentEditingProduct.galleryUrls = [];
 
@@ -1254,6 +1280,7 @@ const pageTitle = 'Products & Catalog Workspace';
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
 
+        if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
         if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
         if (!currentEditingProduct.galleryUrls) currentEditingProduct.galleryUrls = [];
         currentEditingProduct.gallery.push({
@@ -1276,7 +1303,7 @@ const pageTitle = 'Products & Catalog Workspace';
   function renderPricingTiersTable() {
     const tbody = document.getElementById('tier-rows');
     if (!tbody) return;
-    const tiers = currentEditingProduct.pricingTiers || [];
+    const tiers = currentEditingProduct?.pricingTiers || [];
     tbody.innerHTML = tiers.map((t: any, idx: number) => {
       const cleanPrice = t.price !== undefined && t.price !== null ? parseFloat(String(t.price).replace(/[^0-9.]/g, '')) : '';
       const safePrice = isNaN(cleanPrice as number) ? '' : cleanPrice;
@@ -1300,6 +1327,7 @@ const pageTitle = 'Products & Catalog Workspace';
   }
 
   document.getElementById('btn-add-tier')?.addEventListener('click', () => {
+    if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
     if (!currentEditingProduct.pricingTiers) currentEditingProduct.pricingTiers = [];
     currentEditingProduct.pricingTiers.push({ minQuantity: 100, maxQuantity: null, price: 3.00 });
     renderPricingTiersTable();
@@ -1309,7 +1337,7 @@ const pageTitle = 'Products & Catalog Workspace';
   function renderColorsList() {
     const container = document.getElementById('color-rows');
     if (!container) return;
-    const colors = currentEditingProduct.colors || [];
+    const colors = currentEditingProduct?.colors || [];
     container.innerHTML = colors.map((c: any, idx: number) => `
       <div class="flex items-center gap-2">
         <input type="color" class="c-hex-pick w-7 h-7 rounded-lg border border-black/10 p-0.5 cursor-pointer shrink-0" value="${c.hex || '#000000'}" />
@@ -1337,6 +1365,7 @@ const pageTitle = 'Products & Catalog Workspace';
   }
 
   document.getElementById('btn-add-color')?.addEventListener('click', () => {
+    if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
     if (!currentEditingProduct.colors) currentEditingProduct.colors = [];
     currentEditingProduct.colors.push({ name: 'New Color', hex: '#3b82f6' });
     renderColorsList();
@@ -1346,7 +1375,7 @@ const pageTitle = 'Products & Catalog Workspace';
   function renderSpecsList() {
     const container = document.getElementById('spec-rows');
     if (!container) return;
-    const specs = currentEditingProduct.specifications || [];
+    const specs = currentEditingProduct?.specifications || [];
     container.innerHTML = specs.map((s: any, idx: number) => `
       <div class="flex items-center gap-2">
         <input type="text" class="s-name w-1/3 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Name" value="${escapeHtml(s.label || s.name || '')}" />
@@ -1365,6 +1394,7 @@ const pageTitle = 'Products & Catalog Workspace';
   }
 
   document.getElementById('btn-add-spec')?.addEventListener('click', () => {
+    if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
     if (!currentEditingProduct.specifications) currentEditingProduct.specifications = [];
     currentEditingProduct.specifications.push({ label: '', name: '', value: '' });
     renderSpecsList();
@@ -1372,7 +1402,8 @@ const pageTitle = 'Products & Catalog Workspace';
 
   // Save Product Button Handler
   document.getElementById('btn-save-product')?.addEventListener('click', async () => {
-    syncInputsToActiveDoc();
+    const btnSave = document.getElementById('btn-save-product') as HTMLButtonElement | null;
+    if (btnSave?.disabled) return;
 
     const pSku = (document.getElementById('p-sku') as HTMLInputElement)?.value.trim();
     const pSlug = (document.getElementById('p-slug') as HTMLInputElement)?.value.trim();
@@ -1380,6 +1411,27 @@ const pageTitle = 'Products & Catalog Workspace';
       (window as any).__showToast?.('SKU and Slug are required.', 'error');
       return;
     }
+
+    if (!currentEditingProduct) {
+      const pId = (document.getElementById('p-id') as HTMLInputElement)?.value.trim();
+      currentEditingProduct = {
+        _type: 'product',
+        _id: pId || undefined,
+        title: {},
+        shortTitle: {},
+        slug: { _type: 'slug', current: pSlug },
+        pricingTiers: [],
+        colors: [],
+        specifications: [],
+        minOrderQuantity: 200,
+        moq: '200 Pairs',
+        currency: 'USD',
+        isDraft: false,
+        isArchived: false,
+      };
+    }
+
+    syncInputsToActiveDoc();
 
     currentEditingProduct.sku = pSku;
     currentEditingProduct.slug = { _type: 'slug', current: pSlug };
@@ -1445,6 +1497,11 @@ const pageTitle = 'Products & Catalog Workspace';
 
     (window as any).__showToast?.('Saving product to Sanity CMS...', 'info');
 
+    if (btnSave) {
+      btnSave.disabled = true;
+      btnSave.classList.add('opacity-50', 'pointer-events-none');
+    }
+
     try {
       const res = await fetch('/api/admin/cms/products', {
         method: 'POST',
@@ -1454,11 +1511,16 @@ const pageTitle = 'Products & Catalog Workspace';
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save');
 
-      (window as any).__showToast?.('Product successfully saved & cached refreshed!', 'success');
+      (window as any).__showToast?.('Product successfully saved & cache refreshed!', 'success');
       closeProductDrawer();
       loadData();
     } catch (err: any) {
       (window as any).__showToast?.(err.message, 'error');
+    } finally {
+      if (btnSave) {
+        btnSave.disabled = false;
+        btnSave.classList.remove('opacity-50', 'pointer-events-none');
+      }
     }
   });
 
