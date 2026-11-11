@@ -238,10 +238,39 @@
   let isLoading = false;
   let searchDebounceTimer: any = null;
 
+  function ensureSingleMediaModalPortal() {
+    let canonicalBackdrop = document.querySelector('body > #media-library-backdrop');
+    let canonicalModal = document.querySelector('body > #media-library-modal');
+
+    if (!canonicalBackdrop) {
+      const anyBackdrop = document.getElementById('media-library-backdrop');
+      if (anyBackdrop) {
+        document.body.appendChild(anyBackdrop);
+        canonicalBackdrop = anyBackdrop;
+      }
+    }
+    if (!canonicalModal) {
+      const anyModal = document.getElementById('media-library-modal');
+      if (anyModal) {
+        document.body.appendChild(anyModal);
+        canonicalModal = anyModal;
+      }
+    }
+
+    // Prune all redundant duplicates inside #shell-main-canvas or other containers
+    document.querySelectorAll('#media-library-backdrop').forEach((el) => {
+      if (el !== canonicalBackdrop) el.remove();
+    });
+    document.querySelectorAll('#media-library-modal').forEach((el) => {
+      if (el !== canonicalModal) el.remove();
+    });
+  }
+
+  ensureSingleMediaModalPortal();
+  document.addEventListener('shell:page-load', ensureSingleMediaModalPortal);
+
   const backdrop = document.getElementById('media-library-backdrop');
   const modal = document.getElementById('media-library-modal');
-  if (backdrop && backdrop.parentElement !== document.body) document.body.appendChild(backdrop);
-  if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
   const modalContent = modal?.querySelector('div');
   const modalTitle = document.getElementById('media-modal-title');
   const modeBadge = document.getElementById('media-modal-mode-badge');
@@ -577,6 +606,7 @@
    * Global function to open Cloud Media Library modal
    */
   (window as any).__openMediaLibrary = function(options: OpenMediaOptions) {
+    ensureSingleMediaModalPortal();
     currentOptions = options;
     currentSelection.clear();
 

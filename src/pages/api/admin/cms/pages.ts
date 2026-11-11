@@ -4,7 +4,7 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-admin';
 import { PageService } from '@data/page';
-import { syncCmsMutation } from '@utils/cmsSync';
+import { syncCmsMutation, sanitizeSanityDocument } from '@utils/cmsSync';
 import { computeJsonDiff, insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -69,10 +69,11 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, any>;
-    const doc = body.document;
-    if (!doc || doc._type !== 'page') {
+    const rawDoc = body.document;
+    if (!rawDoc || rawDoc._type !== 'page') {
       return jsonNoCache({ error: 'Invalid page payload: _type must be "page".' }, 400);
     }
+    const doc = sanitizeSanityDocument(rawDoc);
 
     let existingDoc: any = null;
     if (doc._id) {

@@ -6,7 +6,7 @@ import { getSanityAdminClient } from '@utils/sanity-admin';
 import { ProductService } from '@data/products';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService, DEFAULT_RFQ_SETTINGS } from '@data/rfqSettings';
-import { syncCmsMutation } from '@utils/cmsSync';
+import { syncCmsMutation, sanitizeSanityDocument } from '@utils/cmsSync';
 import {
   DEFAULT_BRAND_TITLE,
   DEFAULT_COPYRIGHT_TEXT,
@@ -166,10 +166,11 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, any>;
-    const doc = body.document;
-    if (!doc || !VALID_CONFIG_TYPES.has(doc._type)) {
+    const rawDoc = body.document;
+    if (!rawDoc || !VALID_CONFIG_TYPES.has(rawDoc._type)) {
       return jsonNoCache({ error: `Invalid config document: must be one of ${Array.from(VALID_CONFIG_TYPES).join(', ')}` }, 400);
     }
+    const doc = sanitizeSanityDocument(rawDoc);
 
     const docType = doc._type;
     const existingDoc = await client.fetch(`*[_type == $docType][0]`, { docType }).catch(() => null);

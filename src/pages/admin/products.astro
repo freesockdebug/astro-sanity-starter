@@ -1043,7 +1043,6 @@ const pageTitle = 'Products & Catalog Workspace';
         currentEditingProduct.mainImage.asset = {
           _type: 'reference',
           _ref: asset._id,
-          url: asset.url,
         };
         currentEditingProduct.mainImageUrl = asset.url;
         renderMainImagePreview();
@@ -1107,7 +1106,6 @@ const pageTitle = 'Products & Catalog Workspace';
             asset: {
               _type: 'reference',
               _ref: asset._id,
-              url: asset.url,
             },
           });
           currentEditingProduct.galleryUrls.push(asset.url);
@@ -1279,7 +1277,10 @@ const pageTitle = 'Products & Catalog Workspace';
         currentEditingProduct.gallery.push({
           _type: 'image',
           _key: crypto.randomUUID().slice(0, 8),
-          asset: { ...data.asset.asset, url: data.url },
+          asset: {
+            _type: 'reference',
+            _ref: data.asset.asset._ref || data.id,
+          },
         });
         currentEditingProduct.galleryUrls.push(data.url);
       } catch (err: any) {
@@ -1483,10 +1484,24 @@ const pageTitle = 'Products & Catalog Workspace';
     const amazonUrlVal = (document.getElementById('p-amazon-url') as HTMLInputElement)?.value.trim();
     currentEditingProduct.amazonUrl = amazonUrlVal || undefined;
 
-    // Clean ephemeral helper fields before sending to Sanity
-    const docToSave = JSON.parse(JSON.stringify(currentEditingProduct));
-    delete docToSave.mainImageUrl;
-    delete docToSave.galleryUrls;
+    // Clean ephemeral helper fields and sanitize reference objects before sending to Sanity
+    function sanitizeForSanity(obj: any): any {
+      if (!obj || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(sanitizeForSanity);
+      if (obj._type === 'reference' || (typeof obj._ref === 'string' && !obj._type)) {
+        const cleanRef: any = { _type: 'reference', _ref: obj._ref };
+        if (obj._weak !== undefined) cleanRef._weak = obj._weak;
+        if (obj._key !== undefined) cleanRef._key = obj._key;
+        return cleanRef;
+      }
+      const cleanObj: any = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (k === 'mainImageUrl' || k === 'galleryUrls') continue;
+        cleanObj[k] = sanitizeForSanity(v);
+      }
+      return cleanObj;
+    }
+    const docToSave = sanitizeForSanity(currentEditingProduct);
 
     (window as any).__showToast?.('Saving product to Sanity CMS...', 'info');
 

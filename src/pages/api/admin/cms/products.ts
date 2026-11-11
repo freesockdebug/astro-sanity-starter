@@ -4,7 +4,7 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-admin';
 import { ProductService } from '@data/products';
-import { syncCmsMutation } from '@utils/cmsSync';
+import { syncCmsMutation, sanitizeSanityDocument } from '@utils/cmsSync';
 import { computeJsonDiff, insertAuditLog } from '@utils/audit';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -87,10 +87,11 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, any>;
-    const doc = body.document;
-    if (!doc || !doc._type) {
+    const rawDoc = body.document;
+    if (!rawDoc || !rawDoc._type) {
       return jsonNoCache({ error: 'Invalid document payload: missing _type.' }, 400);
     }
+    const doc = sanitizeSanityDocument(rawDoc);
 
     const docType = doc._type;
     let existingDoc: any = null;

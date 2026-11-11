@@ -247,6 +247,10 @@ const pageTitle = 'Pages & Modular Visual Builder';
   import { escapeHtml } from '@utils/adminWorkbench';
 
   function initPagesWorkbench() {
+    const listEl = document.getElementById('pages-list');
+    if (!listEl || (listEl as any).__initialized) return;
+    (listEl as any).__initialized = true;
+
     let currentPages: any[] = [];
     let activePageDoc: any = null;
     let catalogProducts: any[] = [];
@@ -502,7 +506,6 @@ const pageTitle = 'Pages & Modular Visual Builder';
             asset: {
               _type: 'reference',
               _ref: asset._id,
-              url: asset.url,
             },
           };
           renderSocialImagePreview();
@@ -1732,7 +1735,6 @@ const pageTitle = 'Pages & Modular Visual Builder';
                 asset: {
                   _type: 'reference',
                   _ref: asset._id,
-                  url: asset.url,
                 },
               };
               renderSections();
@@ -1935,7 +1937,6 @@ const pageTitle = 'Pages & Modular Visual Builder';
                 asset: {
                   _type: 'reference',
                   _ref: assets[0]._id,
-                  url: assets[0].url,
                 },
               };
               renderSections();
@@ -2251,4 +2252,10 @@ const pageTitle = 'Pages & Modular Visual Builder';
   } else {
     initPagesWorkbench();
   }
+
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('pages-list')) {
+      initPagesWorkbench();
+    }
+  });
 </script>

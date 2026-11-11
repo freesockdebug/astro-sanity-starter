@@ -546,3 +546,37 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
   };
 }
 
+/**
+ * Recursively cleans a document before saving to Sanity.
+ * Removes illegal properties (such as 'url') from Sanity reference objects.
+ * In Sanity GROQ/mutations, a reference must strictly contain `_type: 'reference'`, `_ref`, and optionally `_weak` or `_key`.
+ */
+export function sanitizeSanityDocument<T = any>(val: T): T {
+  if (val === null || val === undefined) return val;
+  if (Array.isArray(val)) {
+    return val.map((item) => sanitizeSanityDocument(item)) as unknown as T;
+  }
+  if (typeof val === 'object') {
+    const obj = val as Record<string, any>;
+    // Check if this object is a Sanity reference
+    if (obj._type === 'reference' || (typeof obj._ref === 'string' && !obj._type)) {
+      const cleanRef: Record<string, any> = {
+        _type: 'reference',
+        _ref: obj._ref,
+      };
+      if (obj._weak !== undefined) cleanRef._weak = Boolean(obj._weak);
+      if (obj._key !== undefined) cleanRef._key = String(obj._key);
+      return cleanRef as unknown as T;
+    }
+
+    const cleanObj: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      // Omit ephemeral preview helpers that should never be written to Sanity
+      if (k === 'mainImageUrl' || k === 'galleryUrls') continue;
+      cleanObj[k] = sanitizeSanityDocument(v);
+    }
+    return cleanObj as unknown as T;
+  }
+  return val;
+}
+
