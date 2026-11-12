@@ -4,7 +4,6 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
-import { DEFAULT_CARRIERS, QUICK_REPLY_TEMPLATES } from '@utils/shipping';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -26,11 +25,104 @@ const hasResend = !!(settings.resend_api_key || getRuntimeEnv('RESEND_API_KEY', 
 const hasSanity = !!((getRuntimeEnv('SANITY_TOKEN', cfEnv) || getRuntimeEnv('SANITY_API_TOKEN', cfEnv)) && getRuntimeEnv('SANITY_PROJECT_ID', cfEnv));
 const hasCloudflareCdn = !!(settings.cloudflare_api_token || getRuntimeEnv('CLOUDFLARE_API_TOKEN', cfEnv));
 
-const pageTitle = 'Workspace Settings';
+const healthProbes = [
+  { label: 'D1 Database', ok: true, on: 'Active', off: 'Inactive', warn: false },
+  { label: 'Logto OIDC', ok: hasLogtoOidc, on: 'Configured', off: 'Missing', warn: true },
+  { label: 'Logto M2M', ok: hasLogtoM2m, on: 'Configured', off: 'Optional', warn: true },
+  { label: 'Turnstile', ok: hasTurnstile, on: 'Protected', off: 'Unset', warn: true },
+  { label: 'Resend API', ok: hasResend, on: 'Enabled', off: 'Disabled', warn: false },
+  { label: 'Sanity CMS', ok: hasSanity, on: 'Connected', off: 'Unset', warn: false },
+  { label: 'Edge Purge', ok: hasCloudflareCdn, on: 'Active', off: 'Unset', warn: false },
+];
+
+type SettingField = {
+  key: keyof typeof settings;
+  label: string;
+  type?: 'text' | 'email' | 'url' | 'password' | 'number' | 'select' | 'checkbox';
+  placeholder?: string;
+  help?: string;
+  span?: number;
+  mono?: boolean;
+  extraClass?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  maxlength?: number;
+  unit?: string;
+  options?: { value: string; label: string }[];
+  boxed?: boolean;
+};
+
+const s1Fields: SettingField[] = [
+  { key: 'brand_name', label: 'Brand Display Name', placeholder: 'e.g. B2B ATELIER', help: 'Shown in browser titles, email notifications, and webhook alerts.', extraClass: 'font-medium' },
+  { key: 'contact_email', label: 'Customer Support Email', type: 'email', placeholder: 'e.g. inquiry@yourbrand.com', help: 'Displayed to buyers in account portal and order requisition receipts.', mono: true },
+  { key: 'whatsapp_number', label: 'VIP Concierge WhatsApp', placeholder: 'e.g. 8613800000000 (digits only with country code)', help: 'Powers the 1-click WhatsApp button in buyer account portal.', mono: true },
+  { key: 'whatsapp_prefill', label: 'WhatsApp Inquiry Prefill Text', placeholder: 'Hello, I would like to consult on custom manufacturing...', help: 'Default message draft when a buyer initiates a WhatsApp consultation.' },
+  { key: 'app_url', label: 'Website Canonical Public URL', type: 'url', span: 2, placeholder: 'https://gwenvenni.com', help: 'Used for absolute canonical links, sitemaps, and email link generation.', mono: true },
+];
+
+const s2EmailFields: SettingField[] = [
+  { key: 'resend_from_email', label: 'Sender Address (From)', placeholder: 'e.g. RFQ Alert <rfq@yourdomain.com>', mono: true },
+  { key: 'resend_to_emails', label: 'Recipient Email(s)', placeholder: 'e.g. sales@domain.com, lead@domain.com', mono: true },
+  { key: 'resend_subject_prefix', label: 'Subject Prefix', placeholder: 'e.g. [New B2B RFQ]', mono: true },
+];
+
+const s3Fields: SettingField[] = [
+  { key: 'order_no_prefix', label: 'Order Serial Prefix (2-8 Chars)', placeholder: 'ORD', maxlength: 8, mono: true, extraClass: 'font-bold uppercase', help: `Example generated order number: ${settings.order_no_prefix}-20261104-A1B2` },
+  { key: 'shipping_carriers', label: 'Logistics Carriers Presets (Comma-separated)', placeholder: 'DHL Express,FedEx,UPS,SF Express', mono: true, help: 'Carriers available in the order dispatch / fulfillment dialog.' },
+  { key: 'print_sheet_title', label: 'Printable Requisition Header Title', placeholder: 'OFFICIAL B2B PROCUREMENT REQUISITION', mono: true, help: 'Header on the official PDF/Print procurement requisition document.' },
+  { key: 'print_sheet_footer', label: 'Printable Requisition Footer / Disclaimer', placeholder: 'This document is an official B2B sample & procurement requisition sheet.', help: 'Legal or terms notice at the bottom of printed requisition sheets.' },
+];
+
+const s4Fields: SettingField[] = [
+  { key: 'login_retention_days', label: 'Audit Log Retention (Days)', type: 'number', min: 7, max: 365, mono: true, extraClass: 'font-bold', help: 'Audit trail retention window (7 to 365 days).' },
+  { key: 'turnstile_hostnames', label: 'Turnstile Allowed Hostnames (Comma-separated)', span: 2, placeholder: 'e.g. yourdomain.com, www.yourdomain.com, localhost', mono: true, help: 'Leave blank to accept requests from the current request hostname automatically.' },
+  { key: 'turnstile_site_key', label: 'Turnstile Site Key (Client-side)', placeholder: 'e.g. 0x4AAAAAA...', mono: true, help: 'Public challenge key rendered in the buyer quote basket drawer.' },
+  { key: 'turnstile_secret_key', label: 'Turnstile Secret Key (Server-side)', type: 'password', span: 2, placeholder: 'e.g. 0x4AAAAAA... (leave unchanged or enter new key)', mono: true, help: 'Private key used by /api/submit-quote to verify challenges with Cloudflare.' },
+];
+
+const s6Fields: SettingField[] = [
+  { key: 'enable_error_logging', label: 'Enable D1 Error Logging', type: 'checkbox', boxed: true, help: 'Persist runtime errors, unhandled exceptions, and API anomalies into D1 database for in-dashboard diagnostics.' },
+  { key: 'log_authenticated_users', label: 'Log Authenticated Users', type: 'checkbox', boxed: true, help: 'Control whether activity and error records are logged for signed-in buyers and administrators (GDPR / Privacy).' },
+  { key: 'log_client_errors', label: 'Frontend Client Error Telemetry (前端异常监控)', type: 'checkbox', boxed: true, help: 'Capture unhandled browser exceptions (window.onerror & unhandledrejection) and report to D1 diagnostics. When disabled, client stops reporting and backend rejects telemetry.' },
+  { key: 'log_retention_days', label: 'Error Log Retention (Days)', type: 'number', min: 1, max: 365, boxed: true, mono: true, extraClass: 'font-bold', help: 'Automatic rolling prune threshold (1 to 365 days).' },
+  {
+    key: 'log_min_level',
+    label: 'Minimum Log Level to D1',
+    type: 'select',
+    boxed: true,
+    mono: true,
+    extraClass: 'font-semibold',
+    help: 'Controls D1 write volume. Info/Debug capture full request profiling.',
+    options: [
+      { value: 'debug', label: 'debug (Verbose + SQL timings)' },
+      { value: 'info', label: 'info (All completed requests & events)' },
+      { value: 'warn', label: 'warn (Default: Slow requests & warnings)' },
+      { value: 'error', label: 'error (Errors & critical only)' },
+      { value: 'critical', label: 'critical (Critical incidents only)' },
+    ],
+  },
+  { key: 'slow_request_threshold_ms', label: 'Slow Request Warning Threshold (ms)', type: 'number', min: 50, max: 30000, step: 50, span: 2, boxed: true, mono: true, extraClass: 'font-bold', unit: 'ms (Default: 1000ms)', help: 'Requests exceeding this threshold are automatically captured as performance warnings even in warn/error mode.' },
+];
+
+const s7Fields: SettingField[] = [
+  { key: 'revalidate_secret', label: 'Revalidation Webhook Secret', type: 'password', placeholder: 'e.g. my-secret-revalidate-token', mono: true, help: 'Shared secret for Sanity Webhook or manual /api/revalidate calls.' },
+  { key: 'cloudflare_zone_id', label: 'Cloudflare Zone ID', placeholder: 'e.g. 023e105f4ecef8ad9ca31a8372d0c353', mono: true, help: 'Found on Cloudflare dashboard Overview tab for your domain.' },
+  { key: 'cloudflare_api_token', label: 'Cloudflare Purge API Token', type: 'password', placeholder: 'Bearer token with Cache:Purge permission', mono: true, help: 'API Token with Zone.Cache Purge permissions.' },
+];
+
+const dictLinks = [
+  { href: '/admin/dicts?group=shipping_carriers', title: '📦 Shipping Carriers', desc: 'Live carrier tracking URL templates (DHL, FedEx, UPS, SF, EMS) with query parameter placeholders.' },
+  { href: '/admin/dicts?group=quick_replies', title: '💬 Quick Reply Templates', desc: 'English response chips for approval remarks, dispatch notifications, and rejection feedback.' },
+  { href: '/admin/dicts?group=customer_tiers', title: '🏷️ Customer Tiers & Tags', desc: 'B2B client discount tiers (Regular, Wholesale, VIP, Partner) and CRM tag chips.' },
+];
+
+const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
+  `w-full px-3 ${f.boxed ? 'py-1.5' : 'py-2'} text-xs rounded-xl ${bg} border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all ${f.mono ? 'font-mono' : ''} ${f.extraClass || ''}`;
 ---
 
 <AdminLayout
-  title={pageTitle}
+  title="Workspace Settings"
   currentTab="settings"
   sessionEmail={sessionUser.email}
   adminName={adminContext?.name}
@@ -41,7 +133,6 @@ const pageTitle = 'Workspace Settings';
   dataScope={adminContext?.dataScope}
   pendingOrdersCount={pendingOrdersCount}
 >
-  <!-- Page Header -->
   <AdminPageToolbar
     title="Workspace Settings"
     subtitle="Dynamic runtime configurations for brand identity, buyer concierge, RFQ dispatch rules, and access control."
@@ -50,14 +141,8 @@ const pageTitle = 'Workspace Settings';
     class="mb-5"
   >
     <div slot="actions" class="flex items-center gap-2.5">
-      <button
-        id="save-settings-btn-top"
-        type="button"
-        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer"
-      >
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-        </svg>
+      <button id="save-settings-btn-top" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
         <span>Save Changes</span>
       </button>
     </div>
@@ -74,87 +159,19 @@ const pageTitle = 'Workspace Settings';
         Root Admin: <strong class="text-[#1d1d1f] font-semibold">{rootAdminEmails ? rootAdminEmails.split(',')[0] : 'Unset'}</strong>
       </div>
     </div>
-
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 min-[1760px]:grid-cols-7 gap-2 pt-1 text-xs">
-      <!-- D1 -->
-      <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
-        <span class="font-medium text-[#52525b]">D1 Database</span>
-        <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
-        </span>
-      </div>
-
-      <!-- Logto OIDC -->
-      <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
-        <span class="font-medium text-[#52525b]">Logto OIDC</span>
-        <span class:list={[
-          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
-          hasLogtoOidc ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200'
-        ]}>
-          <span class:list={['w-1.5 h-1.5 rounded-full', hasLogtoOidc ? 'bg-emerald-500' : 'bg-amber-500']}></span>
-          {hasLogtoOidc ? 'Configured' : 'Missing'}
-        </span>
-      </div>
-
-      <!-- Logto M2M -->
-      <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
-        <span class="font-medium text-[#52525b]">Logto M2M</span>
-        <span class:list={[
-          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
-          hasLogtoM2m ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200'
-        ]}>
-          <span class:list={['w-1.5 h-1.5 rounded-full', hasLogtoM2m ? 'bg-emerald-500' : 'bg-amber-500']}></span>
-          {hasLogtoM2m ? 'Configured' : 'Optional'}
-        </span>
-      </div>
-
-      <!-- Turnstile -->
-      <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
-        <span class="font-medium text-[#52525b]">Turnstile</span>
-        <span class:list={[
-          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
-          hasTurnstile ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200'
-        ]}>
-          <span class:list={['w-1.5 h-1.5 rounded-full', hasTurnstile ? 'bg-emerald-500' : 'bg-amber-500']}></span>
-          {hasTurnstile ? 'Protected' : 'Unset'}
-        </span>
-      </div>
-
-      <!-- Resend -->
-      <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
-        <span class="font-medium text-[#52525b]">Resend API</span>
-        <span class:list={[
-          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
-          hasResend ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-zinc-600 bg-zinc-100 border-zinc-200'
-        ]}>
-          <span class:list={['w-1.5 h-1.5 rounded-full', hasResend ? 'bg-emerald-500' : 'bg-zinc-400']}></span>
-          {hasResend ? 'Enabled' : 'Disabled'}
-        </span>
-      </div>
-
-      <!-- Sanity -->
-      <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
-        <span class="font-medium text-[#52525b]">Sanity CMS</span>
-        <span class:list={[
-          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
-          hasSanity ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-zinc-600 bg-zinc-100 border-zinc-200'
-        ]}>
-          <span class:list={['w-1.5 h-1.5 rounded-full', hasSanity ? 'bg-emerald-500' : 'bg-zinc-400']}></span>
-          {hasSanity ? 'Connected' : 'Unset'}
-        </span>
-      </div>
-
-      <!-- Cloudflare Global CDN -->
-      <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
-        <span class="font-medium text-[#52525b]">Edge Purge</span>
-        <span class:list={[
-          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
-          hasCloudflareCdn ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-zinc-600 bg-zinc-100 border-zinc-200'
-        ]}>
-          <span class:list={['w-1.5 h-1.5 rounded-full', hasCloudflareCdn ? 'bg-emerald-500' : 'bg-zinc-400']}></span>
-          {hasCloudflareCdn ? 'Active' : 'Unset'}
-        </span>
-      </div>
+      {healthProbes.map((p) => (
+        <div class="p-2.5 rounded-xl bg-[#fafafa] border border-black/5 flex items-center justify-between">
+          <span class="font-medium text-[#52525b]">{p.label}</span>
+          <span class:list={[
+            'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
+            p.ok ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : p.warn ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-zinc-600 bg-zinc-100 border-zinc-200',
+          ]}>
+            <span class:list={['w-1.5 h-1.5 rounded-full', p.ok ? 'bg-emerald-500' : p.warn ? 'bg-amber-500' : 'bg-zinc-400']}></span>
+            {p.ok ? p.on : p.off}
+          </span>
+        </div>
+      ))}
     </div>
   </div>
 
@@ -166,215 +183,58 @@ const pageTitle = 'Workspace Settings';
         <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">1. Brand Identity & Buyer Concierge</h2>
         <p class="text-xs text-[#86868b] mt-0.5">Customizes client-facing brand titles, direct support emails, and VIP WhatsApp concierge.</p>
       </div>
-
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Brand Display Name -->
-        <div>
-          <label for="brand_name" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Brand Display Name
-          </label>
-          <input
-            type="text"
-            id="brand_name"
-            name="brand_name"
-            value={settings.brand_name}
-            placeholder="e.g. B2B ATELIER"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-medium"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Shown in browser titles, email notifications, and webhook alerts.</p>
-        </div>
-
-        <!-- Public Contact Email -->
-        <div>
-          <label for="contact_email" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Customer Support Email
-          </label>
-          <input
-            type="email"
-            id="contact_email"
-            name="contact_email"
-            value={settings.contact_email}
-            placeholder="e.g. inquiry@yourbrand.com"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Displayed to buyers in account portal and order requisition receipts.</p>
-        </div>
-
-        <!-- WhatsApp Number -->
-        <div>
-          <label for="whatsapp_number" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            VIP Concierge WhatsApp
-          </label>
-          <input
-            type="text"
-            id="whatsapp_number"
-            name="whatsapp_number"
-            value={settings.whatsapp_number}
-            placeholder="e.g. 8613800000000 (digits only with country code)"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Powers the 1-click WhatsApp button in buyer account portal.</p>
-        </div>
-
-        <!-- WhatsApp Prefill Message -->
-        <div>
-          <label for="whatsapp_prefill" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            WhatsApp Inquiry Prefill Text
-          </label>
-          <input
-            type="text"
-            id="whatsapp_prefill"
-            name="whatsapp_prefill"
-            value={settings.whatsapp_prefill}
-            placeholder="Hello, I would like to consult on custom manufacturing..."
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Default message draft when a buyer initiates a WhatsApp consultation.</p>
-        </div>
-
-        <!-- Website Public URL -->
-        <div class="md:col-span-2">
-          <label for="app_url" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Website Canonical Public URL
-          </label>
-          <input
-            type="url"
-            id="app_url"
-            name="app_url"
-            value={settings.app_url}
-            placeholder="https://gwenvenni.com"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Used for absolute canonical links, sitemaps, and email link generation.</p>
-        </div>
+        {s1Fields.map((f) => (
+          <div class={f.span === 2 ? 'md:col-span-2' : ''}>
+            <label for={f.key} class="block text-xs font-semibold text-[#1d1d1f] mb-1">{f.label}</label>
+            <input type={f.type || 'text'} id={f.key} name={f.key} value={String(settings[f.key] ?? '')} placeholder={f.placeholder} class={inputCls(f)} />
+            {f.help && <p class="text-[11px] text-[#86868b] mt-1">{f.help}</p>}
+          </div>
+        ))}
       </div>
     </div>
 
     <!-- Section 2: RFQ Notifications & Webhook -->
     <div class="p-5 sm:p-6 rounded-2xl bg-white border border-black/5 shadow-2xs space-y-4">
-      <div class="border-b border-black/5 pb-3 flex items-center justify-between">
-        <div>
-          <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">2. RFQ Inbound Notifications & Webhooks</h2>
-          <p class="text-xs text-[#86868b] mt-0.5">Control automatic dispatch when buyers submit procurement or swatch inquiries.</p>
-        </div>
+      <div class="border-b border-black/5 pb-3">
+        <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">2. RFQ Inbound Notifications & Webhooks</h2>
+        <p class="text-xs text-[#86868b] mt-0.5">Control automatic dispatch when buyers submit procurement or swatch inquiries.</p>
       </div>
 
-      <!-- Email Notifications Subsection -->
       <div class="space-y-3 pt-1">
-        <div class="flex items-center justify-between">
-          <label for="enable_email_notify" class="flex items-center gap-2.5 cursor-pointer">
-            <input
-              type="checkbox"
-              id="enable_email_notify"
-              name="enable_email_notify"
-              checked={settings.enable_email_notify}
-              class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f]"
-            />
-            <span class="text-xs font-bold text-[#1d1d1f]">Dispatch Email Notifications via Resend</span>
-          </label>
-        </div>
-
+        <label for="enable_email_notify" class="flex items-center gap-2.5 cursor-pointer">
+          <input type="checkbox" id="enable_email_notify" name="enable_email_notify" checked={Boolean(settings.enable_email_notify)} class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f]" />
+          <span class="text-xs font-bold text-[#1d1d1f]">Dispatch Email Notifications via Resend</span>
+        </label>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label for="resend_from_email" class="block text-xs font-medium text-[#52525b] mb-1">
-              Sender Address (From)
-            </label>
-            <input
-              type="text"
-              id="resend_from_email"
-              name="resend_from_email"
-              value={settings.resend_from_email}
-              placeholder="e.g. RFQ Alert <rfq@yourdomain.com>"
-              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-            />
-          </div>
-
-          <div>
-            <label for="resend_to_emails" class="block text-xs font-medium text-[#52525b] mb-1">
-              Recipient Email(s)
-            </label>
-            <input
-              type="text"
-              id="resend_to_emails"
-              name="resend_to_emails"
-              value={settings.resend_to_emails}
-              placeholder="e.g. sales@domain.com, lead@domain.com"
-              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-            />
-          </div>
-
-          <div>
-            <label for="resend_subject_prefix" class="block text-xs font-medium text-[#52525b] mb-1">
-              Subject Prefix
-            </label>
-            <input
-              type="text"
-              id="resend_subject_prefix"
-              name="resend_subject_prefix"
-              value={settings.resend_subject_prefix}
-              placeholder="e.g. [New B2B RFQ]"
-              class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-            />
-          </div>
+          {s2EmailFields.map((f) => (
+            <div>
+              <label for={f.key} class="block text-xs font-medium text-[#52525b] mb-1">{f.label}</label>
+              <input type="text" id={f.key} name={f.key} value={String(settings[f.key] ?? '')} placeholder={f.placeholder} class={inputCls(f)} />
+            </div>
+          ))}
         </div>
-
-        <!-- Resend API Key -->
         <div class="pt-2">
-          <label for="resend_api_key" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Resend API Key (re_...)
-          </label>
-          <input
-            type="password"
-            id="resend_api_key"
-            name="resend_api_key"
-            value={settings.resend_api_key}
-            placeholder="re_xxxxxxxxxxxxxxxxx (leave unchanged or enter new key)"
-            autocomplete="new-password"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
+          <label for="resend_api_key" class="block text-xs font-semibold text-[#1d1d1f] mb-1">Resend API Key (re_...)</label>
+          <input type="password" id="resend_api_key" name="resend_api_key" value={settings.resend_api_key} placeholder="re_xxxxxxxxxxxxxxxxx (leave unchanged or enter new key)" autocomplete="new-password" class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono" />
           <p class="text-[11px] text-[#86868b] mt-1">Overrides the <code>RESEND_API_KEY</code> environment variable if provided.</p>
         </div>
       </div>
 
-      <!-- Webhook Dispatch Subsection -->
       <div class="border-t border-black/5 pt-4 space-y-3">
-        <div class="flex items-center justify-between">
-          <label for="enable_webhook_notify" class="flex items-center gap-2.5 cursor-pointer">
-            <input
-              type="checkbox"
-              id="enable_webhook_notify"
-              name="enable_webhook_notify"
-              checked={settings.enable_webhook_notify}
-              class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f]"
-            />
-            <span class="text-xs font-bold text-[#1d1d1f]">Dispatch Bot Webhooks (WeCom, DingTalk, Feishu, Slack)</span>
-          </label>
-        </div>
-
+        <label for="enable_webhook_notify" class="flex items-center gap-2.5 cursor-pointer">
+          <input type="checkbox" id="enable_webhook_notify" name="enable_webhook_notify" checked={Boolean(settings.enable_webhook_notify)} class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f]" />
+          <span class="text-xs font-bold text-[#1d1d1f]">Dispatch Bot Webhooks (WeCom, DingTalk, Feishu, Slack)</span>
+        </label>
         <div>
-          <label for="notification_webhook_url" class="block text-xs font-medium text-[#52525b] mb-1">
-            Outbound Webhook HTTPS URL
-          </label>
+          <label for="notification_webhook_url" class="block text-xs font-medium text-[#52525b] mb-1">Outbound Webhook HTTPS URL</label>
           <div class="flex flex-col sm:flex-row gap-2">
-            <input
-              type="url"
-              id="notification_webhook_url"
-              name="notification_webhook_url"
-              value={settings.notification_webhook_url}
-              placeholder="https://qyapi.weixin.qq.com/... or https://oapi.dingtalk.com/..."
-              class="flex-1 px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-            />
-            <button
-              id="test-webhook-btn"
-              type="button"
-              class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-black/15 hover:border-black/30 text-[#1d1d1f] hover:bg-[#f5f5f7] shadow-2xs active:scale-95 transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5"
-            >
+            <input type="url" id="notification_webhook_url" name="notification_webhook_url" value={settings.notification_webhook_url} placeholder="https://qyapi.weixin.qq.com/... or https://oapi.dingtalk.com/..." class="flex-1 px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono" />
+            <button id="test-webhook-btn" type="button" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-black/15 hover:border-black/30 text-[#1d1d1f] hover:bg-[#f5f5f7] shadow-2xs active:scale-95 transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5">
               <span>Test Connection</span>
             </button>
           </div>
-          <p id="webhook-test-status" class="text-[11px] text-[#86868b] mt-1.5">
-            Supports WeChat Work, DingTalk markdown cards, Feishu / Lark, and generic JSON webhooks. Must be HTTPS.
-          </p>
+          <p id="webhook-test-status" class="text-[11px] text-[#86868b] mt-1.5">Supports WeChat Work, DingTalk markdown cards, Feishu / Lark, and generic JSON webhooks. Must be HTTPS.</p>
         </div>
       </div>
     </div>
@@ -385,72 +245,14 @@ const pageTitle = 'Workspace Settings';
         <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">3. Orders & Requisition Sheet Standards</h2>
         <p class="text-xs text-[#86868b] mt-0.5">Configures order number generation, logistics carrier presets, and printable requisition sheets.</p>
       </div>
-
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Order Serial Prefix -->
-        <div>
-          <label for="order_no_prefix" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Order Serial Prefix (2-8 Chars)
-          </label>
-          <input
-            type="text"
-            id="order_no_prefix"
-            name="order_no_prefix"
-            value={settings.order_no_prefix}
-            placeholder="ORD"
-            maxlength="8"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono font-bold uppercase"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Example generated order number: <code class="font-mono">{settings.order_no_prefix}-20261104-A1B2</code></p>
-        </div>
-
-        <!-- Shipping Carriers Presets -->
-        <div>
-          <label for="shipping_carriers" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Logistics Carriers Presets (Comma-separated)
-          </label>
-          <input
-            type="text"
-            id="shipping_carriers"
-            name="shipping_carriers"
-            value={settings.shipping_carriers}
-            placeholder="DHL Express,FedEx,UPS,SF Express"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Carriers available in the order dispatch / fulfillment dialog.</p>
-        </div>
-
-        <!-- Print Sheet Title -->
-        <div>
-          <label for="print_sheet_title" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Printable Requisition Header Title
-          </label>
-          <input
-            type="text"
-            id="print_sheet_title"
-            name="print_sheet_title"
-            value={settings.print_sheet_title}
-            placeholder="OFFICIAL B2B PROCUREMENT REQUISITION"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Header on the official PDF/Print procurement requisition document.</p>
-        </div>
-
-        <!-- Print Sheet Footer Disclaimer -->
-        <div>
-          <label for="print_sheet_footer" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Printable Requisition Footer / Disclaimer
-          </label>
-          <input
-            type="text"
-            id="print_sheet_footer"
-            name="print_sheet_footer"
-            value={settings.print_sheet_footer}
-            placeholder="This document is an official B2B sample & procurement requisition sheet."
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Legal or terms notice at the bottom of printed requisition sheets.</p>
-        </div>
+        {s3Fields.map((f) => (
+          <div>
+            <label for={f.key} class="block text-xs font-semibold text-[#1d1d1f] mb-1">{f.label}</label>
+            <input type="text" id={f.key} name={f.key} value={String(settings[f.key] ?? '')} placeholder={f.placeholder} maxlength={f.maxlength} class={inputCls(f)} />
+            {f.help && <p class="text-[11px] text-[#86868b] mt-1">{f.help}</p>}
+          </div>
+        ))}
       </div>
     </div>
 
@@ -460,115 +262,31 @@ const pageTitle = 'Workspace Settings';
         <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">4. Organization, Team & RBAC Governance</h2>
         <p class="text-xs text-[#86868b] mt-0.5">Team members and role-based permissions have moved to their dedicated management consoles.</p>
       </div>
-
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <a
-          href="/admin/members"
-          class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/20 transition-all flex items-start gap-3 group"
-        >
-          <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-base shrink-0 border border-blue-200">
-            🧑‍💼
-          </div>
+        <a href="/admin/members" class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/20 transition-all flex items-start gap-3 group">
+          <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-base shrink-0 border border-blue-200">🧑‍💼</div>
           <div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-bold text-[#1d1d1f] group-hover:text-blue-600 transition-colors">Team Members</span>
-              <span class="text-xs text-[#86868b]">→</span>
-            </div>
-            <p class="text-[11px] text-[#86868b] mt-0.5 leading-relaxed">
-              Authorize staff, select from registered Logto accounts, assign roles, and view performance workloads.
-            </p>
+            <div class="flex items-center gap-1.5"><span class="text-xs font-bold text-[#1d1d1f] group-hover:text-blue-600 transition-colors">Team Members</span><span class="text-xs text-[#86868b]">→</span></div>
+            <p class="text-[11px] text-[#86868b] mt-0.5 leading-relaxed">Authorize staff, select from registered Logto accounts, assign roles, and view performance workloads.</p>
           </div>
         </a>
-
-        <a
-          href="/admin/roles"
-          class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/20 transition-all flex items-start gap-3 group"
-        >
-          <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-base shrink-0 border border-purple-200">
-            🔐
-          </div>
+        <a href="/admin/roles" class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/20 transition-all flex items-start gap-3 group">
+          <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-base shrink-0 border border-purple-200">🔐</div>
           <div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-bold text-[#1d1d1f] group-hover:text-purple-600 transition-colors">Roles & Permissions</span>
-              <span class="text-xs text-[#86868b]">→</span>
-            </div>
-            <p class="text-[11px] text-[#86868b] mt-0.5 leading-relaxed">
-              Visual RBAC matrix: customize row-level DataScope, visible menus, and fine-grained action buttons.
-            </p>
+            <div class="flex items-center gap-1.5"><span class="text-xs font-bold text-[#1d1d1f] group-hover:text-purple-600 transition-colors">Roles & Permissions</span><span class="text-xs text-[#86868b]">→</span></div>
+            <p class="text-[11px] text-[#86868b] mt-0.5 leading-relaxed">Visual RBAC matrix: customize row-level DataScope, visible menus, and fine-grained action buttons.</p>
           </div>
         </a>
       </div>
-
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-black/5">
         <input type="hidden" id="co_admin_emails" name="co_admin_emails" value={settings.co_admin_emails} />
-
-        <!-- Login Retention Days -->
-        <div>
-          <label for="login_retention_days" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Audit Log Retention (Days)
-          </label>
-          <input
-            type="number"
-            id="login_retention_days"
-            name="login_retention_days"
-            value={settings.login_retention_days}
-            min="7"
-            max="365"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono font-bold"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Audit trail retention window (7 to 365 days).</p>
-        </div>
-
-        <!-- Turnstile Hostnames -->
-        <div class="md:col-span-2">
-          <label for="turnstile_hostnames" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Turnstile Allowed Hostnames (Comma-separated)
-          </label>
-          <input
-            type="text"
-            id="turnstile_hostnames"
-            name="turnstile_hostnames"
-            value={settings.turnstile_hostnames}
-            placeholder="e.g. yourdomain.com, www.yourdomain.com, localhost"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">
-            Leave blank to accept requests from the current request hostname automatically.
-          </p>
-        </div>
-
-        <!-- Turnstile Site Key -->
-        <div>
-          <label for="turnstile_site_key" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Turnstile Site Key (Client-side)
-          </label>
-          <input
-            type="text"
-            id="turnstile_site_key"
-            name="turnstile_site_key"
-            value={settings.turnstile_site_key}
-            placeholder="e.g. 0x4AAAAAA..."
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Public challenge key rendered in the buyer quote basket drawer.</p>
-        </div>
-
-        <!-- Turnstile Secret Key -->
-        <div class="md:col-span-2">
-          <label for="turnstile_secret_key" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Turnstile Secret Key (Server-side)
-          </label>
-          <input
-            type="password"
-            id="turnstile_secret_key"
-            name="turnstile_secret_key"
-            value={settings.turnstile_secret_key}
-            placeholder="e.g. 0x4AAAAAA... (leave unchanged or enter new key)"
-            autocomplete="new-password"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Private key used by <code>/api/submit-quote</code> to verify challenges with Cloudflare.</p>
-        </div>
+        {s4Fields.map((f) => (
+          <div class={f.span === 2 ? 'md:col-span-2' : ''}>
+            <label for={f.key} class="block text-xs font-semibold text-[#1d1d1f] mb-1">{f.label}</label>
+            <input type={f.type || 'text'} id={f.key} name={f.key} value={String(settings[f.key] ?? '')} min={f.min} max={f.max} placeholder={f.placeholder} autocomplete={f.type === 'password' ? 'new-password' : undefined} class={inputCls(f)} />
+            {f.help && <p class="text-[11px] text-[#86868b] mt-1">{f.help}</p>}
+          </div>
+        ))}
       </div>
     </div>
 
@@ -579,54 +297,25 @@ const pageTitle = 'Workspace Settings';
           <div class="flex items-center gap-2">
             <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">5. Universal Data Dictionaries (Live Engine)</h2>
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              3-Tier Caching Active
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>3-Tier Caching Active
             </span>
           </div>
           <p class="text-xs text-[#86868b] mt-0.5">Shipping carriers, quick reply templates, customer tiers, and tags are dynamically configured without code redeployment.</p>
         </div>
-        <a
-          href="/admin/dicts"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white transition-all shadow-2xs cursor-pointer shrink-0"
-        >
-          <span>Open Data Dictionaries Console</span>
-          <span>→</span>
+        <a href="/admin/dicts" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] hover:bg-black text-white transition-all shadow-2xs cursor-pointer shrink-0">
+          <span>Open Data Dictionaries Console</span><span>→</span>
         </a>
       </div>
-
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        <a
-          href="/admin/dicts?group=shipping_carriers"
-          class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/15 transition-all group block space-y-1.5"
-        >
-          <div class="flex items-center justify-between">
-            <span class="font-bold text-xs text-[#1d1d1f] group-hover:text-blue-600 transition-colors">📦 Shipping Carriers</span>
-            <span class="text-[11px] text-[#86868b]">Manage →</span>
-          </div>
-          <p class="text-[11px] text-[#52525b] leading-relaxed">Live carrier tracking URL templates (DHL, FedEx, UPS, SF, EMS) with query parameter placeholders.</p>
-        </a>
-
-        <a
-          href="/admin/dicts?group=quick_replies"
-          class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/15 transition-all group block space-y-1.5"
-        >
-          <div class="flex items-center justify-between">
-            <span class="font-bold text-xs text-[#1d1d1f] group-hover:text-blue-600 transition-colors">💬 Quick Reply Templates</span>
-            <span class="text-[11px] text-[#86868b]">Manage →</span>
-          </div>
-          <p class="text-[11px] text-[#52525b] leading-relaxed">English response chips for approval remarks, dispatch notifications, and rejection feedback.</p>
-        </a>
-
-        <a
-          href="/admin/dicts?group=customer_tiers"
-          class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/15 transition-all group block space-y-1.5"
-        >
-          <div class="flex items-center justify-between">
-            <span class="font-bold text-xs text-[#1d1d1f] group-hover:text-blue-600 transition-colors">🏷️ Customer Tiers & Tags</span>
-            <span class="text-[11px] text-[#86868b]">Manage →</span>
-          </div>
-          <p class="text-[11px] text-[#52525b] leading-relaxed">B2B client discount tiers (Regular, Wholesale, VIP, Partner) and CRM tag chips.</p>
-        </a>
+        {dictLinks.map((d) => (
+          <a href={d.href} class="p-4 rounded-xl border border-black/5 bg-[#fbfbfd] hover:bg-[#f5f5f7] hover:border-black/15 transition-all group block space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-[#1d1d1f] group-hover:text-blue-600 transition-colors">{d.title}</span>
+              <span class="text-[11px] text-[#86868b]">Manage →</span>
+            </div>
+            <p class="text-[11px] text-[#52525b] leading-relaxed">{d.desc}</p>
+          </a>
+        ))}
       </div>
     </div>
 
@@ -637,135 +326,43 @@ const pageTitle = 'Workspace Settings';
           <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">6. Diagnostics & Observability Governance</h2>
           <p class="text-xs text-[#86868b] mt-0.5">Control D1 business error logging, logged-in user tracking, and retention thresholds.</p>
         </div>
-        <a
-          href="/admin/logs"
-          class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all text-[#1d1d1f]"
-        >
-          <span>Open Diagnostics Console</span>
-          <span>→</span>
+        <a href="/admin/logs" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all text-[#1d1d1f]">
+          <span>Open Diagnostics Console</span><span>→</span>
         </a>
       </div>
-
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-        <!-- Enable Error Logging -->
-        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-start gap-3">
-          <input
-            type="checkbox"
-            id="enable_error_logging"
-            name="enable_error_logging"
-            checked={settings.enable_error_logging}
-            class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f] mt-0.5 shrink-0"
-          />
-          <div>
-            <label for="enable_error_logging" class="block text-xs font-bold text-[#1d1d1f] cursor-pointer">
-              Enable D1 Error Logging
-            </label>
-            <p class="text-[11px] text-[#86868b] mt-0.5">
-              Persist runtime errors, unhandled exceptions, and API anomalies into D1 database for in-dashboard diagnostics.
-            </p>
-          </div>
-        </div>
-
-        <!-- Log Authenticated Users -->
-        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-start gap-3">
-          <input
-            type="checkbox"
-            id="log_authenticated_users"
-            name="log_authenticated_users"
-            checked={settings.log_authenticated_users}
-            class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f] mt-0.5 shrink-0"
-          />
-          <div>
-            <label for="log_authenticated_users" class="block text-xs font-bold text-[#1d1d1f] cursor-pointer">
-              Log Authenticated Users
-            </label>
-            <p class="text-[11px] text-[#86868b] mt-0.5">
-              Control whether activity and error records are logged for signed-in buyers and administrators (GDPR / Privacy).
-            </p>
-          </div>
-        </div>
-
-        <!-- Frontend Client Error Telemetry -->
-        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-start gap-3">
-          <input
-            type="checkbox"
-            id="log_client_errors"
-            name="log_client_errors"
-            checked={settings.log_client_errors}
-            class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f] mt-0.5 shrink-0"
-          />
-          <div>
-            <label for="log_client_errors" class="block text-xs font-bold text-[#1d1d1f] cursor-pointer">
-              Frontend Client Error Telemetry (前端异常监控)
-            </label>
-            <p class="text-[11px] text-[#86868b] mt-0.5">
-              Capture unhandled browser exceptions (window.onerror & unhandledrejection) and report to D1 diagnostics. When disabled, client stops reporting and backend rejects telemetry.
-            </p>
-          </div>
-        </div>
-
-        <!-- Log Retention Days -->
-        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col justify-between">
-          <div>
-            <label for="log_retention_days" class="block text-xs font-bold text-[#1d1d1f] mb-1">
-              Error Log Retention (Days)
-            </label>
-            <input
-              type="number"
-              id="log_retention_days"
-              name="log_retention_days"
-              value={settings.log_retention_days}
-              min="1"
-              max="365"
-              class="w-full px-3 py-1.5 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] font-mono font-bold"
-            />
-          </div>
-          <p class="text-[11px] text-[#86868b] mt-1">Automatic rolling prune threshold (1 to 365 days).</p>
-        </div>
-
-        <!-- Minimum Log Persistence Level -->
-        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col justify-between">
-          <div>
-            <label for="log_min_level" class="block text-xs font-bold text-[#1d1d1f] mb-1">
-              Minimum Log Level to D1
-            </label>
-            <select
-              id="log_min_level"
-              name="log_min_level"
-              class="w-full px-3 py-1.5 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] font-mono font-semibold"
-            >
-              <option value="debug" selected={settings.log_min_level === 'debug'}>debug (Verbose + SQL timings)</option>
-              <option value="info" selected={settings.log_min_level === 'info'}>info (All completed requests & events)</option>
-              <option value="warn" selected={settings.log_min_level === 'warn'}>warn (Default: Slow requests & warnings)</option>
-              <option value="error" selected={settings.log_min_level === 'error'}>error (Errors & critical only)</option>
-              <option value="critical" selected={settings.log_min_level === 'critical'}>critical (Critical incidents only)</option>
-            </select>
-          </div>
-          <p class="text-[11px] text-[#86868b] mt-1">Controls D1 write volume. Info/Debug capture full request profiling.</p>
-        </div>
-
-        <!-- Slow Request Threshold -->
-        <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col justify-between md:col-span-2">
-          <div>
-            <label for="slow_request_threshold_ms" class="block text-xs font-bold text-[#1d1d1f] mb-1">
-              Slow Request Warning Threshold (ms)
-            </label>
-            <div class="flex items-center gap-2">
-              <input
-                type="number"
-                id="slow_request_threshold_ms"
-                name="slow_request_threshold_ms"
-                value={settings.slow_request_threshold_ms || 1000}
-                min="50"
-                max="30000"
-                step="50"
-                class="w-36 px-3 py-1.5 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] font-mono font-bold"
-              />
-              <span class="text-xs text-[#86868b]">ms (Default: 1000ms)</span>
+        {s6Fields.map((f) =>
+          f.type === 'checkbox' ? (
+            <div class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-start gap-3">
+              <input type="checkbox" id={f.key} name={f.key} checked={Boolean(settings[f.key])} class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f] mt-0.5 shrink-0" />
+              <div>
+                <label for={f.key} class="block text-xs font-bold text-[#1d1d1f] cursor-pointer">{f.label}</label>
+                <p class="text-[11px] text-[#86868b] mt-0.5">{f.help}</p>
+              </div>
             </div>
-          </div>
-          <p class="text-[11px] text-[#86868b] mt-1">Requests exceeding this threshold are automatically captured as performance warnings even in warn/error mode.</p>
-        </div>
+          ) : (
+            <div class={`p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 flex flex-col justify-between ${f.span === 2 ? 'md:col-span-2' : ''}`}>
+              <div>
+                <label for={f.key} class="block text-xs font-bold text-[#1d1d1f] mb-1">{f.label}</label>
+                {f.type === 'select' ? (
+                  <select id={f.key} name={f.key} class={inputCls(f, 'bg-white')}>
+                    {(f.options || []).map((opt) => (
+                      <option value={opt.value} selected={settings[f.key] === opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : f.unit ? (
+                  <div class="flex items-center gap-2">
+                    <input type="number" id={f.key} name={f.key} value={String(settings[f.key] ?? 1000)} min={f.min} max={f.max} step={f.step} class="w-36 px-3 py-1.5 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] font-mono font-bold" />
+                    <span class="text-xs text-[#86868b]">{f.unit}</span>
+                  </div>
+                ) : (
+                  <input type={f.type || 'text'} id={f.key} name={f.key} value={String(settings[f.key] ?? '')} min={f.min} max={f.max} class={inputCls(f, 'bg-white')} />
+                )}
+              </div>
+              {f.help && <p class="text-[11px] text-[#86868b] mt-1">{f.help}</p>}
+            </div>
+          )
+        )}
       </div>
     </div>
 
@@ -775,73 +372,22 @@ const pageTitle = 'Workspace Settings';
         <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">7. Edge CDN Purge & Cache Invalidation</h2>
         <p class="text-xs text-[#86868b] mt-0.5">Configure automated Cloudflare global CDN cache purging upon content updates.</p>
       </div>
-
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- Revalidate Secret -->
-        <div>
-          <label for="revalidate_secret" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Revalidation Webhook Secret
-          </label>
-          <input
-            type="password"
-            id="revalidate_secret"
-            name="revalidate_secret"
-            value={settings.revalidate_secret}
-            placeholder="e.g. my-secret-revalidate-token"
-            autocomplete="new-password"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Shared secret for Sanity Webhook or manual <code>/api/revalidate</code> calls.</p>
-        </div>
-
-        <!-- Cloudflare Zone ID -->
-        <div>
-          <label for="cloudflare_zone_id" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Cloudflare Zone ID
-          </label>
-          <input
-            type="text"
-            id="cloudflare_zone_id"
-            name="cloudflare_zone_id"
-            value={settings.cloudflare_zone_id}
-            placeholder="e.g. 023e105f4ecef8ad9ca31a8372d0c353"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">Found on Cloudflare dashboard Overview tab for your domain.</p>
-        </div>
-
-        <!-- Cloudflare API Token -->
-        <div>
-          <label for="cloudflare_api_token" class="block text-xs font-semibold text-[#1d1d1f] mb-1">
-            Cloudflare Purge API Token
-          </label>
-          <input
-            type="password"
-            id="cloudflare_api_token"
-            name="cloudflare_api_token"
-            value={settings.cloudflare_api_token}
-            placeholder="Bearer token with Cache:Purge permission"
-            autocomplete="new-password"
-            class="w-full px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono"
-          />
-          <p class="text-[11px] text-[#86868b] mt-1">API Token with <code>Zone.Cache Purge</code> permissions.</p>
-        </div>
+        {s7Fields.map((f) => (
+          <div>
+            <label for={f.key} class="block text-xs font-semibold text-[#1d1d1f] mb-1">{f.label}</label>
+            <input type={f.type || 'text'} id={f.key} name={f.key} value={String(settings[f.key] ?? '')} placeholder={f.placeholder} autocomplete={f.type === 'password' ? 'new-password' : undefined} class={inputCls(f)} />
+            {f.help && <p class="text-[11px] text-[#86868b] mt-1">{f.help}</p>}
+          </div>
+        ))}
       </div>
     </div>
 
     <!-- Bottom Save Toolbar -->
     <div class="sticky bottom-4 z-20 flex items-center justify-between p-4 rounded-2xl bg-white/95 backdrop-blur-md border border-black/10 shadow-lg">
-      <div class="text-xs text-[#86868b]">
-        Changes take effect immediately across all edge nodes upon saving.
-      </div>
-      <button
-        id="save-settings-btn-bottom"
-        type="button"
-        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-xs active:scale-95 transition-all cursor-pointer"
-      >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-        </svg>
+      <div class="text-xs text-[#86868b]">Changes take effect immediately across all edge nodes upon saving.</div>
+      <button id="save-settings-btn-bottom" type="button" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-xs active:scale-95 transition-all cursor-pointer">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
         <span>Save All Settings</span>
       </button>
     </div>
@@ -862,39 +408,22 @@ const pageTitle = 'Workspace Settings';
 
       function getFormUpdates() {
         if (!form) return {};
-        var formData = new FormData(form);
-        var updates = {
-          brand_name: (formData.get('brand_name') || '').toString().trim(),
-          app_url: (formData.get('app_url') || '').toString().trim(),
-          contact_email: (formData.get('contact_email') || '').toString().trim(),
-          whatsapp_number: (formData.get('whatsapp_number') || '').toString().trim(),
-          whatsapp_prefill: (formData.get('whatsapp_prefill') || '').toString().trim(),
-          enable_email_notify: form.querySelector('#enable_email_notify') ? form.querySelector('#enable_email_notify').checked : true,
-          resend_api_key: (formData.get('resend_api_key') || '').toString().trim(),
-          resend_from_email: (formData.get('resend_from_email') || '').toString().trim(),
-          resend_to_emails: (formData.get('resend_to_emails') || '').toString().trim(),
-          resend_subject_prefix: (formData.get('resend_subject_prefix') || '').toString().trim(),
-          enable_webhook_notify: form.querySelector('#enable_webhook_notify') ? form.querySelector('#enable_webhook_notify').checked : true,
-          notification_webhook_url: (formData.get('notification_webhook_url') || '').toString().trim(),
-          order_no_prefix: (formData.get('order_no_prefix') || '').toString().trim().toUpperCase(),
-          shipping_carriers: (formData.get('shipping_carriers') || '').toString().trim(),
-          print_sheet_title: (formData.get('print_sheet_title') || '').toString().trim(),
-          print_sheet_footer: (formData.get('print_sheet_footer') || '').toString().trim(),
-          co_admin_emails: (formData.get('co_admin_emails') || '').toString().trim(),
-          turnstile_site_key: (formData.get('turnstile_site_key') || '').toString().trim(),
-          turnstile_secret_key: (formData.get('turnstile_secret_key') || '').toString().trim(),
-          turnstile_hostnames: (formData.get('turnstile_hostnames') || '').toString().trim(),
-          login_retention_days: parseInt(formData.get('login_retention_days') || '90', 10),
-          enable_error_logging: form.querySelector('#enable_error_logging') ? form.querySelector('#enable_error_logging').checked : true,
-          log_authenticated_users: form.querySelector('#log_authenticated_users') ? form.querySelector('#log_authenticated_users').checked : true,
-          log_client_errors: form.querySelector('#log_client_errors') ? form.querySelector('#log_client_errors').checked : true,
-          log_retention_days: parseInt(formData.get('log_retention_days') || '30', 10),
-          log_min_level: (formData.get('log_min_level') || 'warn').toString().trim().toLowerCase(),
-          slow_request_threshold_ms: parseInt(formData.get('slow_request_threshold_ms') || '1000', 10),
-          revalidate_secret: (formData.get('revalidate_secret') || '').toString().trim(),
-          cloudflare_zone_id: (formData.get('cloudflare_zone_id') || '').toString().trim(),
-          cloudflare_api_token: (formData.get('cloudflare_api_token') || '').toString().trim(),
-        };
+        var updates = {};
+        form.querySelectorAll('[name]').forEach(function(el) {
+          var key = el.name;
+          if (!key) return;
+          if (el.type === 'checkbox') {
+            updates[key] = el.checked;
+          } else if (el.type === 'number') {
+            var def = key === 'login_retention_days' ? '90' : key === 'log_retention_days' ? '30' : '1000';
+            updates[key] = parseInt(el.value || def, 10);
+          } else {
+            var val = (el.value || '').toString().trim();
+            if (key === 'order_no_prefix') val = val.toUpperCase();
+            if (key === 'log_min_level') val = (val || 'warn').toLowerCase();
+            updates[key] = val;
+          }
+        });
         return updates;
       }
 
@@ -902,12 +431,8 @@ const pageTitle = 'Workspace Settings';
         var updates = getFormUpdates();
         var buttons = [saveTop, saveBottom];
         buttons.forEach(function(b) {
-          if (b) {
-            b.disabled = true;
-            b.classList.add('opacity-50', 'pointer-events-none');
-          }
+          if (b) { b.disabled = true; b.classList.add('opacity-50', 'pointer-events-none'); }
         });
-
         try {
           var res = await fetch('/api/admin/settings', {
             method: 'POST',
@@ -924,10 +449,7 @@ const pageTitle = 'Workspace Settings';
           showToast('Network error while saving settings: ' + err.message, false);
         } finally {
           buttons.forEach(function(b) {
-            if (b) {
-              b.disabled = false;
-              b.classList.remove('opacity-50', 'pointer-events-none');
-            }
+            if (b) { b.disabled = false; b.classList.remove('opacity-50', 'pointer-events-none'); }
           });
         }
       }
@@ -939,10 +461,7 @@ const pageTitle = 'Workspace Settings';
         testBtn.addEventListener('click', async function() {
           var urlInput = document.getElementById('notification_webhook_url');
           var url = urlInput ? urlInput.value.trim() : '';
-          if (!url) {
-            showToast('Please provide a webhook URL before testing.', false);
-            return;
-          }
+          if (!url) { showToast('Please provide a webhook URL before testing.', false); return; }
 
           testBtn.disabled = true;
           testBtn.textContent = 'Sending...';
@@ -950,7 +469,6 @@ const pageTitle = 'Workspace Settings';
             webhookStatus.textContent = 'Sending test payload to webhook...';
             webhookStatus.className = 'text-[11px] text-blue-600 mt-1.5 animate-pulse';
           }
-
           try {
             var res = await fetch('/api/admin/settings', {
               method: 'POST',
@@ -986,4 +504,3 @@ const pageTitle = 'Workspace Settings';
     })();
   </script>
 </AdminLayout>
-

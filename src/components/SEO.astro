@@ -1,7 +1,7 @@
 ---
 // src/components/SEO.astro
-import { SEO as AstroSEO, type TwitterCardType } from 'astro-seo';
 import type { CustomImage, Page, SiteConfig } from 'types';
+type TwitterCardType = 'summary' | 'summary_large_image' | 'app' | 'player';
 import { SanityImageService } from '@utils/image';
 import { cleanBrandTitle } from '@utils/text';
 import {
@@ -125,48 +125,37 @@ const ogLocale = OG_LOCALE_MAP[currentLang] || 'en_US';
 const ogAlternateLocales = (Object.keys(LANGUAGES) as SupportedLocale[])
   .filter((loc) => loc !== currentLang)
   .map((loc) => OG_LOCALE_MAP[loc]);
+const resolvedImageWidth = String(imageDimensions?.width || 1200);
+const resolvedImageHeight = String(imageDimensions?.height || 630);
+const robotsContent = (noindex || nofollow)
+  ? `${noindex ? 'noindex' : 'index'}, ${nofollow ? 'nofollow' : 'follow'}`
+  : '';
 ---
 
-<AstroSEO
-  title={resolvedTitle}
-  description={resolvedDescription}
-  canonical={resolvedCanonical}
-  noindex={noindex}
-  nofollow={nofollow}
-  openGraph={{
-    basic: {
-      title: resolvedTitle,
-      type,
-      image: resolvedImageUrl,
-      url: resolvedCanonical,
-    },
-    optional: {
-      description: resolvedDescription,
-      siteName,
-      locale: ogLocale,
-      localeAlternate: ogAlternateLocales,
-    },
-    image: {
-      url: resolvedImageUrl,
-      secureUrl: resolvedImageUrl.startsWith('https') ? resolvedImageUrl : undefined,
-      alt: rawImageAlt,
-      width: imageDimensions?.width || 1200,
-      height: imageDimensions?.height || 630,
-    },
-  }}
-  twitter={{
-    card: twitterCard,
-    title: resolvedTitle,
-    description: resolvedDescription,
-    image: resolvedImageUrl,
-    imageAlt: rawImageAlt,
-  }}
-  extend={{
-    meta: [
-      { property: 'twitter:url', content: resolvedCanonical },
-    ],
-  }}
-/>
+<title>{resolvedTitle}</title>
+<meta name="description" content={resolvedDescription} />
+<link rel="canonical" href={resolvedCanonical} />
+{robotsContent && <meta name="robots" content={robotsContent} />}
+
+<meta property="og:title" content={resolvedTitle} />
+<meta property="og:type" content={type} />
+<meta property="og:image" content={resolvedImageUrl} />
+{resolvedImageUrl.startsWith('https') && <meta property="og:image:secure_url" content={resolvedImageUrl} />}
+<meta property="og:image:alt" content={rawImageAlt} />
+<meta property="og:image:width" content={resolvedImageWidth} />
+<meta property="og:image:height" content={resolvedImageHeight} />
+<meta property="og:url" content={resolvedCanonical} />
+<meta property="og:description" content={resolvedDescription} />
+<meta property="og:site_name" content={siteName} />
+<meta property="og:locale" content={ogLocale} />
+{ogAlternateLocales.map((alt) => <meta property="og:locale:alternate" content={alt} />)}
+
+<meta name="twitter:card" content={twitterCard} />
+<meta name="twitter:title" content={resolvedTitle} />
+<meta name="twitter:description" content={resolvedDescription} />
+<meta name="twitter:image" content={resolvedImageUrl} />
+<meta name="twitter:image:alt" content={rawImageAlt} />
+<meta property="twitter:url" content={resolvedCanonical} />
 
 {structuredData && (
   <script

@@ -5,7 +5,6 @@ import SectionBoundary from '@components/SectionBoundary.astro';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
 import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
-import type { TwitterCardType } from 'astro-seo';
 import { getSystemSettings } from '@utils/db';
 // @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
@@ -19,7 +18,7 @@ interface Props {
     image?: CustomImage | string;
     canonicalUrl?: string | URL;
     type?: 'website' | 'article' | 'product';
-    twitterCard?: TwitterCardType;
+    twitterCard?: 'summary' | 'summary_large_image' | 'app' | 'player';
     noindex?: boolean;
     nofollow?: boolean;
     page?: Partial<Page>;
