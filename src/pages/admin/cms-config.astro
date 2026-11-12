@@ -317,7 +317,7 @@ const pageTitle = 'CMS Site Configuration';
 </AdminLayout>
 
 <script>
-  import { escapeHtml } from '@utils/adminWorkbench';
+  import { escapeHtml, getFallbackEn, setLocaleVal } from '@utils/adminWorkbench';
 
   function initCmsConfig() {
     let activeTab = 'site';
@@ -362,20 +362,8 @@ const pageTitle = 'CMS Site Configuration';
     }
   }
 
-  // Helper to extract localized text or string safely
-  function getLocaleVal(val: any): string {
-    if (!val) return '';
-    if (typeof val === 'string') return val;
-    return val.en || val.zh || Object.values(val)[0] || '';
-  }
-
-  function makeLocaleVal(str: string, orig?: any): any {
-    return {
-      ...(typeof orig === 'object' && orig ? orig : {}),
-      _type: 'localeString',
-      en: str,
-    };
-  }
+  const getLocaleVal = (val: any) => getFallbackEn(val);
+  const makeLocaleVal = (str: string, orig?: any) => setLocaleVal(orig, str, 'en');
 
   // 1. Site Pane
   function populateSitePane() {

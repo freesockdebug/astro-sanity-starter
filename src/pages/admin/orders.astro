@@ -458,10 +458,10 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     data-can-ship={canShip ? 'true' : 'false'}
     data-can-claim={canClaim ? 'true' : 'false'}
     data-can-assign={canAssign ? 'true' : 'false'}
-    data-carriers={JSON.stringify(carrierOptions)}
-    data-inquiry-types={JSON.stringify(inquiryTypeItems)}
     class="hidden"
   ></div>
+  <script type="application/json" id="orders-carriers-json" set:html={JSON.stringify(carrierOptions)}></script>
+  <script type="application/json" id="orders-inquiry-types-json" set:html={JSON.stringify(inquiryTypeItems)}></script>
 
   <!-- Floating Batch Operations Action Bar -->
   <div
@@ -541,13 +541,13 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
 
   let clientCarriers: any[] = [];
   try {
-    const rawCarriers = appMetaEl?.getAttribute('data-carriers');
+    const rawCarriers = document.getElementById('orders-carriers-json')?.textContent;
     if (rawCarriers) clientCarriers = JSON.parse(rawCarriers);
   } catch {}
 
   let clientInquiryTypes: any[] = [];
   try {
-    const rawInquiry = appMetaEl?.getAttribute('data-inquiry-types');
+    const rawInquiry = document.getElementById('orders-inquiry-types-json')?.textContent;
     if (rawInquiry) clientInquiryTypes = JSON.parse(rawInquiry);
   } catch {}
   const inquiryTypeMap = new Map(clientInquiryTypes.map((i: any) => [String(i.item_key || '').toLowerCase(), i]));

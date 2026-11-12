@@ -708,6 +708,7 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
           fetch(`${origin}${p.startsWith('/') ? p : `/${p}`}`, {
             method: 'GET',
             headers: { 'User-Agent': 'Cloudflare-Edge-Warmup/1.0' },
+            signal: AbortSignal.timeout(6000),
           })
         )
       )

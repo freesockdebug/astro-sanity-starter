@@ -20,7 +20,8 @@ const {
   menus,
 } = Astro.props;
 
-const canShow = (key: string) => !menus || menus.includes(key);
+const menuSet = Array.isArray(menus) ? new Set(menus) : typeof menus === 'string' ? new Set([menus]) : null;
+const canShow = (key: string) => !menuSet || menuSet.has(key);
 
 // SVG Icon definitions corresponding to menu keys
 const MENU_SVGS: Record<string, string> = {

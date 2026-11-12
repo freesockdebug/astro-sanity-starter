@@ -2,10 +2,8 @@
 // Server-side dedicated Sanity Client with write authorization for /admin operations.
 // STRICT SECURITY NOTICE: Never import this module in client-side scripts.
 
-import { createClient, type SanityClient } from '@sanity/client';
+import { createEdgeSanityClient, type SanityClient } from './sanity-client';
 import { getRuntimeEnv } from './auth';
-
-let adminClientInstance: SanityClient | null = null;
 
 export function getSanityAdminClient(customEnv?: any): SanityClient {
   const projectId = getRuntimeEnv('SANITY_PROJECT_ID', customEnv);
@@ -24,13 +22,15 @@ export function getSanityAdminClient(customEnv?: any): SanityClient {
   }
 
   // Always use fresh live API (no CDN caching) for administrative mutations & reads
-  return createClient({
-    projectId,
-    dataset,
-    token,
-    useCdn: false,
-    apiVersion: '2024-01-31',
-    perspective: 'published',
-  });
+  return createEdgeSanityClient(
+    {
+      projectId,
+      dataset,
+      token,
+      useCdn: false,
+      apiVersion: '2024-01-31',
+      perspective: 'published',
+    },
+    'AdminWrite'
+  );
 }
-

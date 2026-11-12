@@ -312,3 +312,137 @@ export function exportToCsv(
   URL.revokeObjectURL(url);
 }
 
+// ============================================================================
+// 1. Unified Multi-Language (localeString / localeText) Primitives
+// ============================================================================
+export function getLocaleVal(val: any, lang = 'en'): string {
+  if (!val) return '';
+  if (typeof val === 'string') return val;
+  return val[lang] || '';
+}
+
+export function getFallbackEn(val: any): string {
+  if (!val) return '';
+  if (typeof val === 'string') return val;
+  return val.en || (Object.values(val).find((v) => typeof v === 'string' && v !== 'localeString' && v !== 'localeText') as string) || '';
+}
+
+export function setLocaleVal(
+  orig: any,
+  text: string,
+  lang = 'en',
+  type: 'localeString' | 'localeText' = 'localeString'
+): any {
+  if (typeof orig === 'object' && orig !== null) {
+    return { ...orig, _type: orig._type || type, [lang]: text };
+  }
+  return { _type: type, [lang]: text };
+}
+
+// ============================================================================
+// 2. Saltline-Style Table-Driven Form Descriptor & Two-Way DOM Binder
+// ============================================================================
+export interface FieldSpec {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'checkbox' | 'select' | 'localeString' | 'localeText' | 'csv';
+  col?: 1 | 2 | 3 | 4 | 6 | 12;
+  rows?: number;
+  bold?: boolean;
+  mono?: boolean;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+}
+
+/**
+ * Renders an array of declarative FieldSpecs into a 12-column responsive grid
+ */
+export function renderSchemaFields(fields: FieldSpec[], doc: Record<string, any>, lang = 'en'): string {
+  const colClassMap: Record<number, string> = {
+    12: 'sm:col-span-12',
+    6: 'sm:col-span-6',
+    4: 'sm:col-span-4',
+    3: 'sm:col-span-3',
+    2: 'sm:col-span-2',
+    1: 'sm:col-span-1',
+  };
+
+  return `<div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+    ${fields
+      .map((f) => {
+        const spanClass = colClassMap[f.col || 12] || 'sm:col-span-12';
+        const isLocale = f.type === 'localeString' || f.type === 'localeText';
+        const rawVal = doc?.[f.key];
+        const strVal = isLocale
+          ? getLocaleVal(rawVal, lang)
+          : f.type === 'csv'
+          ? Array.isArray(rawVal) ? rawVal.join(', ') : ''
+          : String(rawVal ?? '');
+        const ph = f.placeholder ?? (isLocale ? getFallbackEn(rawVal) : '');
+        const langBadge = isLocale ? ` <span class="text-[10px] font-mono text-[#86868b]">(${lang.toUpperCase()})</span>` : '';
+        const fontMod = `${f.bold ? 'font-bold ' : ''}${f.mono ? 'font-mono ' : ''}`;
+
+        if (f.type === 'checkbox') {
+          const checked = rawVal === true || (rawVal !== false && f.placeholder === 'defaultTrue');
+          return `
+            <div class="col-span-1 ${spanClass} flex items-center gap-2 pt-1">
+              <input type="checkbox" data-bind="${escapeHtml(f.key)}" data-ftype="checkbox" class="rounded cursor-pointer" ${checked ? 'checked' : ''} />
+              <label class="font-semibold text-xs text-[#1d1d1f] cursor-pointer">${escapeHtml(f.label)}</label>
+            </div>`;
+        }
+
+        if (f.type === 'select') {
+          return `
+            <div class="col-span-1 ${spanClass}">
+              <label class="adm-label">${escapeHtml(f.label)}</label>
+              <select data-bind="${escapeHtml(f.key)}" data-ftype="select" class="adm-input">
+                ${(f.options || [])
+                  .map((o) => `<option value="${escapeHtml(o.value)}" ${strVal === o.value ? 'selected' : ''}>${escapeHtml(o.label)}</option>`)
+                  .join('')}
+              </select>
+            </div>`;
+        }
+
+        if (f.type === 'textarea' || f.type === 'localeText') {
+          return `
+            <div class="col-span-1 ${spanClass}">
+              <label class="adm-label">${escapeHtml(f.label)}${langBadge}</label>
+              <textarea rows="${f.rows || 2}" data-bind="${escapeHtml(f.key)}" data-ftype="${f.type}" class="adm-input ${fontMod}" placeholder="${escapeHtml(ph)}">${escapeHtml(strVal)}</textarea>
+            </div>`;
+        }
+
+        return `
+          <div class="col-span-1 ${spanClass}">
+            <label class="adm-label">${escapeHtml(f.label)}${langBadge}</label>
+            <input type="${f.type === 'number' ? 'number' : 'text'}" data-bind="${escapeHtml(f.key)}" data-ftype="${f.type}" class="adm-input ${fontMod}" value="${escapeHtml(strVal)}" placeholder="${escapeHtml(ph)}" />
+          </div>`;
+      })
+      .join('')}
+  </div>`;
+}
+
+/**
+ * Automatically reads all [data-bind] inputs inside rootEl and updates target doc in-place
+ */
+export function syncSchemaFieldsFromDom(rootEl: ParentNode, doc: Record<string, any>, lang = 'en'): void {
+  rootEl.querySelectorAll('[data-bind]').forEach((node) => {
+    const el = node as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    const key = el.getAttribute('data-bind');
+    const ftype = el.getAttribute('data-ftype') || 'text';
+    if (!key) return;
+
+    if (ftype === 'checkbox') {
+      doc[key] = (el as HTMLInputElement).checked;
+    } else if (ftype === 'number') {
+      const n = Number(el.value);
+      doc[key] = isNaN(n) ? 0 : n;
+    } else if (ftype === 'csv') {
+      doc[key] = el.value.split(',').map((s) => s.trim()).filter(Boolean);
+    } else if (ftype === 'localeString' || ftype === 'localeText') {
+      doc[key] = setLocaleVal(doc[key], el.value.trim(), lang, ftype);
+    } else {
+      doc[key] = el.value.trim();
+    }
+  });
+}
+

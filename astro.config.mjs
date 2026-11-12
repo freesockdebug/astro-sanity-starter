@@ -1,10 +1,8 @@
 import 'dotenv/config';
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
-import sanity from '@sanity/astro';
 import cloudflare from '@astrojs/cloudflare';
 import { visualizer } from 'rollup-plugin-visualizer';
-import { sanityConfig } from './src/utils/sanity-client';
 
 const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('build');
 const isAnalyze = process.env.ANALYZE === 'true';
@@ -32,7 +30,6 @@ export default defineConfig({
     image: {
         domains: ['cdn.sanity.io']
     },
-    integrations: [sanity(sanityConfig)],
     vite: {
         plugins: [
             tailwindcss(),
@@ -55,7 +52,7 @@ export default defineConfig({
             drop: isProduction ? ['console', 'debugger'] : []
         },
         optimizeDeps: {
-            exclude: ['marked', '@sanity/client', '@nanostores/persistent']
+            exclude: ['marked', '@nanostores/persistent']
         }
     },
     server: {

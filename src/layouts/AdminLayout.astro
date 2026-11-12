@@ -35,13 +35,15 @@ const {
   dataScope = 'ALL',
 } = Astro.props;
 
-const canShow = (key: string) => !menus || menus.includes(key);
+const menuSet = Array.isArray(menus) ? new Set(menus) : typeof menus === 'string' ? new Set([menus]) : null;
+const canShow = (key: string) => !menuSet || menuSet.has(key);
 const currentTabTitle = getTabTitle(currentTab, 'Workspace');
 const isShellReq = Astro.request.headers.get('x-shell-request') === '1';
 
 const safeEmail = typeof sessionEmail === 'string' ? sessionEmail.trim() : '';
-const displayName = adminName || (safeEmail ? safeEmail.split('@')[0] : 'Admin');
-const emailInitial = displayName ? displayName.slice(0, 1).toUpperCase() : 'A';
+const displayName = typeof adminName === 'string' && adminName.trim() ? adminName.trim() : (safeEmail ? safeEmail.split('@')[0] : 'Admin');
+const safeDisplayName = typeof displayName === 'string' ? displayName : String(displayName || 'Admin');
+const emailInitial = safeDisplayName ? safeDisplayName.slice(0, 1).toUpperCase() : 'A';
 
 const roleBadgeClasses: Record<string, string> = {
   super_admin: 'bg-amber-50 text-amber-800 border-amber-200/80',

@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { createClient } from '@sanity/client';
 import { SecurityService } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
@@ -428,61 +427,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }
     })();
 
-    // 4. Execute Sanity write, Resend email, and Webhook notification concurrently
-    let sanityRecordId: string | null = null;
-    let sanityWriteError: string | null = null;
-    const sanityToken =
-      getVal('SANITY_TOKEN') ||
-      getVal('SANITY_WRITE_TOKEN') ||
-      getVal('sanity_token');
-    const sanityProjectId = getVal('SANITY_PROJECT_ID');
-    const sanityDataset = getVal('SANITY_DATASET') || 'production';
-
-    const sanityWriteTask = (async () => {
-      if (!sanityToken || !sanityProjectId) {
-        sanityWriteError = 'SANITY_TOKEN or SANITY_PROJECT_ID is missing on Cloudflare Worker runtime';
-        return;
-      }
-      try {
-        const writeClient = createClient({
-          projectId: sanityProjectId,
-          dataset: sanityDataset,
-          apiVersion: '2024-01-31',
-          useCdn: false,
-          token: sanityToken,
-        });
-
-        const doc = {
-          _type: 'inquiry',
-          orderNo,
-          company: buyerInfo.company,
-          buyerName: buyerInfo.name,
-          email: buyerInfo.email,
-          whatsapp: buyerInfo.whatsapp,
-          destination: resolvedDestination,
-          visitorIp: visitorIp || undefined,
-          detectedCountry: detectedCountry || cfCountryCode || undefined,
-          notes: buyerInfo.message,
-          inquiryType: inquiryType,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          itemsSummary: items
-            .map((i) => `[${i.sku || 'SKU'}] ${i.title} (${i.variant || 'Default'}) x ${i.quantity}pcs`)
-            .join('\n'),
-          rawItems: JSON.stringify(items),
-        };
-        const created = await writeClient.create(doc);
-        sanityRecordId = created?._id || null;
-        if (import.meta.env.DEV) {
-          console.log('Successfully recorded inquiry in Sanity:', sanityRecordId);
-        }
-      } catch (e: any) {
-        console.error('Could not write inquiry to Sanity:', e);
-        sanityWriteError = e?.message || 'Sanity API create failed';
-      }
-    })();
-
-    // 4. Send Email notification via Resend with timeout protection
+    // 4. Execute Resend email and Webhook notification concurrently with D1 write
     const resendApiKey = systemSettings?.resend_api_key || getVal('RESEND_API_KEY');
     const emailTask = (async () => {
       if (!resendApiKey || systemSettings?.enable_email_notify === false) return;
@@ -574,7 +519,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }
     })();
 
-    await Promise.allSettled([d1WriteTask, sanityWriteTask, emailTask, webhookTask]);
+    await Promise.allSettled([d1WriteTask, emailTask, webhookTask]);
 
     if (!orderId) {
       if (idempKey) {
@@ -588,11 +533,11 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         rayId: request.headers.get('cf-ray') || undefined,
         userId: sessionUser?.id,
         userEmail: normalizedEmail,
-        context: { d1WriteError, sanityWriteError, orderNo },
+        context: { d1WriteError, orderNo },
       }, { cfEnv });
       return new Response(
         JSON.stringify({
-          error: `Order could not be saved to primary database: ${d1WriteError || sanityWriteError || 'Database write failed'}.`,
+          error: `Order could not be saved to primary database: ${d1WriteError || 'Database write failed'}.`,
           success: false,
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -609,7 +554,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         orderNo: orderNo || undefined,
         orderId: orderId || undefined,
         message: 'Your RFQ and Official Order have been received. Our account manager will contact you within 24 hours.',
-        sanityRecordId,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
