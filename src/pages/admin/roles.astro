@@ -164,7 +164,7 @@ const pageTitle = 'Roles & Permissions Matrix';
                   <button
                     type="button"
                     class="btn-configure-role h-7 px-3 rounded-lg text-xs font-semibold bg-[#f5f5f7] text-[#1d1d1f] hover:bg-black hover:text-white transition-all cursor-pointer border border-black/5"
-                    data-role-id={r.id}
+                    data-role-code={r.code}
                   >
                     {isSuper ? 'View Matrix' : 'Configure Permissions'}
                   </button>
@@ -427,15 +427,15 @@ const pageTitle = 'Roles & Permissions Matrix';
     const rawRoles = document.getElementById('roles-data-json')?.textContent;
     if (rawRoles) {
       for (const r of JSON.parse(rawRoles)) {
-        if (r?.id) rolesMap.set(String(r.id), r);
+        if (r?.code) rolesMap.set(String(r.code), r);
       }
     }
   } catch {}
 
   document.querySelectorAll('.btn-configure-role').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const roleId = btn.getAttribute('data-role-id');
-      const role = roleId ? rolesMap.get(roleId) : null;
+      const roleCode = btn.getAttribute('data-role-code');
+      const role = roleCode ? rolesMap.get(roleCode) : null;
       if (role) openEdit(role);
     });
   });
