@@ -5,7 +5,6 @@ import { hasMenu } from '@utils/rbac';
 import { getSystemSettings, updateSystemSettings } from '@utils/db';
 import { SecurityService } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

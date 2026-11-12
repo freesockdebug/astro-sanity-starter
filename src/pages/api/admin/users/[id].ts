@@ -1,6 +1,6 @@
 // src/pages/api/admin/users/[id].ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import {
   getUserById,
@@ -14,7 +14,6 @@ import {
 import { recordAdminAudit } from '@utils/audit';
 import { getMergedAdminEmails } from '@utils/auth';
 import { getDictMap } from '@utils/dicts';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

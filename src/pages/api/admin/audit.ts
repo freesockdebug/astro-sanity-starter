@@ -1,10 +1,9 @@
 // src/pages/api/admin/audit.ts
 // Admin Operation Audit Log Query API with RBAC protection
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasMenu } from '@utils/rbac';
 import { listAuditLogs } from '@utils/db';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

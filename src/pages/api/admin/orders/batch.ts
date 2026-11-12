@@ -1,12 +1,11 @@
 // src/pages/api/admin/orders/batch.ts
 // Batch Order Actions: Batch Approve, Batch Reject, Batch Assign with RBAC & Audit
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { batchUpdateOrderStatus, batchAssignOrders } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
 import type { OrderStatus } from '@db/types';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

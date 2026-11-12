@@ -1,11 +1,10 @@
 // src/pages/api/admin/orders/[id]/status.ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { updateOrderStatus, getOrderById } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
 import type { OrderStatus } from '@db/types';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

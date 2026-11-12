@@ -3,7 +3,6 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasMenu, hasPermission } from '@utils/rbac';
 import { listErrorLogs, clearErrorLogs } from '@utils/db';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

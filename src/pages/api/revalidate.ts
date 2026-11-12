@@ -1,7 +1,6 @@
 // src/pages/api/revalidate.ts
 // On-Demand Cache Revalidation & Edge Purge Endpoint
 import type { APIRoute } from 'astro';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 import { SecurityService } from '@utils/security';
 import { getRuntimeEnv } from '@utils/auth';

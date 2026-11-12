@@ -2,7 +2,6 @@
 // Cloud-backed Administrator Table Preferences API (L2 Cloudflare KV + L3 D1 system_settings)
 
 import type { APIRoute } from 'astro';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { executeWithAutoSchema } from '../../../db/schema';

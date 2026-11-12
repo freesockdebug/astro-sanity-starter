@@ -1,12 +1,11 @@
 // src/pages/api/admin/members/[email].ts
 // Admin Member Removal Endpoint
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission, invalidateAdminRbacCache } from '@utils/rbac';
 import { deleteAdminMember, getAdminMember } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
 import { getRuntimeEnv } from '@utils/auth';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

@@ -4,7 +4,6 @@ import { SESSION_COOKIE_NAME, getCookieValue, verifySessionToken, jsonNoCache } 
 import { SecurityService } from '@utils/security';
 import { logger } from '@utils/logger';
 import { getSystemSettings } from '@utils/db';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

@@ -1,7 +1,6 @@
 // src/pages/api/auth/login.ts
 import type { APIRoute } from 'astro';
 import { getRuntimeEnv } from '@utils/auth';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

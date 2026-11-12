@@ -6,7 +6,6 @@ import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { listDictGroups } from '@utils/db';
 import { getAllCachedDictItems } from '@utils/dicts';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

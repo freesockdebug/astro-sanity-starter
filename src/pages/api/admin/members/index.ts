@@ -1,11 +1,10 @@
 // src/pages/api/admin/members/index.ts
 // Admin Member Management: List, Add, or Update Members with Roles
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission, invalidateAdminRbacCache } from '@utils/rbac';
 import { listAdminMembers, listAdminRoles, upsertAdminMember, getAdminMember, listCandidateLogtoUsers } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

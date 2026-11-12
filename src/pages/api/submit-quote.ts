@@ -7,7 +7,6 @@ import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
 import { kvGet, kvPut, kvDelete } from '@utils/kv';
 import { logger } from '@utils/logger';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false; // Run dynamically as Cloudflare Worker endpoint

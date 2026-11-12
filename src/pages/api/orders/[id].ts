@@ -2,7 +2,6 @@
 import type { APIRoute } from 'astro';
 import { verifyBuyerAuth, jsonNoCache } from '@utils/auth';
 import { getOrderById, getOrderByNo } from '@utils/db';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

@@ -1,11 +1,10 @@
 // src/pages/api/admin/orders/[id]/assign.ts
 // Assign or Claim Order Endpoint with RBAC & Audit Logging
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { assignOrder, getOrderById } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

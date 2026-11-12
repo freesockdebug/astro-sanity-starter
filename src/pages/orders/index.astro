@@ -4,7 +4,6 @@ import Layout from '@layouts/Layout.astro';
 import BuyerLayout from '@layouts/BuyerLayout.astro';
 import { getBuyerContext } from '@utils/auth';
 import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

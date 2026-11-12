@@ -2,7 +2,6 @@
 import type { APIRoute } from 'astro';
 import { getSessionFromRequest, checkIsAdmin, jsonNoCache, SESSION_COOKIE_NAME } from '@utils/auth';
 import { getUserByIdOrEmail, getSystemSettings } from '@utils/db';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

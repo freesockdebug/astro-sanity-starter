@@ -6,7 +6,6 @@ import TierBadge from '@components/TierBadge.astro';
 import { getBuyerContext, getRuntimeEnv } from '@utils/auth';
 import { getUserLoginHistory } from '@utils/db';
 import { getLangFromUrl, useTranslations } from '@i18n';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

@@ -5,7 +5,6 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
 import { listAdminMembers, listAdminRoles } from '@utils/db';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

@@ -1,12 +1,11 @@
 // src/pages/api/admin/roles/index.ts
 // RBAC Roles Management API: List & Upsert Roles
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission, invalidateAdminRbacCache } from '@utils/rbac';
 import { listAdminRoles, upsertAdminRole, getMemberEmailsByRole } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
 import { ALL_MENU_KEYS } from '@config/adminNavigation';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

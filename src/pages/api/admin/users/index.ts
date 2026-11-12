@@ -1,9 +1,8 @@
 // src/pages/api/admin/users/index.ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { checkIsAdmin } from '@utils/auth';
 import { listAdminUsers, getSystemSettings } from '@utils/db';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

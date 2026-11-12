@@ -1,7 +1,6 @@
 // src/pages/api/auth/reset-password.ts
 import type { APIRoute } from 'astro';
 import { getRuntimeEnv, getSessionFromRequest } from '@utils/auth';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

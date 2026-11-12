@@ -1,11 +1,10 @@
 // src/pages/api/admin/roles/[code].ts
 // Role Deletion Endpoint
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { deleteAdminRole, getAdminRole } from '@utils/db';
 import { recordAdminAudit } from '@utils/audit';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

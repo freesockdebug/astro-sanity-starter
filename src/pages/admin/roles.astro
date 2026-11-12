@@ -6,7 +6,6 @@ import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { listAdminRoles, listAdminMembers } from '@utils/db';
 import { ADMIN_MENU_GROUPS, ADMIN_PERMISSION_GROUPS } from '@config/adminNavigation';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

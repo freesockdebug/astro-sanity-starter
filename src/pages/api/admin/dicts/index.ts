@@ -2,7 +2,7 @@
 // Data Dictionary Management API: Query, Upsert, and KV Invalidation
 
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import {
   listDictGroups,
@@ -11,7 +11,6 @@ import {
 } from '@utils/db';
 import { getDictItems, getAllCachedDictItems, invalidateDictCache } from '@utils/dicts';
 import { recordAdminAudit } from '@utils/audit';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

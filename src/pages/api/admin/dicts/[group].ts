@@ -2,12 +2,11 @@
 // Data Dictionary Item Delete API
 
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/authGuards';
+import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { deleteDictItem } from '@utils/db';
 import { invalidateDictCache } from '@utils/dicts';
 import { recordAdminAudit } from '@utils/audit';
-// @ts-ignore
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
