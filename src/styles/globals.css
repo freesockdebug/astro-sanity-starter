@@ -429,11 +429,13 @@ html.apple-snap-active {
     @apply h-8 px-2.5 bg-apple-gray font-medium cursor-pointer;
   }
 
-  .adm-btn {
+  .adm-btn,
+  .adm-btn-primary {
     @apply h-8 px-3.5 rounded-xl text-xs font-semibold bg-apple-ink text-white hover:bg-black transition-all shadow-2xs inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50;
   }
 
-  .adm-btn-ghost {
+  .adm-btn-ghost,
+  .adm-btn-secondary {
     @apply h-8 px-3 rounded-xl text-xs font-semibold bg-apple-gray text-apple-ink hover:bg-black/10 border border-black/5 transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer;
   }
 
@@ -447,6 +449,14 @@ html.apple-snap-active {
 
   .adm-thead {
     @apply sticky top-0 z-10 border-b border-black/5 bg-apple-gray/90 text-[11px] tracking-wider text-apple-muted uppercase backdrop-blur-xs;
+  }
+
+  .adm-th {
+    @apply px-3.5 py-2.5 text-[11px] font-semibold tracking-wider text-apple-muted uppercase;
+  }
+
+  .adm-td {
+    @apply px-3.5 py-2.5 align-middle;
   }
 
   .adm-badge {
