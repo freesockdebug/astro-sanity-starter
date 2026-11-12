@@ -448,19 +448,19 @@ async function reactivateScripts(targetDoc: Document): Promise<void> {
   }
 
   // 2. Dual-Track Track B: Inline scripts anywhere in targetDoc (including define:vars placed outside layout)
-  // First strip inert non-module scripts from newly swapped containers to avoid dead script clutter
+  // First strip inert executable non-module scripts from newly swapped containers to avoid dead script clutter (preserve application/json SSR stores)
   const containers = [
     document.getElementById('shell-main-canvas'),
     document.getElementById('shell-overlays'),
   ].filter(Boolean) as HTMLElement[];
   containers.forEach((container) => {
-    container.querySelectorAll('script:not([type="module"])').forEach((s) => s.remove());
+    container.querySelectorAll('script:not([type="module"]):not([type="application/json"]):not([type="application/ld+json"])').forEach((s) => s.remove());
   });
 
-  // Query all non-module inline scripts that are not persistent layout scripts or JSON-LD
+  // Query all non-module inline scripts that are not persistent layout scripts or JSON data stores
   const inlineScripts = Array.from(
     targetDoc.querySelectorAll<HTMLScriptElement>(
-      'script:not([type="module"]):not([src]):not([data-shell-persist]):not([type="application/ld+json"])'
+      'script:not([type="module"]):not([src]):not([data-shell-persist]):not([type="application/ld+json"]):not([type="application/json"])'
     )
   );
 

@@ -136,6 +136,7 @@ const BADGE_COLORS: [string, string, string][] = [
     </div>
   </div>
 
+  <!-- SSR Data Store: application/json script preserved by appShellRouter across SPA navigation -->
   <script type="application/json" id="dicts-ssr-data" set:html={JSON.stringify({ allItems })}></script>
 
   <!-- Add / Edit Item Modal -->
@@ -204,7 +205,16 @@ const BADGE_COLORS: [string, string, string][] = [
 
 <script>
   import { $id, $val, $chk, $txt, escapeHtml, syncUrlParams } from '@utils/adminWorkbench';
-  import { getBadgeColorClasses } from '@utils/dicts';
+
+  const BADGE_CLS: Record<string, string> = {
+    blue: 'bg-blue-50 text-blue-700 border-blue-200',
+    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    amber: 'bg-amber-50 text-amber-800 border-amber-200',
+    purple: 'bg-purple-50 text-purple-700 border-purple-200',
+    rose: 'bg-rose-50 text-rose-700 border-rose-200',
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  };
+  const getBadgeColorClasses = (c?: string) => BADGE_CLS[c || ''] || 'bg-slate-100 text-slate-700 border-slate-200';
 
   // Saltline Table-Driven Meta Schema: [metaKey, label, type, placeholderOrOptions, defaultVal, hint]
   type MetaFieldSpec = [string, string, 'text' | 'textarea' | 'number' | 'select', string | [string, string][], any, string?];
@@ -231,10 +241,13 @@ const BADGE_COLORS: [string, string, string][] = [
   function initDictsPage() {
     const root = $id('dicts-root');
     const ssrEl = $id('dicts-ssr-data');
-    if (!root || !ssrEl) return;
+    if (!root) return;
 
     let allItems: any[] = [];
-    try { allItems = JSON.parse(ssrEl.textContent || '{}').allItems || []; } catch {}
+    try {
+      const fromSsr = ssrEl?.textContent ? JSON.parse(ssrEl.textContent).allItems : null;
+      allItems = fromSsr || (root.dataset.items ? JSON.parse(root.dataset.items) : []);
+    } catch {}
     let currentGroup = root.dataset.initialGroup || 'shipping_carriers';
 
     const tbody = $id('dict-items-tbody');
@@ -356,6 +369,7 @@ const BADGE_COLORS: [string, string, string][] = [
           const data: any = await res.json();
           if (!res.ok || !data.success) throw new Error(data.error || 'Failed to toggle status');
           allItems.forEach((i) => { if (i.group_code === g && i.item_key === k) i.is_enabled = nextEnabled; });
+          root.dataset.items = JSON.stringify(allItems);
           renderItemsTable();
           toast(data.message || 'Status updated');
         } catch (err: any) {
@@ -370,6 +384,7 @@ const BADGE_COLORS: [string, string, string][] = [
           const data: any = await res.json();
           if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
           allItems = allItems.filter((i) => !(i.group_code === g && i.item_key === k));
+          root.dataset.items = JSON.stringify(allItems);
           renderItemsTable();
           toast('Item deleted successfully');
         } catch (err: any) {
@@ -443,6 +458,7 @@ const BADGE_COLORS: [string, string, string][] = [
         if (idx >= 0) allItems[idx] = updated;
         else allItems.push(updated);
 
+        root.dataset.items = JSON.stringify(allItems);
         renderItemsTable();
         dialog?.close();
         toast(data.message || 'Saved successfully');
