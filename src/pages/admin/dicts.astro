@@ -1,466 +1,466 @@
 ---
-export const prerender = false;
+// src/pages/admin/dicts.astro
+// Universal Data Dictionary Control Center (Saltline Table-Driven Edition)
 import AdminLayout from '@layouts/AdminLayout.astro';
-import { DICT_CATEGORIES, getBadgeColorClasses, type DictCategoryDef } from '@utils/dicts';
-import { getLangFromUrl } from '@i18n/utils';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
+import { requireAdminContext } from '@utils/auth';
+import { listDictGroups } from '@utils/db';
+import { getAllCachedDictItems } from '@utils/dicts';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
-const lang = getLangFromUrl(Astro.url);
-const T = (en: string, zh: string) => (lang === 'zh' ? zh : en);
-const isSuperAdmin = Astro.locals.adminRole === 'super_admin';
-const canWrite = isSuperAdmin || (Astro.locals.adminPermissions || []).includes('settings.write');
+export const prerender = false;
 
-const GROUP_LABELS: Record<DictCategoryDef['group'], string> = {
-  orders_logistics: T('Orders & Logistics', '订单与物流'),
-  crm_inquiries: T('CRM & Inquiries', '客户与询盘'),
-  products_catalog: T('Products & Catalog', '商品与目录'),
-};
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/dicts',
+  { requiredMenu: 'dicts' }
+);
+if (redirectResponse) return redirectResponse;
 
-const groupedCategories = DICT_CATEGORIES.reduce((acc, cat) => {
-  (acc[cat.group] ||= []).push(cat);
-  return acc;
-}, {} as Record<DictCategoryDef['group'], DictCategoryDef[]>);
+const [groups, allItems] = await Promise.all([
+  listDictGroups(),
+  getAllCachedDictItems(cfEnv),
+]);
 
-const SWATCH_COLORS: [string, string][] = [
-  ['slate', 'bg-slate-400'], ['blue', 'bg-blue-500'], ['emerald', 'bg-emerald-500'],
-  ['amber', 'bg-amber-500'], ['rose', 'bg-rose-500'], ['purple', 'bg-purple-500'], ['indigo', 'bg-indigo-500'],
+const initialGroup = Astro.url.searchParams.get('group') || (groups[0]?.code || 'shipping_carriers');
+const activeGroupObj = groups.find((g) => g.code === initialGroup);
+
+const BADGE_COLORS: [string, string, string][] = [
+  ['slate', 'Slate', 'bg-slate-100 text-slate-800 border-slate-300'],
+  ['blue', 'Blue', 'bg-blue-100 text-blue-800 border-blue-300'],
+  ['emerald', 'Emerald', 'bg-emerald-100 text-emerald-800 border-emerald-300'],
+  ['amber', 'Amber', 'bg-amber-100 text-amber-800 border-amber-300'],
+  ['purple', 'Purple', 'bg-purple-100 text-purple-800 border-purple-300'],
+  ['rose', 'Rose', 'bg-rose-100 text-rose-800 border-rose-300'],
+  ['indigo', 'Indigo', 'bg-indigo-100 text-indigo-800 border-indigo-300'],
 ];
 ---
 
-<AdminLayout title={T('Data Dictionaries', '数据字典与业务参数')} activeNav="dicts">
-  <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6">
-    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <div class="flex items-center gap-2.5">
-          <h1 class="text-xl font-bold tracking-tight text-slate-900">{T('Data Dictionaries & Parameters', '数据字典与业务参数')}</h1>
-          <span class="adm-badge bg-indigo-50 text-indigo-700 border-indigo-200">{T('D1 + KV Hot Cached', 'D1 落盘 + KV 热缓存')}</span>
-        </div>
-        <p class="mt-1 text-xs text-slate-500">
-          {T('Centralized management of business dropdowns, status badges, logistics carriers, and CRM quick reply templates.', '集中管控全站业务下拉选项、状态徽章配色、物流承运商轨迹模板及客诉快捷回复话术。')}
-        </p>
+<AdminLayout
+  title="Data Dictionaries"
+  currentTab="dicts"
+  sessionEmail={sessionUser.email}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+>
+  <AdminPageToolbar
+    title="Data Dictionaries"
+    badge="Universal Engine"
+    badgeColor="purple"
+    subtitle="Manage shipping carriers, multi-scene quick replies, customer tiers, CRM tags, and SLA thresholds without code deployments"
+    icon="🏷️"
+    class="mb-5"
+  >
+    <div slot="actions">
+      <button id="btn-add-item" type="button" class="adm-btn-primary">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+        <span>Add Dictionary Item</span>
+      </button>
+    </div>
+  </AdminPageToolbar>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start" id="dicts-root" data-initial-group={initialGroup}>
+    <!-- Left Column: Dictionary Group Directory -->
+    <div class="lg:col-span-4 adm-card p-3.5 space-y-3">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-[#1d1d1f]">Dictionary Categories</h2>
+        <span class="text-[10px] text-[#86868b] font-mono">{groups.length} groups</span>
       </div>
-      <div class="flex items-center gap-2.5">
-        <button type="button" id="btn-refresh-dict" class="adm-btn-secondary px-3 py-2 text-xs">
-          <svg class="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-          {T('Reload Cache', '刷新字典')}
-        </button>
-        {canWrite && (
-          <button type="button" id="btn-add-dict-item" class="adm-btn-primary px-3.5 py-2 text-xs">
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-            {T('New Option', '新增字典项')}
-          </button>
-        )}
+      <input type="text" id="group-search" placeholder="Filter categories..." class="adm-input py-1.5" />
+      <div id="groups-list" class="space-y-1">
+        {groups.map((g) => {
+          const isActive = g.code === initialGroup;
+          return (
+            <button
+              type="button"
+              class={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer group-btn flex items-start justify-between gap-2 ${
+                isActive ? 'bg-black text-white border-black shadow-xs font-semibold' : 'bg-white hover:bg-[#f5f5f7] border-transparent text-[#1d1d1f]'
+              }`}
+              data-group-code={g.code}
+              data-group-name={g.name}
+              data-group-desc={g.description}
+            >
+              <div class="min-w-0">
+                <div class="text-xs truncate flex items-center gap-1.5">
+                  <span>{g.name}</span>
+                  {g.is_system && <span class={`text-[9px] px-1 py-0.2 rounded font-mono ${isActive ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'}`}>SYS</span>}
+                </div>
+                <p class={`text-[11px] truncate mt-0.5 ${isActive ? 'text-white/70' : 'text-[#86868b]'}`}>{g.code}</p>
+              </div>
+              <span class={`text-[10px] px-1.5 py-0.5 rounded-md font-mono shrink-0 ${isActive ? 'bg-white/20 text-white' : 'bg-[#f0f0f2] text-[#52525b]'}`}>
+                {g.enabled_count}/{g.items_count}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
-      <!-- Left Category Sidebar -->
-      <aside class="lg:col-span-3 space-y-4">
-        <div class="adm-card p-3 space-y-4">
-          {Object.entries(groupedCategories).map(([groupKey, cats]) => (
-            <div>
-              <div class="px-2.5 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                {GROUP_LABELS[groupKey as DictCategoryDef['group']]}
-              </div>
-              <div class="space-y-1">
-                {cats.map((cat, idx) => {
-                  const isFirst = groupKey === 'orders_logistics' && idx === 0;
-                  return (
-                    <button
-                      type="button"
-                      data-cat-code={cat.code}
-                      data-cat-label={lang === 'zh' ? cat.label_zh : cat.label_en}
-                      data-cat-desc={lang === 'zh' ? cat.description_zh : cat.description_en}
-                      data-cat-meta-hint={cat.meta_schema_hint || ''}
-                      class:list={[
-                        'dict-cat-btn group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all',
-                        isFirst ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                      ]}
-                    >
-                      <div class="truncate pr-2">
-                        <div class="font-semibold truncate">{lang === 'zh' ? cat.label_zh : cat.label_en}</div>
-                        <div class:list={['dict-cat-sub text-[10px] font-mono truncate mt-0.5', isFirst ? 'text-slate-300' : 'text-slate-400']}>{cat.code}</div>
-                      </div>
-                      <svg class="h-3.5 w-3.5 shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      <!-- Right Table Panel -->
-      <section class="lg:col-span-9">
-        <div class="adm-card overflow-hidden">
-          <div class="border-b border-slate-100 bg-slate-50/70 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <div class="flex items-center gap-2">
-                <h2 id="active-cat-title" class="text-sm font-bold text-slate-900">{lang === 'zh' ? DICT_CATEGORIES[0].label_zh : DICT_CATEGORIES[0].label_en}</h2>
-                <code id="active-cat-code" class="rounded bg-slate-200/70 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">{DICT_CATEGORIES[0].code}</code>
-              </div>
-              <p id="active-cat-desc" class="mt-0.5 text-xs text-slate-500">{lang === 'zh' ? DICT_CATEGORIES[0].description_zh : DICT_CATEGORIES[0].description_en}</p>
-            </div>
-            <span id="dict-count-badge" class="adm-badge bg-white text-slate-600 border-slate-200 self-start sm:self-center">0 items</span>
+    <!-- Right Column: Dictionary Items Workbench Table -->
+    <div class="lg:col-span-8 adm-card overflow-hidden flex flex-col">
+      <div class="p-4 sm:p-5 border-b border-black/5 bg-[#fafafa] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 id="current-group-title" class="text-sm sm:text-base font-bold text-[#1d1d1f] tracking-tight">{activeGroupObj?.name || 'Dictionary Items'}</h3>
+            <span id="current-group-code-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-black/5 text-[#52525b]">{initialGroup}</span>
           </div>
-
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
-              <thead class="bg-slate-50/50">
-                <tr>
-                  <th class="adm-th py-3 pl-5 pr-3">{T('Code / Key', '字典编码')}</th>
-                  <th class="adm-th px-3 py-3">{T('English Label', '英文名称')}</th>
-                  <th class="adm-th px-3 py-3">{T('Chinese Label', '中文名称')}</th>
-                  <th class="adm-th px-3 py-3">{T('Badge Preview', '徽章预览')}</th>
-                  <th class="adm-th px-3 py-3">{T('Extra Meta', '扩展参数')}</th>
-                  <th class="adm-th px-3 py-3 text-center">{T('Sort', '排序')}</th>
-                  <th class="adm-th px-3 py-3 text-center">{T('Status', '状态')}</th>
-                  <th class="adm-th py-3 pl-3 pr-5 text-right">{T('Actions', '操作')}</th>
-                </tr>
-              </thead>
-              <tbody id="dict-tbody" class="divide-y divide-slate-100 bg-white">
-                <tr><td colspan="8" class="py-12 text-center text-slate-400">{T('Loading dictionary items...', '正在加载字典数据...')}</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <p id="current-group-desc" class="text-xs text-[#86868b] mt-0.5">{activeGroupObj?.description || 'Configurable key-value dictionary items.'}</p>
         </div>
-      </section>
+      </div>
+
+      <div class="overflow-x-auto min-h-[360px]">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-black/5 bg-[#fbfbfd]">
+              <th class="adm-th w-14 text-center">Order</th>
+              <th class="adm-th">Item Key</th>
+              <th class="adm-th">Visual Label & Badge</th>
+              <th class="adm-th">Extended Properties (Meta)</th>
+              <th class="adm-th w-24 text-center">Status</th>
+              <th class="adm-th w-24 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="dict-items-tbody" class="divide-y divide-black/5 font-sans"></tbody>
+        </table>
+        <div id="no-items-empty" class="hidden p-10 text-center text-xs text-[#86868b]">
+          No dictionary items found for this category. Click "+ Add Dictionary Item" above to add one.
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Slide-over Modal for Add / Edit Dict Item -->
-  <div id="dict-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-    <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
-      <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4">
-        <div>
-          <h3 id="dict-modal-title" class="text-sm font-bold text-slate-900">{T('Edit Dictionary Option', '编辑字典项')}</h3>
-          <p id="dict-modal-subtitle" class="text-[11px] font-mono text-slate-400 mt-0.5"></p>
-        </div>
-        <button type="button" id="btn-close-dict-modal" class="rounded-lg p-1 text-slate-400 hover:bg-slate-200/60 hover:text-slate-600">
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
+  <script type="application/json" id="dicts-ssr-data" set:html={JSON.stringify({ allItems })}></script>
 
-      <form id="dict-form" class="p-5 space-y-4">
-        <input type="hidden" id="field-category-code" />
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label class="adm-label">{T('Item Code (Unique Key)', '字典编码 (唯一标识)')} *</label>
-            <input type="text" id="field-item-code" required pattern="[a-zA-Z0-9_-]+" placeholder="e.g. dhl_express" class="adm-input font-mono disabled:bg-slate-100 disabled:text-slate-500" />
+  <!-- Add / Edit Item Modal -->
+  <Fragment slot="modals">
+    <dialog id="dict-item-dialog" class="backdrop:bg-black/40 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-lg m-auto">
+      <div class="p-5 sm:p-6 space-y-4">
+        <div class="flex items-center justify-between border-b border-black/5 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🏷️</span>
+            <h3 id="modal-title" class="text-sm font-bold text-[#1d1d1f]">Add Dictionary Item</h3>
           </div>
-          <div>
-            <label class="adm-label">{T('Sort Order', '排序权重 (越小越靠前)')}</label>
-            <input type="number" id="field-sort-order" value="10" class="adm-input" />
-          </div>
+          <button id="btn-close-modal" type="button" class="text-zinc-400 hover:text-black text-lg cursor-pointer">✕</button>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <form id="dict-item-form" class="space-y-3.5">
+          <input type="hidden" id="form-group-code" name="group_code" value={initialGroup} />
           <div>
-            <label class="adm-label">{T('English Label', '英文显示名称')} *</label>
-            <input type="text" id="field-label-en" required placeholder="e.g. DHL Express" class="adm-input" />
+            <label class="adm-label">Item Key (Unique Key) *</label>
+            <input type="text" id="form-item-key" name="item_key" required placeholder="e.g. dhl, VIP, swatch_request" class="adm-input font-mono" />
+            <p class="text-[10px] text-[#86868b] mt-0.5">Code identifier stored in database records.</p>
           </div>
           <div>
-            <label class="adm-label">{T('Chinese Label', '中文显示名称')} *</label>
-            <input type="text" id="field-label-zh" required placeholder="例如：DHL 国际快递" class="adm-input" />
+            <label class="adm-label">Display Label *</label>
+            <input type="text" id="form-item-label" name="item_label" required placeholder="e.g. DHL Express, VIP Commercial" class="adm-input" />
           </div>
-        </div>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label class="adm-label">{T('Badge Color Style', '状态徽章颜色')}</label>
-            <div class="grid grid-cols-4 gap-1.5" id="badge-color-picker">
-              {SWATCH_COLORS.map(([colorName, dotClass]) => (
-                <button type="button" data-color={colorName} class="color-swatch-btn flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
-                  <span class={`h-2.5 w-2.5 rounded-full ${dotClass}`}></span>
-                  <span class="capitalize">{colorName}</span>
-                </button>
+            <label class="adm-label mb-1.5">Visual Badge Color</label>
+            <div class="grid grid-cols-4 min-[1760px]:grid-cols-7 gap-1.5">
+              {BADGE_COLORS.map(([name, label, cls]) => (
+                <label class="flex flex-col items-center gap-1 p-1.5 rounded-xl border border-black/10 hover:border-black/30 cursor-pointer text-center color-option">
+                  <input type="radio" name="badge_color" value={name} class="sr-only" />
+                  <span class={`w-4 h-4 rounded-full border ${cls} inline-block`}></span>
+                  <span class="text-[10px] text-[#52525b] font-medium">{label}</span>
+                </label>
               ))}
             </div>
-            <input type="hidden" id="field-badge-color" value="slate" />
           </div>
-          <div>
-            <label class="adm-label">{T('Status', '启用状态')}</label>
-            <label class="mt-2 inline-flex cursor-pointer items-center gap-2.5">
-              <input type="checkbox" id="field-is-active" checked class="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
-              <span class="text-xs font-medium text-slate-700">{T('Active (Visible in dropdowns)', '启用 (在业务下拉框中显示)')}</span>
-            </label>
+
+          <div id="dynamic-meta-fields" class="space-y-3 pt-1 border-t border-black/5"></div>
+
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="adm-label">Sort Order</label>
+              <input type="number" id="form-sort-order" name="sort_order" value="100" class="adm-input font-mono" />
+            </div>
+            <div class="flex items-center pt-5">
+              <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1d1d1f]">
+                <input type="checkbox" id="form-is-enabled" name="is_enabled" checked class="w-4 h-4 rounded accent-black text-black cursor-pointer" />
+                <span>Enable Dictionary Item</span>
+              </label>
+            </div>
           </div>
-        </div>
 
-        <div id="dynamic-meta-fields" class="space-y-3 rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5"></div>
+          <div id="form-error" class="hidden p-2.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200"></div>
 
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="text-xs font-semibold text-slate-700">{T('Additional JSON Metadata (Optional)', '其他扩展 JSON 参数 (选填)')}</label>
-            <span id="meta-schema-hint" class="text-[10px] font-mono text-slate-400"></span>
+          <div class="flex items-center justify-end gap-2 pt-3 border-t border-black/5">
+            <button id="btn-cancel-modal" type="button" class="adm-btn-secondary">Cancel</button>
+            <button id="btn-submit-modal" type="submit" class="adm-btn-primary">Save Dictionary Item</button>
           </div>
-          <textarea id="field-meta-json" rows="2" placeholder="{}" class="adm-input font-mono"></textarea>
-        </div>
+        </form>
+      </div>
+    </dialog>
+  </Fragment>
+</AdminLayout>
 
-        <div class="flex items-center justify-end gap-2.5 border-t border-slate-100 pt-4">
-          <button type="button" id="btn-cancel-dict-modal" class="adm-btn-secondary">{T('Cancel', '取消')}</button>
-          <button type="submit" id="btn-save-dict" class="adm-btn-primary">{T('Save Option', '保存字典项')}</button>
-        </div>
-      </form>
-    </div>
-  </div>
+<script>
+  import { $id, $val, $chk, $txt, escapeHtml, syncUrlParams } from '@utils/adminWorkbench';
+  import { getBadgeColorClasses } from '@utils/dicts';
 
-  <script>
-    import { $id, $val, $chk, $txt, escapeHtml, showToast } from '@utils/adminWorkbench';
-    import { getBadgeColorClasses } from '@utils/dicts';
+  // Saltline Table-Driven Meta Schema: [metaKey, label, type, placeholderOrOptions, defaultVal, hint]
+  type MetaFieldSpec = [string, string, 'text' | 'textarea' | 'number' | 'select', string | [string, string][], any, string?];
+  const META_SCHEMA: Record<string, MetaFieldSpec[]> = {
+    shipping_carriers: [
+      ['tracking_url', 'Tracking URL Template', 'text', 'https://example.com/track?no={tracking}', '', 'Use {tracking} or {tracking_no} placeholder.'],
+    ],
+    quick_replies: [
+      ['scene', 'Reply Scene Category *', 'select', [['approval', 'Order Approval (通过)'], ['shipping', 'Shipping / Dispatch (发货)'], ['rejection', 'Order Rejection (驳回)']], 'approval'],
+      ['content', 'Template Content *', 'textarea', 'Enter standard English reply message...', ''],
+    ],
+    customer_tiers: [
+      ['discount_label', 'Discount Tagline / Tier Notice', 'text', 'e.g. 15% Volume Tier', ''],
+      ['description', 'Tier Benefits Description', 'text', 'e.g. Priority dispatch and custom fabric specialist', ''],
+    ],
+    order_statuses: [
+      ['sla_hours', 'SLA Alert Threshold (Hours)', 'number', '24', '', 'Orders in this status exceeding this duration trigger urgent SLA warning tags.'],
+    ],
+    audit_actions: [
+      ['risk_level', 'Action Risk Level', 'select', [['LOW', 'LOW (Normal Activity)'], ['MEDIUM', 'MEDIUM (Privilege/Assignment Change)'], ['HIGH', 'HIGH (Deletion / Account Lockout)']], 'LOW'],
+    ],
+  };
 
-    // Saltline Table-Driven Meta Field Schema: [key, label, type('text'|'textarea'|'number'), placeholder, defaultVal, extraHint]
-    type MetaFieldTuple = [string, string, 'text' | 'textarea' | 'number', string, string | number, string?];
-    const META_SCHEMA: Record<string, MetaFieldTuple[]> = {
-      shipping_carriers: [
-        ['tracking_url', 'Tracking URL Template / 物流轨迹查询链接模板', 'text', 'https://www.dhl.com/en/express/tracking.html?AWB={tracking_no}', '', 'Use {tracking_no} as placeholder for tracking number / 使用 {tracking_no} 作为运单号占位符'],
-      ],
-      quick_replies: [
-        ['template_en', 'English Reply Template / 英文快捷回复话术', 'textarea', 'Dear customer, thank you for your inquiry...', ''],
-        ['template_zh', 'Chinese Reply Template / 中文快捷回复话术', 'textarea', '尊敬的客户，感谢您的询盘...', ''],
-      ],
-      units_of_measure: [
-        ['decimals', 'Allowed Decimal Places / 允许小数位数', 'number', '0', 0],
-      ],
-      incoterms: [
-        ['desc_en', 'Term Responsibility Note (EN) / 贸易条款说明 (英)', 'text', 'Seller delivers goods on board the vessel...', ''],
-      ],
+  function initDictsPage() {
+    const root = $id('dicts-root');
+    const ssrEl = $id('dicts-ssr-data');
+    if (!root || !ssrEl) return;
+
+    let allItems: any[] = [];
+    try { allItems = JSON.parse(ssrEl.textContent || '{}').allItems || []; } catch {}
+    let currentGroup = root.dataset.initialGroup || 'shipping_carriers';
+
+    const tbody = $id('dict-items-tbody');
+    const emptyEl = $id('no-items-empty');
+    const dialog = $id<HTMLDialogElement>('dict-item-dialog');
+    const formError = $id('form-error');
+
+    const toast = (msg: string, ok = true) => (window as any).__showToast?.(msg, ok ? 'success' : 'error');
+
+    const formatMetaSummary = (meta: any) => {
+      if (!meta) return '<span class="text-[10px] text-zinc-300">-</span>';
+      if (meta.tracking_url) return `<span class="font-mono text-[10px] text-zinc-500 truncate max-w-xs block">${escapeHtml(meta.tracking_url)}</span>`;
+      if (meta.scene && meta.content) return `<div class="space-y-0.5"><span class="px-1 py-0.2 rounded text-[9px] bg-black/5 font-semibold uppercase">${escapeHtml(meta.scene)}</span><span class="text-[11px] text-zinc-600 italic block line-clamp-1">"${escapeHtml(meta.content)}"</span></div>`;
+      if (meta.discount_label) return `<span class="text-[11px] font-semibold text-emerald-700">${escapeHtml(meta.discount_label)}</span>`;
+      if (meta.sla_hours) return `<span class="text-[11px] font-mono font-semibold text-amber-700">SLA: ${escapeHtml(meta.sla_hours)}h threshold</span>`;
+      const keys = Object.keys(meta);
+      return keys.length ? `<span class="text-[10px] font-mono text-zinc-400">${keys.length} attributes</span>` : '<span class="text-[10px] text-zinc-300">-</span>';
     };
 
-    document.addEventListener('astro:page-load', () => {
-      const tbody = $id('dict-tbody');
+    const renderItemsTable = () => {
       if (!tbody) return;
+      const filtered = allItems
+        .filter((i) => i.group_code.toLowerCase() === currentGroup.toLowerCase())
+        .sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100));
 
-      let activeCategory = 'order_statuses';
-      let currentItems: any[] = [];
-      let isEditing = false;
+      emptyEl?.classList.toggle('hidden', filtered.length > 0);
+      tbody.innerHTML = filtered.map((item) => {
+        const isEnabled = Boolean(item.is_enabled);
+        const g = escapeHtml(item.group_code);
+        const k = escapeHtml(item.item_key);
+        return `<tr class="hover:bg-[#fbfbfd] transition-colors">
+          <td class="adm-td text-center font-mono text-zinc-400">${item.sort_order}</td>
+          <td class="adm-td font-mono font-bold text-[#1d1d1f]">${k}</td>
+          <td class="adm-td"><span class="inline-flex items-center px-2 py-0.5 rounded-md border text-xs font-semibold ${getBadgeColorClasses(item.badge_color)}">${escapeHtml(item.item_label)}</span></td>
+          <td class="adm-td">${formatMetaSummary(item.meta)}</td>
+          <td class="adm-td text-center">
+            <button type="button" data-action="toggle" data-group="${g}" data-key="${k}" data-enabled="${isEnabled}" class="px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${isEnabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-zinc-100 text-zinc-500 border border-zinc-200'}">
+              ${isEnabled ? '● Active' : '○ Inactive'}
+            </button>
+          </td>
+          <td class="adm-td text-right space-x-1">
+            <button type="button" data-action="edit" data-group="${g}" data-key="${k}" class="p-1 text-zinc-400 hover:text-black hover:bg-black/5 rounded-lg transition-colors cursor-pointer" title="Edit Item">✎</button>
+            <button type="button" data-action="delete" data-group="${g}" data-key="${k}" class="p-1 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Delete Item">🗑</button>
+          </td>
+        </tr>`;
+      }).join('');
+    };
 
-      const selectSwatch = (color: string) => {
-        const input = $id<HTMLInputElement>('field-badge-color');
-        if (input) input.value = color || 'slate';
-        document.querySelectorAll<HTMLElement>('.color-swatch-btn').forEach((btn) => {
-          const matched = btn.dataset.color === color;
-          btn.classList.toggle('ring-2', matched);
-          btn.classList.toggle('ring-slate-900', matched);
-          btn.classList.toggle('bg-slate-100', matched);
-        });
-      };
+    const renderDynamicMetaFields = (groupCode: string, meta: Record<string, any> = {}) => {
+      const container = $id('dynamic-meta-fields');
+      if (!container) return;
+      const specs = META_SCHEMA[groupCode] || [];
+      container.innerHTML = specs.map(([key, label, type, phOrOpts, defVal, hint]) => {
+        const val = meta[key] ?? defVal ?? '';
+        let control = '';
+        if (type === 'select' && Array.isArray(phOrOpts)) {
+          control = `<select data-meta-key="${key}" class="adm-input font-semibold">${phOrOpts.map(([v, l]) => `<option value="${escapeHtml(v)}" ${val === v ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`;
+        } else if (type === 'textarea') {
+          control = `<textarea data-meta-key="${key}" rows="3" placeholder="${escapeHtml(phOrOpts)}" class="adm-input">${escapeHtml(val)}</textarea>`;
+        } else {
+          control = `<input type="${type}" data-meta-key="${key}" value="${escapeHtml(val)}" placeholder="${escapeHtml(phOrOpts)}" class="adm-input ${type === 'number' || key === 'tracking_url' ? 'font-mono' : ''}" />`;
+        }
+        return `<div><label class="adm-label">${escapeHtml(label)}</label>${control}${hint ? `<p class="text-[10px] text-[#86868b] mt-0.5">${escapeHtml(hint)}</p>` : ''}</div>`;
+      }).join('');
+    };
 
-      document.querySelectorAll<HTMLElement>('.color-swatch-btn').forEach((btn) => {
-        btn.addEventListener('click', () => selectSwatch(btn.dataset.color || 'slate'));
+    const selectColorRadio = (color: string) => {
+      document.querySelectorAll<HTMLElement>('.color-option').forEach((label) => {
+        const radio = label.querySelector<HTMLInputElement>('input[type="radio"]');
+        const matched = radio?.value === color;
+        if (radio) radio.checked = matched;
+        label.classList.toggle('border-black', matched);
+        label.classList.toggle('bg-[#f5f5f7]', matched);
+        label.classList.toggle('ring-1', matched);
+        label.classList.toggle('ring-black', matched);
       });
+    };
 
-      const formatMetaSummary = (cat: string, metaStr: string) => {
-        if (!metaStr) return '<span class="text-slate-300">—</span>';
-        try {
-          const obj = JSON.parse(metaStr);
-          if (cat === 'shipping_carriers' && obj.tracking_url) {
-            return `<div class="max-w-[260px] truncate text-[11px] text-blue-600 font-mono" title="${escapeHtml(obj.tracking_url)}">🔗 ${escapeHtml(obj.tracking_url)}</div>`;
-          }
-          if (cat === 'quick_replies' && (obj.template_zh || obj.template_en)) {
-            const preview = obj.template_zh || obj.template_en;
-            return `<div class="max-w-[260px] truncate text-[11px] text-slate-600" title="${escapeHtml(preview)}">💬 ${escapeHtml(preview)}</div>`;
-          }
-          if (cat === 'units_of_measure' && obj.decimals !== undefined) {
-            return `<span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">Decimals: ${escapeHtml(obj.decimals)}</span>`;
-          }
-          return `<code class="block max-w-[220px] truncate rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">${escapeHtml(metaStr)}</code>`;
-        } catch {
-          return `<code class="text-[10px] text-rose-500">${escapeHtml(metaStr)}</code>`;
-        }
-      };
-
-      const renderTable = () => {
-        $txt('dict-count-badge', `${currentItems.length} items`);
-        if (!currentItems.length) {
-          tbody.innerHTML = '<tr><td colspan="8" class="py-12 text-center text-slate-400">No items in this category yet.</td></tr>';
-          return;
-        }
-        tbody.innerHTML = currentItems.map((item, idx) => {
-          const badgeCls = getBadgeColorClasses(item.badge_color || 'slate');
-          const activeDot = item.is_active
-            ? '<span class="inline-flex items-center gap-1 text-emerald-600 font-medium"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active</span>'
-            : '<span class="inline-flex items-center gap-1 text-slate-400"><span class="h-1.5 w-1.5 rounded-full bg-slate-300"></span>Disabled</span>';
-          const sysTag = item.is_system ? '<span class="ml-1.5 rounded bg-slate-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-slate-500 border border-slate-200">SYS</span>' : '';
-          const delBtn = item.is_system ? '' : `<button type="button" data-del-idx="${idx}" class="rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-100">Delete</button>`;
-
-          return `<tr class="hover:bg-slate-50/80 transition-colors">
-            <td class="whitespace-nowrap py-3 pl-5 pr-3 font-mono font-semibold text-slate-800">${escapeHtml(item.item_code)}${sysTag}</td>
-            <td class="px-3 py-3 font-medium text-slate-800">${escapeHtml(item.label_en)}</td>
-            <td class="px-3 py-3 text-slate-700">${escapeHtml(item.label_zh)}</td>
-            <td class="px-3 py-3"><span class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${badgeCls}">${escapeHtml(item.label_en)} / ${escapeHtml(item.label_zh)}</span></td>
-            <td class="px-3 py-3">${formatMetaSummary(item.category_code, item.meta_json)}</td>
-            <td class="px-3 py-3 text-center font-mono text-slate-500">${Number(item.sort_order || 0)}</td>
-            <td class="px-3 py-3 text-center text-[11px]">${activeDot}</td>
-            <td class="whitespace-nowrap py-3 pl-3 pr-5 text-right space-x-1.5">
-              <button type="button" data-edit-idx="${idx}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">Edit</button>
-              ${delBtn}
-            </td>
-          </tr>`;
-        }).join('');
-      };
-
-      const loadCategory = async (catCode: string, forceRefresh = false) => {
-        activeCategory = catCode;
-        tbody.innerHTML = '<tr><td colspan="8" class="py-12 text-center text-slate-400">Loading...</td></tr>';
-        try {
-          const url = `/api/admin/dicts?category=${encodeURIComponent(catCode)}${forceRefresh ? `&t=${Date.now()}` : ''}`;
-          const res = await fetch(url, { headers: { Accept: 'application/json' } });
-          const data: any = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to load');
-          currentItems = data.items || [];
-          renderTable();
-        } catch (e: any) {
-          tbody.innerHTML = `<tr><td colspan="8" class="py-12 text-center text-rose-500">${escapeHtml(e.message)}</td></tr>`;
-        }
-      };
-
-      document.querySelectorAll<HTMLElement>('.dict-cat-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll<HTMLElement>('.dict-cat-btn').forEach((b) => {
-            b.className = 'dict-cat-btn group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900';
-            b.querySelector('.dict-cat-sub')?.classList.replace('text-slate-300', 'text-slate-400');
-          });
-          btn.className = 'dict-cat-btn group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all bg-slate-900 text-white shadow-sm';
-          btn.querySelector('.dict-cat-sub')?.classList.replace('text-slate-400', 'text-slate-300');
-
-          const code = btn.dataset.catCode || 'order_statuses';
-          $txt('active-cat-title', btn.dataset.catLabel || code);
-          $txt('active-cat-code', code);
-          $txt('active-cat-desc', btn.dataset.catDesc || '');
-          $txt('meta-schema-hint', btn.dataset.catMetaHint || '');
-          loadCategory(code);
-        });
+    document.querySelectorAll<HTMLElement>('.color-option').forEach((label) => {
+      label.addEventListener('click', () => {
+        const r = label.querySelector<HTMLInputElement>('input[type="radio"]');
+        if (r) selectColorRadio(r.value);
       });
+    });
 
-      const renderDynamicMetaFields = (categoryCode: string, metaObj: Record<string, any>) => {
-        const container = $id('dynamic-meta-fields');
-        if (!container) return;
-        const fields = META_SCHEMA[categoryCode];
-        if (!fields) {
-          container.classList.add('hidden');
-          container.innerHTML = '';
-          return;
-        }
-        container.classList.remove('hidden');
-        container.innerHTML = fields.map(([key, label, type, placeholder, defVal, hint]) => {
-          const val = escapeHtml(metaObj[key] ?? defVal);
-          const control = type === 'textarea'
-            ? `<textarea data-meta-key="${key}" rows="2" placeholder="${escapeHtml(placeholder)}" class="adm-input">${val}</textarea>`
-            : `<input type="${type}" data-meta-key="${key}" value="${val}" ${type === 'number' ? 'min="0" max="6"' : ''} placeholder="${escapeHtml(placeholder)}" class="adm-input ${type === 'text' ? 'font-mono' : ''}" />`;
-          const hintHtml = hint ? `<p class="mt-1 text-[10px] text-slate-400">${escapeHtml(hint)}</p>` : '';
-          return `<div><label class="adm-label">${escapeHtml(label)}</label>${control}${hintHtml}</div>`;
-        }).join('');
-      };
+    const openModal = (editItem?: any) => {
+      if (!dialog) return;
+      formError?.classList.add('hidden');
+      $val('form-group-code', currentGroup);
+      const keyInput = $id<HTMLInputElement>('form-item-key');
+      if (keyInput) keyInput.disabled = Boolean(editItem);
 
-      const modal = $id('dict-modal');
-      const openModal = (item: any) => {
-        isEditing = !!item;
-        $txt('dict-modal-title', item ? 'Edit Dictionary Option / 编辑字典项' : 'New Dictionary Option / 新增字典项');
-        $txt('dict-modal-subtitle', `Category: ${activeCategory}`);
-        ($id('field-category-code') as HTMLInputElement).value = activeCategory;
+      $txt('modal-title', editItem ? 'Edit Dictionary Item' : 'Add Dictionary Item');
+      $val('form-item-key', editItem ? editItem.item_key : '');
+      $val('form-item-label', editItem ? editItem.item_label : '');
+      $val('form-sort-order', editItem ? editItem.sort_order ?? 100 : 100);
+      $chk('form-is-enabled', editItem ? Boolean(editItem.is_enabled) : true);
+      selectColorRadio(editItem?.badge_color || 'slate');
+      renderDynamicMetaFields(currentGroup, editItem?.meta || {});
+      dialog.showModal();
+    };
 
-        const codeInput = $id<HTMLInputElement>('field-item-code')!;
-        codeInput.value = item ? item.item_code : '';
-        codeInput.disabled = !!item && !!item.is_system;
-
-        ($id('field-sort-order') as HTMLInputElement).value = item ? String(item.sort_order ?? 10) : String((currentItems.length + 1) * 10);
-        ($id('field-label-en') as HTMLInputElement).value = item ? item.label_en : '';
-        ($id('field-label-zh') as HTMLInputElement).value = item ? item.label_zh : '';
-        ($id('field-is-active') as HTMLInputElement).checked = item ? Boolean(item.is_active) : true;
-
-        let parsedMeta: Record<string, any> = {};
-        if (item?.meta_json) {
-          try { parsedMeta = JSON.parse(item.meta_json) || {}; } catch {}
-        }
-        renderDynamicMetaFields(activeCategory, parsedMeta);
-
-        const remainingMeta = { ...parsedMeta };
-        (META_SCHEMA[activeCategory] || []).forEach(([k]) => delete remainingMeta[k]);
-        ($id('field-meta-json') as HTMLTextAreaElement).value = Object.keys(remainingMeta).length ? JSON.stringify(remainingMeta) : '';
-
-        selectSwatch(item ? item.badge_color : 'slate');
-        modal?.classList.replace('hidden', 'flex');
-      };
-
-      const closeModal = () => modal?.classList.replace('flex', 'hidden');
-      $id('btn-add-dict-item')?.addEventListener('click', () => openModal(null));
-      $id('btn-close-dict-modal')?.addEventListener('click', closeModal);
-      $id('btn-cancel-dict-modal')?.addEventListener('click', closeModal);
-      $id('btn-refresh-dict')?.addEventListener('click', () => loadCategory(activeCategory, true));
-
-      tbody.addEventListener('click', async (e) => {
-        const target = e.target as HTMLElement;
-        const editBtn = target.closest<HTMLElement>('[data-edit-idx]');
-        if (editBtn) {
-          const item = currentItems[Number(editBtn.dataset.editIdx)];
-          if (item) openModal(item);
-          return;
-        }
-        const delBtn = target.closest<HTMLElement>('[data-del-idx]');
-        if (delBtn) {
-          const item = currentItems[Number(delBtn.dataset.delIdx)];
-          if (!item || !window.confirm(`Delete dictionary option "${item.item_code}"?`)) return;
-          try {
-            const res = await fetch(`/api/admin/dicts?category_code=${encodeURIComponent(item.category_code)}&item_code=${encodeURIComponent(item.item_code)}`, { method: 'DELETE' });
-            const data: any = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Delete failed');
-            showToast('Deleted / 已删除', 'success');
-            loadCategory(activeCategory, true);
-          } catch (err: any) {
-            showToast(err.message || 'Delete failed', 'error');
-          }
-        }
-      });
-
-      $id('dict-form')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const saveBtn = $id<HTMLButtonElement>('btn-save-dict');
-        if (saveBtn) saveBtn.disabled = true;
-
+    tbody?.addEventListener('click', async (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+      if (!btn) return;
+      const { action, group: g = '', key: k = '' } = btn.dataset;
+      if (action === 'edit') {
+        const item = allItems.find((i) => i.group_code === g && i.item_key === k);
+        if (item) openModal(item);
+      } else if (action === 'toggle') {
+        const nextEnabled = btn.dataset.enabled !== 'true';
+        btn.disabled = true;
         try {
-          let metaObj: Record<string, any> = {};
-          const rawJson = $val('field-meta-json');
-          if (rawJson) {
-            try { metaObj = JSON.parse(rawJson) || {}; } catch { throw new Error('Invalid JSON in Additional Metadata'); }
-          }
-          (META_SCHEMA[activeCategory] || []).forEach(([key, , type]) => {
-            const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-meta-key="${key}"]`);
-            const v = el?.value.trim() || '';
-            if (type === 'number') metaObj[key] = Number(v || '0');
-            else if (v) metaObj[key] = v;
-          });
-
-          const payload = {
-            category_code: $val('field-category-code'),
-            item_code: $val('field-item-code'),
-            label_en: $val('field-label-en'),
-            label_zh: $val('field-label-zh'),
-            badge_color: $val('field-badge-color') || 'slate',
-            sort_order: Number($val('field-sort-order') || '0'),
-            is_active: $chk('field-is-active'),
-            meta_json: Object.keys(metaObj).length ? JSON.stringify(metaObj) : '',
-          };
-
           const res = await fetch('/api/admin/dicts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ action: 'toggle_enabled', groupCode: g, itemKey: k, isEnabled: nextEnabled }),
           });
           const data: any = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
-
-          closeModal();
-          showToast(isEditing ? 'Updated / 已更新' : 'Created / 已创建', 'success');
-          loadCategory(activeCategory, true);
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to toggle status');
+          allItems.forEach((i) => { if (i.group_code === g && i.item_key === k) i.is_enabled = nextEnabled; });
+          renderItemsTable();
+          toast(data.message || 'Status updated');
         } catch (err: any) {
-          showToast(err.message || 'Save failed', 'error');
-        } finally {
-          if (saveBtn) saveBtn.disabled = false;
+          toast(err.message, false);
+          btn.disabled = false;
         }
+      } else if (action === 'delete') {
+        if (!confirm(`Are you sure you want to delete dictionary item "${k}"?`)) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch(`/api/admin/dicts/${encodeURIComponent(g)}?itemKey=${encodeURIComponent(k)}`, { method: 'DELETE' });
+          const data: any = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
+          allItems = allItems.filter((i) => !(i.group_code === g && i.item_key === k));
+          renderItemsTable();
+          toast('Item deleted successfully');
+        } catch (err: any) {
+          toast(err.message, false);
+          btn.disabled = false;
+        }
+      }
+    });
+
+    document.querySelectorAll<HTMLElement>('.group-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        currentGroup = btn.dataset.groupCode || 'shipping_carriers';
+        document.querySelectorAll<HTMLElement>('.group-btn').forEach((b) => {
+          const active = b.dataset.groupCode === currentGroup;
+          b.className = `w-full text-left p-3 rounded-xl border transition-all cursor-pointer group-btn flex items-start justify-between gap-2 ${
+            active ? 'bg-black text-white border-black shadow-xs font-semibold' : 'bg-white hover:bg-[#f5f5f7] border-transparent text-[#1d1d1f]'
+          }`;
+        });
+        $txt('current-group-title', btn.dataset.groupName || '');
+        $txt('current-group-code-badge', currentGroup);
+        $txt('current-group-desc', btn.dataset.groupDesc || '');
+        syncUrlParams({ group: currentGroup }, { group: '' }, false);
+        renderItemsTable();
+      });
+    });
+
+    $id<HTMLInputElement>('group-search')?.addEventListener('input', (e) => {
+      const q = (e.target as HTMLInputElement).value.trim().toLowerCase();
+      document.querySelectorAll<HTMLElement>('.group-btn').forEach((btn) => {
+        const matched = (btn.dataset.groupName || '').toLowerCase().includes(q) || (btn.dataset.groupCode || '').toLowerCase().includes(q);
+        btn.style.display = matched ? '' : 'none';
+      });
+    });
+
+    $id('btn-add-item')?.addEventListener('click', () => openModal());
+    $id('btn-close-modal')?.addEventListener('click', () => dialog?.close());
+    $id('btn-cancel-modal')?.addEventListener('click', () => dialog?.close());
+
+    $id('dict-item-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formError?.classList.add('hidden');
+      const groupCode = $val('form-group-code') || currentGroup;
+      const itemKey = $val('form-item-key');
+      const itemLabel = $val('form-item-label');
+      const sortOrder = parseInt($val('form-sort-order') || '100', 10);
+      const isEnabled = $chk('form-is-enabled');
+      const badgeColor = document.querySelector<HTMLInputElement>('input[name="badge_color"]:checked')?.value || 'slate';
+
+      const meta: Record<string, any> = {};
+      (META_SCHEMA[groupCode] || []).forEach(([k, , type]) => {
+        const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-meta-key="${k}"]`);
+        const v = el?.value.trim() || '';
+        if (type === 'number') { if (v) meta[k] = Number(v); }
+        else if (v) meta[k] = v;
       });
 
-      loadCategory(activeCategory);
+      const submitBtn = $id<HTMLButtonElement>('btn-submit-modal');
+      if (submitBtn) submitBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/dicts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'upsert_item', groupCode, itemKey, itemLabel, badgeColor, meta, sortOrder, isEnabled }),
+        });
+        const data: any = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save dictionary item');
+
+        const idx = allItems.findIndex((i) => i.group_code === groupCode && i.item_key === itemKey);
+        const updated = { group_code: groupCode, item_key: itemKey, item_label: itemLabel, badge_color: badgeColor, meta, sort_order: sortOrder, is_enabled: isEnabled };
+        if (idx >= 0) allItems[idx] = updated;
+        else allItems.push(updated);
+
+        renderItemsTable();
+        dialog?.close();
+        toast(data.message || 'Saved successfully');
+      } catch (err: any) {
+        if (formError) {
+          formError.textContent = err.message;
+          formError.classList.remove('hidden');
+        }
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
     });
-  </script>
-</AdminLayout>
+
+    renderItemsTable();
+  }
+
+  initDictsPage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('dicts-root')) initDictsPage();
+  });
+</script>

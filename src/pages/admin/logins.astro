@@ -1,393 +1,401 @@
 ---
-export const prerender = false;
+// src/pages/admin/logins.astro
+// Admin Security Audit: 90-Day Login History & Operation Diff Tracker (Saltline Compressed)
 import AdminLayout from '@layouts/AdminLayout.astro';
-import { getLangFromUrl, useTranslations } from '@i18n/utils';
-import { formatAdminDateTime } from '@utils/adminWorkbench';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
+import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
+import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
+import TableColumnController from '@components/admin/TableColumnController.astro';
+import TableFilter from '@components/admin/TableFilter.astro';
+import { requireAdminContext } from '@utils/auth';
+import { getDictItems } from '@utils/dicts';
+// @ts-ignore
+import { env as cfEnv } from 'cloudflare:workers';
 
-const lang = getLangFromUrl(Astro.url);
-const t = useTranslations(lang);
-const T = (en: string, zh: string) => (lang === 'zh' ? zh : en);
+export const prerender = false;
 
-const url = new URL(Astro.request.url);
-const initialEvent = url.searchParams.get('event')?.trim() || '';
-const initialRole = url.searchParams.get('role')?.trim() || '';
-const initialQ = url.searchParams.get('q')?.trim() || '';
+const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/logins',
+  { requiredMenu: 'logins' }
+);
+if (redirectResponse) return redirectResponse;
 
-let initialLogs: any[] = [];
-let ssrError = '';
+const auditActions = await getDictItems(cfEnv, 'audit_actions', true).catch(() => []);
+const retentionDays = systemSettings?.login_retention_days || 90;
+const initialSearch = Astro.url.searchParams.get('search')?.trim() || '';
+const initialTimeWindow = Astro.url.searchParams.get('timeWindow') || 'ALL';
 
-try {
-  const runtimeEnv = Astro.locals.runtime?.env;
-  if (runtimeEnv?.DB) {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    if (initialEvent) { conditions.push('event_type = ?'); params.push(initialEvent); }
-    if (initialRole) { conditions.push('role = ?'); params.push(initialRole); }
-    if (initialQ) {
-      conditions.push('(email LIKE ? OR sub LIKE ? OR ip_address LIKE ? OR country LIKE ?)');
-      const like = `%${initialQ}%`;
-      params.push(like, like, like, like);
-    }
-    const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const res = await runtimeEnv.DB.prepare(
-      `SELECT id, sub, email, name, role, portal, event_type, ip_address, country, user_agent, detail_json, created_at
-       FROM user_login_logs ${whereSql} ORDER BY id DESC LIMIT 100`
-    ).bind(...params).all();
-    initialLogs = Array.isArray(res?.results) ? res.results : [];
-  }
-} catch (err: any) {
-  ssrError = err?.message || 'Failed to load login audit logs.';
-}
-
-const totalCount = initialLogs.length;
-const adminCount = initialLogs.filter((r) => r.portal === 'admin' || r.role === 'super_admin' || r.role === 'sales').length;
-const buyerCount = initialLogs.filter((r) => r.portal === 'buyer' || r.role === 'buyer').length;
-const deniedCount = initialLogs.filter((r) => r.event_type === 'admin_denied').length;
-
-const KPI_CARDS: [string, string, number, string, string][] = [
-  ['metric-total', T('Loaded Events', '当前加载记录'), totalCount, 'text-slate-900', 'border-slate-200/80 bg-white'],
-  ['metric-buyer', T('Buyer Logins', '买家端登录'), buyerCount, 'text-blue-600', 'border-slate-200/80 bg-white'],
-  ['metric-admin', T('Admin Sessions', '后台管理登录'), adminCount, 'text-indigo-600', 'border-slate-200/80 bg-white'],
-  ['metric-denied', T('Access Denied', '越权拦截告警'), deniedCount, 'text-rose-600', 'border-rose-200/70 bg-rose-50/40'],
+const METRIC_CAPSULES: [string, string, string, string][] = [
+  ['metric-sessions', 'Sessions', 'bg-[#f5f5f7] text-[#52525b] border-black/5', 'text-[#1d1d1f]'],
+  ['metric-accounts', 'Accounts', 'bg-[#f5f5f7] text-[#52525b] border-black/5', 'text-[#1d1d1f]'],
+  ['metric-ips', 'IPs', 'bg-blue-50/80 text-blue-800 border-blue-200/80', 'text-blue-700'],
+  ['metric-countries', 'Countries', 'bg-purple-50/80 text-purple-800 border-purple-200/80', 'text-purple-700'],
 ];
-
-const EVENT_BADGE_MAP: Record<string, [string, string]> = {
-  login_success: ['bg-emerald-50 text-emerald-700 border-emerald-200', T('Login Success', '登录成功')],
-  logout: ['bg-slate-100 text-slate-600 border-slate-200', T('Logout', '安全退出')],
-  admin_denied: ['bg-rose-50 text-rose-700 border-rose-200', T('Access Denied', '越权拦截')],
-};
-
-const ROLE_BADGE_MAP: Record<string, [string, string]> = {
-  super_admin: ['bg-purple-50 text-purple-700 border-purple-200', T('Super Admin', '超级管理员')],
-  merchandiser: ['bg-emerald-50 text-emerald-700 border-emerald-200', T('Merchandiser', '商品运营')],
-  sales: ['bg-indigo-50 text-indigo-700 border-indigo-200', T('Sales Rep', '业务跟单')],
-  unauthorized: ['bg-rose-50 text-rose-700 border-rose-200', T('Unauthorized', '未授权访客')],
-  buyer: ['bg-blue-50 text-blue-700 border-blue-200', T('Buyer', '注册买家')],
-};
 ---
 
-<AdminLayout title={`${t('admin.nav.logins')} | ${t('admin.OrderDesk')}`} activeNav="logins">
-  <div id="i18n-logins" hidden
-    data-empty={T('No login records match your filter.', '未找到匹配的登录审计记录。')}
-    data-Success={T('Login Success', '登录成功')}
-    data-logout={T('Logout', '安全退出')}
-    data-denied={T('Access Denied', '越权拦截')}
-    data-super={T('Super Admin', '超级管理员')}
-    data-merchandiser={T('Merchandiser', '商品运营')}
-    data-sales={T('Sales Rep', '业务跟单')}
-    data-buyer={T('Buyer', '注册买家')}
-    data-unauth={T('Unauthorized', '未授权访客')}
-  ></div>
-
-  <main class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 space-y-5">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
-          <span>{T('Login & Session Security Audit', '用户登录与会话安全审计')}</span>
-          <span class="adm-badge bg-emerald-50 text-emerald-700 border-emerald-200">Logto OIDC</span>
-        </h1>
-        <p class="mt-1 text-xs text-slate-500">
-          {T('Real-time audit trail of Buyer & Admin authentication events, edge IP geolocation, and unauthorized access attempts.', '实时记录买家与管理员的登录认证、安全退出、Cloudflare 边缘 IP 归属地及未授权越权拦截记录。')}
-        </p>
-      </div>
-      <button type="button" id="refresh-btn" class="adm-btn-secondary self-start sm:self-auto">
-        <svg id="refresh-icon" class="w-3.5 h-3.5 text-slate-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-        {T('Refresh', '刷新记录')}
-      </button>
-    </div>
-
-    <!-- Summary Cards -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-      {KPI_CARDS.map(([id, label, count, valCls, cardCls]) => (
-        <div class={`rounded-2xl border p-4 shadow-2xs ${cardCls}`}>
-          <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">{label}</div>
-          <div id={id} class={`mt-1.5 text-2xl font-bold font-mono ${valCls}`}>{count}</div>
+<AdminLayout
+  title="Login Audit Logs"
+  currentTab="logins"
+  sessionEmail={sessionUser.email}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
+  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
+    <AdminPageToolbar title="Audit Center" badge={`${retentionDays}d`} badgeColor="emerald" class="flex-nowrap px-3 py-2 sm:px-4 sm:py-2.5 gap-2">
+      <div slot="metrics" class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-x-auto no-scrollbar">
+        <div class="flex items-center gap-1 shrink-0 p-0.5 bg-[#f5f5f7] rounded-xl border border-black/5">
+          <button type="button" id="tab-btn-logins" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#1d1d1f] text-white shadow-2xs transition-all cursor-pointer">Logins</button>
+          <button type="button" id="tab-btn-audit" class="px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-black transition-all cursor-pointer">Operation Diff</button>
         </div>
-      ))}
-    </div>
-
-    <!-- Filter Bar -->
-    <div class="adm-card p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-      <div class="flex flex-wrap items-center gap-2">
-        <select id="event-filter" class="h-9 rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-xs font-medium text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-hidden">
-          <option value="" selected={initialEvent === ''}>{T('All Events', '全部事件类型')}</option>
-          <option value="login_success" selected={initialEvent === 'login_success'}>{T('Login Success', '登录成功 (login_success)')}</option>
-          <option value="logout" selected={initialEvent === 'logout'}>{T('Logout', '安全退出 (logout)')}</option>
-          <option value="admin_denied" selected={initialEvent === 'admin_denied'}>{T('Access Denied', '越权拦截 (admin_denied)')}</option>
-        </select>
-
-        <select id="role-filter" class="h-9 rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-xs font-medium text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-hidden">
-          <option value="" selected={initialRole === ''}>{T('All Roles', '全部身份角色')}</option>
-          <option value="buyer" selected={initialRole === 'buyer'}>{T('Buyer', '注册买家 (buyer)')}</option>
-          <option value="super_admin" selected={initialRole === 'super_admin'}>{T('Super Admin', '超级管理员 (super_admin)')}</option>
-          <option value="merchandiser" selected={initialRole === 'merchandiser'}>{T('Merchandiser', '商品运营 (merchandiser)')}</option>
-          <option value="sales" selected={initialRole === 'sales'}>{T('Sales Rep', '业务跟单 (sales)')}</option>
-          <option value="unauthorized" selected={initialRole === 'unauthorized'}>{T('Unauthorized', '越权拦截访客 (unauthorized)')}</option>
-        </select>
+        <div class="h-4 w-px bg-black/10 hidden sm:block shrink-0"></div>
+        <div id="logins-metrics-container" class="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
+          {METRIC_CAPSULES.map(([id, label, wrapCls, valCls]) => (
+            <span class={`px-2 py-0.5 rounded-lg text-[11px] font-mono font-medium border flex items-center gap-1 shrink-0 whitespace-nowrap ${wrapCls}`}>
+              <span>{label}</span>
+              <strong id={id} class={`font-bold ${valCls}`}>-</strong>
+            </span>
+          ))}
+        </div>
       </div>
 
-      <form id="search-form" class="relative flex-1 max-w-md">
-        <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-        <input id="search-input" type="search" value={initialQ} placeholder={T('Search email, Logto sub, IP or country...', '搜索邮箱、Logto ID、IP 地址或国家代码...')} class="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-9 pr-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden" />
-        <button type="button" id="clear-search-btn" class:list={['absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600', !initialQ && 'hidden']}>
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-      </form>
-    </div>
+      <div slot="actions" class="flex items-center gap-2 ml-auto shrink-0">
+        <span id="log-count-summary" class="hidden xl:inline font-mono text-[11px] text-[#86868b]">(Loading...)</span>
+        <TableFilter timeSelectId="logins-timewindow-select" initialTimeWindow={initialTimeWindow} />
+        <AdminSearchInput
+          id="logins-search-input"
+          clearBtnId="clear-logins-search"
+          initialValue={initialSearch}
+          placeholder="Search email, IP, city..."
+          class="relative flex items-center w-36 md:w-40 lg:w-44 xl:w-56 2xl:w-64"
+        />
+        <TableColumnController
+          controllerBtnId="logins-columns-btn"
+          controllerMenuId="logins-columns-menu"
+          columnsListId="logins-columns-list"
+          countBadgeId="logins-columns-count"
+          syncStatusId="logins-columns-sync"
+          resetBtnId="logins-columns-reset"
+          densityBtnId="logins-density-btn"
+          densityLabelId="logins-density-label"
+          showDensityToggle={true}
+          class="hidden md:inline-flex"
+        />
+      </div>
+    </AdminPageToolbar>
 
-    {ssrError && <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{ssrError}</div>}
+    <AdminWorkbenchTableShell
+      containerId="logins-container"
+      skeletonId="logins-skeleton"
+      contentId="logins-content"
+      contentHidden={true}
+      showPagination={false}
+    />
 
-    <!-- Table -->
-    <div class="adm-card overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-100 text-left text-xs">
-          <thead class="bg-slate-50/80">
+    <div id="audit-diff-container" class="hidden flex-1 min-h-0 adm-card overflow-hidden flex flex-col">
+      <div class="px-3.5 py-2.5 bg-[#fafafa] border-b border-black/5 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-[#1d1d1f]">Administrative Operation Diff Logs</span>
+          <span class="text-[10px] text-[#86868b]">Indexed audit events</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-[11px] text-[#86868b] font-medium hidden sm:inline">Action Filter:</label>
+          <select id="audit-action-filter" class="px-2.5 py-1 text-xs rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black font-semibold text-[#1d1d1f]">
+            <option value="">All Actions ({auditActions.length} types)</option>
+            {auditActions.map((a) => (
+              <option value={a.item_key}>{a.item_label} ({a.item_key})</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div class="flex-1 overflow-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="sticky top-0 bg-[#fbfbfd] border-b border-black/5 z-10">
             <tr>
-              <th class="adm-th py-3">{T('Timestamp', '发生时间')}</th>
-              <th class="adm-th py-3">{T('Event', '事件类型')}</th>
-              <th class="adm-th py-3">{T('User / Identity', '用户与邮箱')}</th>
-              <th class="adm-th py-3">{T('Role & Portal', '角色与入口')}</th>
-              <th class="adm-th py-3">{T('Edge IP & Country', 'IP 与国家/地区')}</th>
-              <th class="adm-th py-3">{T('Client Device (UA)', '终端设备信息')}</th>
+              <th class="adm-th">Timestamp</th>
+              <th class="adm-th">Administrator</th>
+              <th class="adm-th">Action</th>
+              <th class="adm-th">Target</th>
+              <th class="adm-th">Field Changes / Diff</th>
             </tr>
           </thead>
-          <tbody id="logins-tbody" class="divide-y divide-slate-100 bg-white">
-            {initialLogs.length === 0 ? (
-              <tr><td colspan="6" class="px-4 py-12 text-center text-xs text-slate-400">{T('No login records match your filter.', '未找到匹配的登录审计记录。')}</td></tr>
-            ) : (
-              initialLogs.map((row) => {
-                const [evCls, evLabel] = EVENT_BADGE_MAP[row.event_type] || EVENT_BADGE_MAP.login_success;
-                const [rCls, rLabel] = ROLE_BADGE_MAP[row.role] || ROLE_BADGE_MAP.buyer;
-                return (
-                  <tr class="hover:bg-slate-50/80 transition-colors cursor-pointer" data-user-sub={row.sub || ''} data-user-email={row.email || ''} data-user-name={row.name || ''} data-user-role={row.role || ''}>
-                    <td class="adm-td whitespace-nowrap font-mono text-[11px] text-slate-500">{formatAdminDateTime(row.created_at)}</td>
-                    <td class="adm-td whitespace-nowrap"><span class={`adm-badge ${evCls}`}>{evLabel}</span></td>
-                    <td class="adm-td">
-                      <div class="font-medium text-slate-900">{row.email || row.name || '—'}</div>
-                      <div class="font-mono text-[10px] text-slate-400 truncate max-w-[200px]" title={row.sub || ''}>sub: {row.sub || '—'}</div>
-                    </td>
-                    <td class="adm-td whitespace-nowrap">
-                      <span class={`adm-badge ${rCls}`}>{rLabel}</span>
-                      <span class="ml-1.5 text-[10px] font-mono text-slate-400">/{row.portal || 'buyer'}</span>
-                    </td>
-                    <td class="adm-td whitespace-nowrap">
-                      <div class="flex items-center gap-1.5">
-                        {row.country && <span class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700">{row.country}</span>}
-                        <span class="font-mono text-[11px] text-slate-700">{row.ip_address || '—'}</span>
-                      </div>
-                    </td>
-                    <td class="adm-td max-w-[320px]"><div class="truncate text-[11px] text-slate-500 font-mono" title={row.user_agent || ''}>{row.user_agent || '—'}</div></td>
-                  </tr>
-                );
-              })
-            )}
+          <tbody id="audit-table-body" class="divide-y divide-black/5 font-sans text-xs">
+            <tr><td colspan="5" class="py-12 text-center text-[#86868b]">Loading operation audit logs...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
-  </main>
-
-  <!-- User Activity Trail Slide-over Drawer -->
-  <div id="user-activity-drawer" class="fixed inset-0 z-50 hidden">
-    <div id="user-activity-backdrop" class="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] opacity-0 transition-opacity duration-200"></div>
-    <div class="fixed inset-y-0 right-0 flex max-w-full pl-10">
-      <div id="user-activity-panel" class="w-screen max-w-xl transform transition-transform duration-200 translate-x-full bg-white shadow-2xl flex flex-col">
-        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/60">
-          <div>
-            <div class="flex items-center gap-2">
-              <h3 id="drawer-user-title" class="text-sm font-bold text-slate-900">—</h3>
-              <span id="drawer-user-role" class="adm-badge bg-blue-50 text-blue-700 border-blue-200">—</span>
-            </div>
-            <p id="drawer-user-sub" class="text-[11px] font-mono text-slate-500 mt-0.5">sub: —</p>
-          </div>
-          <button type="button" id="close-activity-drawer" class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-
-        <div class="px-6 pt-3 border-b border-slate-200 flex items-center gap-4 bg-white text-xs font-semibold">
-          <button type="button" id="tab-btn-logins" class="pb-2.5 border-b-2 border-blue-600 text-blue-600">{T('Session History', '会话登录轨迹')}</button>
-          <button type="button" id="tab-btn-actions" class="pb-2.5 border-b-2 border-transparent text-slate-500 hover:text-slate-800">{T('Operations & Audit Trail', '业务操作审计轨迹')}</button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto p-6 space-y-4">
-          <div id="tab-panel-logins" class="space-y-2.5"></div>
-          <div id="tab-panel-actions" class="hidden space-y-2.5"></div>
-        </div>
-      </div>
-    </div>
   </div>
-
-  <script>
-    import { $id, $val, $txt, escapeHtml, formatAdminDateTime, syncUrlParams, bindSearchAndRefresh, createSlideDrawer } from '@utils/adminWorkbench';
-
-    document.addEventListener('astro:page-load', () => {
-      const i18nEl = $id('i18n-logins');
-      if (!i18nEl) return;
-
-      const tbody = $id('logins-tbody')!;
-      const eventFilter = $id<HTMLSelectElement>('event-filter');
-      const roleFilter = $id<HTMLSelectElement>('role-filter');
-      const refreshIcon = $id('refresh-icon');
-
-      const D = i18nEl.dataset;
-      const evBadge = (type: string) => {
-        if (type === 'admin_denied') return `<span class="adm-badge bg-rose-50 text-rose-700 border-rose-200">${escapeHtml(D.denied || 'Access Denied')}</span>`;
-        if (type === 'logout') return `<span class="adm-badge bg-slate-100 text-slate-600 border-slate-200">${escapeHtml(D.logout || 'Logout')}</span>`;
-        return `<span class="adm-badge bg-emerald-50 text-emerald-700 border-emerald-200">${escapeHtml(D.Success || 'Login Success')}</span>`;
-      };
-      const rBadge = (role: string) => {
-        const map: Record<string, [string, string | undefined]> = {
-          super_admin: ['bg-purple-50 text-purple-700 border-purple-200', D.super],
-          merchandiser: ['bg-emerald-50 text-emerald-700 border-emerald-200', D.merchandiser],
-          sales: ['bg-indigo-50 text-indigo-700 border-indigo-200', D.sales],
-          unauthorized: ['bg-rose-50 text-rose-700 border-rose-200', D.unauth],
-        };
-        const [cls, label] = map[role] || ['bg-blue-50 text-blue-700 border-blue-200', D.buyer || 'Buyer'];
-        return `<span class="adm-badge ${cls}">${escapeHtml(label || role)}</span>`;
-      };
-
-      const fetchLogs = async () => {
-        const ev = $val('event-filter');
-        const rl = $val('role-filter');
-        const q = $val('search-input');
-        syncUrlParams({ event: ev, role: rl, q });
-        refreshIcon?.classList.add('animate-spin');
-
-        try {
-          const params = new URLSearchParams({ limit: '100' });
-          if (ev) params.set('event', ev);
-          if (rl) params.set('role', rl);
-          if (q) params.set('q', q);
-
-          const res = await fetch(`/api/admin/login-logs?${params.toString()}`, { headers: { Accept: 'application/json' } });
-          if (!res.ok) return;
-          const payload: any = await res.json();
-          const items: any[] = Array.isArray(payload?.data?.items) ? payload.data.items : [];
-
-          $txt('metric-total', String(items.length));
-          $txt('metric-buyer', String(items.filter((r) => r.portal === 'buyer' || r.role === 'buyer').length));
-          $txt('metric-admin', String(items.filter((r) => r.portal === 'admin' || r.role === 'super_admin' || r.role === 'sales').length));
-          $txt('metric-denied', String(items.filter((r) => r.event_type === 'admin_denied').length));
-
-          if (!items.length) {
-            tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-12 text-center text-xs text-slate-400">${escapeHtml(D.empty || 'No records')}</td></tr>`;
-            return;
-          }
-          tbody.innerHTML = items.map((row) => `
-            <tr class="hover:bg-slate-50/80 transition-colors cursor-pointer" data-user-sub="${escapeHtml(row.sub || '')}" data-user-email="${escapeHtml(row.email || '')}" data-user-name="${escapeHtml(row.name || '')}" data-user-role="${escapeHtml(row.role || '')}">
-              <td class="adm-td whitespace-nowrap font-mono text-[11px] text-slate-500">${escapeHtml(formatAdminDateTime(row.created_at))}</td>
-              <td class="adm-td whitespace-nowrap">${evBadge(row.event_type)}</td>
-              <td class="adm-td">
-                <div class="font-medium text-slate-900">${escapeHtml(row.email || row.name || '—')}</div>
-                <div class="font-mono text-[10px] text-slate-400 truncate max-w-[200px]" title="${escapeHtml(row.sub || '')}">sub: ${escapeHtml(row.sub || '—')}</div>
-              </td>
-              <td class="adm-td whitespace-nowrap">${rBadge(row.role)}<span class="ml-1.5 text-[10px] font-mono text-slate-400">/${escapeHtml(row.portal || 'buyer')}</span></td>
-              <td class="adm-td whitespace-nowrap">
-                <div class="flex items-center gap-1.5">
-                  ${row.country ? `<span class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700">${escapeHtml(row.country)}</span>` : ''}
-                  <span class="font-mono text-[11px] text-slate-700">${escapeHtml(row.ip_address || '—')}</span>
-                </div>
-              </td>
-              <td class="adm-td max-w-[320px]"><div class="truncate text-[11px] text-slate-500 font-mono" title="${escapeHtml(row.user_agent || '')}">${escapeHtml(row.user_agent || '—')}</div></td>
-            </tr>`).join('');
-        } finally {
-          refreshIcon?.classList.remove('animate-spin');
-        }
-      };
-
-      eventFilter?.addEventListener('change', fetchLogs);
-      roleFilter?.addEventListener('change', fetchLogs);
-      bindSearchAndRefresh({
-        form: $id<HTMLFormElement>('search-form'),
-        input: $id<HTMLInputElement>('search-input'),
-        clearBtn: $id('clear-search-btn'),
-        refreshBtn: $id('refresh-btn'),
-        onSearch: fetchLogs,
-      });
-
-      const drawer = createSlideDrawer({
-        drawerId: 'user-activity-drawer',
-        backdropId: 'user-activity-backdrop',
-        panelId: 'user-activity-panel',
-        closeBtnIds: ['close-activity-drawer'],
-      });
-
-      const tabBtnLogins = $id('tab-btn-logins');
-      const tabBtnActions = $id('tab-btn-actions');
-      const tabPanelLogins = $id('tab-panel-logins')!;
-      const tabPanelActions = $id('tab-panel-actions')!;
-
-      const switchTab = (tab: 'logins' | 'actions') => {
-        const isLogins = tab === 'logins';
-        tabPanelLogins.classList.toggle('hidden', !isLogins);
-        tabPanelActions.classList.toggle('hidden', isLogins);
-        tabBtnLogins?.classList.toggle('border-blue-600', isLogins);
-        tabBtnLogins?.classList.toggle('text-blue-600', isLogins);
-        tabBtnLogins?.classList.toggle('border-transparent', !isLogins);
-        tabBtnLogins?.classList.toggle('text-slate-500', !isLogins);
-        tabBtnActions?.classList.toggle('border-blue-600', !isLogins);
-        tabBtnActions?.classList.toggle('text-blue-600', !isLogins);
-        tabBtnActions?.classList.toggle('border-transparent', isLogins);
-        tabBtnActions?.classList.toggle('text-slate-500', isLogins);
-      };
-
-      tabBtnLogins?.addEventListener('click', () => switchTab('logins'));
-      tabBtnActions?.addEventListener('click', () => switchTab('actions'));
-
-      tbody.addEventListener('click', async (e) => {
-        const tr = (e.target as HTMLElement).closest<HTMLElement>('tr[data-user-sub]');
-        if (!tr) return;
-        const sub = tr.dataset.userSub || '';
-        const email = tr.dataset.userEmail || '';
-        const name = tr.dataset.userName || '';
-        const role = tr.dataset.userRole || 'buyer';
-        if (!sub && !email) return;
-
-        $txt('drawer-user-title', email || name || 'Unknown User');
-        $txt('drawer-user-sub', `sub: ${sub || '—'}`);
-        $txt('drawer-user-role', role);
-        switchTab('logins');
-        drawer.open();
-
-        tabPanelLogins.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">Loading session history...</div>';
-        tabPanelActions.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">Loading audit trail...</div>';
-
-        const qKey = email || sub;
-        const [loginRes, auditRes] = await Promise.all([
-          fetch(`/api/admin/login-logs?q=${encodeURIComponent(qKey)}&limit=50`).then((r) => r.json()).catch(() => null),
-          fetch(`/api/admin/audit?actor=${encodeURIComponent(qKey)}&limit=50`).then((r) => r.json()).catch(() => null),
-        ]);
-
-        const loginItems: any[] = loginRes?.data?.items || [];
-        tabPanelLogins.innerHTML = loginItems.length
-          ? loginItems.map((item) => `
-              <div class="rounded-xl border border-slate-200/80 p-3 text-xs space-y-1 bg-slate-50/40">
-                <div class="flex items-center justify-between">
-                  ${evBadge(item.event_type)}
-                  <span class="font-mono text-[11px] text-slate-400">${escapeHtml(formatAdminDateTime(item.created_at))}</span>
-                </div>
-                <div class="flex items-center gap-2 text-[11px] text-slate-600 font-mono pt-1">
-                  <span>IP: ${escapeHtml(item.ip_address || '—')}</span>
-                  ${item.country ? `<span class="rounded bg-slate-200/70 px-1.5 py-0.2 text-[10px] font-bold">${escapeHtml(item.country)}</span>` : ''}
-                  <span>Portal: /${escapeHtml(item.portal || 'buyer')}</span>
-                </div>
-              </div>`).join('')
-          : '<div class="text-xs text-slate-400 py-8 text-center">No session logs found.</div>';
-
-        const auditItems: any[] = auditRes?.data?.items || [];
-        tabPanelActions.innerHTML = auditItems.length
-          ? auditItems.map((act) => `
-              <div class="rounded-xl border border-slate-200/80 p-3 text-xs space-y-1.5 bg-white">
-                <div class="flex items-center justify-between">
-                  <span class="font-semibold text-slate-800 font-mono">${escapeHtml(act.action || 'ACTION')}</span>
-                  <span class="font-mono text-[11px] text-slate-400">${escapeHtml(formatAdminDateTime(act.created_at))}</span>
-                </div>
-                <div class="text-[11px] text-slate-600">Target: <span class="font-mono font-medium text-slate-800">${escapeHtml(act.target_type || '')} #${escapeHtml(act.target_id || '')}</span></div>
-                ${act.diff_json ? `<pre class="mt-1 rounded bg-slate-900 text-slate-100 p-2 text-[10px] font-mono overflow-x-auto">${escapeHtml(act.diff_json)}</pre>` : ''}
-              </div>`).join('')
-          : '<div class="text-xs text-slate-400 py-8 text-center">No operation audit logs found for this user.</div>';
-      });
-    });
-  </script>
 </AdminLayout>
+
+<script>
+  import { clientCache } from '@utils/clientCache';
+  import { $id, $txt, escapeHtml, formatAdminTime, syncUrlParams, bindSearchAndRefresh } from '@utils/adminWorkbench';
+  import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
+
+  let pageAbort: AbortController | null = null;
+
+  function initLoginsPage() {
+    if (!$id('logins-container')) return;
+    pageAbort?.abort();
+    pageAbort = new AbortController();
+    const { signal } = pageAbort;
+
+    const DEFAULT_COLUMNS: ColumnConfig[] = [
+      { id: 'user', label: 'User Email & ID', defaultWidth: 220, minWidth: 160, visible: true, canHide: false },
+      { id: 'ip', label: 'IP Address', defaultWidth: 140, minWidth: 100, visible: true, canHide: true },
+      { id: 'location', label: 'Location', defaultWidth: 150, minWidth: 110, visible: true, canHide: true },
+      { id: 'user_agent', label: 'Client User-Agent', defaultWidth: 260, minWidth: 160, visible: true, canHide: true },
+      { id: 'timestamp', label: 'Login Timestamp', defaultWidth: 160, minWidth: 120, visible: true, canHide: false, pinRight: true, align: 'right' },
+    ];
+
+    let allLogins: any[] = [];
+    const initialUrl = new URL(window.location.href);
+    let currentSearch = initialUrl.searchParams.get('search')?.trim() || '';
+    let currentTimeWindow = initialUrl.searchParams.get('timeWindow') || 'ALL';
+
+    const tableSettings = useTableSettings({
+      tableKey: 'logins',
+      defaultColumns: DEFAULT_COLUMNS,
+      defaultDensity: 'cozy',
+      controllerBtnEl: $id('logins-columns-btn'),
+      controllerMenuEl: $id('logins-columns-menu'),
+      columnsListEl: $id('logins-columns-list'),
+      countBadgeEl: $id('logins-columns-count'),
+      syncStatusEl: $id('logins-columns-sync'),
+      resetBtnEl: $id('logins-columns-reset'),
+      densityBtnEl: $id('logins-density-btn'),
+      densityLabelEl: $id('logins-density-label'),
+      onSettingsChange: () => { if (allLogins.length) filterAndRender(); },
+      onDensityChange: () => { if (allLogins.length) filterAndRender(); },
+    });
+
+    function updateMetrics(logins: any[]) {
+      $txt('metric-sessions', logins.length);
+      $txt('metric-accounts', new Set(logins.map((l) => (l.email || '').toLowerCase())).size);
+      $txt('metric-ips', new Set(logins.map((l) => l.ip).filter(Boolean)).size);
+      $txt('metric-countries', new Set(logins.map((l) => l.country).filter(Boolean)).size || 1);
+    }
+
+    function renderTable(displayLogins: any[]) {
+      const content = $id('logins-content');
+      if (!content) return;
+      $txt('log-count-summary', `(${displayLogins.length} of ${allLogins.length} events)`);
+
+      if (!displayLogins.length) {
+        content.innerHTML = `<div class="py-16 text-center text-xs text-[#86868b]">${currentSearch ? `No login events matching "${escapeHtml(currentSearch)}".` : 'No login activity recorded yet.'}</div>`;
+        content.classList.remove('hidden');
+        return;
+      }
+
+      const mobileCardsHtml = `<div class="block md:hidden divide-y divide-black/5">${displayLogins.map((entry) => {
+        const loc = escapeHtml([entry.city, entry.country].filter(Boolean).join(', ') || 'Global');
+        const safeEmail = escapeHtml(entry.email || '');
+        const safeId = escapeHtml(entry.user_id || '');
+        const safeIp = escapeHtml(entry.ip || '—');
+        const safeUa = escapeHtml(entry.user_agent || 'Unknown Device');
+        return `<div class="p-3.5 space-y-2 bg-white text-xs">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <span class="font-semibold text-[#1d1d1f] truncate block">${safeEmail}</span>
+              <span class="font-mono text-[10px] text-[#86868b] truncate block" title="${safeId}">${safeId}</span>
+            </div>
+            <span class="text-[11px] text-[#86868b] shrink-0 font-mono">${formatAdminTime(entry.created_at, 'full')}</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 space-y-1">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="font-mono font-medium text-[#1d1d1f]">${safeIp}</span>
+              <span class="text-[#52525b]">📍 ${loc}</span>
+            </div>
+            <p class="text-[10px] text-[#86868b] truncate" title="${safeUa}">${safeUa}</p>
+          </div>
+        </div>`;
+      }).join('')}</div>`;
+
+      const visibleCols = tableSettings.getVisibleColumns();
+      const cellPad = tableSettings.getDensity() === 'compact' ? 'py-1.5 px-3' : 'py-3 px-4';
+
+      const desktopRowsHtml = displayLogins.map((entry) => {
+        const loc = escapeHtml([entry.city, entry.country].filter(Boolean).join(', ') || 'Global / Edge');
+        const safeEmail = escapeHtml(entry.email || '');
+        const safeId = escapeHtml(entry.user_id || '');
+        const safeIp = escapeHtml(entry.ip || '');
+        const safeUa = escapeHtml(entry.user_agent || 'Unknown Client');
+        const dateStr = formatAdminTime(entry.created_at, 'full');
+
+        const cells = visibleCols.map((col) => {
+          const w = `style="width: ${col.defaultWidth}px;"`;
+          if (col.id === 'user') return `<td ${w} class="${cellPad}"><div class="font-medium text-[#1d1d1f] truncate">${safeEmail}</div><div class="text-[10px] font-mono text-[#86868b] truncate max-w-[200px]" title="${safeId}">${safeId}</div></td>`;
+          if (col.id === 'ip') return `<td ${w} class="${cellPad} font-mono text-[11px] text-[#1d1d1f]">${safeIp ? `<span class="px-2 py-0.5 rounded bg-[#f5f5f7] border border-black/5">${safeIp}</span>` : '<span class="text-[#86868b]">—</span>'}</td>`;
+          if (col.id === 'location') return `<td ${w} class="${cellPad}"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-zinc-100 text-[#1d1d1f] border border-black/5 truncate max-w-[140px]">📍 ${loc}</span></td>`;
+          if (col.id === 'user_agent') return `<td ${w} class="${cellPad} text-[11px] text-[#52525b] truncate max-w-xs" title="${safeUa}">${safeUa}</td>`;
+          if (col.id === 'timestamp') return `<td ${w} class="${cellPad} text-right whitespace-nowrap font-mono text-[11px]">${dateStr}</td>`;
+          return '<td></td>';
+        }).join('');
+        return `<tr class="hover:bg-[#f5f5f7]/60 transition-colors">${cells}</tr>`;
+      }).join('');
+
+      content.innerHTML = `${mobileCardsHtml}<div class="hidden md:block"><table id="logins-main-table" class="w-full text-left text-xs border-collapse table-fixed select-text"><thead class="sticky top-0 z-10 bg-[#fafafa]/95 backdrop-blur-xs shadow-2xs border-b border-black/10"><tr id="logins-header-row"></tr></thead><tbody class="divide-y divide-black/5">${desktopRowsHtml}</tbody></table></div>`;
+      content.classList.remove('hidden');
+
+      const loginsTable = $id<HTMLTableElement>('logins-main-table');
+      const loginsHeaderRow = $id<HTMLTableRowElement>('logins-header-row');
+      if (loginsTable && loginsHeaderRow) tableSettings.renderHeader(loginsHeaderRow, loginsTable);
+    }
+
+    function filterAndRender() {
+      const q = currentSearch.toLowerCase();
+      const now = Date.now();
+      const winMap: Record<string, number> = { '24h': 864e5, '7d': 6048e5, '30d': 2592e6 };
+      const windowMs = winMap[currentTimeWindow] || 0;
+
+      const filtered = allLogins.filter((l) => {
+        if (windowMs > 0 && l.created_at) {
+          const raw = String(l.created_at).trim();
+          const t = new Date(raw.endsWith('Z') ? raw : `${raw.replace(' ', 'T')}Z`).getTime();
+          if (!isNaN(t) && now - t > windowMs) return false;
+        }
+        return !q || [l.email, l.user_id, l.ip, l.city, l.country].some((v) => (v || '').toLowerCase().includes(q));
+      });
+      updateMetrics(filtered);
+      renderTable(filtered);
+    }
+
+    async function loadLogins() {
+      const skeleton = $id('logins-skeleton');
+      const content = $id('logins-content');
+      try {
+        await clientCache.fetchWithCache('admin:logins:150', '/api/admin/logins?limit=150', {
+          mode: 'swr',
+          onData: (data: any) => {
+            allLogins = data.logins || [];
+            skeleton?.classList.add('hidden');
+            filterAndRender();
+          },
+        });
+      } catch (err: any) {
+        skeleton?.classList.add('hidden');
+        if (content) {
+          content.innerHTML = `<div class="py-16 text-center text-xs text-rose-600">Failed to load login audit logs (${escapeHtml(err?.message || '')}). <button type="button" id="retry-logins-btn" class="underline ml-1 cursor-pointer">Retry</button></div>`;
+          content.classList.remove('hidden');
+          $id('retry-logins-btn')?.addEventListener('click', loadLogins);
+        }
+      }
+    }
+
+    bindSearchAndRefresh({
+      searchInputId: 'logins-search-input',
+      clearBtnId: 'clear-logins-search',
+      debounceMs: 0,
+      onSearch: (val) => {
+        currentSearch = val;
+        syncUrlParams({ search: currentSearch, timeWindow: currentTimeWindow }, { timeWindow: 'ALL' }, false);
+        filterAndRender();
+      },
+      onRefresh: loadLogins,
+    });
+
+    const timeSelect = $id<HTMLSelectElement>('logins-timewindow-select');
+    if (timeSelect) {
+      timeSelect.value = currentTimeWindow;
+      timeSelect.addEventListener('change', () => {
+        currentTimeWindow = timeSelect.value || 'ALL';
+        syncUrlParams({ search: currentSearch, timeWindow: currentTimeWindow }, { timeWindow: 'ALL' }, false);
+        filterAndRender();
+      });
+    }
+
+    window.addEventListener('popstate', () => {
+      const u = new URL(window.location.href);
+      currentSearch = u.searchParams.get('search')?.trim() || '';
+      currentTimeWindow = u.searchParams.get('timeWindow') || 'ALL';
+      const inp = $id<HTMLInputElement>('logins-search-input');
+      if (inp) inp.value = currentSearch;
+      $id('clear-logins-search')?.classList.toggle('hidden', !currentSearch);
+      if (timeSelect) timeSelect.value = currentTimeWindow;
+      filterAndRender();
+    }, { signal });
+
+    // Mode Switcher: Logins vs Operation Audit Diff
+    let auditLogsLoaded = false;
+    const tabBtnLogins = $id('tab-btn-logins');
+    const tabBtnAudit = $id('tab-btn-audit');
+    const loginsShell = $id('logins-container');
+    const auditDiffContainer = $id('audit-diff-container');
+    const metricsContainer = $id('logins-metrics-container');
+    const auditActionFilter = $id<HTMLSelectElement>('audit-action-filter');
+
+    const loadAuditLogs = async () => {
+      const tbody = $id('audit-table-body');
+      if (!tbody) return;
+      const actionVal = auditActionFilter?.value || '';
+      try {
+        const res = await fetch(`/api/admin/audit?limit=100${actionVal ? `&action=${encodeURIComponent(actionVal)}` : ''}`);
+        const data: any = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Error');
+        const logs: any[] = data.logs || [];
+        if (!logs.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-[#86868b]">No admin operations found for this action filter.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = logs.map((log) => {
+          let diffHtml = '<span class="text-[10px] text-[#86868b]">-</span>';
+          try {
+            const diff = log.diff_json ? JSON.parse(log.diff_json) : null;
+            if (diff && Object.keys(diff).length) {
+              diffHtml = Object.entries(diff).map(([k, v]: [string, any]) => `<span class="inline-block mr-2 text-[10px]"><span class="text-[#86868b]">${escapeHtml(k)}:</span> <span class="text-rose-700 line-through">${escapeHtml(JSON.stringify(v?.before ?? '∅'))}</span> → <span class="text-emerald-700 font-semibold">${escapeHtml(JSON.stringify(v?.after ?? '∅'))}</span></span>`).join('');
+            } else if (log.after_json) {
+              diffHtml = `<span class="text-[10px] text-[#52525b] font-mono">${escapeHtml(String(log.after_json).slice(0, 120))}</span>`;
+            }
+          } catch {}
+          const act = String(log.action || '');
+          const badgeCls = /DELETE|BLOCK|REJECT/.test(act)
+            ? 'bg-rose-50 text-rose-700 border-rose-200'
+            : /CREATE|APPROVE|SHIP|UPSERT/.test(act)
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : 'bg-slate-100 text-slate-800 border-slate-200';
+          return `<tr class="hover:bg-[#fbfbfd]">
+            <td class="adm-td font-mono text-[11px] text-[#86868b] whitespace-nowrap">${formatAdminTime(log.created_at, 'full')}</td>
+            <td class="adm-td font-medium text-[#1d1d1f]">${escapeHtml(log.admin_email)}</td>
+            <td class="adm-td"><span class="px-2 py-0.5 rounded-md border text-[10px] font-mono font-bold ${badgeCls}">${escapeHtml(act)}</span></td>
+            <td class="adm-td font-mono text-[11px] text-[#52525b]">${escapeHtml(log.target_type || '')}${log.target_id ? `:${escapeHtml(log.target_id)}` : ''}</td>
+            <td class="adm-td max-w-md truncate">${diffHtml}</td>
+          </tr>`;
+        }).join('');
+      } catch (e: any) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-600">Failed to load audit logs: ${escapeHtml(e.message)}</td></tr>`;
+      }
+    };
+
+    const setMode = (isAudit: boolean) => {
+      if (tabBtnLogins) tabBtnLogins.className = isAudit ? 'px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-black transition-all cursor-pointer' : 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#1d1d1f] text-white shadow-2xs transition-all cursor-pointer';
+      if (tabBtnAudit) tabBtnAudit.className = !isAudit ? 'px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-black transition-all cursor-pointer' : 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#1d1d1f] text-white shadow-2xs transition-all cursor-pointer';
+      loginsShell?.classList.toggle('hidden', isAudit);
+      metricsContainer?.classList.toggle('hidden', isAudit);
+      auditDiffContainer?.classList.toggle('hidden', !isAudit);
+      if (isAudit && !auditLogsLoaded) {
+        auditLogsLoaded = true;
+        loadAuditLogs();
+      }
+    };
+
+    tabBtnLogins?.addEventListener('click', () => setMode(false));
+    tabBtnAudit?.addEventListener('click', () => setMode(true));
+    auditActionFilter?.addEventListener('change', loadAuditLogs);
+
+    tableSettings.renderMenu();
+    loadLogins();
+  }
+
+  initLoginsPage();
+  document.addEventListener('shell:page-load', () => {
+    if (document.getElementById('logins-container')) initLoginsPage();
+  });
+</script>
