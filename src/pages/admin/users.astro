@@ -374,7 +374,11 @@ const pageTitle = 'Customer & Access Management';
 
 <script>
   import { clientCache } from '@utils/clientCache';
-  import { escapeHtml, formatAdminTime, createPaginationController } from '@utils/adminWorkbench';
+  import {
+    escapeHtml, formatAdminTime, createPaginationController,
+    createWorkbenchFetcher, bindSearchAndRefresh, exportToCsv,
+    $id, syncUrlParams, createSlideDrawer
+  } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
   let pageAbort: AbortController | null = null;
@@ -760,99 +764,30 @@ const pageTitle = 'Customer & Access Management';
     }
   }
 
-  async function loadUsers(updateUrl = true) {
-    if (activeAbortController) {
-      activeAbortController.abort();
-    }
-    activeAbortController = new AbortController();
+  const usersFetcher = createWorkbenchFetcher({
+    skeletonEl: $id('users-skeleton'),
+    contentEl: $id('users-content'),
+    onData: (data: any) => {
+      renderStats(data.stats, data.total);
+      renderUsers(data.users || []);
+      pagination.render(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 30);
+    },
+  });
 
-    const skeleton = document.getElementById('users-skeleton');
-    const content = document.getElementById('users-content');
-    const paginationContainer = document.getElementById('users-pagination-container');
-
-    let skeletonTimer: any = null;
-    if (skeleton && content) {
-      if (content.classList.contains('hidden') || !content.innerHTML.trim()) {
-        skeleton.classList.remove('hidden');
-        content.classList.add('hidden');
-      } else {
-        skeletonTimer = setTimeout(() => {
-          skeleton.classList.remove('hidden');
-          content.classList.add('hidden');
-        }, 80);
-      }
-    }
-    if (paginationContainer) {
-      paginationContainer.classList.add('hidden');
-    }
-
+  function loadUsers(updateUrl = true) {
+    $id('users-pagination-container')?.classList.add('hidden');
     updateActiveVisuals();
-
     if (updateUrl) {
-      const url = new URL(window.location.href);
-      if (currentTier && currentTier !== 'ALL') url.searchParams.set('tier', currentTier);
-      else url.searchParams.delete('tier');
-
-      if (currentStatus && currentStatus !== 'ALL') url.searchParams.set('status', currentStatus);
-      else url.searchParams.delete('status');
-
-      if (currentSearch) url.searchParams.set('search', currentSearch);
-      else url.searchParams.delete('search');
-
-      if (currentTimeWindow && currentTimeWindow !== 'ALL') url.searchParams.set('timeWindow', currentTimeWindow);
-      else url.searchParams.delete('timeWindow');
-
-      if (currentAssignedTo) url.searchParams.set('assignedTo', currentAssignedTo);
-      else url.searchParams.delete('assignedTo');
-
-      if (currentPage > 1) url.searchParams.set('page', String(currentPage));
-      else url.searchParams.delete('page');
-
-      window.history.pushState({}, '', url.toString());
+      syncUrlParams({ tier: currentTier, status: currentStatus, search: currentSearch, timeWindow: currentTimeWindow, assignedTo: currentAssignedTo, page: currentPage }, { page: 1 });
     }
-
-    try {
-      const qs = new URLSearchParams();
-      if (currentTier && currentTier !== 'ALL') qs.set('tier', currentTier);
-      if (currentStatus && currentStatus !== 'ALL') qs.set('status', currentStatus);
-      if (currentSearch) qs.set('search', currentSearch);
-      if (currentTimeWindow && currentTimeWindow !== 'ALL') qs.set('timeWindow', currentTimeWindow);
-      if (currentAssignedTo) qs.set('assignedTo', currentAssignedTo);
-      qs.set('page', String(currentPage));
-      qs.set('limit', String(currentLimit));
-
-      const cacheKey = `admin:users:${currentTier}:${currentStatus}:${currentTimeWindow}:${currentAssignedTo}:${currentSearch}:${currentPage}:${currentLimit}`;
-      await clientCache.fetchWithCache(
-        cacheKey,
-        `/api/admin/users?${qs.toString()}`,
-        {
-          mode: 'swr',
-          init: { signal: activeAbortController.signal },
-          onData: (data: any) => {
-            if (skeletonTimer) clearTimeout(skeletonTimer);
-            if (skeleton) skeleton.classList.add('hidden');
-            renderStats(data.stats, data.total);
-            renderUsers(data.users || []);
-            pagination.render(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 30);
-          },
-        }
-      );
-    } catch (err: any) {
-      if (skeletonTimer) clearTimeout(skeletonTimer);
-      if (err?.name === 'AbortError') return;
-      console.error('Failed to load users:', err);
-      if (skeleton) skeleton.classList.add('hidden');
-      if (content) {
-        content.innerHTML = `
-          <div class="py-16 text-center text-xs text-rose-600">
-            Failed to load customers (${escapeHtml(err.message)}).
-            <button type="button" id="retry-users-btn" class="underline ml-1 cursor-pointer">Retry</button>
-          </div>
-        `;
-        content.classList.remove('hidden');
-        document.getElementById('retry-users-btn')?.addEventListener('click', () => loadUsers(false));
-      }
-    }
+    const qs = new URLSearchParams({ page: String(currentPage), limit: String(currentLimit) });
+    if (currentTier !== 'ALL') qs.set('tier', currentTier);
+    if (currentStatus !== 'ALL') qs.set('status', currentStatus);
+    if (currentSearch) qs.set('search', currentSearch);
+    if (currentTimeWindow !== 'ALL') qs.set('timeWindow', currentTimeWindow);
+    if (currentAssignedTo) qs.set('assignedTo', currentAssignedTo);
+    const cacheKey = `admin:users:${currentTier}:${currentStatus}:${currentTimeWindow}:${currentAssignedTo}:${currentSearch}:${currentPage}:${currentLimit}`;
+    usersFetcher.fetch(`/api/admin/users?${qs}`, cacheKey);
   }
 
   // Event Delegation for Drawer & Tabs
@@ -1003,25 +938,21 @@ const pageTitle = 'Customer & Access Management';
     }
   }
 
-  const showDrawer = () => {
-    if (drawer) drawer.dataset.state = 'open';
-    backdrop?.classList.remove('hidden');
-    setTimeout(() => backdrop?.classList.remove('opacity-0'), 10);
-  };
-
-  const hideDrawer = () => {
-    if (drawer) drawer.dataset.state = 'closed';
-    backdrop?.classList.add('opacity-0');
-    setTimeout(() => backdrop?.classList.add('hidden'), 320);
-    if (feedbackEl) {
-      feedbackEl.className = 'hidden';
-      feedbackEl.textContent = '';
-    }
-  };
-
-  closeBtn?.addEventListener('click', hideDrawer);
-  cancelBtn?.addEventListener('click', hideDrawer);
-  backdrop?.addEventListener('click', hideDrawer);
+  const userDrawer = createSlideDrawer({
+    drawerId: 'user-drawer',
+    backdropId: 'drawer-backdrop',
+    closeIds: ['close-drawer-btn', 'cancel-drawer-btn'],
+    useDataState: true,
+    lockBody: false,
+    onClose: () => {
+      if (feedbackEl) {
+        feedbackEl.className = 'hidden';
+        feedbackEl.textContent = '';
+      }
+    },
+  });
+  const showDrawer = userDrawer.open;
+  const hideDrawer = userDrawer.close;
 
   document.getElementById('users-container')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.action-open-drawer-btn');
@@ -1144,32 +1075,14 @@ const pageTitle = 'Customer & Access Management';
   });
 
   // Search submission and clear
-  const searchForm = document.getElementById('users-search-form');
-  const searchInput = document.getElementById('users-search-input');
-  const clearBtn = document.getElementById('clear-users-search');
-
-  searchInput?.addEventListener('input', () => {
-    if (clearBtn) {
-      if (searchInput.value.trim()) clearBtn.classList.remove('hidden');
-      else clearBtn.classList.add('hidden');
-    }
-  });
-
-  clearBtn?.addEventListener('click', () => {
-    if (searchInput) searchInput.value = '';
-    currentSearch = '';
-    clearBtn.classList.add('hidden');
-    currentPage = 1;
-    loadUsers();
-  });
-
-  searchForm?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const val = searchInput?.value.trim() || '';
-    if (val === currentSearch && currentPage === 1) return;
-    currentSearch = val;
-    currentPage = 1;
-    loadUsers();
+  const searchInput = $id<HTMLInputElement>('users-search-input');
+  const clearBtn = $id('clear-users-search');
+  bindSearchAndRefresh({
+    searchInputId: 'users-search-input',
+    clearBtnId: 'clear-users-search',
+    formId: 'users-search-form',
+    onSearch: (val) => { currentSearch = val; currentPage = 1; loadUsers(); },
+    onRefresh: () => loadUsers(false),
   });
 
   // Scope filter clicks
@@ -1237,34 +1150,16 @@ const pageTitle = 'Customer & Access Management';
   });
 
   // Export Buyers CSV Listener
-  document.getElementById('btn-export-users-csv')?.addEventListener('click', () => {
-    if (!currentUsersList || currentUsersList.length === 0) {
+  $id('btn-export-users-csv')?.addEventListener('click', () => {
+    if (!currentUsersList?.length) {
       (window as any).__showToast?.('No buyer records to export', 'error');
       return;
     }
-    const headers = ['ID', 'Email', 'Name', 'Company', 'Tier', 'Status', 'Assigned Rep', 'Total Orders', 'CRM Notes', 'Created At'];
-    const rows = currentUsersList.map((u) => [
-      u.id,
-      u.email,
-      u.name || '',
-      u.company_name || '',
-      u.tier || 'STANDARD',
-      u.status || 'ACTIVE',
-      u.assigned_to || '',
-      u.total_orders || 0,
-      (u.admin_notes || '').replace(/[\n\r]+/g, ' '),
-      u.created_at || '',
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers, ...rows]
-      .map((e) => e.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `buyers_report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportToCsv(
+      `buyers_report_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['ID', 'Email', 'Name', 'Company', 'Tier', 'Status', 'Assigned Rep', 'Total Orders', 'CRM Notes', 'Created At'],
+      currentUsersList.map((u) => [u.id, u.email, u.name || '', u.company_name || '', u.tier || 'STANDARD', u.status || 'ACTIVE', u.assigned_to || '', u.total_orders || 0, (u.admin_notes || '').replace(/[\n\r]+/g, ' '), u.created_at || ''])
+    );
     (window as any).__showToast?.(`Exported ${currentUsersList.length} buyers to CSV`, 'success');
   });
 

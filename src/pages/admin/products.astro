@@ -1,6 +1,5 @@
 ---
 // src/pages/admin/products.astro
-// Native Cloudflare SSR Product & Category CMS Workbench (Replaces Sanity Studio)
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import MediaLibraryModal from '@components/admin/MediaLibraryModal.astro';
@@ -10,7 +9,7 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
   Astro,
   cfEnv,
   '/admin/products',
@@ -40,11 +39,18 @@ const defaultUnits = unitDict.length > 0 ? unitDict : [
   { item_key: 'Dozens', item_label: 'Dozens' },
 ];
 
-const pageTitle = 'Products & Catalog Workspace';
+const drawerTabs = [
+  ['basic', '1. Basic Info'],
+  ['images', '2. Imagery & Gallery'],
+  ['b2b', '3. Wholesale & Tiers'],
+  ['story', '4. Story & Specs'],
+] as const;
+
+const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs';
 ---
 
 <AdminLayout
-  title={pageTitle}
+  title="Products & Catalog Workspace"
   currentTab="products"
   sessionEmail={sessionUser?.email || ''}
   adminName={adminContext?.name}
@@ -57,63 +63,37 @@ const pageTitle = 'Products & Catalog Workspace';
   fullscreenWorkbench={true}
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
-    <!-- Top Action Bar -->
-    <AdminPageToolbar
-      title="Catalog Workspace"
-    >
+    <AdminPageToolbar title="Catalog Workspace">
       <div slot="metrics" class="flex items-center bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5 text-xs">
-        <button
-          type="button"
-          id="tab-btn-products"
-          class="px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer"
-        >
+        <button type="button" id="tab-btn-products" class="px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer">
           Products (<span id="products-count-badge">0</span>)
         </button>
-        <button
-          type="button"
-          id="tab-btn-categories"
-          class="px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer"
-        >
+        <button type="button" id="tab-btn-categories" class="px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer">
           Categories (<span id="categories-count-badge">0</span>)
         </button>
       </div>
-
       <div slot="actions" class="flex items-center gap-2">
         {canWrite && (
-          <button
-            type="button"
-            id="btn-create-item"
-            class="h-8 px-3.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-          >
+          <button type="button" id="btn-create-item" class="h-8 px-3.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer">
             <span>＋ Add New Product</span>
           </button>
         )}
       </div>
     </AdminPageToolbar>
 
-    <!-- Products View Container -->
+    <!-- Products View -->
     <div id="view-products" class="flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden">
-      <!-- Filter Bar -->
       <div class="p-3 border-b border-black/5 flex flex-wrap items-center justify-between gap-3 bg-[#fafafc]">
-        <div class="flex items-center gap-2 flex-1 min-w-[200px] max-w-md">
-          <div class="relative w-full">
-            <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              id="search-input"
-              placeholder="Search product title, SKU, or category..."
-              class="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs"
-            />
-          </div>
+        <div class="relative flex-1 min-w-[200px] max-w-md">
+          <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input type="text" id="search-input" placeholder="Search product title, SKU, or category..." class="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs" />
         </div>
-
         <div class="flex items-center gap-2 flex-wrap">
           <select id="category-filter" class="h-8 px-2.5 rounded-xl bg-white border border-black/10 text-xs focus:outline-none focus:border-black cursor-pointer">
             <option value="ALL">All Categories</option>
           </select>
-
           <select id="status-filter" class="h-8 px-2.5 rounded-xl bg-white border border-black/10 text-xs focus:outline-none focus:border-black cursor-pointer">
             <option value="ALL">All Statuses</option>
             <option value="LIVE">Live Published</option>
@@ -123,7 +103,6 @@ const pageTitle = 'Products & Catalog Workspace';
         </div>
       </div>
 
-      <!-- Products Table Content -->
       <div class="flex-1 overflow-auto">
         <table class="w-full text-left text-xs border-collapse">
           <thead class="bg-[#f5f5f7]/80 text-[#86868b] text-[11px] uppercase tracking-wider sticky top-0 backdrop-blur-xs z-10 border-b border-black/5">
@@ -138,24 +117,18 @@ const pageTitle = 'Products & Catalog Workspace';
             </tr>
           </thead>
           <tbody id="products-table-body" class="divide-y divide-black/5">
-            <tr>
-              <td colspan="7" class="py-12 text-center text-[#86868b]">Loading products from Sanity CDN...</td>
-            </tr>
+            <tr><td colspan="7" class="py-12 text-center text-[#86868b]">Loading products from Sanity CDN...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- Categories View Container (Hidden by default) -->
+    <!-- Categories View -->
     <div id="view-categories" class="hidden flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden">
       <div class="p-3 border-b border-black/5 bg-[#fafafc] flex items-center justify-between">
         <p class="text-xs text-[#52525b]">Categories drive the main navigation, product hall filtering, and catalog organization.</p>
         {canWrite && (
-          <button
-            type="button"
-            id="btn-add-category"
-            class="h-7 px-3 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] shadow-2xs cursor-pointer"
-          >
+          <button type="button" id="btn-add-category" class="h-7 px-3 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] shadow-2xs cursor-pointer">
             ＋ Add Category
           </button>
         )}
@@ -172,9 +145,7 @@ const pageTitle = 'Products & Catalog Workspace';
             </tr>
           </thead>
           <tbody id="categories-table-body" class="divide-y divide-black/5">
-            <tr>
-              <td colspan="5" class="py-12 text-center text-[#86868b]">Loading categories...</td>
-            </tr>
+            <tr><td colspan="5" class="py-12 text-center text-[#86868b]">Loading categories...</td></tr>
           </tbody>
         </table>
       </div>
@@ -182,41 +153,21 @@ const pageTitle = 'Products & Catalog Workspace';
   </div>
 
   <Fragment slot="drawers">
-    <!-- Product Edit Physics Slide-Over Drawer -->
-    <div
-      id="product-drawer-backdrop"
-      class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden opacity-0 transition-opacity duration-300"
-    ></div>
-
-    <div
-      id="product-drawer"
-      class="fixed inset-y-0 right-0 z-50 w-full sm:max-w-2xl lg:max-w-3xl bg-white shadow-2xl flex flex-col transform translate-x-full transition-transform duration-300 ease-out"
-    >
-      <!-- Drawer Header -->
+    <div id="product-drawer-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 hidden opacity-0 transition-opacity duration-300"></div>
+    <div id="product-drawer" class="fixed inset-y-0 right-0 z-50 w-full sm:max-w-2xl lg:max-w-3xl bg-white shadow-2xl flex flex-col transform translate-x-full transition-transform duration-300 ease-out">
       <div class="p-4 border-b border-black/5 flex items-center justify-between bg-white shrink-0">
         <div>
           <h2 id="drawer-title" class="text-sm font-bold text-[#1d1d1f]">Edit Product</h2>
-          <p id="drawer-subtitle" class="text-[11px] text-[#86868b]">Configure multilingual content, wholesale pricing, colors & imagery</p>
+          <p class="text-[11px] text-[#86868b]">Configure multilingual content, wholesale pricing, colors & imagery</p>
         </div>
-        <button
-          type="button"
-          id="close-product-drawer"
-          class="p-1.5 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] transition-all text-sm cursor-pointer"
-        >
-          ✕
-        </button>
+        <button type="button" id="close-product-drawer" class="p-1.5 rounded-lg text-[#86868b] hover:text-black hover:bg-[#f5f5f7] transition-all text-sm cursor-pointer">✕</button>
       </div>
 
-      <!-- Multilingual Language Selector Ribbon -->
       <div class="px-4 py-2 border-b border-black/5 bg-[#fafafc] flex items-center justify-between shrink-0">
         <div class="flex items-center gap-1.5">
           <span class="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">Language:</span>
           {['en', 'de', 'fr', 'es'].map((lang) => (
-            <button
-              type="button"
-              class="btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer"
-              data-lang={lang}
-            >
+            <button type="button" class="btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer" data-lang={lang}>
               {lang.toUpperCase()}
             </button>
           ))}
@@ -224,23 +175,14 @@ const pageTitle = 'Products & Catalog Workspace';
         <span class="text-[10px] text-[#86868b]">Auto-syncs across localized tabs</span>
       </div>
 
-      <!-- Drawer Sub-tabs -->
       <div class="px-4 border-b border-black/5 flex gap-4 text-xs font-semibold shrink-0 bg-white">
-        <button type="button" class="drawer-tab-btn py-2.5 border-b-2 border-black text-[#1d1d1f] cursor-pointer" data-tab="basic">
-          1. Basic Info
-        </button>
-        <button type="button" class="drawer-tab-btn py-2.5 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="images">
-          2. Imagery & Gallery
-        </button>
-        <button type="button" class="drawer-tab-btn py-2.5 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="b2b">
-          3. Wholesale & Tiers
-        </button>
-        <button type="button" class="drawer-tab-btn py-2.5 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="story">
-          4. Story & Specs
-        </button>
+        {drawerTabs.map(([id, label], idx) => (
+          <button type="button" class={`drawer-tab-btn py-2.5 border-b-2 cursor-pointer ${idx === 0 ? 'border-black text-[#1d1d1f]' : 'border-transparent text-[#86868b] hover:text-black'}`} data-tab={id}>
+            {label}
+          </button>
+        ))}
       </div>
 
-      <!-- Drawer Body Forms -->
       <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 text-xs">
         <form id="product-form" class="space-y-6">
           <input type="hidden" id="p-id" name="_id" />
@@ -250,26 +192,24 @@ const pageTitle = 'Products & Catalog Workspace';
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block font-semibold mb-1">Product Title (<span class="active-lang-label font-bold uppercase">EN</span>) *</label>
-                <input type="text" id="p-title" required class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs" />
+                <input type="text" id="p-title" required class={inpCls} />
               </div>
               <div>
                 <label class="block font-semibold mb-1">Short Title (<span class="active-lang-label font-bold uppercase">EN</span>)</label>
-                <input type="text" id="p-short-title" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs" />
+                <input type="text" id="p-short-title" class={inpCls} />
               </div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block font-semibold mb-1">SKU Code *</label>
-                <input type="text" id="p-sku" required placeholder="e.g. MS-200-SILK" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs" />
+                <input type="text" id="p-sku" required placeholder="e.g. MS-200-SILK" class={`${inpCls} font-mono`} />
               </div>
               <div>
                 <label class="block font-semibold mb-1">URL Slug *</label>
                 <div class="flex items-center gap-1.5">
-                  <input type="text" id="p-slug" required class="flex-1 px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs" />
-                  <button type="button" id="btn-auto-slug" class="px-2.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer">
-                    Auto
-                  </button>
+                  <input type="text" id="p-slug" required class={`flex-1 ${inpCls} font-mono`} />
+                  <button type="button" id="btn-auto-slug" class="px-2.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer">Auto</button>
                 </div>
               </div>
             </div>
@@ -277,34 +217,25 @@ const pageTitle = 'Products & Catalog Workspace';
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block font-semibold mb-1">Category</label>
-                <select id="p-category" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs cursor-pointer">
-                  <option value="">No Category</option>
-                </select>
+                <select id="p-category" class={`${inpCls} cursor-pointer`}><option value="">No Category</option></select>
               </div>
               <div>
                 <label class="block font-semibold mb-1">Publish Status</label>
                 <div class="flex items-center gap-3 pt-2">
-                  <label class="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" id="p-is-draft" class="rounded accent-black" />
-                    <span class="text-xs">Draft Mode</span>
-                  </label>
-                  <label class="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" id="p-is-archived" class="rounded accent-black" />
-                    <span class="text-xs">Archived</span>
-                  </label>
+                  <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="p-is-draft" class="rounded accent-black" /><span class="text-xs">Draft Mode</span></label>
+                  <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="p-is-archived" class="rounded accent-black" /><span class="text-xs">Archived</span></label>
                 </div>
               </div>
             </div>
 
             <div>
               <label class="block font-semibold mb-1">Tagline / Key Highlight (<span class="active-lang-label font-bold uppercase">EN</span>)</label>
-              <input type="text" id="p-tagline" placeholder="e.g. 100% Grade 6A Mulberry Silk · 200 Needle Count" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs" />
+              <input type="text" id="p-tagline" placeholder="e.g. 100% Grade 6A Mulberry Silk · 200 Needle Count" class={inpCls} />
             </div>
           </div>
 
           <!-- TAB 2: Imagery & Gallery -->
           <div id="tab-pane-images" class="drawer-pane hidden space-y-5">
-            <!-- Main Hero Image -->
             <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
               <label class="block font-bold text-xs text-[#1d1d1f]">Main Catalog Image *</label>
               <div class="flex items-center gap-4">
@@ -313,31 +244,18 @@ const pageTitle = 'Products & Catalog Workspace';
                 </div>
                 <div class="space-y-2 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      id="btn-choose-main-media"
-                      class="px-3 py-1.5 rounded-xl bg-[#1d1d1f] text-white text-xs font-semibold hover:bg-black cursor-pointer shadow-2xs flex items-center gap-1.5"
-                    >
-                      <span>📁 From Media Library</span>
-                    </button>
+                    <button type="button" id="btn-choose-main-media" class="px-3 py-1.5 rounded-xl bg-[#1d1d1f] text-white text-xs font-semibold hover:bg-black cursor-pointer shadow-2xs flex items-center gap-1.5"><span>📁 From Media Library</span></button>
                     <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-black/10 text-[#1d1d1f] text-xs font-semibold hover:border-black cursor-pointer shadow-2xs">
                       <span>⬆️ Upload Local</span>
                       <input type="file" id="upload-main-image" accept="image/*" class="hidden" />
                     </label>
-                    <button
-                      type="button"
-                      id="btn-remove-main-image"
-                      class="px-2.5 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-medium cursor-pointer transition-colors hidden"
-                    >
-                      🗑️ Remove
-                    </button>
+                    <button type="button" id="btn-remove-main-image" class="px-2.5 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-medium cursor-pointer transition-colors hidden">🗑️ Remove</button>
                   </div>
                   <p class="text-[10px] text-[#86868b]">Select high-res image from cloud library or upload directly to Sanity CDN.</p>
                 </div>
               </div>
             </div>
 
-            <!-- Gallery Images -->
             <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
               <div class="flex items-center justify-between">
                 <div>
@@ -345,22 +263,14 @@ const pageTitle = 'Products & Catalog Workspace';
                   <span class="text-[10px] text-[#86868b]">Drag to reorder · Click ★ to set as main image</span>
                 </div>
                 <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    id="btn-choose-gallery-media"
-                    class="px-2.5 py-1 rounded-lg bg-[#1d1d1f] text-white text-[11px] font-semibold cursor-pointer shadow-2xs hover:bg-black"
-                  >
-                    <span>📁 + From Library</span>
-                  </button>
+                  <button type="button" id="btn-choose-gallery-media" class="px-2.5 py-1 rounded-lg bg-[#1d1d1f] text-white text-[11px] font-semibold cursor-pointer shadow-2xs hover:bg-black"><span>📁 + From Library</span></button>
                   <label class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
                     <span>⬆️ + Upload Local</span>
                     <input type="file" id="upload-gallery-image" accept="image/*" class="hidden" multiple />
                   </label>
                 </div>
               </div>
-              <div id="gallery-container" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                <!-- Gallery thumbs injected here -->
-              </div>
+              <div id="gallery-container" class="grid grid-cols-3 sm:grid-cols-4 gap-3"></div>
             </div>
           </div>
 
@@ -369,31 +279,22 @@ const pageTitle = 'Products & Catalog Workspace';
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label class="block font-semibold mb-1">Currency</label>
-                <select id="p-currency" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs">
-                  {defaultCurrencies.map((c: any) => (
-                    <option value={c.item_key}>{c.item_label}</option>
-                  ))}
-                </select>
+                <select id="p-currency" class={inpCls}>{defaultCurrencies.map((c: any) => <option value={c.item_key}>{c.item_label}</option>)}</select>
               </div>
               <div>
                 <label class="block font-semibold mb-1">Unit</label>
-                <select id="p-unit" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs">
-                  {defaultUnits.map((u: any) => (
-                    <option value={u.item_key}>{u.item_label}</option>
-                  ))}
-                </select>
+                <select id="p-unit" class={inpCls}>{defaultUnits.map((u: any) => <option value={u.item_key}>{u.item_label}</option>)}</select>
               </div>
               <div>
                 <label class="block font-semibold mb-1">MOQ</label>
-                <input type="number" id="p-moq" min="1" placeholder="200" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs font-mono" />
+                <input type="number" id="p-moq" min="1" placeholder="200" class={`${inpCls} font-mono`} />
               </div>
               <div>
                 <label class="block font-semibold mb-1">Lead Time</label>
-                <input type="text" id="p-leadtime" placeholder="15-20 days" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs" />
+                <input type="text" id="p-leadtime" placeholder="15-20 days" class={inpCls} />
               </div>
             </div>
 
-            <!-- Amazon Direct Purchase Settings -->
             <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
               <div>
                 <span class="font-bold text-xs text-[#1d1d1f] block">Amazon Direct Purchase & Sample</span>
@@ -411,16 +312,13 @@ const pageTitle = 'Products & Catalog Workspace';
               </div>
             </div>
 
-            <!-- Pricing Tiers Dynamic Table -->
             <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-2.5">
               <div class="flex items-center justify-between">
                 <div>
                   <span class="font-bold text-xs text-[#1d1d1f] block">B2B Quantity Pricing Tiers</span>
                   <span class="text-[10px] text-[#86868b]">Progressive wholesale discounts based on order volume</span>
                 </div>
-                <button type="button" id="btn-add-tier" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
-                  ＋ Add Tier
-                </button>
+                <button type="button" id="btn-add-tier" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">＋ Add Tier</button>
               </div>
               <table class="w-full text-xs">
                 <thead>
@@ -431,26 +329,19 @@ const pageTitle = 'Products & Catalog Workspace';
                     <th class="py-1.5 text-right w-10"></th>
                   </tr>
                 </thead>
-                <tbody id="tier-rows" class="divide-y divide-black/5">
-                  <!-- Tier rows injected here -->
-                </tbody>
+                <tbody id="tier-rows" class="divide-y divide-black/5"></tbody>
               </table>
             </div>
 
-            <!-- Color Swatches Dynamic Palette -->
             <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-2.5">
               <div class="flex items-center justify-between">
                 <div>
                   <span class="font-bold text-xs text-[#1d1d1f] block">Color Swatches</span>
                   <span class="text-[10px] text-[#86868b]">Available production colors and hex swatches</span>
                 </div>
-                <button type="button" id="btn-add-color" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
-                  ＋ Add Color
-                </button>
+                <button type="button" id="btn-add-color" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">＋ Add Color</button>
               </div>
-              <div id="color-rows" class="space-y-2">
-                <!-- Color items injected here -->
-              </div>
+              <div id="color-rows" class="space-y-2"></div>
             </div>
           </div>
 
@@ -458,55 +349,29 @@ const pageTitle = 'Products & Catalog Workspace';
           <div id="tab-pane-story" class="drawer-pane hidden space-y-5">
             <div>
               <label class="block font-semibold mb-1">Artisan Story & Craft Narrative (<span class="active-lang-label font-bold uppercase">EN</span> Markdown)</label>
-              <textarea
-                id="p-story"
-                rows="8"
-                placeholder="Write artisanal storytelling in Markdown (e.g. Crafted from 100% Grade 6A mulberry silk with Italian hand-linked toes...)"
-                class="w-full p-3 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs resize-y"
-              ></textarea>
+              <textarea id="p-story" rows="8" placeholder="Write artisanal storytelling in Markdown..." class="w-full p-3 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs resize-y"></textarea>
             </div>
-
             <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="font-bold text-xs text-[#1d1d1f]">Technical Specifications</span>
-                <button type="button" id="btn-add-spec" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
-                  ＋ Add Spec
-                </button>
+                <button type="button" id="btn-add-spec" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">＋ Add Spec</button>
               </div>
-              <div id="spec-rows" class="space-y-2">
-                <!-- Specs rows injected here -->
-              </div>
+              <div id="spec-rows" class="space-y-2"></div>
             </div>
           </div>
         </form>
       </div>
 
-      <!-- Drawer Footer Controls -->
       <div class="p-4 border-t border-black/5 bg-white flex items-center justify-between gap-3 shrink-0">
-        <button
-          type="button"
-          id="btn-cancel-drawer"
-          class="h-9 px-4 rounded-xl text-xs font-semibold text-[#52525b] hover:bg-[#f5f5f7] transition-all cursor-pointer"
-        >
-          Cancel
+        <button type="button" id="btn-cancel-drawer" class="h-9 px-4 rounded-xl text-xs font-semibold text-[#52525b] hover:bg-[#f5f5f7] transition-all cursor-pointer">Cancel</button>
+        <button type="button" id="btn-save-product" class="h-9 px-5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs cursor-pointer flex items-center gap-1.5">
+          <span>Save Product to Sanity</span>
         </button>
-        <div class="flex items-center gap-2">
-          <button
-            type="button"
-            id="btn-save-product"
-            class="h-9 px-5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
-          >
-            <span>Save Product to Sanity</span>
-          </button>
-        </div>
       </div>
     </div>
 
-    <!-- Category Modal Dialog -->
-    <dialog
-      id="category-dialog"
-      class="backdrop:bg-black/50 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-md m-auto overflow-hidden text-xs"
-    >
+    <!-- Category Modal -->
+    <dialog id="category-dialog" class="backdrop:bg-black/50 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-md m-auto overflow-hidden text-xs">
       <div class="p-4 border-b border-black/5 bg-white flex items-center justify-between">
         <h3 id="cat-modal-title" class="font-bold text-sm text-[#1d1d1f]">Edit Category</h3>
         <button type="button" id="close-cat-dialog" class="text-[#86868b] hover:text-black text-sm">✕</button>
@@ -515,15 +380,15 @@ const pageTitle = 'Products & Catalog Workspace';
         <input type="hidden" id="c-id" />
         <div>
           <label class="block font-semibold mb-1">Title (EN) *</label>
-          <input type="text" id="c-title-en" required class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs" />
+          <input type="text" id="c-title-en" required class={inpCls} />
         </div>
         <div>
           <label class="block font-semibold mb-1">Slug *</label>
-          <input type="text" id="c-slug" required class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 font-mono text-xs" />
+          <input type="text" id="c-slug" required class={`${inpCls} font-mono`} />
         </div>
         <div>
           <label class="block font-semibold mb-1">Display Sort Order</label>
-          <input type="number" id="c-order" value="10" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 font-mono text-xs" />
+          <input type="number" id="c-order" value="10" class={`${inpCls} font-mono`} />
         </div>
         <div class="flex justify-end gap-2 pt-2 border-t border-black/5">
           <button type="button" id="btn-cancel-cat" class="px-3 py-1.5 rounded-xl text-[#52525b] hover:bg-[#f5f5f7]">Cancel</button>
@@ -533,23 +398,22 @@ const pageTitle = 'Products & Catalog Workspace';
     </dialog>
   </Fragment>
 
-  <!-- App Meta Attributes -->
-  <div
-    id="catalog-app-meta"
-    class="hidden"
-    data-can-write={canWrite ? 'true' : 'false'}
-    data-can-delete={canDelete ? 'true' : 'false'}
-  ></div>
-
-  <!-- Global Cloud Media Library Modal -->
+  <div id="catalog-app-meta" class="hidden" data-can-write={canWrite ? 'true' : 'false'} data-can-delete={canDelete ? 'true' : 'false'}></div>
   <MediaLibraryModal />
 </AdminLayout>
 
 <script>
-  import { escapeHtml } from '@utils/adminWorkbench';
+  import { escapeHtml, $id, $val, $chk, $txt, createSlideDrawer } from '@utils/adminWorkbench';
+
+  const LOCALE_FIELDS = [
+    ['p-title', 'title'],
+    ['p-short-title', 'shortTitle'],
+    ['p-tagline', 'tagline'],
+    ['p-story', 'story'],
+  ] as const;
 
   function initProductsPage() {
-    const metaEl = document.getElementById('catalog-app-meta');
+    const metaEl = $id('catalog-app-meta');
     if (!metaEl || (metaEl as any).__initialized) return;
     (metaEl as any).__initialized = true;
 
@@ -557,347 +421,234 @@ const pageTitle = 'Products & Catalog Workspace';
     let currentCategories: any[] = [];
     let currentEditingProduct: any = null;
     let activeLanguage = 'en';
+    const canDelete = metaEl.getAttribute('data-can-delete') === 'true';
 
-    const canWrite = metaEl?.getAttribute('data-can-write') === 'true';
-    const canDelete = metaEl?.getAttribute('data-can-delete') === 'true';
-
-  // UI Tabs Switcher
-  const tabProductsBtn = document.getElementById('tab-btn-products');
-  const tabCategoriesBtn = document.getElementById('tab-btn-categories');
-  const viewProducts = document.getElementById('view-products');
-  const viewCategories = document.getElementById('view-categories');
-
-  tabProductsBtn?.addEventListener('click', () => {
-    tabProductsBtn.className = 'px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer';
-    if (tabCategoriesBtn) tabCategoriesBtn.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer';
-    viewProducts?.classList.remove('hidden');
-    viewCategories?.classList.add('hidden');
-  });
-
-  tabCategoriesBtn?.addEventListener('click', () => {
-    tabCategoriesBtn.className = 'px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer';
-    if (tabProductsBtn) tabProductsBtn.className = 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer';
-    viewCategories?.classList.remove('hidden');
-    viewProducts?.classList.add('hidden');
-  });
-
-  // Drawer Tabs
-  const drawerTabBtns = document.querySelectorAll('.drawer-tab-btn');
-  drawerTabBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const targetTab = btn.getAttribute('data-tab');
-      drawerTabBtns.forEach((b) => {
-        b.classList.remove('border-black', 'text-[#1d1d1f]');
-        b.classList.add('border-transparent', 'text-[#86868b]');
-      });
-      btn.classList.add('border-black', 'text-[#1d1d1f]');
-      btn.classList.remove('border-transparent', 'text-[#86868b]');
-
-      document.querySelectorAll('.drawer-pane').forEach((p) => p.classList.add('hidden'));
-      document.getElementById(`tab-pane-${targetTab}`)?.classList.remove('hidden');
-    });
-  });
-
-  // Language Bar Switcher
-  function updateActiveLang(lang: string) {
-    activeLanguage = lang;
-    document.querySelectorAll('.btn-lang-toggle').forEach((b: any) => {
-      if (b.getAttribute('data-lang') === lang) {
-        b.className = 'btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-bold border border-black bg-black text-white transition-all cursor-pointer';
-      } else {
-        b.className = 'btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-semibold border border-black/10 bg-white text-[#52525b] hover:border-black transition-all cursor-pointer';
-      }
-    });
-    document.querySelectorAll('.active-lang-label').forEach((el) => {
-      el.textContent = lang.toUpperCase();
+    const drawerCtrl = createSlideDrawer({
+      drawerId: 'product-drawer',
+      backdropId: 'product-drawer-backdrop',
+      closeIds: ['close-product-drawer', 'btn-cancel-drawer'],
+      onClose: () => { currentEditingProduct = null; },
     });
 
-    // Populate localized values into input fields
-    if (currentEditingProduct) {
-      const pTitle = document.getElementById('p-title') as HTMLInputElement | null;
-      const pShortTitle = document.getElementById('p-short-title') as HTMLInputElement | null;
-      const pTagline = document.getElementById('p-tagline') as HTMLInputElement | null;
-      const pStory = document.getElementById('p-story') as HTMLTextAreaElement | null;
+    // Top Products vs Categories View Toggle
+    const [tabProd, tabCat, viewProd, viewCat] = ['tab-btn-products', 'tab-btn-categories', 'view-products', 'view-categories'].map((id) => $id(id));
+    const switchMainView = (showCats: boolean) => {
+      if (tabProd) tabProd.className = !showCats ? 'px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer' : 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer';
+      if (tabCat) tabCat.className = showCats ? 'px-3 py-1 rounded-lg font-semibold transition-all shadow-2xs bg-white text-[#1d1d1f] cursor-pointer' : 'px-3 py-1 rounded-lg font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer';
+      viewProd?.classList.toggle('hidden', showCats);
+      viewCat?.classList.toggle('hidden', !showCats);
+    };
+    tabProd?.addEventListener('click', () => switchMainView(false));
+    tabCat?.addEventListener('click', () => switchMainView(true));
 
-      if (pTitle) pTitle.value = currentEditingProduct.title?.[lang] || '';
-      if (pShortTitle) pShortTitle.value = currentEditingProduct.shortTitle?.[lang] || '';
-      if (pTagline) pTagline.value = currentEditingProduct.tagline?.[lang] || '';
-      if (pStory) pStory.value = currentEditingProduct.story?.[lang] || '';
-    }
-  }
-
-  document.querySelectorAll('.btn-lang-toggle').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      // Save current input values into temporary object before switching
-      syncInputsToActiveDoc();
-      const lang = btn.getAttribute('data-lang') || 'en';
-      updateActiveLang(lang);
-    });
-  });
-
-  function syncInputsToActiveDoc() {
-    if (!currentEditingProduct) {
-      const pId = (document.getElementById('p-id') as HTMLInputElement)?.value.trim();
-      currentEditingProduct = {
-        _type: 'product',
-        _id: pId || undefined,
-        title: {},
-        shortTitle: {},
-        tagline: {},
-        story: {},
-        pricingTiers: [],
-        colors: [],
-        specifications: [],
-        minOrderQuantity: 200,
-        moq: '200 Pairs',
-        currency: 'USD',
-        isDraft: false,
-        isArchived: false,
-      };
-    }
-    if (!currentEditingProduct.title) currentEditingProduct.title = {};
-    if (!currentEditingProduct.shortTitle) currentEditingProduct.shortTitle = {};
-    if (!currentEditingProduct.tagline) currentEditingProduct.tagline = {};
-    if (!currentEditingProduct.story) currentEditingProduct.story = {};
-
-    const pTitle = document.getElementById('p-title') as HTMLInputElement | null;
-    const pShortTitle = document.getElementById('p-short-title') as HTMLInputElement | null;
-    const pTagline = document.getElementById('p-tagline') as HTMLInputElement | null;
-    const pStory = document.getElementById('p-story') as HTMLTextAreaElement | null;
-
-    if (pTitle) currentEditingProduct.title[activeLanguage] = pTitle.value.trim();
-    if (pShortTitle) currentEditingProduct.shortTitle[activeLanguage] = pShortTitle.value.trim();
-    if (pTagline) currentEditingProduct.tagline[activeLanguage] = pTagline.value.trim();
-    if (pStory) currentEditingProduct.story[activeLanguage] = pStory.value.trim();
-  }
-
-  // Load Products & Categories from /api/admin/cms/products
-  async function loadData() {
-    try {
-      const res = await fetch('/api/admin/cms/products');
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to fetch catalog');
-      }
-
-      currentProducts = data.products || [];
-      currentCategories = data.categories || [];
-
-      // Update counters
-      const pBadge = document.getElementById('products-count-badge');
-      const cBadge = document.getElementById('categories-count-badge');
-      if (pBadge) pBadge.textContent = String(currentProducts.length);
-      if (cBadge) cBadge.textContent = String(currentCategories.length);
-
-      // Populate Category Dropdowns
-      const catFilter = document.getElementById('category-filter') as HTMLSelectElement | null;
-      const pCatSelect = document.getElementById('p-category') as HTMLSelectElement | null;
-      if (catFilter) {
-        catFilter.innerHTML = '<option value="ALL">All Categories</option>' +
-          currentCategories.map((c: any) => `<option value="${c.slug?.current || c._id}">${escapeHtml(c.title?.en || c.slug?.current || 'Category')}</option>`).join('');
-      }
-      if (pCatSelect) {
-        pCatSelect.innerHTML = '<option value="">No Category</option>' +
-          currentCategories.map((c: any) => `<option value="${c._id}">${escapeHtml(c.title?.en || c.slug?.current || 'Category')}</option>`).join('');
-      }
-
-      renderProductsTable();
-      renderCategoriesTable();
-    } catch (err: any) {
-      (window as any).__showToast?.(err.message, 'error');
-    }
-  }
-
-  function renderProductsTable() {
-    const tbody = document.getElementById('products-table-body');
-    if (!tbody) return;
-
-    const search = (document.getElementById('search-input') as HTMLInputElement)?.value.toLowerCase().trim() || '';
-    const cat = (document.getElementById('category-filter') as HTMLSelectElement)?.value || 'ALL';
-    const status = (document.getElementById('status-filter') as HTMLSelectElement)?.value || 'ALL';
-
-    const filtered = currentProducts.filter((p: any) => {
-      const titleEn = (p.title?.en || '').toLowerCase();
-      const sku = (p.sku || '').toLowerCase();
-      const catSlug = (p.category?.slug?.current || p.category?._id || '').toLowerCase();
-
-      if (search && !titleEn.includes(search) && !sku.includes(search) && !catSlug.includes(search)) return false;
-      if (cat !== 'ALL' && catSlug !== cat.toLowerCase()) return false;
-      if (status === 'DRAFT' && !p.isDraft) return false;
-      if (status === 'ARCHIVED' && !p.isArchived) return false;
-      if (status === 'LIVE' && (p.isDraft || p.isArchived)) return false;
-      return true;
-    });
-
-    if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-[#86868b]">No products matching filter criteria.</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = filtered.map((p: any) => {
-      const imgUrl = (window as any).resolveSanityRefUrl?.(p.mainImage || p.mainImageUrl, { width: 120 }) || p.mainImageUrl || p.mainImage?.asset?.url || '';
-      const title = p.title?.en || p.shortTitle?.en || 'Untitled Product';
-      const sku = p.sku || 'NO-SKU';
-      const catName = p.category?.title?.en || p.category?.slug?.current || '—';
-
-      // Price Tiers preview
-      let priceText = '—';
-      if (Array.isArray(p.pricingTiers) && p.pricingTiers.length > 0) {
-        const prices = p.pricingTiers
-          .map((t: any) => parseFloat(String(t.price || '').replace(/[^0-9.]/g, '')))
-          .filter((n: number) => !isNaN(n));
-        if (prices.length > 0) {
-          const min = Math.min(...prices);
-          const max = Math.max(...prices);
-          const curr = p.pricingTiers[0]?.currency || p.currency || 'USD';
-          priceText = min === max ? `${curr} ${min}` : `${curr} ${min} ~ ${max}`;
-        }
-      }
-
-      // Color dots
-      const colorDots = Array.isArray(p.colors)
-        ? p.colors.slice(0, 5).map((c: any) => `<span class="w-3.5 h-3.5 rounded-full border border-black/10 inline-block shrink-0 shadow-2xs" style="background-color: ${escapeHtml(c.hex || '#ccc')};" title="${escapeHtml(c.name || '')}"></span>`).join('')
-        : '';
-
-      const isLive = !p.isDraft && !p.isArchived;
-
-      return `
-        <tr class="hover:bg-[#fafafc] transition-colors group">
-          <td class="py-2.5 px-3.5">
-            <div class="w-12 h-12 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-center justify-center overflow-hidden shrink-0">
-              ${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#86868b]">No Img</span>`}
-            </div>
-          </td>
-          <td class="py-2.5 px-3.5">
-            <span class="font-semibold text-[#1d1d1f] block">${escapeHtml(title)}</span>
-            <span class="font-mono text-[10px] text-[#86868b]">${escapeHtml(sku)}</span>
-          </td>
-          <td class="py-2.5 px-3.5">
-            <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#f5f5f7] border border-black/5 text-[#52525b]">${escapeHtml(catName)}</span>
-          </td>
-          <td class="py-2.5 px-3.5">
-            <span class="font-semibold text-[#1d1d1f] block">${escapeHtml(priceText)}</span>
-            <span class="text-[10px] text-[#86868b]">MOQ: ${escapeHtml(p.moq || (p.minOrderQuantity ? `${p.minOrderQuantity} Pairs` : '200 Pairs'))}</span>
-          </td>
-          <td class="py-2.5 px-3.5">
-            <div class="flex items-center gap-1">${colorDots || '<span class="text-[#86868b] text-[10px]">—</span>'}</div>
-          </td>
-          <td class="py-2.5 px-3.5">
-            ${isLive
-              ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Live</span>`
-              : p.isDraft
-              ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Draft</span>`
-              : `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">Archived</span>`}
-          </td>
-          <td class="py-2.5 px-3.5 text-right whitespace-nowrap">
-            <button
-              type="button"
-              class="btn-edit-product px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] shadow-2xs transition-all cursor-pointer"
-              data-id="${p._id}"
-            >
-              Edit
-            </button>
-            ${canDelete ? `
-              <button
-                type="button"
-                class="btn-delete-product ml-1 p-1 rounded-lg text-[#86868b] hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
-                data-id="${p._id}"
-                data-title="${escapeHtml(title)}"
-                title="Delete Product"
-              >
-                <svg class="w-3.5 h-3.5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            ` : ''}
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    // Attach row events
-    document.querySelectorAll('.btn-edit-product').forEach((btn) => {
+    // Drawer Sub-tabs
+    const drawerTabBtns = document.querySelectorAll('.drawer-tab-btn');
+    drawerTabBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-id');
-        const prod = currentProducts.find((p: any) => p._id === id);
-        if (prod) openProductDrawer(prod);
+        const targetTab = btn.getAttribute('data-tab');
+        drawerTabBtns.forEach((b) => {
+          b.classList.toggle('border-black', b === btn);
+          b.classList.toggle('text-[#1d1d1f]', b === btn);
+          b.classList.toggle('border-transparent', b !== btn);
+          b.classList.toggle('text-[#86868b]', b !== btn);
+        });
+        document.querySelectorAll('.drawer-pane').forEach((p) => p.classList.add('hidden'));
+        $id(`tab-pane-${targetTab}`)?.classList.remove('hidden');
       });
     });
 
-    document.querySelectorAll('.btn-delete-product').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-id');
-        const title = btn.getAttribute('data-title') || 'this product';
-        if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) return;
-
-        try {
-          const res = await fetch(`/api/admin/cms/products?id=${encodeURIComponent(id || '')}`, { method: 'DELETE' });
-          const data = await res.json();
-          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete');
-          (window as any).__showToast?.(`Deleted "${title}"`, 'success');
-          loadData();
-        } catch (e: any) {
-          (window as any).__showToast?.(e.message, 'error');
-        }
-      });
-    });
-  }
-
-  function renderCategoriesTable() {
-    const tbody = document.getElementById('categories-table-body');
-    if (!tbody) return;
-
-    if (currentCategories.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-[#86868b]">No categories configured.</td></tr>`;
-      return;
+    function syncInputsToActiveDoc() {
+      if (!currentEditingProduct) {
+        currentEditingProduct = {
+          _type: 'product',
+          _id: $val('p-id') || undefined,
+          title: {}, shortTitle: {}, tagline: {}, story: {},
+          pricingTiers: [], colors: [], specifications: [],
+          minOrderQuantity: 200, moq: '200 Pairs', currency: 'USD', isDraft: false, isArchived: false,
+        };
+      }
+      for (const [id, prop] of LOCALE_FIELDS) {
+        (currentEditingProduct[prop] ||= {})[activeLanguage] = $val(id);
+      }
     }
 
-    tbody.innerHTML = currentCategories.map((c: any) => {
-      const titles = `EN: ${c.title?.en || '—'} · DE: ${c.title?.de || '—'}`;
-      const slug = c.slug?.current || '—';
-      return `
+    function updateActiveLang(lang: string) {
+      activeLanguage = lang;
+      document.querySelectorAll('.btn-lang-toggle').forEach((b) => {
+        const active = b.getAttribute('data-lang') === lang;
+        b.className = active
+          ? 'btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-bold border border-black bg-black text-white transition-all cursor-pointer'
+          : 'btn-lang-toggle px-2.5 py-1 rounded-md text-[11px] font-semibold border border-black/10 bg-white text-[#52525b] hover:border-black transition-all cursor-pointer';
+      });
+      document.querySelectorAll('.active-lang-label').forEach((el) => { el.textContent = lang.toUpperCase(); });
+      if (currentEditingProduct) {
+        for (const [id, prop] of LOCALE_FIELDS) {
+          $val(id, currentEditingProduct[prop]?.[lang] || '');
+        }
+      }
+    }
+
+    document.querySelectorAll('.btn-lang-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        syncInputsToActiveDoc();
+        updateActiveLang(btn.getAttribute('data-lang') || 'en');
+      });
+    });
+
+    async function loadData() {
+      try {
+        const res = await fetch('/api/admin/cms/products');
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to fetch catalog');
+        currentProducts = data.products || [];
+        currentCategories = data.categories || [];
+        $txt('products-count-badge', currentProducts.length);
+        $txt('categories-count-badge', currentCategories.length);
+
+        const catFilter = $id<HTMLSelectElement>('category-filter');
+        const pCatSelect = $id<HTMLSelectElement>('p-category');
+        if (catFilter) {
+          catFilter.innerHTML = '<option value="ALL">All Categories</option>' +
+            currentCategories.map((c: any) => `<option value="${c.slug?.current || c._id}">${escapeHtml(c.title?.en || c.slug?.current || 'Category')}</option>`).join('');
+        }
+        if (pCatSelect) {
+          pCatSelect.innerHTML = '<option value="">No Category</option>' +
+            currentCategories.map((c: any) => `<option value="${c._id}">${escapeHtml(c.title?.en || c.slug?.current || 'Category')}</option>`).join('');
+        }
+        renderProductsTable();
+        renderCategoriesTable();
+      } catch (err: any) {
+        (window as any).__showToast?.(err.message, 'error');
+      }
+    }
+
+    function renderProductsTable() {
+      const tbody = $id('products-table-body');
+      if (!tbody) return;
+      const search = $val('search-input').toLowerCase();
+      const cat = $val('category-filter') || 'ALL';
+      const status = $val('status-filter') || 'ALL';
+
+      const filtered = currentProducts.filter((p: any) => {
+        const titleEn = (p.title?.en || '').toLowerCase();
+        const sku = (p.sku || '').toLowerCase();
+        const catSlug = (p.category?.slug?.current || p.category?._id || '').toLowerCase();
+        if (search && !titleEn.includes(search) && !sku.includes(search) && !catSlug.includes(search)) return false;
+        if (cat !== 'ALL' && catSlug !== cat.toLowerCase()) return false;
+        if (status === 'DRAFT' && !p.isDraft) return false;
+        if (status === 'ARCHIVED' && !p.isArchived) return false;
+        if (status === 'LIVE' && (p.isDraft || p.isArchived)) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-[#86868b]">No products matching filter criteria.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map((p: any) => {
+        const imgUrl = (window as any).resolveSanityRefUrl?.(p.mainImage || p.mainImageUrl, { width: 120 }) || p.mainImageUrl || p.mainImage?.asset?.url || '';
+        const title = p.title?.en || p.shortTitle?.en || 'Untitled Product';
+        const sku = p.sku || 'NO-SKU';
+        const catName = p.category?.title?.en || p.category?.slug?.current || '—';
+
+        let priceText = '—';
+        if (Array.isArray(p.pricingTiers) && p.pricingTiers.length > 0) {
+          const prices = p.pricingTiers.map((t: any) => parseFloat(String(t.price || '').replace(/[^0-9.]/g, ''))).filter((n: number) => !isNaN(n));
+          if (prices.length > 0) {
+            const min = Math.min(...prices), max = Math.max(...prices);
+            const curr = p.pricingTiers[0]?.currency || p.currency || 'USD';
+            priceText = min === max ? `${curr} ${min}` : `${curr} ${min} ~ ${max}`;
+          }
+        }
+
+        const colorDots = Array.isArray(p.colors)
+          ? p.colors.slice(0, 5).map((c: any) => `<span class="w-3.5 h-3.5 rounded-full border border-black/10 inline-block shrink-0 shadow-2xs" style="background-color: ${escapeHtml(c.hex || '#ccc')};" title="${escapeHtml(c.name || '')}"></span>`).join('')
+          : '';
+        const statusBadge = !p.isDraft && !p.isArchived
+          ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Live</span>`
+          : p.isDraft
+          ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Draft</span>`
+          : `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">Archived</span>`;
+
+        return `
+          <tr class="hover:bg-[#fafafc] transition-colors group">
+            <td class="py-2.5 px-3.5"><div class="w-12 h-12 rounded-xl bg-[#f5f5f7] border border-black/5 flex items-center justify-center overflow-hidden shrink-0">${imgUrl ? `<img src="${escapeHtml(imgUrl)}" alt="" class="w-full h-full object-cover" />` : `<span class="text-[9px] text-[#86868b]">No Img</span>`}</div></td>
+            <td class="py-2.5 px-3.5"><span class="font-semibold text-[#1d1d1f] block">${escapeHtml(title)}</span><span class="font-mono text-[10px] text-[#86868b]">${escapeHtml(sku)}</span></td>
+            <td class="py-2.5 px-3.5"><span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#f5f5f7] border border-black/5 text-[#52525b]">${escapeHtml(catName)}</span></td>
+            <td class="py-2.5 px-3.5"><span class="font-semibold text-[#1d1d1f] block">${escapeHtml(priceText)}</span><span class="text-[10px] text-[#86868b]">MOQ: ${escapeHtml(p.moq || (p.minOrderQuantity ? `${p.minOrderQuantity} Pairs` : '200 Pairs'))}</span></td>
+            <td class="py-2.5 px-3.5"><div class="flex items-center gap-1">${colorDots || '<span class="text-[#86868b] text-[10px]">—</span>'}</div></td>
+            <td class="py-2.5 px-3.5">${statusBadge}</td>
+            <td class="py-2.5 px-3.5 text-right whitespace-nowrap">
+              <button type="button" class="btn-edit-product px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] shadow-2xs transition-all cursor-pointer" data-id="${p._id}">Edit</button>
+              ${canDelete ? `<button type="button" class="btn-delete-product ml-1 p-1 rounded-lg text-[#86868b] hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer" data-id="${p._id}" data-title="${escapeHtml(title)}" title="Delete Product"><svg class="w-3.5 h-3.5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>` : ''}
+            </td>
+          </tr>`;
+      }).join('');
+
+      tbody.querySelectorAll('.btn-edit-product').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const prod = currentProducts.find((p: any) => p._id === btn.getAttribute('data-id'));
+          if (prod) openProductDrawer(prod);
+        });
+      });
+
+      tbody.querySelectorAll('.btn-delete-product').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          const title = btn.getAttribute('data-title') || 'this product';
+          if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) return;
+          try {
+            const res = await fetch(`/api/admin/cms/products?id=${encodeURIComponent(id || '')}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete');
+            (window as any).__showToast?.(`Deleted "${title}"`, 'success');
+            loadData();
+          } catch (e: any) {
+            (window as any).__showToast?.(e.message, 'error');
+          }
+        });
+      });
+    }
+
+    function renderCategoriesTable() {
+      const tbody = $id('categories-table-body');
+      if (!tbody) return;
+      if (currentCategories.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-12 text-center text-[#86868b]">No categories configured.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = currentCategories.map((c: any) => `
         <tr class="hover:bg-[#fafafc]">
           <td class="py-2.5 px-3.5 font-mono text-[11px]">${c.order ?? 10}</td>
-          <td class="py-2.5 px-3.5 font-mono font-semibold">${escapeHtml(slug)}</td>
-          <td class="py-2.5 px-3.5 font-medium text-[#1d1d1f]">${escapeHtml(titles)}</td>
+          <td class="py-2.5 px-3.5 font-mono font-semibold">${escapeHtml(c.slug?.current || '—')}</td>
+          <td class="py-2.5 px-3.5 font-medium text-[#1d1d1f]">${escapeHtml(`EN: ${c.title?.en || '—'} · DE: ${c.title?.de || '—'}`)}</td>
           <td class="py-2.5 px-3.5 text-[#86868b]">${escapeHtml(c.description?.en || '—')}</td>
           <td class="py-2.5 px-3.5 text-right whitespace-nowrap">
             <button type="button" class="btn-edit-cat px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black shadow-2xs cursor-pointer" data-id="${c._id}">Edit</button>
           </td>
-        </tr>
-      `;
-    }).join('');
-
-    document.querySelectorAll('.btn-edit-cat').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-id');
-        const cat = currentCategories.find((c: any) => c._id === id);
-        if (cat) openCategoryDialog(cat);
+        </tr>`).join('');
+      tbody.querySelectorAll('.btn-edit-cat').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const cat = currentCategories.find((c: any) => c._id === btn.getAttribute('data-id'));
+          if (cat) openCategoryDialog(cat);
+        });
       });
-    });
-  }
-
-  // Filter Event Listeners
-  document.getElementById('search-input')?.addEventListener('input', renderProductsTable);
-  document.getElementById('category-filter')?.addEventListener('change', renderProductsTable);
-  document.getElementById('status-filter')?.addEventListener('change', renderProductsTable);
-
-  // Auto-Slug generator
-  document.getElementById('btn-auto-slug')?.addEventListener('click', () => {
-    const pTitle = (document.getElementById('p-title') as HTMLInputElement)?.value.trim() || '';
-    const slugInput = document.getElementById('p-slug') as HTMLInputElement | null;
-    if (slugInput && pTitle) {
-      slugInput.value = pTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     }
-  });
 
-  // Open Product Drawer
-  function openProductDrawer(prod?: any) {
-    if (prod) {
-      currentEditingProduct = JSON.parse(JSON.stringify(prod));
-      // Auto-parse legacy range string (e.g. "200 - 499" or "500+") into minQuantity/maxQuantity
-      if (Array.isArray(currentEditingProduct.pricingTiers)) {
-        currentEditingProduct.pricingTiers.forEach((t: any) => {
+    ['search-input', 'category-filter', 'status-filter'].forEach((id, i) => {
+      $id(id)?.addEventListener(i === 0 ? 'input' : 'change', renderProductsTable);
+    });
+
+    $id('btn-auto-slug')?.addEventListener('click', () => {
+      const t = $val('p-title');
+      if (t) $val('p-slug', t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+    });
+
+    function openProductDrawer(prod?: any) {
+      if (prod) {
+        currentEditingProduct = JSON.parse(JSON.stringify(prod));
+        (currentEditingProduct.pricingTiers || []).forEach((t: any) => {
           if (t.range && (t.minQuantity === undefined || t.minQuantity === null)) {
             const parts = String(t.range).replace(/,/g, '').split('-');
             if (parts.length === 2) {
@@ -909,582 +660,322 @@ const pageTitle = 'Products & Catalog Workspace';
             }
           }
         });
-      }
-    } else {
-      currentEditingProduct = {
-        _type: 'product',
-        title: { en: '' },
-        shortTitle: { en: '' },
-        slug: { current: '' },
-        pricingTiers: [
-          { minQuantity: 200, maxQuantity: 499, price: 3.50, currency: 'USD', unit: 'Pairs', range: '200 - 499' },
-          { minQuantity: 500, maxQuantity: 999, price: 3.20, currency: 'USD', unit: 'Pairs', range: '500 - 999' },
-          { minQuantity: 1000, price: 2.90, currency: 'USD', unit: 'Pairs', range: '1000+' },
-        ],
-        colors: [
-          { name: 'Onyx Black', hex: '#111111' },
-          { name: 'Ivory White', hex: '#fcfcfc' },
-        ],
-        specifications: [
-          { label: 'Composition', name: 'Composition', value: '100% Grade 6A Mulberry Silk' },
-          { label: 'Needle Count', name: 'Needle Count', value: '200 Needles' },
-        ],
-        minOrderQuantity: 200,
-        moq: '200 Pairs',
-        currency: 'USD',
-        leadTime: '15-20 days',
-        isDraft: false,
-        isArchived: false,
-      };
-    }
-
-    const drawer = document.getElementById('product-drawer');
-    const backdrop = document.getElementById('product-drawer-backdrop');
-    const drawerTitle = document.getElementById('drawer-title');
-    if (drawerTitle) drawerTitle.textContent = prod ? `Edit: ${prod.title?.en || prod.sku}` : 'Create New Product';
-
-    // Populate common inputs
-    (document.getElementById('p-id') as HTMLInputElement).value = currentEditingProduct._id || '';
-    (document.getElementById('p-sku') as HTMLInputElement).value = currentEditingProduct.sku || '';
-    (document.getElementById('p-slug') as HTMLInputElement).value = currentEditingProduct.slug?.current || '';
-    (document.getElementById('p-category') as HTMLSelectElement).value = currentEditingProduct.category?._id || '';
-    (document.getElementById('p-is-draft') as HTMLInputElement).checked = Boolean(currentEditingProduct.isDraft);
-    (document.getElementById('p-is-archived') as HTMLInputElement).checked = Boolean(currentEditingProduct.isArchived);
-    const moqVal = currentEditingProduct.minOrderQuantity || parseInt(String(currentEditingProduct.moq || '').replace(/\D+/g, ''), 10) || 200;
-    (document.getElementById('p-moq') as HTMLInputElement).value = String(moqVal);
-    (document.getElementById('p-leadtime') as HTMLInputElement).value = currentEditingProduct.leadTime || '';
-
-    // Currency and Unit backfill
-    const currSelect = document.getElementById('p-currency') as HTMLSelectElement | null;
-    if (currSelect) {
-      currSelect.value = currentEditingProduct.currency || currentEditingProduct.pricingTiers?.[0]?.currency || 'USD';
-    }
-    const unitSelect = document.getElementById('p-unit') as HTMLSelectElement | null;
-    if (unitSelect) {
-      const moqStr = String(currentEditingProduct.moq || '');
-      unitSelect.value = currentEditingProduct.pricingTiers?.[0]?.unit || (moqStr.toLowerCase().includes('pcs') ? 'Pcs' : 'Pairs');
-    }
-
-    // Amazon settings
-    const asinInput = document.getElementById('p-amazon-asin') as HTMLInputElement | null;
-    if (asinInput) asinInput.value = currentEditingProduct.amazonAsin || '';
-    const amazonUrlInput = document.getElementById('p-amazon-url') as HTMLInputElement | null;
-    if (amazonUrlInput) amazonUrlInput.value = currentEditingProduct.amazonUrl || '';
-
-    // Main Image
-    renderMainImagePreview();
-    // Gallery
-    renderGalleryPreview();
-    // Pricing tiers
-    renderPricingTiersTable();
-    // Colors
-    renderColorsList();
-    // Specs
-    renderSpecsList();
-
-    // Default to EN tab
-    updateActiveLang('en');
-
-    // Show Drawer
-    drawer?.classList.remove('translate-x-full');
-    backdrop?.classList.remove('hidden');
-    setTimeout(() => backdrop?.classList.remove('opacity-0'), 10);
-    document.body.classList.add('overflow-hidden');
-  }
-
-  function closeProductDrawer() {
-    const drawer = document.getElementById('product-drawer');
-    const backdrop = document.getElementById('product-drawer-backdrop');
-    drawer?.classList.add('translate-x-full');
-    backdrop?.classList.add('opacity-0');
-    setTimeout(() => {
-      backdrop?.classList.add('hidden');
-      document.body.classList.remove('overflow-hidden');
-    }, 300);
-    currentEditingProduct = null;
-  }
-
-  document.getElementById('close-product-drawer')?.addEventListener('click', closeProductDrawer);
-  document.getElementById('btn-cancel-drawer')?.addEventListener('click', closeProductDrawer);
-  document.getElementById('product-drawer-backdrop')?.addEventListener('click', closeProductDrawer);
-  document.getElementById('btn-create-item')?.addEventListener('click', () => openProductDrawer());
-
-  // Main Image preview render
-  function renderMainImagePreview() {
-    const el = document.getElementById('main-image-preview');
-    const btnRemove = document.getElementById('btn-remove-main-image');
-    if (!el) return;
-
-    const imgUrl = (window as any).resolveSanityRefUrl?.(currentEditingProduct?.mainImage, { width: 600 }) ||
-      (window as any).resolveSanityRefUrl?.(currentEditingProduct?.mainImageUrl, { width: 600 }) ||
-      currentEditingProduct?.mainImageUrl ||
-      currentEditingProduct?.mainImage?.asset?.url || '';
-
-    if (imgUrl) {
-      el.innerHTML = `<img src="${escapeHtml(imgUrl)}" class="w-full h-full object-cover" />`;
-      btnRemove?.classList.remove('hidden');
-    } else {
-      el.innerHTML = `<span class="text-[10px] text-[#86868b]">No Image</span>`;
-      btnRemove?.classList.add('hidden');
-    }
-  }
-
-  // Choose Main Image from Cloud Media Library
-  document.getElementById('btn-choose-main-media')?.addEventListener('click', () => {
-    (window as any).__openMediaLibrary?.({
-      mode: 'single',
-      title: 'Choose Main Cover Image',
-      selectedIds: currentEditingProduct?.mainImage?.asset?._ref ? [currentEditingProduct.mainImage.asset._ref] : [],
-      onSelect: (selectedAssets: any[]) => {
-        if (!selectedAssets || selectedAssets.length === 0) return;
-        const asset = selectedAssets[0];
-        if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
-        if (!currentEditingProduct.mainImage) currentEditingProduct.mainImage = { _type: 'image' };
-        currentEditingProduct.mainImage.asset = {
-          _type: 'reference',
-          _ref: asset._id,
+      } else {
+        currentEditingProduct = {
+          _type: 'product', title: { en: '' }, shortTitle: { en: '' }, slug: { current: '' },
+          pricingTiers: [
+            { minQuantity: 200, maxQuantity: 499, price: 3.50, currency: 'USD', unit: 'Pairs', range: '200 - 499' },
+            { minQuantity: 500, maxQuantity: 999, price: 3.20, currency: 'USD', unit: 'Pairs', range: '500 - 999' },
+            { minQuantity: 1000, price: 2.90, currency: 'USD', unit: 'Pairs', range: '1000+' },
+          ],
+          colors: [{ name: 'Onyx Black', hex: '#111111' }, { name: 'Ivory White', hex: '#fcfcfc' }],
+          specifications: [
+            { label: 'Composition', name: 'Composition', value: '100% Grade 6A Mulberry Silk' },
+            { label: 'Needle Count', name: 'Needle Count', value: '200 Needles' },
+          ],
+          minOrderQuantity: 200, moq: '200 Pairs', currency: 'USD', leadTime: '15-20 days', isDraft: false, isArchived: false,
         };
-        currentEditingProduct.mainImageUrl = asset.url;
-        renderMainImagePreview();
-        (window as any).__showToast?.('Updated main product cover image', 'success');
-      },
-    });
-  });
+      }
 
-  // Remove Main Image
-  document.getElementById('btn-remove-main-image')?.addEventListener('click', () => {
-    if (currentEditingProduct) {
-      currentEditingProduct.mainImage = null;
-      currentEditingProduct.mainImageUrl = '';
+      const p = currentEditingProduct;
+      $txt('drawer-title', prod ? `Edit: ${prod.title?.en || prod.sku}` : 'Create New Product');
+      $val('p-id', p._id || '');
+      $val('p-sku', p.sku || '');
+      $val('p-slug', p.slug?.current || '');
+      $val('p-category', p.category?._id || '');
+      $chk('p-is-draft', Boolean(p.isDraft));
+      $chk('p-is-archived', Boolean(p.isArchived));
+      $val('p-moq', p.minOrderQuantity || parseInt(String(p.moq || '').replace(/\D+/g, ''), 10) || 200);
+      $val('p-leadtime', p.leadTime || '');
+      $val('p-currency', p.currency || p.pricingTiers?.[0]?.currency || 'USD');
+      $val('p-unit', p.pricingTiers?.[0]?.unit || (String(p.moq || '').toLowerCase().includes('pcs') ? 'Pcs' : 'Pairs'));
+      $val('p-amazon-asin', p.amazonAsin || '');
+      $val('p-amazon-url', p.amazonUrl || '');
+
+      renderMainImagePreview();
+      renderGalleryPreview();
+      renderPricingTiersTable();
+      renderColorsList();
+      renderSpecsList();
+      updateActiveLang('en');
+      drawerCtrl.open();
     }
-    renderMainImagePreview();
-    (window as any).__showToast?.('Removed main cover image', 'info');
-  });
 
-  // Upload Local Main Image
-  document.getElementById('upload-main-image')?.addEventListener('change', async (e: any) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    $id('btn-create-item')?.addEventListener('click', () => openProductDrawer());
 
-    const fd = new FormData();
-    fd.append('file', file);
-    (window as any).__showToast?.('Uploading image to Sanity CDN...', 'info');
+    function renderMainImagePreview() {
+      const el = $id('main-image-preview');
+      const btnRemove = $id('btn-remove-main-image');
+      if (!el) return;
+      const p = currentEditingProduct;
+      const imgUrl = (window as any).resolveSanityRefUrl?.(p?.mainImage, { width: 600 }) ||
+        (window as any).resolveSanityRefUrl?.(p?.mainImageUrl, { width: 600 }) ||
+        p?.mainImageUrl || p?.mainImage?.asset?.url || '';
+      el.innerHTML = imgUrl ? `<img src="${escapeHtml(imgUrl)}" class="w-full h-full object-cover" />` : `<span class="text-[10px] text-[#86868b]">No Image</span>`;
+      btnRemove?.classList.toggle('hidden', !imgUrl);
+    }
 
-    try {
+    $id('btn-choose-main-media')?.addEventListener('click', () => {
+      (window as any).__openMediaLibrary?.({
+        mode: 'single',
+        title: 'Choose Main Cover Image',
+        selectedIds: currentEditingProduct?.mainImage?.asset?._ref ? [currentEditingProduct.mainImage.asset._ref] : [],
+        onSelect: (assets: any[]) => {
+          const asset = assets?.[0];
+          if (!asset) return;
+          const p = (currentEditingProduct ||= { _type: 'product' });
+          (p.mainImage ||= { _type: 'image' }).asset = { _type: 'reference', _ref: asset._id };
+          p.mainImageUrl = asset.url;
+          renderMainImagePreview();
+          (window as any).__showToast?.('Updated main product cover image', 'success');
+        },
+      });
+    });
+
+    $id('btn-remove-main-image')?.addEventListener('click', () => {
+      if (currentEditingProduct) {
+        currentEditingProduct.mainImage = null;
+        currentEditingProduct.mainImageUrl = '';
+      }
+      renderMainImagePreview();
+      (window as any).__showToast?.('Removed main cover image', 'info');
+    });
+
+    async function uploadFileToSanity(file: File) {
+      const fd = new FormData();
+      fd.append('file', file);
       const res = await fetch('/api/admin/cms/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
-
-      if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
-      if (!currentEditingProduct.mainImage) currentEditingProduct.mainImage = { _type: 'image' };
-      currentEditingProduct.mainImage.asset = data.asset.asset;
-      currentEditingProduct.mainImageUrl = data.url;
-      renderMainImagePreview();
-      (window as any).__showToast?.('Image uploaded successfully', 'success');
-    } catch (err: any) {
-      (window as any).__showToast?.(err.message, 'error');
-    } finally {
-      e.target.value = '';
-    }
-  });
-
-  // Choose Gallery Images from Cloud Media Library (Batch Select)
-  document.getElementById('btn-choose-gallery-media')?.addEventListener('click', () => {
-    (window as any).__openMediaLibrary?.({
-      mode: 'multiple',
-      title: 'Batch Select Gallery Images',
-      onSelect: (selectedAssets: any[]) => {
-        if (!selectedAssets || selectedAssets.length === 0) return;
-        if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
-        if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
-        if (!currentEditingProduct.galleryUrls) currentEditingProduct.galleryUrls = [];
-
-        selectedAssets.forEach((asset: any) => {
-          currentEditingProduct.gallery.push({
-            _type: 'image',
-            _key: crypto.randomUUID().slice(0, 8),
-            asset: {
-              _type: 'reference',
-              _ref: asset._id,
-            },
-          });
-          currentEditingProduct.galleryUrls.push(asset.url);
-        });
-
-        renderGalleryPreview();
-        (window as any).__showToast?.(`Added ${selectedAssets.length} image(s) to gallery`, 'success');
-      },
-    });
-  });
-
-  // Drag and drop state for gallery reordering
-  let draggedGalleryIdx: number | null = null;
-
-  // Gallery render & drag/swap handlers
-  function renderGalleryPreview() {
-    const container = document.getElementById('gallery-container');
-    if (!container) return;
-    const gallery = currentEditingProduct?.gallery || [];
-    if (gallery.length === 0) {
-      container.innerHTML = `<div class="col-span-full py-6 text-center text-[#86868b] text-[11px] bg-white rounded-xl border border-dashed border-black/10">No gallery images added yet. Click "+ From Library" or "+ Upload Local".</div>`;
-      return;
+      return data;
     }
 
-    container.innerHTML = gallery.map((item: any, idx: number) => {
-      const url = (window as any).resolveSanityRefUrl?.(item, { width: 300 }) ||
-        (window as any).resolveSanityRefUrl?.(currentEditingProduct?.galleryUrls?.[idx], { width: 300 }) ||
-        item.asset?.url ||
-        currentEditingProduct?.galleryUrls?.[idx] || '';
-
-      const isCurrentMain = Boolean(
-        (item.asset?._ref && item.asset._ref === currentEditingProduct?.mainImage?.asset?._ref) ||
-        (item.asset?.url && item.asset.url === currentEditingProduct?.mainImageUrl) ||
-        (url && currentEditingProduct?.mainImageUrl && url === currentEditingProduct.mainImageUrl)
-      );
-
-      return `
-        <div
-          class="gallery-card relative group rounded-xl overflow-hidden border ${isCurrentMain ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-black/10'} aspect-square bg-[#f5f5f7] cursor-grab active:cursor-grabbing transition-all select-none"
-          draggable="true"
-          data-idx="${idx}"
-        >
-          ${url ? `<img src="${escapeHtml(url)}" class="w-full h-full object-cover pointer-events-none" />` : `<div class="w-full h-full flex items-center justify-center text-[10px] text-[#86868b]">Img</div>`}
-
-          <!-- Drag Handle / Main Indicator Badge -->
-          <div class="absolute top-1 left-1 px-1.5 py-0.5 rounded-md ${isCurrentMain ? 'bg-amber-500 text-white font-bold' : 'bg-black/50 text-white font-mono'} text-[9px] pointer-events-none flex items-center gap-1">
-            ${isCurrentMain ? '★ Cover' : `#${idx + 1}`}
-          </div>
-
-          <!-- Actions Toolbar -->
-          <div class="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              type="button"
-              class="btn-make-main p-1 rounded-md ${isCurrentMain ? 'bg-amber-500 text-white' : 'bg-black/70 hover:bg-amber-500 text-white'} text-[10px] font-bold shadow-xs transition-colors cursor-pointer"
-              data-idx="${idx}"
-              title="Set as Main Cover Image"
-            >
-              ★ Main
-            </button>
-            <button
-              type="button"
-              class="btn-del-gallery p-1 rounded-md bg-black/70 hover:bg-rose-600 text-white text-[10px] shadow-xs transition-colors cursor-pointer"
-              data-idx="${idx}"
-              title="Remove from Gallery"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    // Set as Main Image (Copy reference to mainImage, keep gallery untouched)
-    container.querySelectorAll('.btn-make-main').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
-        if (!Array.isArray(currentEditingProduct.gallery)) currentEditingProduct.gallery = [];
-
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        const chosenGalleryItem = currentEditingProduct.gallery[idx];
-        if (!chosenGalleryItem) return;
-
-        // Set chosen gallery image as main image directly (preserves gallery content intact)
-        currentEditingProduct.mainImage = {
-          _type: 'image',
-          asset: chosenGalleryItem.asset,
-        };
-        currentEditingProduct.mainImageUrl = (window as any).resolveSanityRefUrl?.(chosenGalleryItem) ||
-          chosenGalleryItem.asset?.url ||
-          currentEditingProduct.galleryUrls?.[idx] || '';
-
-        renderMainImagePreview();
-        renderGalleryPreview();
-        (window as any).__showToast?.('Set selected image as main catalog cover', 'success');
-      });
-    });
-
-    // Delete gallery item
-    container.querySelectorAll('.btn-del-gallery').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        currentEditingProduct.gallery.splice(idx, 1);
-        currentEditingProduct.galleryUrls?.splice(idx, 1);
-        renderGalleryPreview();
-      });
-    });
-
-    // HTML5 Drag and Drop Reordering
-    const cards = container.querySelectorAll('.gallery-card');
-    cards.forEach((card) => {
-      card.addEventListener('dragstart', (e: any) => {
-        draggedGalleryIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
-        e.dataTransfer.effectAllowed = 'move';
-        card.classList.add('opacity-40');
-      });
-
-      card.addEventListener('dragend', () => {
-        draggedGalleryIdx = null;
-        card.classList.remove('opacity-40');
-        cards.forEach((c) => c.classList.remove('ring-2', 'ring-black', 'scale-105'));
-      });
-
-      card.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer!.dropEffect = 'move';
-        card.classList.add('ring-2', 'ring-black', 'scale-105');
-      });
-
-      card.addEventListener('dragleave', () => {
-        card.classList.remove('ring-2', 'ring-black', 'scale-105');
-      });
-
-      card.addEventListener('drop', (e) => {
-        e.preventDefault();
-        card.classList.remove('ring-2', 'ring-black', 'scale-105');
-        const targetIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
-        if (draggedGalleryIdx !== null && draggedGalleryIdx !== targetIdx) {
-          const item = currentEditingProduct.gallery.splice(draggedGalleryIdx, 1)[0];
-          currentEditingProduct.gallery.splice(targetIdx, 0, item);
-          if (currentEditingProduct.galleryUrls) {
-            const urlItem = currentEditingProduct.galleryUrls.splice(draggedGalleryIdx, 1)[0];
-            currentEditingProduct.galleryUrls.splice(targetIdx, 0, urlItem);
-          }
-          renderGalleryPreview();
-        }
-      });
-    });
-  }
-
-  // Upload Local to Gallery
-  document.getElementById('upload-gallery-image')?.addEventListener('change', async (e: any) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fd = new FormData();
-      fd.append('file', file);
+    $id('upload-main-image')?.addEventListener('change', async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      (window as any).__showToast?.('Uploading image to Sanity CDN...', 'info');
       try {
-        const res = await fetch('/api/admin/cms/upload', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
-
-        if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
-        if (!currentEditingProduct.gallery) currentEditingProduct.gallery = [];
-        if (!currentEditingProduct.galleryUrls) currentEditingProduct.galleryUrls = [];
-        currentEditingProduct.gallery.push({
-          _type: 'image',
-          _key: crypto.randomUUID().slice(0, 8),
-          asset: {
-            _type: 'reference',
-            _ref: data.asset.asset._ref || data.id,
-          },
-        });
-        currentEditingProduct.galleryUrls.push(data.url);
+        const data = await uploadFileToSanity(file);
+        const p = (currentEditingProduct ||= { _type: 'product' });
+        (p.mainImage ||= { _type: 'image' }).asset = data.asset.asset;
+        p.mainImageUrl = data.url;
+        renderMainImagePreview();
+        (window as any).__showToast?.('Image uploaded successfully', 'success');
       } catch (err: any) {
         (window as any).__showToast?.(err.message, 'error');
+      } finally {
+        e.target.value = '';
       }
+    });
+
+    $id('btn-choose-gallery-media')?.addEventListener('click', () => {
+      (window as any).__openMediaLibrary?.({
+        mode: 'multiple',
+        title: 'Batch Select Gallery Images',
+        onSelect: (assets: any[]) => {
+          if (!assets?.length) return;
+          const p = (currentEditingProduct ||= { _type: 'product' });
+          p.gallery ||= [];
+          p.galleryUrls ||= [];
+          assets.forEach((a: any) => {
+            p.gallery.push({ _type: 'image', _key: crypto.randomUUID().slice(0, 8), asset: { _type: 'reference', _ref: a._id } });
+            p.galleryUrls.push(a.url);
+          });
+          renderGalleryPreview();
+          (window as any).__showToast?.(`Added ${assets.length} image(s) to gallery`, 'success');
+        },
+      });
+    });
+
+    let draggedGalleryIdx: number | null = null;
+
+    function renderGalleryPreview() {
+      const container = $id('gallery-container');
+      if (!container) return;
+      const p = currentEditingProduct;
+      const gallery = p?.gallery || [];
+      if (gallery.length === 0) {
+        container.innerHTML = `<div class="col-span-full py-6 text-center text-[#86868b] text-[11px] bg-white rounded-xl border border-dashed border-black/10">No gallery images added yet. Click "+ From Library" or "+ Upload Local".</div>`;
+        return;
+      }
+
+      container.innerHTML = gallery.map((item: any, idx: number) => {
+        const url = (window as any).resolveSanityRefUrl?.(item, { width: 300 }) ||
+          (window as any).resolveSanityRefUrl?.(p?.galleryUrls?.[idx], { width: 300 }) ||
+          item.asset?.url || p?.galleryUrls?.[idx] || '';
+        const isMain = Boolean(
+          (item.asset?._ref && item.asset._ref === p?.mainImage?.asset?._ref) ||
+          (item.asset?.url && item.asset.url === p?.mainImageUrl) ||
+          (url && p?.mainImageUrl && url === p.mainImageUrl)
+        );
+        return `
+          <div class="gallery-card relative group rounded-xl overflow-hidden border ${isMain ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-black/10'} aspect-square bg-[#f5f5f7] cursor-grab active:cursor-grabbing transition-all select-none" draggable="true" data-idx="${idx}">
+            ${url ? `<img src="${escapeHtml(url)}" class="w-full h-full object-cover pointer-events-none" />` : `<div class="w-full h-full flex items-center justify-center text-[10px] text-[#86868b]">Img</div>`}
+            <div class="absolute top-1 left-1 px-1.5 py-0.5 rounded-md ${isMain ? 'bg-amber-500 text-white font-bold' : 'bg-black/50 text-white font-mono'} text-[9px] pointer-events-none flex items-center gap-1">${isMain ? '★ Cover' : `#${idx + 1}`}</div>
+            <div class="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button type="button" class="btn-make-main p-1 rounded-md ${isMain ? 'bg-amber-500 text-white' : 'bg-black/70 hover:bg-amber-500 text-white'} text-[10px] font-bold shadow-xs transition-colors cursor-pointer" data-idx="${idx}" title="Set as Main Cover Image">★ Main</button>
+              <button type="button" class="btn-del-gallery p-1 rounded-md bg-black/70 hover:bg-rose-600 text-white text-[10px] shadow-xs transition-colors cursor-pointer" data-idx="${idx}" title="Remove from Gallery">✕</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      container.querySelectorAll('.btn-make-main').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          const chosen = p?.gallery?.[idx];
+          if (!chosen) return;
+          p.mainImage = { _type: 'image', asset: chosen.asset };
+          p.mainImageUrl = (window as any).resolveSanityRefUrl?.(chosen) || chosen.asset?.url || p.galleryUrls?.[idx] || '';
+          renderMainImagePreview();
+          renderGalleryPreview();
+          (window as any).__showToast?.('Set selected image as main catalog cover', 'success');
+        });
+      });
+
+      container.querySelectorAll('.btn-del-gallery').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          p.gallery.splice(idx, 1);
+          p.galleryUrls?.splice(idx, 1);
+          renderGalleryPreview();
+        });
+      });
+
+      const cards = container.querySelectorAll('.gallery-card');
+      cards.forEach((card) => {
+        card.addEventListener('dragstart', (e: any) => {
+          draggedGalleryIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
+          e.dataTransfer.effectAllowed = 'move';
+          card.classList.add('opacity-40');
+        });
+        card.addEventListener('dragend', () => {
+          draggedGalleryIdx = null;
+          card.classList.remove('opacity-40');
+          cards.forEach((c) => c.classList.remove('ring-2', 'ring-black', 'scale-105'));
+        });
+        card.addEventListener('dragover', (e: any) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          card.classList.add('ring-2', 'ring-black', 'scale-105');
+        });
+        card.addEventListener('dragleave', () => card.classList.remove('ring-2', 'ring-black', 'scale-105'));
+        card.addEventListener('drop', (e) => {
+          e.preventDefault();
+          card.classList.remove('ring-2', 'ring-black', 'scale-105');
+          const targetIdx = parseInt(card.getAttribute('data-idx') || '0', 10);
+          if (draggedGalleryIdx !== null && draggedGalleryIdx !== targetIdx) {
+            p.gallery.splice(targetIdx, 0, p.gallery.splice(draggedGalleryIdx, 1)[0]);
+            if (p.galleryUrls) p.galleryUrls.splice(targetIdx, 0, p.galleryUrls.splice(draggedGalleryIdx, 1)[0]);
+            renderGalleryPreview();
+          }
+        });
+      });
     }
 
-    renderGalleryPreview();
-    (window as any).__showToast?.(`Added ${files.length} image(s) to gallery`, 'success');
-    e.target.value = '';
-  });
-
-  // Dynamic Tiers Table
-  function renderPricingTiersTable() {
-    const tbody = document.getElementById('tier-rows');
-    if (!tbody) return;
-    const tiers = currentEditingProduct?.pricingTiers || [];
-    tbody.innerHTML = tiers.map((t: any, idx: number) => {
-      const cleanPrice = t.price !== undefined && t.price !== null ? parseFloat(String(t.price).replace(/[^0-9.]/g, '')) : '';
-      const safePrice = isNaN(cleanPrice as number) ? '' : cleanPrice;
-      return `
-        <tr>
-          <td class="py-1.5 pr-2"><input type="number" class="t-min w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${t.minQuantity || ''}" /></td>
-          <td class="py-1.5 pr-2"><input type="number" class="t-max w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" placeholder="∞" value="${t.maxQuantity || ''}" /></td>
-          <td class="py-1.5 pr-2"><input type="number" step="0.01" class="t-price w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${safePrice}" /></td>
-          <td class="py-1.5 text-right"><button type="button" class="btn-del-tier text-[#86868b] hover:text-rose-600" data-idx="${idx}">✕</button></td>
-        </tr>
-      `;
-    }).join('');
-
-    tbody.querySelectorAll('.btn-del-tier').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        tiers.splice(idx, 1);
-        renderPricingTiersTable();
-      });
-    });
-  }
-
-  document.getElementById('btn-add-tier')?.addEventListener('click', () => {
-    if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
-    if (!currentEditingProduct.pricingTiers) currentEditingProduct.pricingTiers = [];
-    currentEditingProduct.pricingTiers.push({ minQuantity: 100, maxQuantity: null, price: 3.00 });
-    renderPricingTiersTable();
-  });
-
-  // Dynamic Colors List
-  function renderColorsList() {
-    const container = document.getElementById('color-rows');
-    if (!container) return;
-    const colors = currentEditingProduct?.colors || [];
-    container.innerHTML = colors.map((c: any, idx: number) => `
-      <div class="flex items-center gap-2">
-        <input type="color" class="c-hex-pick w-7 h-7 rounded-lg border border-black/10 p-0.5 cursor-pointer shrink-0" value="${c.hex || '#000000'}" />
-        <input type="text" class="c-name flex-1 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Color Name (e.g. Navy Blue)" value="${escapeHtml(c.name || '')}" />
-        <input type="text" class="c-hex w-20 px-2.5 py-1 rounded-lg bg-white border border-black/10 font-mono text-xs" placeholder="#hex" value="${escapeHtml(c.hex || '')}" />
-        <button type="button" class="btn-del-color text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
-      </div>
-    `).join('');
-
-    container.querySelectorAll('.c-hex-pick').forEach((picker: any, idx: number) => {
-      picker.addEventListener('input', () => {
-        colors[idx].hex = picker.value;
-        const hexInput = container.querySelectorAll('.c-hex')[idx] as HTMLInputElement | null;
-        if (hexInput) hexInput.value = picker.value;
-      });
+    $id('upload-gallery-image')?.addEventListener('change', async (e: any) => {
+      const files = e.target.files;
+      if (!files?.length) return;
+      const p = (currentEditingProduct ||= { _type: 'product' });
+      p.gallery ||= [];
+      p.galleryUrls ||= [];
+      for (const file of Array.from(files) as File[]) {
+        try {
+          const data = await uploadFileToSanity(file);
+          p.gallery.push({ _type: 'image', _key: crypto.randomUUID().slice(0, 8), asset: { _type: 'reference', _ref: data.asset.asset._ref || data.id } });
+          p.galleryUrls.push(data.url);
+        } catch (err: any) {
+          (window as any).__showToast?.(err.message, 'error');
+        }
+      }
+      renderGalleryPreview();
+      (window as any).__showToast?.(`Added ${files.length} image(s) to gallery`, 'success');
+      e.target.value = '';
     });
 
-    container.querySelectorAll('.btn-del-color').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        colors.splice(idx, 1);
-        renderColorsList();
+    function renderPricingTiersTable() {
+      const tbody = $id('tier-rows');
+      if (!tbody) return;
+      const tiers = currentEditingProduct?.pricingTiers || [];
+      tbody.innerHTML = tiers.map((t: any, idx: number) => {
+        const cleanPrice = t.price !== undefined && t.price !== null ? parseFloat(String(t.price).replace(/[^0-9.]/g, '')) : '';
+        return `
+          <tr>
+            <td class="py-1.5 pr-2"><input type="number" class="t-min w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${t.minQuantity || ''}" /></td>
+            <td class="py-1.5 pr-2"><input type="number" class="t-max w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" placeholder="∞" value="${t.maxQuantity || ''}" /></td>
+            <td class="py-1.5 pr-2"><input type="number" step="0.01" class="t-price w-full px-2 py-1 rounded-lg bg-white border border-black/10 text-xs font-mono" value="${isNaN(cleanPrice as number) ? '' : cleanPrice}" /></td>
+            <td class="py-1.5 text-right"><button type="button" class="btn-del-tier text-[#86868b] hover:text-rose-600" data-idx="${idx}">✕</button></td>
+          </tr>`;
+      }).join('');
+      tbody.querySelectorAll('.btn-del-tier').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          tiers.splice(parseInt(btn.getAttribute('data-idx') || '0', 10), 1);
+          renderPricingTiersTable();
+        });
       });
-    });
-  }
-
-  document.getElementById('btn-add-color')?.addEventListener('click', () => {
-    if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
-    if (!currentEditingProduct.colors) currentEditingProduct.colors = [];
-    currentEditingProduct.colors.push({ name: 'New Color', hex: '#3b82f6' });
-    renderColorsList();
-  });
-
-  // Specs Rows
-  function renderSpecsList() {
-    const container = document.getElementById('spec-rows');
-    if (!container) return;
-    const specs = currentEditingProduct?.specifications || [];
-    container.innerHTML = specs.map((s: any, idx: number) => `
-      <div class="flex items-center gap-2">
-        <input type="text" class="s-name w-1/3 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Name" value="${escapeHtml(s.label || s.name || '')}" />
-        <input type="text" class="s-val flex-1 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Value" value="${escapeHtml(s.value || '')}" />
-        <button type="button" class="btn-del-spec text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
-      </div>
-    `).join('');
-
-    container.querySelectorAll('.btn-del-spec').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        specs.splice(idx, 1);
-        renderSpecsList();
-      });
-    });
-  }
-
-  document.getElementById('btn-add-spec')?.addEventListener('click', () => {
-    if (!currentEditingProduct) currentEditingProduct = { _type: 'product' };
-    if (!currentEditingProduct.specifications) currentEditingProduct.specifications = [];
-    currentEditingProduct.specifications.push({ label: '', name: '', value: '' });
-    renderSpecsList();
-  });
-
-  // Save Product Button Handler
-  document.getElementById('btn-save-product')?.addEventListener('click', async () => {
-    const btnSave = document.getElementById('btn-save-product') as HTMLButtonElement | null;
-    if (btnSave?.disabled) return;
-
-    const pSku = (document.getElementById('p-sku') as HTMLInputElement)?.value.trim();
-    const pSlug = (document.getElementById('p-slug') as HTMLInputElement)?.value.trim();
-    if (!pSku || !pSlug) {
-      (window as any).__showToast?.('SKU and Slug are required.', 'error');
-      return;
     }
 
-    if (!currentEditingProduct) {
-      const pId = (document.getElementById('p-id') as HTMLInputElement)?.value.trim();
-      currentEditingProduct = {
-        _type: 'product',
-        _id: pId || undefined,
-        title: {},
-        shortTitle: {},
-        slug: { _type: 'slug', current: pSlug },
-        pricingTiers: [],
-        colors: [],
-        specifications: [],
-        minOrderQuantity: 200,
-        moq: '200 Pairs',
-        currency: 'USD',
-        isDraft: false,
-        isArchived: false,
-      };
+    $id('btn-add-tier')?.addEventListener('click', () => {
+      ((currentEditingProduct ||= { _type: 'product' }).pricingTiers ||= []).push({ minQuantity: 100, maxQuantity: null, price: 3.00 });
+      renderPricingTiersTable();
+    });
+
+    function renderColorsList() {
+      const container = $id('color-rows');
+      if (!container) return;
+      const colors = currentEditingProduct?.colors || [];
+      container.innerHTML = colors.map((c: any, idx: number) => `
+        <div class="flex items-center gap-2">
+          <input type="color" class="c-hex-pick w-7 h-7 rounded-lg border border-black/10 p-0.5 cursor-pointer shrink-0" value="${c.hex || '#000000'}" />
+          <input type="text" class="c-name flex-1 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Color Name (e.g. Navy Blue)" value="${escapeHtml(c.name || '')}" />
+          <input type="text" class="c-hex w-20 px-2.5 py-1 rounded-lg bg-white border border-black/10 font-mono text-xs" placeholder="#hex" value="${escapeHtml(c.hex || '')}" />
+          <button type="button" class="btn-del-color text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
+        </div>`).join('');
+
+      container.querySelectorAll<HTMLInputElement>('.c-hex-pick').forEach((picker, idx) => {
+        picker.addEventListener('input', () => {
+          colors[idx].hex = picker.value;
+          const hexInput = container.querySelectorAll<HTMLInputElement>('.c-hex')[idx];
+          if (hexInput) hexInput.value = picker.value;
+        });
+      });
+      container.querySelectorAll('.btn-del-color').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          colors.splice(parseInt(btn.getAttribute('data-idx') || '0', 10), 1);
+          renderColorsList();
+        });
+      });
     }
 
-    syncInputsToActiveDoc();
-
-    currentEditingProduct.sku = pSku;
-    currentEditingProduct.slug = { _type: 'slug', current: pSlug };
-    const catId = (document.getElementById('p-category') as HTMLSelectElement)?.value;
-    currentEditingProduct.category = catId ? { _type: 'reference', _ref: catId } : null;
-    currentEditingProduct.isDraft = (document.getElementById('p-is-draft') as HTMLInputElement)?.checked;
-    currentEditingProduct.isArchived = (document.getElementById('p-is-archived') as HTMLInputElement)?.checked;
-
-    const minMoq = parseInt((document.getElementById('p-moq') as HTMLInputElement)?.value || '200', 10);
-    const selectedCurrency = (document.getElementById('p-currency') as HTMLSelectElement)?.value || 'USD';
-    const selectedUnit = (document.getElementById('p-unit') as HTMLSelectElement)?.value || 'Pairs';
-
-    currentEditingProduct.minOrderQuantity = minMoq;
-    currentEditingProduct.moq = `${minMoq} ${selectedUnit}`;
-    currentEditingProduct.currency = selectedCurrency;
-    currentEditingProduct.leadTime = (document.getElementById('p-leadtime') as HTMLInputElement)?.value.trim();
-
-    // Read back pricing tiers with full backward & forward compatibility (range string + numeric min/max)
-    const tierTrs = document.querySelectorAll('#tier-rows tr');
-    currentEditingProduct.pricingTiers = Array.from(tierTrs).map((tr) => {
-      const min = parseInt((tr.querySelector('.t-min') as HTMLInputElement)?.value || '0', 10);
-      const maxVal = (tr.querySelector('.t-max') as HTMLInputElement)?.value;
-      const max = maxVal ? parseInt(maxVal, 10) : null;
-      const priceVal = (tr.querySelector('.t-price') as HTMLInputElement)?.value || '0';
-      const rangeStr = max ? `${min} - ${max}` : `${min}+`;
-      return {
-        _key: crypto.randomUUID().slice(0, 8),
-        range: rangeStr,
-        price: String(priceVal),
-        minQuantity: min,
-        maxQuantity: max,
-        currency: selectedCurrency,
-        unit: selectedUnit,
-      };
+    $id('btn-add-color')?.addEventListener('click', () => {
+      ((currentEditingProduct ||= { _type: 'product' }).colors ||= []).push({ name: 'New Color', hex: '#3b82f6' });
+      renderColorsList();
     });
 
-    // Read back colors
-    const colorDivs = document.querySelectorAll('#color-rows > div');
-    currentEditingProduct.colors = Array.from(colorDivs).map((div) => {
-      const name = (div.querySelector('.c-name') as HTMLInputElement)?.value.trim() || 'Color';
-      const hex = (div.querySelector('.c-hex') as HTMLInputElement)?.value.trim() || '#000000';
-      return { _key: crypto.randomUUID().slice(0, 8), name, hex };
+    function renderSpecsList() {
+      const container = $id('spec-rows');
+      if (!container) return;
+      const specs = currentEditingProduct?.specifications || [];
+      container.innerHTML = specs.map((s: any, idx: number) => `
+        <div class="flex items-center gap-2">
+          <input type="text" class="s-name w-1/3 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Name" value="${escapeHtml(s.label || s.name || '')}" />
+          <input type="text" class="s-val flex-1 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Value" value="${escapeHtml(s.value || '')}" />
+          <button type="button" class="btn-del-spec text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
+        </div>`).join('');
+      container.querySelectorAll('.btn-del-spec').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          specs.splice(parseInt(btn.getAttribute('data-idx') || '0', 10), 1);
+          renderSpecsList();
+        });
+      });
+    }
+
+    $id('btn-add-spec')?.addEventListener('click', () => {
+      ((currentEditingProduct ||= { _type: 'product' }).specifications ||= []).push({ label: '', name: '', value: '' });
+      renderSpecsList();
     });
 
-    // Read back specs (saving both label and name to guarantee compatibility)
-    const specDivs = document.querySelectorAll('#spec-rows > div');
-    currentEditingProduct.specifications = Array.from(specDivs).map((div) => {
-      const label = (div.querySelector('.s-name') as HTMLInputElement)?.value.trim() || '';
-      const value = (div.querySelector('.s-val') as HTMLInputElement)?.value.trim() || '';
-      return { _key: crypto.randomUUID().slice(0, 8), label, name: label, value };
-    }).filter((s) => s.label);
-
-    // Read back Amazon ASIN & Custom Amazon URL
-    const asinVal = (document.getElementById('p-amazon-asin') as HTMLInputElement)?.value.trim();
-    currentEditingProduct.amazonAsin = asinVal || undefined;
-    const amazonUrlVal = (document.getElementById('p-amazon-url') as HTMLInputElement)?.value.trim();
-    currentEditingProduct.amazonUrl = amazonUrlVal || undefined;
-
-    // Clean ephemeral helper fields and sanitize reference objects before sending to Sanity
     function sanitizeForSanity(obj: any): any {
       if (!obj || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map(sanitizeForSanity);
@@ -1501,92 +992,129 @@ const pageTitle = 'Products & Catalog Workspace';
       }
       return cleanObj;
     }
-    const docToSave = sanitizeForSanity(currentEditingProduct);
 
-    (window as any).__showToast?.('Saving product to Sanity CMS...', 'info');
-
-    if (btnSave) {
-      btnSave.disabled = true;
-      btnSave.classList.add('opacity-50', 'pointer-events-none');
-    }
-
-    try {
-      const res = await fetch('/api/admin/cms/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document: docToSave }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save');
-
-      (window as any).__showToast?.('Product successfully saved & cache refreshed!', 'success');
-      closeProductDrawer();
-      loadData();
-    } catch (err: any) {
-      (window as any).__showToast?.(err.message, 'error');
-    } finally {
-      if (btnSave) {
-        btnSave.disabled = false;
-        btnSave.classList.remove('opacity-50', 'pointer-events-none');
+    $id('btn-save-product')?.addEventListener('click', async () => {
+      const btnSave = $id<HTMLButtonElement>('btn-save-product');
+      if (btnSave?.disabled) return;
+      const pSku = $val('p-sku');
+      const pSlug = $val('p-slug');
+      if (!pSku || !pSlug) {
+        (window as any).__showToast?.('SKU and Slug are required.', 'error');
+        return;
       }
-    }
-  });
 
-  // Category Modal Handlers
-  const catDialog = document.getElementById('category-dialog') as HTMLDialogElement | null;
-  function openCategoryDialog(cat?: any) {
-    (document.getElementById('c-id') as HTMLInputElement).value = cat?._id || '';
-    (document.getElementById('c-title-en') as HTMLInputElement).value = cat?.title?.en || '';
-    (document.getElementById('c-slug') as HTMLInputElement).value = cat?.slug?.current || '';
-    (document.getElementById('c-order') as HTMLInputElement).value = String(cat?.order ?? 10);
-    catDialog?.showModal();
-  }
+      syncInputsToActiveDoc();
+      const p = currentEditingProduct;
+      p.sku = pSku;
+      p.slug = { _type: 'slug', current: pSlug };
+      const catId = $val('p-category');
+      p.category = catId ? { _type: 'reference', _ref: catId } : null;
+      p.isDraft = $chk('p-is-draft');
+      p.isArchived = $chk('p-is-archived');
 
-  document.getElementById('btn-add-category')?.addEventListener('click', () => openCategoryDialog());
-  document.getElementById('close-cat-dialog')?.addEventListener('click', () => catDialog?.close());
-  document.getElementById('btn-cancel-cat')?.addEventListener('click', () => catDialog?.close());
+      const minMoq = parseInt($val('p-moq') || '200', 10);
+      const selectedCurrency = $val('p-currency') || 'USD';
+      const selectedUnit = $val('p-unit') || 'Pairs';
+      p.minOrderQuantity = minMoq;
+      p.moq = `${minMoq} ${selectedUnit}`;
+      p.currency = selectedCurrency;
+      p.leadTime = $val('p-leadtime');
+      p.amazonAsin = $val('p-amazon-asin') || undefined;
+      p.amazonUrl = $val('p-amazon-url') || undefined;
 
-  document.getElementById('category-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = (document.getElementById('c-id') as HTMLInputElement)?.value;
-    const titleEn = (document.getElementById('c-title-en') as HTMLInputElement)?.value.trim();
-    const slug = (document.getElementById('c-slug') as HTMLInputElement)?.value.trim();
-    const order = parseInt((document.getElementById('c-order') as HTMLInputElement)?.value || '10', 10);
-
-    const catDoc: any = {
-      _type: 'category',
-      title: { en: titleEn },
-      slug: { _type: 'slug', current: slug },
-      order,
-    };
-    if (id) catDoc._id = id;
-
-    try {
-      const res = await fetch('/api/admin/cms/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document: catDoc }),
+      p.pricingTiers = Array.from(document.querySelectorAll('#tier-rows tr')).map((tr) => {
+        const min = parseInt((tr.querySelector('.t-min') as HTMLInputElement)?.value || '0', 10);
+        const maxVal = (tr.querySelector('.t-max') as HTMLInputElement)?.value;
+        const max = maxVal ? parseInt(maxVal, 10) : null;
+        const priceVal = (tr.querySelector('.t-price') as HTMLInputElement)?.value || '0';
+        return {
+          _key: crypto.randomUUID().slice(0, 8),
+          range: max ? `${min} - ${max}` : `${min}+`,
+          price: String(priceVal),
+          minQuantity: min,
+          maxQuantity: max,
+          currency: selectedCurrency,
+          unit: selectedUnit,
+        };
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save category');
 
-      (window as any).__showToast?.('Category saved successfully', 'success');
-      catDialog?.close();
-      loadData();
-    } catch (err: any) {
-      (window as any).__showToast?.(err.message, 'error');
+      p.colors = Array.from(document.querySelectorAll('#color-rows > div')).map((div) => ({
+        _key: crypto.randomUUID().slice(0, 8),
+        name: (div.querySelector('.c-name') as HTMLInputElement)?.value.trim() || 'Color',
+        hex: (div.querySelector('.c-hex') as HTMLInputElement)?.value.trim() || '#000000',
+      }));
+
+      p.specifications = Array.from(document.querySelectorAll('#spec-rows > div')).map((div) => {
+        const label = (div.querySelector('.s-name') as HTMLInputElement)?.value.trim() || '';
+        const value = (div.querySelector('.s-val') as HTMLInputElement)?.value.trim() || '';
+        return { _key: crypto.randomUUID().slice(0, 8), label, name: label, value };
+      }).filter((s) => s.label);
+
+      (window as any).__showToast?.('Saving product to Sanity CMS...', 'info');
+      if (btnSave) { btnSave.disabled = true; btnSave.classList.add('opacity-50', 'pointer-events-none'); }
+
+      try {
+        const res = await fetch('/api/admin/cms/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ document: sanitizeForSanity(p) }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save');
+        (window as any).__showToast?.('Product successfully saved & cache refreshed!', 'success');
+        drawerCtrl.close();
+        loadData();
+      } catch (err: any) {
+        (window as any).__showToast?.(err.message, 'error');
+      } finally {
+        if (btnSave) { btnSave.disabled = false; btnSave.classList.remove('opacity-50', 'pointer-events-none'); }
+      }
+    });
+
+    const catDialog = $id<HTMLDialogElement>('category-dialog');
+    function openCategoryDialog(cat?: any) {
+      $val('c-id', cat?._id || '');
+      $val('c-title-en', cat?.title?.en || '');
+      $val('c-slug', cat?.slug?.current || '');
+      $val('c-order', cat?.order ?? 10);
+      catDialog?.showModal();
     }
-  });
 
-    // Initial Boot
+    $id('btn-add-category')?.addEventListener('click', () => openCategoryDialog());
+    $id('close-cat-dialog')?.addEventListener('click', () => catDialog?.close());
+    $id('btn-cancel-cat')?.addEventListener('click', () => catDialog?.close());
+
+    $id('category-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = $val('c-id');
+      const catDoc: any = {
+        _type: 'category',
+        title: { en: $val('c-title-en') },
+        slug: { _type: 'slug', current: $val('c-slug') },
+        order: parseInt($val('c-order') || '10', 10),
+      };
+      if (id) catDoc._id = id;
+      try {
+        const res = await fetch('/api/admin/cms/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ document: catDoc }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save category');
+        (window as any).__showToast?.('Category saved successfully', 'success');
+        catDialog?.close();
+        loadData();
+      } catch (err: any) {
+        (window as any).__showToast?.(err.message, 'error');
+      }
+    });
+
     loadData();
   }
 
   initProductsPage();
   document.addEventListener('shell:page-load', () => {
-    if (document.getElementById('catalog-app-meta')) {
-      initProductsPage();
-    }
+    if ($id('catalog-app-meta')) initProductsPage();
   });
 </script>
-

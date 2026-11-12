@@ -411,6 +411,9 @@ const pageTitle = 'System Diagnostics & Performance';
     createPaginationController,
     bindSearchAndRefresh,
     exportToCsv,
+    $id,
+    $val,
+    syncUrlParams,
   } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
@@ -560,35 +563,11 @@ const pageTitle = 'System Diagnostics & Performance';
     const confirmClearBtn = document.getElementById('confirm-clear-btn');
 
     function syncUrl(push = true) {
-      const url = new URL(window.location.href);
-      if (currentLevel && currentLevel !== 'ALL') url.searchParams.set('level', currentLevel);
-      else url.searchParams.delete('level');
-
-      if (currentEventCode && currentEventCode !== 'ALL') url.searchParams.set('eventCode', currentEventCode);
-      else url.searchParams.delete('eventCode');
-
-      if (currentHealth && currentHealth !== 'ALL') url.searchParams.set('health', currentHealth);
-      else url.searchParams.delete('health');
-
-      if (currentTimeWindow && currentTimeWindow !== 'ALL') url.searchParams.set('timeWindow', currentTimeWindow);
-      else url.searchParams.delete('timeWindow');
-
-      if (currentSearch) url.searchParams.set('search', currentSearch);
-      else url.searchParams.delete('search');
-
-      if (currentSort && currentSort !== 'newest') url.searchParams.set('sort', currentSort);
-      else url.searchParams.delete('sort');
-
-      if (currentPage > 1) url.searchParams.set('page', String(currentPage));
-      else url.searchParams.delete('page');
-
-      if (url.toString() !== window.location.href) {
-        if (push) {
-          window.history.pushState({}, '', url.toString());
-        } else {
-          window.history.replaceState({}, '', url.toString());
-        }
-      }
+      syncUrlParams(
+        { level: currentLevel, eventCode: currentEventCode, health: currentHealth, timeWindow: currentTimeWindow, search: currentSearch, sort: currentSort, page: currentPage },
+        { sort: 'newest', page: 1 },
+        push
+      );
     }
 
     function renderLevelBadge(lvl: string) {
@@ -1101,91 +1080,30 @@ const pageTitle = 'System Diagnostics & Performance';
     }
 
     // Metric capsule instant filters
-    if (metricCapsuleTotal) {
-      metricCapsuleTotal.addEventListener('click', () => {
-        currentLevel = 'ALL';
-        currentEventCode = 'ALL';
-        currentHealth = 'ALL';
-        if (levelSelect) levelSelect.value = 'ALL';
-        if (eventSelect) eventSelect.value = 'ALL';
-        if (healthSelect) healthSelect.value = 'ALL';
-        currentPage = 1;
-        loadLogs();
-      });
-    }
-
-    if (metricCapsuleErrors) {
-      metricCapsuleErrors.addEventListener('click', () => {
-        currentLevel = 'ERROR';
-        if (levelSelect) levelSelect.value = 'ERROR';
-        currentPage = 1;
-        loadLogs();
-      });
-    }
-
-    if (metricCapsuleWarns) {
-      metricCapsuleWarns.addEventListener('click', () => {
-        currentLevel = 'WARN';
-        if (levelSelect) levelSelect.value = 'WARN';
-        currentPage = 1;
-        loadLogs();
-      });
-    }
-
-    if (metricCapsuleSlow) {
-      metricCapsuleSlow.addEventListener('click', () => {
-        currentHealth = 'slow_only';
-        if (healthSelect) healthSelect.value = 'slow_only';
-        currentPage = 1;
-        loadLogs();
-      });
-    }
+    ([
+      ['metric-capsule-total', () => { currentLevel = 'ALL'; currentEventCode = 'ALL'; currentHealth = 'ALL'; $val('filter-level-select', 'ALL'); $val('filter-event-select', 'ALL'); $val('filter-health-select', 'ALL'); }],
+      ['metric-capsule-errors', () => { currentLevel = 'ERROR'; $val('filter-level-select', 'ERROR'); }],
+      ['metric-capsule-warns', () => { currentLevel = 'WARN'; $val('filter-level-select', 'WARN'); }],
+      ['metric-capsule-slow', () => { currentHealth = 'slow_only'; $val('filter-health-select', 'slow_only'); }],
+    ] as const).forEach(([id, fn]) => {
+      $id(id)?.addEventListener('click', () => { fn(); currentPage = 1; loadLogs(); });
+    });
 
     // Filter selects
-    if (levelSelect) {
-      levelSelect.value = currentLevel;
-      levelSelect.addEventListener('change', () => {
-        currentLevel = levelSelect.value;
+    ([
+      ['filter-level-select', () => currentLevel, (v: string) => { currentLevel = v; }],
+      ['filter-event-select', () => currentEventCode, (v: string) => { currentEventCode = v; }],
+      ['filter-health-select', () => currentHealth, (v: string) => { currentHealth = v; }],
+      ['filter-timewindow-select', () => currentTimeWindow, (v: string) => { currentTimeWindow = v; }],
+      ['logs-sort-select', () => currentSort, (v: string) => { currentSort = v; }],
+    ] as const).forEach(([id, getter, setter]) => {
+      $val(id, getter());
+      $id<HTMLSelectElement>(id)?.addEventListener('change', (e) => {
+        setter((e.target as HTMLSelectElement).value);
         currentPage = 1;
         loadLogs();
       });
-    }
-
-    if (eventSelect) {
-      eventSelect.value = currentEventCode;
-      eventSelect.addEventListener('change', () => {
-        currentEventCode = eventSelect.value;
-        currentPage = 1;
-        loadLogs();
-      });
-    }
-
-    if (healthSelect) {
-      healthSelect.value = currentHealth;
-      healthSelect.addEventListener('change', () => {
-        currentHealth = healthSelect.value;
-        currentPage = 1;
-        loadLogs();
-      });
-    }
-
-    if (timewindowSelect) {
-      timewindowSelect.value = currentTimeWindow;
-      timewindowSelect.addEventListener('change', () => {
-        currentTimeWindow = timewindowSelect.value;
-        currentPage = 1;
-        loadLogs();
-      });
-    }
-
-    if (sortSelect) {
-      sortSelect.value = currentSort;
-      sortSelect.addEventListener('change', () => {
-        currentSort = sortSelect.value;
-        currentPage = 1;
-        loadLogs();
-      });
-    }
+    });
 
     // Search, clear & refresh bindings via adminWorkbench
     bindSearchAndRefresh({

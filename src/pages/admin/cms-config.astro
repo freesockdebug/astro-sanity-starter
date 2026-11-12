@@ -1,6 +1,5 @@
 ---
 // src/pages/admin/cms-config.astro
-// Unified CMS Configuration Console: Navigation, Catalog Hall, Artisan Story & Quote Drawer
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
@@ -8,7 +7,7 @@ import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(
+const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
   Astro,
   cfEnv,
   '/admin/cms-config',
@@ -17,11 +16,43 @@ const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectR
 if (redirectResponse) return redirectResponse;
 
 const canWrite = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cms:write'));
-const pageTitle = 'CMS Site Configuration';
+
+const tabs = [
+  ['site', '1. Navigation & Brand (siteConfig)'],
+  ['catalog', '2. Product Hall (catalogSettings)'],
+  ['story', '3. Craft Badges (productStorySettings)'],
+  ['rfq', '4. RFQ Quote Drawer (rfqSettings)'],
+] as const;
+
+const rfqToggles = [
+  ['rfq-toggle-swatch-kit', 'showSwatchKitButton', 'Show "Request Swatch Kit" button (Master Toggle)', false],
+  ['rfq-toggle-nav-action', 'showNavActionButton', 'Show RFQ cart button in Navbar', false],
+  ['rfq-toggle-card-quote', 'showCardQuoteButton', 'Show "Quote" button on Product Cards', true],
+  ['rfq-toggle-hero-secondary', 'showHeroSecondaryButton', 'Show secondary CTA button in Hero', true],
+  ['rfq-toggle-product-buy-sample', 'showProductBuySampleButton', 'Show "Buy Sample on Amazon" on detail page', true],
+  ['rfq-toggle-product-add-quote', 'showProductAddToQuoteButton', 'Show "Add to Quote Basket" on detail page', true],
+  ['rfq-toggle-product-spec-sheet', 'showProductSpecSheetButton', 'Show "Download Spec Sheet PDF" on detail page', true],
+] as const;
+
+const rfqCopyFields = [
+  ['rfq-title-en', 'Drawer Header Title (EN)'],
+  ['rfq-empty-en', 'Empty Cart Message (EN)'],
+  ['rfq-btn-en', 'Add to Quote Button Text (EN)'],
+  ['rfq-submit-en', 'Submit Inquiry Button Text (EN)'],
+] as const;
+
+const catalogFields = [
+  ['cat-title-en', 'Banner Title (EN)'],
+  ['cat-title-de', 'Banner Title (DE)'],
+  ['cat-sub-en', 'Banner Subtitle (EN)'],
+  ['cat-sub-de', 'Banner Subtitle (DE)'],
+] as const;
+
+const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs';
 ---
 
 <AdminLayout
-  title={pageTitle}
+  title="CMS Site Configuration"
   currentTab="cms_config"
   sessionEmail={sessionUser?.email || ''}
   adminName={adminContext?.name}
@@ -34,43 +65,28 @@ const pageTitle = 'CMS Site Configuration';
   fullscreenWorkbench={true}
 >
   <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
-    <!-- Top Action Bar -->
     <AdminPageToolbar
       title="CMS Global Content Config"
       subtitle="Manage navigation, product catalog headers, artisan story badges and B2B RFQ cart"
     >
       <div slot="actions" class="flex items-center gap-2">
         {canWrite && (
-          <button
-            type="button"
-            id="btn-save-current-config"
-            class="h-8 px-4 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
-          >
+          <button type="button" id="btn-save-current-config" class="h-8 px-4 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs cursor-pointer flex items-center gap-1.5">
             <span>Save Configuration</span>
           </button>
         )}
       </div>
     </AdminPageToolbar>
 
-    <!-- Main Workspace Container -->
     <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl shadow-2xs flex flex-col overflow-hidden">
-      <!-- Tabs Bar -->
       <div class="px-4 border-b border-black/5 flex gap-4 text-xs font-semibold shrink-0 bg-[#fafafc]">
-        <button type="button" class="cfg-tab-btn py-3 border-b-2 border-black text-[#1d1d1f] cursor-pointer" data-tab="site">
-          1. Navigation & Brand (siteConfig)
-        </button>
-        <button type="button" class="cfg-tab-btn py-3 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="catalog">
-          2. Product Hall (catalogSettings)
-        </button>
-        <button type="button" class="cfg-tab-btn py-3 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="story">
-          3. Craft Badges (productStorySettings)
-        </button>
-        <button type="button" class="cfg-tab-btn py-3 border-b-2 border-transparent text-[#86868b] hover:text-black cursor-pointer" data-tab="rfq">
-          4. RFQ Quote Drawer (rfqSettings)
-        </button>
+        {tabs.map(([id, label], i) => (
+          <button type="button" class={`cfg-tab-btn py-3 border-b-2 cursor-pointer ${i === 0 ? 'border-black text-[#1d1d1f]' : 'border-transparent text-[#86868b] hover:text-black'}`} data-tab={id}>
+            {label}
+          </button>
+        ))}
       </div>
 
-      <!-- Tab Panes Container -->
       <div class="flex-1 overflow-y-auto p-4 sm:p-6 text-xs">
         <!-- PANE 1: siteConfig -->
         <div id="pane-site" class="cfg-pane space-y-5 max-w-3xl">
@@ -91,24 +107,18 @@ const pageTitle = 'CMS Site Configuration';
                 <span class="font-bold text-xs text-[#1d1d1f] block">Header Navigation Links</span>
                 <span class="text-[10px] text-[#86868b]">Top navigation items displayed across the store</span>
               </div>
-              <button type="button" id="btn-add-nav-item" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
-                ＋ Add Link
-              </button>
+              <button type="button" id="btn-add-nav-item" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">＋ Add Link</button>
             </div>
-            <div id="nav-items-container" class="space-y-2">
-              <!-- Nav items injected here -->
-            </div>
+            <div id="nav-items-container" class="space-y-2"></div>
           </div>
 
           <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
             <label class="block font-bold text-xs text-[#1d1d1f]">Footer & Copyright Text</label>
-            <input type="text" id="site-copyright" placeholder="© 2026 Gwen & Venni Atelier. All rights reserved." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs" />
+            <input type="text" id="site-copyright" placeholder="© 2026 Gwen & Venni Atelier. All rights reserved." class={inpCls} />
           </div>
 
-          <!-- WhatsApp & Instant Notification Integrations -->
           <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
             <span class="font-bold text-xs text-[#1d1d1f] block">Instant Communication & Webhook Notifications</span>
-            
             <div class="space-y-3">
               <label class="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" id="site-enable-whatsapp" class="rounded accent-black" />
@@ -117,15 +127,14 @@ const pageTitle = 'CMS Site Configuration';
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
                 <div>
                   <label class="block font-semibold mb-1 text-[11px]">WhatsApp Phone Number</label>
-                  <input type="text" id="site-whatsapp-number" placeholder="+1 (555) 019-2834" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs font-mono" />
+                  <input type="text" id="site-whatsapp-number" placeholder="+1 (555) 019-2834" class={`${inpCls} font-mono`} />
                 </div>
                 <div>
                   <label class="block font-semibold mb-1 text-[11px]">Default Inquiry Greeting Message</label>
-                  <input type="text" id="site-whatsapp-prefill" placeholder="Hello Gwen & Venni team..." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                  <input type="text" id="site-whatsapp-prefill" placeholder="Hello Gwen & Venni team..." class={inpCls} />
                 </div>
               </div>
             </div>
-
             <div class="border-t border-black/5 pt-3 space-y-3">
               <label class="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" id="site-enable-webhook" class="rounded accent-black" />
@@ -134,17 +143,16 @@ const pageTitle = 'CMS Site Configuration';
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
                 <div>
                   <label class="block font-semibold mb-1 text-[11px]">Robot Webhook URL (Slack, DingTalk, Feishu, etc.)</label>
-                  <input type="url" id="site-webhook-url" placeholder="https://hooks.slack.com/services/..." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs font-mono" />
+                  <input type="url" id="site-webhook-url" placeholder="https://hooks.slack.com/services/..." class={`${inpCls} font-mono`} />
                 </div>
                 <div>
                   <label class="block font-semibold mb-1 text-[11px]">Inquiry Alert Recipient Email</label>
-                  <input type="email" id="site-recipient-email" placeholder="wholesale@gwenvenni.com" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                  <input type="email" id="site-recipient-email" placeholder="wholesale@gwenvenni.com" class={inpCls} />
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Performance & Edge Cache -->
           <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
             <span class="font-bold text-xs text-[#1d1d1f] block">Performance & Cloudflare Edge CDN</span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -156,14 +164,16 @@ const pageTitle = 'CMS Site Configuration';
               </div>
               <div>
                 <label class="block font-semibold mb-1 text-[11px]">HTML Edge Cache TTL (Seconds)</label>
-                <select id="site-edge-cache-ttl" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs">
-                  <option value="0">0s (Direct bypass / No cache)</option>
-                  <option value="60">60s (1 minute - Testing)</option>
-                  <option value="300">300s (5 minutes - Recommended Gold Standard)</option>
-                  <option value="900">900s (15 minutes)</option>
-                  <option value="1800">1800s (30 minutes)</option>
-                  <option value="3600">3600s (1 hour)</option>
-                  <option value="86400">86400s (24 hours)</option>
+                <select id="site-edge-cache-ttl" class={inpCls}>
+                  {[
+                    [0, '0s (Direct bypass / No cache)'],
+                    [60, '60s (1 minute - Testing)'],
+                    [300, '300s (5 minutes - Recommended Gold Standard)'],
+                    [900, '900s (15 minutes)'],
+                    [1800, '1800s (30 minutes)'],
+                    [3600, '3600s (1 hour)'],
+                    [86400, '86400s (24 hours)'],
+                  ].map(([val, label]) => <option value={String(val)}>{label}</option>)}
                 </select>
               </div>
             </div>
@@ -175,22 +185,12 @@ const pageTitle = 'CMS Site Configuration';
           <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
             <span class="font-bold text-xs text-[#1d1d1f] block">/products Catalog Header Banner</span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block font-semibold mb-1">Banner Title (EN)</label>
-                <input type="text" id="cat-title-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
-              </div>
-              <div>
-                <label class="block font-semibold mb-1">Banner Title (DE)</label>
-                <input type="text" id="cat-title-de" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
-              </div>
-              <div>
-                <label class="block font-semibold mb-1">Banner Subtitle (EN)</label>
-                <input type="text" id="cat-sub-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
-              </div>
-              <div>
-                <label class="block font-semibold mb-1">Banner Subtitle (DE)</label>
-                <input type="text" id="cat-sub-de" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
-              </div>
+              {catalogFields.map(([id, label]) => (
+                <div>
+                  <label class="block font-semibold mb-1">{label}</label>
+                  <input type="text" id={id} class={inpCls} />
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -202,11 +202,11 @@ const pageTitle = 'CMS Site Configuration';
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block font-semibold mb-1">Badge Text (EN)</label>
-                <input type="text" id="story-badge-text" placeholder="CRAFTSMANSHIP & STORY" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                <input type="text" id="story-badge-text" placeholder="CRAFTSMANSHIP & STORY" class={inpCls} />
               </div>
               <div>
                 <label class="block font-semibold mb-1">Story Heading (EN)</label>
-                <input type="text" id="story-heading" placeholder="The Story Behind the Silhouette" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                <input type="text" id="story-heading" placeholder="The Story Behind the Silhouette" class={inpCls} />
               </div>
             </div>
           </div>
@@ -217,13 +217,9 @@ const pageTitle = 'CMS Site Configuration';
                 <span class="font-bold text-xs text-[#1d1d1f] block">Universal Craft & Quality Credential Cards</span>
                 <span class="text-[10px] text-[#86868b]">Prominent credibility badges shown in the sticky sidebar (credentials[])</span>
               </div>
-              <button type="button" id="btn-add-badge" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">
-                ＋ Add Credential Card
-              </button>
+              <button type="button" id="btn-add-badge" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">＋ Add Credential Card</button>
             </div>
-            <div id="story-badges-container" class="space-y-2">
-              <!-- Credentials injected here -->
-            </div>
+            <div id="story-badges-container" class="space-y-2"></div>
           </div>
         </div>
 
@@ -232,64 +228,30 @@ const pageTitle = 'CMS Site Configuration';
           <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-4">
             <span class="font-bold text-xs text-[#1d1d1f] block">B2B Quote Cart & RFQ Drawer Copy</span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block font-semibold mb-1">Drawer Header Title (EN)</label>
-                <input type="text" id="rfq-title-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
-              </div>
-              <div>
-                <label class="block font-semibold mb-1">Empty Cart Message (EN)</label>
-                <input type="text" id="rfq-empty-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
-              </div>
-              <div>
-                <label class="block font-semibold mb-1">Add to Quote Button Text (EN)</label>
-                <input type="text" id="rfq-btn-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
-              </div>
-              <div>
-                <label class="block font-semibold mb-1">Submit Inquiry Button Text (EN)</label>
-                <input type="text" id="rfq-submit-en" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
-              </div>
+              {rfqCopyFields.map(([id, label]) => (
+                <div>
+                  <label class="block font-semibold mb-1">{label}</label>
+                  <input type="text" id={id} class={inpCls} />
+                </div>
+              ))}
             </div>
           </div>
 
-          <!-- Master Button Visibility Toggles -->
           <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
             <div>
               <span class="font-bold text-xs text-[#1d1d1f] block">Global Master Button Visibility Toggles</span>
               <span class="text-[10px] text-[#86868b]">Control visibility of call-to-action buttons across the entire website</span>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="rfq-toggle-swatch-kit" class="rounded accent-black" />
-                <span class="text-xs text-[#1d1d1f]">Show "Request Swatch Kit" button (Master Toggle)</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="rfq-toggle-nav-action" class="rounded accent-black" />
-                <span class="text-xs text-[#1d1d1f]">Show RFQ cart button in Navbar</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="rfq-toggle-card-quote" class="rounded accent-black" />
-                <span class="text-xs text-[#1d1d1f]">Show "Quote" button on Product Cards</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="rfq-toggle-hero-secondary" class="rounded accent-black" />
-                <span class="text-xs text-[#1d1d1f]">Show secondary CTA button in Hero</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="rfq-toggle-product-buy-sample" class="rounded accent-black" />
-                <span class="text-xs text-[#1d1d1f]">Show "Buy Sample on Amazon" on detail page</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="rfq-toggle-product-add-quote" class="rounded accent-black" />
-                <span class="text-xs text-[#1d1d1f]">Show "Add to Quote Basket" on detail page</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer sm:col-span-2">
-                <input type="checkbox" id="rfq-toggle-product-spec-sheet" class="rounded accent-black" />
-                <span class="text-xs text-[#1d1d1f]">Show "Download Spec Sheet PDF" on detail page</span>
-              </label>
+              {rfqToggles.map(([id, prop, label, defVal], idx) => (
+                <label class={`flex items-center gap-2 cursor-pointer ${idx === rfqToggles.length - 1 ? 'sm:col-span-2' : ''}`}>
+                  <input type="checkbox" id={id} data-rfq-prop={prop} data-rfq-def={String(defVal)} class="rounded accent-black" />
+                  <span class="text-xs text-[#1d1d1f]">{label}</span>
+                </label>
+              ))}
             </div>
           </div>
 
-          <!-- Swatch Kit & Amazon Store Defaults -->
           <div class="p-4 rounded-2xl bg-[#fafafc] border border-black/5 space-y-3">
             <div>
               <span class="font-bold text-xs text-[#1d1d1f] block">Official Swatch Kit Defaults & Amazon Store</span>
@@ -298,15 +260,15 @@ const pageTitle = 'CMS Site Configuration';
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label class="block font-semibold mb-1 text-[11px]">Swatch Kit SKU</label>
-                <input type="text" id="rfq-swatch-sku" placeholder="SWATCH-KIT" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 font-mono text-xs" />
+                <input type="text" id="rfq-swatch-sku" placeholder="SWATCH-KIT" class={`${inpCls} font-mono`} />
               </div>
               <div>
                 <label class="block font-semibold mb-1 text-[11px]">Swatch Kit Title (EN)</label>
-                <input type="text" id="rfq-swatch-title" placeholder="Curated Fabric Swatch Kit" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                <input type="text" id="rfq-swatch-title" placeholder="Curated Fabric Swatch Kit" class={inpCls} />
               </div>
               <div>
                 <label class="block font-semibold mb-1 text-[11px]">Default Amazon Store URL</label>
-                <input type="url" id="rfq-amazon-store-url" placeholder="https://www.amazon.com/stores/..." class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 text-xs" />
+                <input type="url" id="rfq-amazon-store-url" placeholder="https://www.amazon.com/stores/..." class={inpCls} />
               </div>
             </div>
           </div>
@@ -317,376 +279,255 @@ const pageTitle = 'CMS Site Configuration';
 </AdminLayout>
 
 <script>
-  import { escapeHtml, getFallbackEn, setLocaleVal } from '@utils/adminWorkbench';
+  import { escapeHtml, getFallbackEn, setLocaleVal, $val, $chk } from '@utils/adminWorkbench';
+
+  const getLocaleVal = getFallbackEn;
+  const makeLocaleVal = (str: string, orig?: any) => setLocaleVal(orig, str, 'en');
 
   function initCmsConfig() {
     let activeTab = 'site';
-  let configs: any = {
-    siteConfig: { _type: 'siteConfig', nav: [] },
-    catalogSettings: { _type: 'catalogSettings' },
-    productStorySettings: { _type: 'productStorySettings', badges: [] },
-    rfqSettings: { _type: 'rfqSettings' },
-  };
+    let configs: any = {
+      siteConfig: { _type: 'siteConfig', nav: [] },
+      catalogSettings: { _type: 'catalogSettings' },
+      productStorySettings: { _type: 'productStorySettings', badges: [] },
+      rfqSettings: { _type: 'rfqSettings' },
+    };
 
-  // Tab switching
-  const tabBtns = document.querySelectorAll('.cfg-tab-btn');
-  tabBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      activeTab = btn.getAttribute('data-tab') || 'site';
-      tabBtns.forEach((b) => {
-        b.classList.remove('border-black', 'text-[#1d1d1f]');
-        b.classList.add('border-transparent', 'text-[#86868b]');
-      });
-      btn.classList.add('border-black', 'text-[#1d1d1f]');
-      btn.classList.remove('border-transparent', 'text-[#86868b]');
-
-      document.querySelectorAll('.cfg-pane').forEach((p) => p.classList.add('hidden'));
-      document.getElementById(`pane-${activeTab}`)?.classList.remove('hidden');
-    });
-  });
-
-  // Load All Configs
-  async function loadConfigs() {
-    try {
-      const res = await fetch('/api/admin/cms/config');
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load configs');
-
-      configs = data.configs;
-      populateSitePane();
-      populateCatalogPane();
-      populateStoryPane();
-      populateRfqPane();
-    } catch (e: any) {
-      (window as any).__showToast?.(e.message, 'error');
-    }
-  }
-
-  const getLocaleVal = (val: any) => getFallbackEn(val);
-  const makeLocaleVal = (str: string, orig?: any) => setLocaleVal(orig, str, 'en');
-
-  // 1. Site Pane
-  function populateSitePane() {
-    const s = configs.siteConfig || {};
-    const brandInput = document.getElementById('site-brand-name') as HTMLInputElement | null;
-    const tagInput = document.getElementById('site-tagline') as HTMLInputElement | null;
-    const copyInput = document.getElementById('site-copyright') as HTMLInputElement | null;
-
-    if (brandInput) brandInput.value = s.header?.title || s.brandName || 'Gwen & Venni';
-    if (tagInput) tagInput.value = getLocaleVal(s.header?.subtitle) || s.tagline || '';
-    if (copyInput) copyInput.value = getLocaleVal(s.footer?.text) || s.copyright || '';
-
-    const enableWa = document.getElementById('site-enable-whatsapp') as HTMLInputElement | null;
-    const waNum = document.getElementById('site-whatsapp-number') as HTMLInputElement | null;
-    const waPrefill = document.getElementById('site-whatsapp-prefill') as HTMLInputElement | null;
-    const enableWb = document.getElementById('site-enable-webhook') as HTMLInputElement | null;
-    const wbUrl = document.getElementById('site-webhook-url') as HTMLInputElement | null;
-    const emailInput = document.getElementById('site-recipient-email') as HTMLInputElement | null;
-    const enableProxy = document.getElementById('site-enable-image-proxy') as HTMLInputElement | null;
-    const ttlSelect = document.getElementById('site-edge-cache-ttl') as HTMLSelectElement | null;
-
-    if (enableWa) enableWa.checked = Boolean(s.enableWhatsApp);
-    if (waNum) waNum.value = s.whatsAppNumber || '';
-    if (waPrefill) waPrefill.value = getLocaleVal(s.whatsAppPrefillText) || '';
-    if (enableWb) enableWb.checked = Boolean(s.enableNotificationWebhook);
-    if (wbUrl) wbUrl.value = s.notificationWebhookUrl || '';
-    if (emailInput) emailInput.value = s.notificationRecipientEmail || '';
-    if (enableProxy) enableProxy.checked = s.enableImageProxy !== undefined ? Boolean(s.enableImageProxy) : true;
-    if (ttlSelect) ttlSelect.value = String(s.edgeCacheTtl !== undefined ? s.edgeCacheTtl : 300);
-
-    renderNavItems();
-  }
-
-  function renderNavItems() {
-    const container = document.getElementById('nav-items-container');
-    if (!container) return;
-    const nav = configs.siteConfig.header?.navLinks || configs.siteConfig.nav || [];
-    if (nav.length === 0) {
-      container.innerHTML = `<div class="py-2 text-[#86868b] text-[11px]">No custom navigation links.</div>`;
-      return;
-    }
-    container.innerHTML = nav.map((item: any, idx: number) => `
-      <div class="flex items-center gap-2">
-        <input type="text" class="nav-label w-1/3 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Label" value="${escapeHtml(getLocaleVal(item.label) || '')}" />
-        <input type="text" class="nav-href flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 font-mono text-xs" placeholder="/products" value="${escapeHtml(item.url || item.href || '')}" />
-        <button type="button" class="btn-del-nav text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
-      </div>
-    `).join('');
-
-    container.querySelectorAll('.btn-del-nav').forEach((btn) => {
+    const tabBtns = document.querySelectorAll('.cfg-tab-btn');
+    tabBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        if (configs.siteConfig.header?.navLinks) {
-          configs.siteConfig.header.navLinks.splice(idx, 1);
-        }
-        if (configs.siteConfig.nav) {
-          configs.siteConfig.nav.splice(idx, 1);
-        }
+        activeTab = btn.getAttribute('data-tab') || 'site';
+        tabBtns.forEach((b) => {
+          b.classList.toggle('border-black', b === btn);
+          b.classList.toggle('text-[#1d1d1f]', b === btn);
+          b.classList.toggle('border-transparent', b !== btn);
+          b.classList.toggle('text-[#86868b]', b !== btn);
+        });
+        document.querySelectorAll('.cfg-pane').forEach((p) => p.classList.add('hidden'));
+        document.getElementById(`pane-${activeTab}`)?.classList.remove('hidden');
+      });
+    });
+
+    async function loadConfigs() {
+      try {
+        const res = await fetch('/api/admin/cms/config');
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load configs');
+        configs = data.configs;
+
+        const s = configs.siteConfig || {};
+        $val('site-brand-name', s.header?.title || s.brandName || 'Gwen & Venni');
+        $val('site-tagline', getLocaleVal(s.header?.subtitle) || s.tagline || '');
+        $val('site-copyright', getLocaleVal(s.footer?.text) || s.copyright || '');
+        $chk('site-enable-whatsapp', Boolean(s.enableWhatsApp));
+        $val('site-whatsapp-number', s.whatsAppNumber || '');
+        $val('site-whatsapp-prefill', getLocaleVal(s.whatsAppPrefillText) || '');
+        $chk('site-enable-webhook', Boolean(s.enableNotificationWebhook));
+        $val('site-webhook-url', s.notificationWebhookUrl || '');
+        $val('site-recipient-email', s.notificationRecipientEmail || '');
+        $chk('site-enable-image-proxy', s.enableImageProxy !== undefined ? Boolean(s.enableImageProxy) : true);
+        $val('site-edge-cache-ttl', String(s.edgeCacheTtl ?? 300));
         renderNavItems();
-      });
-    });
-  }
 
-  document.getElementById('btn-add-nav-item')?.addEventListener('click', () => {
-    if (!configs.siteConfig.header) configs.siteConfig.header = {};
-    if (!configs.siteConfig.header.navLinks) configs.siteConfig.header.navLinks = [];
-    configs.siteConfig.header.navLinks.push({
-      _key: crypto.randomUUID().slice(0, 8),
-      _type: 'actionLink',
-      label: { en: 'New Link' },
-      url: '/custom',
-    });
-    renderNavItems();
-  });
+        const c = configs.catalogSettings || {};
+        $val('cat-title-en', c.title?.en || '');
+        $val('cat-title-de', c.title?.de || '');
+        $val('cat-sub-en', c.subtitle?.en || '');
+        $val('cat-sub-de', c.subtitle?.de || '');
 
-  // 2. Catalog Pane
-  function populateCatalogPane() {
-    const c = configs.catalogSettings || {};
-    (document.getElementById('cat-title-en') as HTMLInputElement).value = c.title?.en || '';
-    (document.getElementById('cat-title-de') as HTMLInputElement).value = c.title?.de || '';
-    (document.getElementById('cat-sub-en') as HTMLInputElement).value = c.subtitle?.en || '';
-    (document.getElementById('cat-sub-de') as HTMLInputElement).value = c.subtitle?.de || '';
-  }
-
-  // 3. Story Pane
-  function populateStoryPane() {
-    const s = configs.productStorySettings || {};
-    const badgeInput = document.getElementById('story-badge-text') as HTMLInputElement | null;
-    const headingInput = document.getElementById('story-heading') as HTMLInputElement | null;
-
-    if (badgeInput) badgeInput.value = getLocaleVal(s.storyBadgeText) || 'CRAFTSMANSHIP & STORY';
-    if (headingInput) headingInput.value = getLocaleVal(s.storyHeading) || 'The Story Behind the Silhouette';
-
-    renderStoryBadges();
-  }
-
-  function renderStoryBadges() {
-    const container = document.getElementById('story-badges-container');
-    if (!container) return;
-    const badges = configs.productStorySettings.credentials || configs.productStorySettings.badges || [];
-    if (badges.length === 0) {
-      container.innerHTML = `<div class="py-2 text-[#86868b] text-[11px]">No credential cards configured.</div>`;
-      return;
-    }
-    container.innerHTML = badges.map((b: any, idx: number) => `
-      <div class="p-2.5 rounded-xl bg-white border border-black/5 flex flex-col sm:flex-row items-start sm:items-center gap-2">
-        <select class="badge-icon-type px-2 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs shrink-0">
-          <option value="lonati" ${b.iconType === 'lonati' ? 'selected' : ''}>⚙️ Lonati</option>
-          <option value="seamless" ${b.iconType === 'seamless' ? 'selected' : ''}>🪡 Seamless</option>
-          <option value="oekotex" ${b.iconType === 'oekotex' ? 'selected' : ''}>🌿 OEKO-TEX</option>
-          <option value="gauge" ${b.iconType === 'gauge' ? 'selected' : ''}>📐 High-Gauge</option>
-          <option value="fiber" ${b.iconType === 'fiber' ? 'selected' : ''}>🧵 Natural Fibers</option>
-          <option value="custom" ${b.iconType === 'custom' ? 'selected' : ''}>✨ Custom</option>
-        </select>
-        <input type="text" class="badge-title flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Card Title" value="${escapeHtml(getLocaleVal(b.title) || '')}" />
-        <input type="text" class="badge-desc flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Detail Description" value="${escapeHtml(getLocaleVal(b.description) || '')}" />
-        <button type="button" class="btn-del-badge text-[#86868b] hover:text-rose-600 p-1 self-end sm:self-center" data-idx="${idx}">✕</button>
-      </div>
-    `).join('');
-
-    container.querySelectorAll('.btn-del-badge').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        if (configs.productStorySettings.credentials) {
-          configs.productStorySettings.credentials.splice(idx, 1);
-        }
-        if (configs.productStorySettings.badges) {
-          configs.productStorySettings.badges.splice(idx, 1);
-        }
+        const st = configs.productStorySettings || {};
+        $val('story-badge-text', getLocaleVal(st.storyBadgeText) || 'CRAFTSMANSHIP & STORY');
+        $val('story-heading', getLocaleVal(st.storyHeading) || 'The Story Behind the Silhouette');
         renderStoryBadges();
+
+        const r = configs.rfqSettings || {};
+        $val('rfq-title-en', getLocaleVal(r.drawerTitle) || '');
+        $val('rfq-empty-en', getLocaleVal(r.drawerEmptyTitle) || getLocaleVal(r.emptyCartNotice) || '');
+        $val('rfq-btn-en', getLocaleVal(r.btnAddToQuoteText) || getLocaleVal(r.addToQuoteBtn) || '');
+        $val('rfq-submit-en', getLocaleVal(r.drawerSubmitButtonText) || getLocaleVal(r.submitInquiryBtn) || '');
+        document.querySelectorAll<HTMLInputElement>('[data-rfq-prop]').forEach((el) => {
+          const prop = el.dataset.rfqProp!;
+          const def = el.dataset.rfqDef === 'true';
+          el.checked = r[prop] !== undefined ? Boolean(r[prop]) : def;
+        });
+        $val('rfq-swatch-sku', r.swatchKitSku || 'SWATCH-KIT');
+        $val('rfq-swatch-title', getLocaleVal(r.swatchKitTitle) || '');
+        $val('rfq-amazon-store-url', r.defaultAmazonStoreUrl || '');
+      } catch (e: any) {
+        (window as any).__showToast?.(e.message, 'error');
+      }
+    }
+
+    function renderNavItems() {
+      const container = document.getElementById('nav-items-container');
+      if (!container) return;
+      const nav = configs.siteConfig.header?.navLinks || configs.siteConfig.nav || [];
+      container.innerHTML = nav.length === 0
+        ? `<div class="py-2 text-[#86868b] text-[11px]">No custom navigation links.</div>`
+        : nav.map((item: any, idx: number) => `
+          <div class="flex items-center gap-2">
+            <input type="text" class="nav-label w-1/3 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Label" value="${escapeHtml(getLocaleVal(item.label) || '')}" />
+            <input type="text" class="nav-href flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 font-mono text-xs" placeholder="/products" value="${escapeHtml(item.url || item.href || '')}" />
+            <button type="button" class="btn-del-nav text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
+          </div>
+        `).join('');
+      container.querySelectorAll('.btn-del-nav').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          configs.siteConfig.header?.navLinks?.splice(idx, 1);
+          configs.siteConfig.nav?.splice(idx, 1);
+          renderNavItems();
+        });
       });
-    });
-  }
+    }
 
-  document.getElementById('btn-add-badge')?.addEventListener('click', () => {
-    if (!configs.productStorySettings.credentials) configs.productStorySettings.credentials = [];
-    configs.productStorySettings.credentials.push({
-      _key: crypto.randomUUID().slice(0, 8),
-      iconType: 'lonati',
-      title: { en: 'Italian Lonati Calibration' },
-      description: { en: '200-needle precision cylinder engineering' },
-    });
-    renderStoryBadges();
-  });
-
-  // 4. RFQ Pane
-  function populateRfqPane() {
-    const r = configs.rfqSettings || {};
-    (document.getElementById('rfq-title-en') as HTMLInputElement).value = getLocaleVal(r.drawerTitle) || '';
-    (document.getElementById('rfq-empty-en') as HTMLInputElement).value = getLocaleVal(r.drawerEmptyTitle) || getLocaleVal(r.emptyCartNotice) || '';
-    (document.getElementById('rfq-btn-en') as HTMLInputElement).value = getLocaleVal(r.btnAddToQuoteText) || getLocaleVal(r.addToQuoteBtn) || '';
-    (document.getElementById('rfq-submit-en') as HTMLInputElement).value = getLocaleVal(r.drawerSubmitButtonText) || getLocaleVal(r.submitInquiryBtn) || '';
-
-    // Master button toggles
-    const tSwatch = document.getElementById('rfq-toggle-swatch-kit') as HTMLInputElement | null;
-    if (tSwatch) tSwatch.checked = Boolean(r.showSwatchKitButton);
-    const tNav = document.getElementById('rfq-toggle-nav-action') as HTMLInputElement | null;
-    if (tNav) tNav.checked = Boolean(r.showNavActionButton);
-    const tCard = document.getElementById('rfq-toggle-card-quote') as HTMLInputElement | null;
-    if (tCard) tCard.checked = r.showCardQuoteButton !== undefined ? Boolean(r.showCardQuoteButton) : true;
-    const tHero = document.getElementById('rfq-toggle-hero-secondary') as HTMLInputElement | null;
-    if (tHero) tHero.checked = r.showHeroSecondaryButton !== undefined ? Boolean(r.showHeroSecondaryButton) : true;
-    const tBuy = document.getElementById('rfq-toggle-product-buy-sample') as HTMLInputElement | null;
-    if (tBuy) tBuy.checked = r.showProductBuySampleButton !== undefined ? Boolean(r.showProductBuySampleButton) : true;
-    const tAdd = document.getElementById('rfq-toggle-product-add-quote') as HTMLInputElement | null;
-    if (tAdd) tAdd.checked = r.showProductAddToQuoteButton !== undefined ? Boolean(r.showProductAddToQuoteButton) : true;
-    const tSpec = document.getElementById('rfq-toggle-product-spec-sheet') as HTMLInputElement | null;
-    if (tSpec) tSpec.checked = r.showProductSpecSheetButton !== undefined ? Boolean(r.showProductSpecSheetButton) : true;
-
-    // Swatch defaults & Amazon store
-    const sSku = document.getElementById('rfq-swatch-sku') as HTMLInputElement | null;
-    if (sSku) sSku.value = r.swatchKitSku || 'SWATCH-KIT';
-    const sTitle = document.getElementById('rfq-swatch-title') as HTMLInputElement | null;
-    if (sTitle) sTitle.value = getLocaleVal(r.swatchKitTitle) || '';
-    const sStore = document.getElementById('rfq-amazon-store-url') as HTMLInputElement | null;
-    if (sStore) sStore.value = r.defaultAmazonStoreUrl || '';
-  }
-
-  // Save handler for current active config
-  document.getElementById('btn-save-current-config')?.addEventListener('click', async () => {
-    let targetDocType = 'siteConfig';
-    let targetPayload: any = {};
-
-    if (activeTab === 'site') {
-      targetDocType = 'siteConfig';
-      const brand = (document.getElementById('site-brand-name') as HTMLInputElement)?.value.trim() || 'Gwen & Venni';
-      const tagline = (document.getElementById('site-tagline') as HTMLInputElement)?.value.trim() || '';
-      const copyright = (document.getElementById('site-copyright') as HTMLInputElement)?.value.trim() || '';
-
-      const labels = document.querySelectorAll('#nav-items-container .nav-label');
-      const hrefs = document.querySelectorAll('#nav-items-container .nav-href');
-      const navLinks = Array.from(labels).map((lInput: any, idx: number) => ({
+    document.getElementById('btn-add-nav-item')?.addEventListener('click', () => {
+      ((configs.siteConfig.header ||= {}).navLinks ||= []).push({
         _key: crypto.randomUUID().slice(0, 8),
         _type: 'actionLink',
-        label: makeLocaleVal(lInput.value.trim()),
-        url: (hrefs[idx] as HTMLInputElement)?.value.trim() || '/',
-      }));
-
-      if (!configs.siteConfig.header) configs.siteConfig.header = {};
-      configs.siteConfig.header.title = brand;
-      configs.siteConfig.header.subtitle = makeLocaleVal(tagline, configs.siteConfig.header.subtitle);
-      configs.siteConfig.header.navLinks = navLinks;
-
-      if (!configs.siteConfig.footer) configs.siteConfig.footer = {};
-      configs.siteConfig.footer.text = makeLocaleVal(copyright, configs.siteConfig.footer.text);
-
-      // WhatsApp & Integrations
-      configs.siteConfig.enableWhatsApp = (document.getElementById('site-enable-whatsapp') as HTMLInputElement)?.checked;
-      configs.siteConfig.whatsAppNumber = (document.getElementById('site-whatsapp-number') as HTMLInputElement)?.value.trim();
-      configs.siteConfig.whatsAppPrefillText = makeLocaleVal((document.getElementById('site-whatsapp-prefill') as HTMLInputElement)?.value.trim() || '', configs.siteConfig.whatsAppPrefillText);
-      configs.siteConfig.enableNotificationWebhook = (document.getElementById('site-enable-webhook') as HTMLInputElement)?.checked;
-      configs.siteConfig.notificationWebhookUrl = (document.getElementById('site-webhook-url') as HTMLInputElement)?.value.trim();
-      configs.siteConfig.notificationRecipientEmail = (document.getElementById('site-recipient-email') as HTMLInputElement)?.value.trim();
-      configs.siteConfig.enableImageProxy = (document.getElementById('site-enable-image-proxy') as HTMLInputElement)?.checked;
-      configs.siteConfig.edgeCacheTtl = parseInt((document.getElementById('site-edge-cache-ttl') as HTMLSelectElement)?.value || '300', 10);
-
-      // Backwards-compatible aliases
-      configs.siteConfig.brandName = brand;
-      configs.siteConfig.tagline = tagline;
-      configs.siteConfig.copyright = copyright;
-      configs.siteConfig.nav = navLinks.map(l => ({ label: l.label, href: l.url }));
-
-      targetPayload = configs.siteConfig;
-    } else if (activeTab === 'catalog') {
-      targetDocType = 'catalogSettings';
-      configs.catalogSettings.title = {
-        en: (document.getElementById('cat-title-en') as HTMLInputElement)?.value.trim(),
-        de: (document.getElementById('cat-title-de') as HTMLInputElement)?.value.trim(),
-      };
-      configs.catalogSettings.subtitle = {
-        en: (document.getElementById('cat-sub-en') as HTMLInputElement)?.value.trim(),
-        de: (document.getElementById('cat-sub-de') as HTMLInputElement)?.value.trim(),
-      };
-      targetPayload = configs.catalogSettings;
-    } else if (activeTab === 'story') {
-      targetDocType = 'productStorySettings';
-      const badgeText = (document.getElementById('story-badge-text') as HTMLInputElement)?.value.trim() || '';
-      const heading = (document.getElementById('story-heading') as HTMLInputElement)?.value.trim() || '';
-
-      configs.productStorySettings.storyBadgeText = makeLocaleVal(badgeText, configs.productStorySettings.storyBadgeText);
-      configs.productStorySettings.storyHeading = makeLocaleVal(heading, configs.productStorySettings.storyHeading);
-
-      const iconSelects = document.querySelectorAll('#story-badges-container .badge-icon-type');
-      const titles = document.querySelectorAll('#story-badges-container .badge-title');
-      const descs = document.querySelectorAll('#story-badges-container .badge-desc');
-
-      const credentials = Array.from(titles).map((tInput: any, idx: number) => ({
-        _key: crypto.randomUUID().slice(0, 8),
-        iconType: (iconSelects[idx] as HTMLSelectElement)?.value || 'lonati',
-        title: makeLocaleVal((tInput as HTMLInputElement)?.value.trim() || 'Standard'),
-        description: { _type: 'localeText', en: (descs[idx] as HTMLInputElement)?.value.trim() || '' },
-      }));
-
-      configs.productStorySettings.credentials = credentials;
-      // Backward-compatible alias
-      configs.productStorySettings.badges = credentials.map(c => ({ icon: c.iconType, title: c.title }));
-
-      targetPayload = configs.productStorySettings;
-    } else if (activeTab === 'rfq') {
-      targetDocType = 'rfqSettings';
-      const drawerTitle = (document.getElementById('rfq-title-en') as HTMLInputElement)?.value.trim();
-      const emptyNotice = (document.getElementById('rfq-empty-en') as HTMLInputElement)?.value.trim();
-      const btnQuote = (document.getElementById('rfq-btn-en') as HTMLInputElement)?.value.trim();
-      const btnSubmit = (document.getElementById('rfq-submit-en') as HTMLInputElement)?.value.trim();
-
-      configs.rfqSettings.drawerTitle = makeLocaleVal(drawerTitle, configs.rfqSettings.drawerTitle);
-      configs.rfqSettings.drawerEmptyTitle = makeLocaleVal(emptyNotice, configs.rfqSettings.drawerEmptyTitle);
-      configs.rfqSettings.btnAddToQuoteText = makeLocaleVal(btnQuote, configs.rfqSettings.btnAddToQuoteText);
-      configs.rfqSettings.drawerSubmitButtonText = makeLocaleVal(btnSubmit, configs.rfqSettings.drawerSubmitButtonText);
-
-      // Master button toggles
-      configs.rfqSettings.showSwatchKitButton = (document.getElementById('rfq-toggle-swatch-kit') as HTMLInputElement)?.checked;
-      configs.rfqSettings.showNavActionButton = (document.getElementById('rfq-toggle-nav-action') as HTMLInputElement)?.checked;
-      configs.rfqSettings.showCardQuoteButton = (document.getElementById('rfq-toggle-card-quote') as HTMLInputElement)?.checked;
-      configs.rfqSettings.showHeroSecondaryButton = (document.getElementById('rfq-toggle-hero-secondary') as HTMLInputElement)?.checked;
-      configs.rfqSettings.showProductBuySampleButton = (document.getElementById('rfq-toggle-product-buy-sample') as HTMLInputElement)?.checked;
-      configs.rfqSettings.showProductAddToQuoteButton = (document.getElementById('rfq-toggle-product-add-quote') as HTMLInputElement)?.checked;
-      configs.rfqSettings.showProductSpecSheetButton = (document.getElementById('rfq-toggle-product-spec-sheet') as HTMLInputElement)?.checked;
-
-      // Swatch defaults & Amazon store
-      configs.rfqSettings.swatchKitSku = (document.getElementById('rfq-swatch-sku') as HTMLInputElement)?.value.trim() || 'SWATCH-KIT';
-      configs.rfqSettings.swatchKitTitle = makeLocaleVal((document.getElementById('rfq-swatch-title') as HTMLInputElement)?.value.trim() || '', configs.rfqSettings.swatchKitTitle);
-      configs.rfqSettings.defaultAmazonStoreUrl = (document.getElementById('rfq-amazon-store-url') as HTMLInputElement)?.value.trim() || undefined;
-
-      // Backward-compatible aliases
-      configs.rfqSettings.emptyCartNotice = configs.rfqSettings.drawerEmptyTitle;
-      configs.rfqSettings.addToQuoteBtn = configs.rfqSettings.btnAddToQuoteText;
-      configs.rfqSettings.submitInquiryBtn = configs.rfqSettings.drawerSubmitButtonText;
-
-      targetPayload = configs.rfqSettings;
-    }
-
-    targetPayload._type = targetDocType;
-    (window as any).__showToast?.(`Saving ${targetDocType}...`, 'info');
-
-    try {
-      const res = await fetch('/api/admin/cms/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document: targetPayload }),
+        label: { en: 'New Link' },
+        url: '/custom',
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save config');
+      renderNavItems();
+    });
 
-      (window as any).__showToast?.(`Saved ${targetDocType} & refreshed caches!`, 'success');
-      if (activeTab === 'site' && typeof configs.siteConfig.enableImageProxy === 'boolean') {
-        (window as any).__ENABLE_IMAGE_PROXY__ = configs.siteConfig.enableImageProxy;
-      }
-      loadConfigs();
-    } catch (e: any) {
-      (window as any).__showToast?.(e.message, 'error');
+    function renderStoryBadges() {
+      const container = document.getElementById('story-badges-container');
+      if (!container) return;
+      const badges = configs.productStorySettings.credentials || configs.productStorySettings.badges || [];
+      const icons = [['lonati', '⚙️ Lonati'], ['seamless', '🪡 Seamless'], ['oekotex', '🌿 OEKO-TEX'], ['gauge', '📐 High-Gauge'], ['fiber', '🧵 Natural Fibers'], ['custom', '✨ Custom']];
+      container.innerHTML = badges.length === 0
+        ? `<div class="py-2 text-[#86868b] text-[11px]">No credential cards configured.</div>`
+        : badges.map((b: any, idx: number) => `
+          <div class="p-2.5 rounded-xl bg-white border border-black/5 flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <select class="badge-icon-type px-2 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs shrink-0">
+              ${icons.map(([v, l]) => `<option value="${v}" ${b.iconType === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+            <input type="text" class="badge-title flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Card Title" value="${escapeHtml(getLocaleVal(b.title) || '')}" />
+            <input type="text" class="badge-desc flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Detail Description" value="${escapeHtml(getLocaleVal(b.description) || '')}" />
+            <button type="button" class="btn-del-badge text-[#86868b] hover:text-rose-600 p-1 self-end sm:self-center" data-idx="${idx}">✕</button>
+          </div>
+        `).join('');
+      container.querySelectorAll('.btn-del-badge').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          configs.productStorySettings.credentials?.splice(idx, 1);
+          configs.productStorySettings.badges?.splice(idx, 1);
+          renderStoryBadges();
+        });
+      });
     }
-  });
 
-    // Initial load
+    document.getElementById('btn-add-badge')?.addEventListener('click', () => {
+      (configs.productStorySettings.credentials ||= []).push({
+        _key: crypto.randomUUID().slice(0, 8),
+        iconType: 'lonati',
+        title: { en: 'Italian Lonati Calibration' },
+        description: { en: '200-needle precision cylinder engineering' },
+      });
+      renderStoryBadges();
+    });
+
+    document.getElementById('btn-save-current-config')?.addEventListener('click', async () => {
+      let targetDocType = 'siteConfig';
+      let targetPayload: any = {};
+
+      if (activeTab === 'site') {
+        targetDocType = 'siteConfig';
+        const brand = $val('site-brand-name') || 'Gwen & Venni';
+        const tagline = $val('site-tagline');
+        const copyright = $val('site-copyright');
+        const labels = document.querySelectorAll<HTMLInputElement>('#nav-items-container .nav-label');
+        const hrefs = document.querySelectorAll<HTMLInputElement>('#nav-items-container .nav-href');
+        const navLinks = Array.from(labels).map((lInput, idx) => ({
+          _key: crypto.randomUUID().slice(0, 8),
+          _type: 'actionLink',
+          label: makeLocaleVal(lInput.value.trim()),
+          url: hrefs[idx]?.value.trim() || '/',
+        }));
+
+        const s = configs.siteConfig;
+        s.header = { ...(s.header || {}), title: brand, subtitle: makeLocaleVal(tagline, s.header?.subtitle), navLinks };
+        s.footer = { ...(s.footer || {}), text: makeLocaleVal(copyright, s.footer?.text) };
+        s.enableWhatsApp = $chk('site-enable-whatsapp');
+        s.whatsAppNumber = $val('site-whatsapp-number');
+        s.whatsAppPrefillText = makeLocaleVal($val('site-whatsapp-prefill'), s.whatsAppPrefillText);
+        s.enableNotificationWebhook = $chk('site-enable-webhook');
+        s.notificationWebhookUrl = $val('site-webhook-url');
+        s.notificationRecipientEmail = $val('site-recipient-email');
+        s.enableImageProxy = $chk('site-enable-image-proxy');
+        s.edgeCacheTtl = parseInt($val('site-edge-cache-ttl') || '300', 10);
+        s.brandName = brand;
+        s.tagline = tagline;
+        s.copyright = copyright;
+        s.nav = navLinks.map((l) => ({ label: l.label, href: l.url }));
+        targetPayload = s;
+      } else if (activeTab === 'catalog') {
+        targetDocType = 'catalogSettings';
+        configs.catalogSettings.title = { en: $val('cat-title-en'), de: $val('cat-title-de') };
+        configs.catalogSettings.subtitle = { en: $val('cat-sub-en'), de: $val('cat-sub-de') };
+        targetPayload = configs.catalogSettings;
+      } else if (activeTab === 'story') {
+        targetDocType = 'productStorySettings';
+        const st = configs.productStorySettings;
+        st.storyBadgeText = makeLocaleVal($val('story-badge-text'), st.storyBadgeText);
+        st.storyHeading = makeLocaleVal($val('story-heading'), st.storyHeading);
+        const iconSelects = document.querySelectorAll<HTMLSelectElement>('#story-badges-container .badge-icon-type');
+        const titles = document.querySelectorAll<HTMLInputElement>('#story-badges-container .badge-title');
+        const descs = document.querySelectorAll<HTMLInputElement>('#story-badges-container .badge-desc');
+        const credentials = Array.from(titles).map((tInput, idx) => ({
+          _key: crypto.randomUUID().slice(0, 8),
+          iconType: iconSelects[idx]?.value || 'lonati',
+          title: makeLocaleVal(tInput.value.trim() || 'Standard'),
+          description: { _type: 'localeText', en: descs[idx]?.value.trim() || '' },
+        }));
+        st.credentials = credentials;
+        st.badges = credentials.map((c) => ({ icon: c.iconType, title: c.title }));
+        targetPayload = st;
+      } else if (activeTab === 'rfq') {
+        targetDocType = 'rfqSettings';
+        const r = configs.rfqSettings;
+        r.drawerTitle = makeLocaleVal($val('rfq-title-en'), r.drawerTitle);
+        r.drawerEmptyTitle = makeLocaleVal($val('rfq-empty-en'), r.drawerEmptyTitle);
+        r.btnAddToQuoteText = makeLocaleVal($val('rfq-btn-en'), r.btnAddToQuoteText);
+        r.drawerSubmitButtonText = makeLocaleVal($val('rfq-submit-en'), r.drawerSubmitButtonText);
+        document.querySelectorAll<HTMLInputElement>('[data-rfq-prop]').forEach((el) => {
+          r[el.dataset.rfqProp!] = el.checked;
+        });
+        r.swatchKitSku = $val('rfq-swatch-sku') || 'SWATCH-KIT';
+        r.swatchKitTitle = makeLocaleVal($val('rfq-swatch-title'), r.swatchKitTitle);
+        r.defaultAmazonStoreUrl = $val('rfq-amazon-store-url') || undefined;
+        r.emptyCartNotice = r.drawerEmptyTitle;
+        r.addToQuoteBtn = r.btnAddToQuoteText;
+        r.submitInquiryBtn = r.drawerSubmitButtonText;
+        targetPayload = r;
+      }
+
+      targetPayload._type = targetDocType;
+      (window as any).__showToast?.(`Saving ${targetDocType}...`, 'info');
+      try {
+        const res = await fetch('/api/admin/cms/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ document: targetPayload }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save config');
+        (window as any).__showToast?.(`Saved ${targetDocType} & refreshed caches!`, 'success');
+        if (activeTab === 'site' && typeof configs.siteConfig.enableImageProxy === 'boolean') {
+          (window as any).__ENABLE_IMAGE_PROXY__ = configs.siteConfig.enableImageProxy;
+        }
+        loadConfigs();
+      } catch (e: any) {
+        (window as any).__showToast?.(e.message, 'error');
+      }
+    });
+
     loadConfigs();
   }
 
   initCmsConfig();
   document.addEventListener('shell:page-load', () => {
-    if (document.getElementById('btn-save-current-config')) {
-      initCmsConfig();
-    }
+    if (document.getElementById('btn-save-current-config')) initCmsConfig();
   });
 </script>
-

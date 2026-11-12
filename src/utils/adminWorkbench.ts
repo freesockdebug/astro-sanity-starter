@@ -446,3 +446,94 @@ export function syncSchemaFieldsFromDom(rootEl: ParentNode, doc: Record<string, 
   });
 }
 
+// ============================================================================
+// 3. Saltline-Style Micro DOM, URL & Drawer Primitives
+// ============================================================================
+export const $id = <T extends HTMLElement = HTMLElement>(id: string): T | null =>
+  document.getElementById(id) as T | null;
+
+export const $val = (id: string, v?: string | number | null): string => {
+  const el = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+  if (v !== undefined && el) el.value = String(v ?? '');
+  return el?.value?.trim() || '';
+};
+
+export const $chk = (id: string, v?: boolean): boolean => {
+  const el = $id<HTMLInputElement>(id);
+  if (v !== undefined && el) el.checked = Boolean(v);
+  return Boolean(el?.checked);
+};
+
+export const $txt = (id: string, v?: string | number | null): void => {
+  const el = $id(id);
+  if (el && v !== undefined) el.textContent = String(v ?? '');
+};
+
+/**
+ * Compact URL searchParams synchronizer: deletes keys matching default/empty values
+ */
+export function syncUrlParams(
+  params: Record<string, string | number | undefined | null>,
+  defaults: Record<string, string | number> = {},
+  push = true
+): void {
+  const url = new URL(window.location.href);
+  for (const [k, v] of Object.entries(params)) {
+    const def = defaults[k] ?? 'ALL';
+    if (v !== undefined && v !== null && v !== '' && v !== def) {
+      url.searchParams.set(k, String(v));
+    } else {
+      url.searchParams.delete(k);
+    }
+  }
+  if (url.toString() !== window.location.href) {
+    window.history[push ? 'pushState' : 'replaceState']({}, '', url.toString());
+  }
+}
+
+/**
+ * Universal Slide-Over Drawer Controller (supports both translate-x-full & data-state="open")
+ */
+export function createSlideDrawer(cfg: {
+  drawerId: string;
+  backdropId: string;
+  closeIds?: string[];
+  useDataState?: boolean;
+  lockBody?: boolean;
+  onClose?: () => void;
+}) {
+  const open = () => {
+    const drawer = $id(cfg.drawerId);
+    const backdrop = $id(cfg.backdropId);
+    if (cfg.useDataState) {
+      if (drawer) drawer.dataset.state = 'open';
+    } else {
+      drawer?.classList.remove('translate-x-full');
+    }
+    backdrop?.classList.remove('hidden');
+    setTimeout(() => backdrop?.classList.remove('opacity-0'), 10);
+    if (cfg.lockBody !== false) document.body.classList.add('overflow-hidden');
+  };
+
+  const close = () => {
+    const drawer = $id(cfg.drawerId);
+    const backdrop = $id(cfg.backdropId);
+    if (cfg.useDataState) {
+      if (drawer) drawer.dataset.state = 'closed';
+    } else {
+      drawer?.classList.add('translate-x-full');
+    }
+    backdrop?.classList.add('opacity-0');
+    setTimeout(() => {
+      backdrop?.classList.add('hidden');
+      if (cfg.lockBody !== false) document.body.classList.remove('overflow-hidden');
+    }, 300);
+    cfg.onClose?.();
+  };
+
+  $id(cfg.backdropId)?.addEventListener('click', close);
+  (cfg.closeIds || []).forEach((id) => $id(id)?.addEventListener('click', close));
+
+  return { open, close };
+}
+
