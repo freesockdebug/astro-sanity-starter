@@ -379,6 +379,7 @@ const pageTitle = 'Customer & Access Management';
     $id, syncUrlParams, createSlideDrawer
   } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
+  import type { AdminUserListItem, AdminUsersApiResponse } from '../../db/adminDtos';
 
   let pageAbort: AbortController | null = null;
 
@@ -397,7 +398,7 @@ const pageTitle = 'Customer & Access Management';
     { id: 'action', label: 'Actions', defaultWidth: 120, minWidth: 100, visible: true, canHide: false, pinRight: true, align: 'right' },
   ];
 
-  let currentUsersList: any[] = [];
+  let currentUsersList: AdminUserListItem[] = [];
   let currentSearch = '';
   let currentTier = 'ALL';
   let currentStatus = 'ALL';
@@ -531,7 +532,7 @@ const pageTitle = 'Customer & Access Management';
     });
   }
 
-  function renderUsers(users) {
+  function renderUsers(users: AdminUserListItem[]) {
     currentUsersList = users || [];
     const container = document.getElementById('users-content');
     if (!container) return;
@@ -764,7 +765,7 @@ const pageTitle = 'Customer & Access Management';
   const usersFetcher = createWorkbenchFetcher({
     skeletonEl: $id('users-skeleton'),
     contentEl: $id('users-content'),
-    onData: (data: any) => {
+    onData: (data: AdminUsersApiResponse) => {
       renderStats(data.stats, data.total);
       renderUsers(data.users || []);
       pagination.render(data.page || 1, data.totalPages || 1, data.total || 0, data.limit || 30);

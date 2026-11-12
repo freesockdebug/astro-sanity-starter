@@ -311,6 +311,7 @@ const pageTitle = 'Roles & Permissions Matrix';
 </AdminLayout>
 
 <script>
+  import { readJsonStore } from '@utils/adminWorkbench';
   function initRolesPage() {
     function showToast(msg: string, success: boolean = true) {
       (window as any).__showToast?.(msg, success ? 'success' : 'error');
@@ -422,14 +423,9 @@ const pageTitle = 'Roles & Permissions Matrix';
   cancelBtn?.addEventListener('click', closeModal);
 
   const rolesMap = new Map<string, any>();
-  try {
-    const rawRoles = document.getElementById('roles-data-json')?.textContent;
-    if (rawRoles) {
-      for (const r of JSON.parse(rawRoles)) {
-        if (r?.code) rolesMap.set(String(r.code), r);
-      }
-    }
-  } catch {}
+  for (const r of readJsonStore<any[]>('roles-data-json', [])) {
+    if (r?.code) rolesMap.set(String(r.code), r);
+  }
 
   document.querySelectorAll('.btn-configure-role').forEach((btn) => {
     btn.addEventListener('click', () => {

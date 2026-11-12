@@ -502,8 +502,9 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
 
 <script>
   import { clientCache } from '@utils/clientCache';
-  import { escapeHtml, formatAdminTime, createPaginationController, syncUrlParams, bindSearchAndRefresh } from '@utils/adminWorkbench';
+  import { escapeHtml, formatAdminTime, createPaginationController, syncUrlParams, bindSearchAndRefresh, readJsonStore } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
+  import type { AdminOrderListItem, AdminOrdersApiResponse } from '../../db/adminDtos';
 
   let pageAbort: AbortController | null = null;
 
@@ -529,17 +530,8 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   const canClaim = appMetaEl?.getAttribute('data-can-claim') === 'true';
   const canAssign = appMetaEl?.getAttribute('data-can-assign') === 'true';
 
-  let clientCarriers: any[] = [];
-  try {
-    const rawCarriers = document.getElementById('orders-carriers-json')?.textContent;
-    if (rawCarriers) clientCarriers = JSON.parse(rawCarriers);
-  } catch {}
-
-  let clientInquiryTypes: any[] = [];
-  try {
-    const rawInquiry = document.getElementById('orders-inquiry-types-json')?.textContent;
-    if (rawInquiry) clientInquiryTypes = JSON.parse(rawInquiry);
-  } catch {}
+  const clientCarriers = readJsonStore<any[]>('orders-carriers-json', []);
+  const clientInquiryTypes = readJsonStore<any[]>('orders-inquiry-types-json', []);
   const inquiryTypeMap = new Map(clientInquiryTypes.map((i: any) => [String(i.item_key || '').toLowerCase(), i]));
 
   function resolveTrackingUrl(carrier?: string, trackingNo?: string, customTemplate?: string): string {
@@ -591,7 +583,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   let currentPage = 1;
   let currentLimit = 50;
   let currentTotalPages = 1;
-  let currentOrdersList: any[] = [];
+  let currentOrdersList: AdminOrderListItem[] = [];
   let activeAbortController: AbortController | null = null;
 
   // Batch Selection State
@@ -886,7 +878,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     }</div>`;
   }
 
-  function renderOrders(orders) {
+  function renderOrders(orders: AdminOrderListItem[]) {
     currentOrdersList = orders || [];
     const container = document.getElementById('orders-content');
     if (!container) return;
@@ -1258,7 +1250,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
         {
           mode: 'swr',
           init: { signal: activeAbortController.signal },
-          onData: (data: any) => {
+          onData: (data: AdminOrdersApiResponse) => {
             if (skeletonTimer) clearTimeout(skeletonTimer);
             if (skeleton) skeleton.classList.add('hidden');
             renderStats(data.stats, data.total);

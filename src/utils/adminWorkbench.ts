@@ -476,6 +476,19 @@ export const $txt = (id: string, v?: string | number | null): void => {
 };
 
 /**
+ * Safely parses JSON embedded in an SSR `<script type="application/json">` or returns fallback.
+ */
+export function readJsonStore<T = any>(id: string, fallback: T): T {
+  const el = document.getElementById(id);
+  if (!el?.textContent) return fallback;
+  try {
+    return JSON.parse(el.textContent) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * Compact URL searchParams synchronizer: deletes keys matching default/empty values
  */
 export function syncUrlParams(
