@@ -142,15 +142,6 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
             );
           })}
         </div>
-
-        <!-- Hidden container for JS selector compatibility -->
-        <div class="hidden" id="stats-cards-container" aria-hidden="true">
-          <span class="stat-card" data-status="ALL"><span data-stat-field="all"></span></span>
-          <span class="stat-card" data-status="PENDING_APPROVAL"><span data-stat-field="pending"></span></span>
-          <span class="stat-card" data-status="APPROVED"><span data-stat-field="approved"></span></span>
-          <span class="stat-card" data-status="SHIPPED"><span data-stat-field="shipped"></span></span>
-          <span class="stat-card" data-status="REJECTED"><span data-stat-field="rejected"></span></span>
-        </div>
       </div>
 
       <div slot="actions" class="flex items-center gap-2 ml-auto shrink-0">
@@ -512,7 +503,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
 
 <script>
   import { clientCache } from '@utils/clientCache';
-  import { escapeHtml, formatAdminTime, createPaginationController } from '@utils/adminWorkbench';
+  import { escapeHtml, formatAdminTime, createPaginationController, syncUrlParams, bindSearchAndRefresh } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
 
   let pageAbort: AbortController | null = null;
@@ -664,50 +655,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   };
 
   function updateActiveVisuals() {
-    // 1. Update stats cards
-    document.querySelectorAll('#stats-cards-container .stat-card').forEach((card) => {
-      const cardStatus = card.getAttribute('data-status');
-      const isSelected = cardStatus === currentStatus;
-      const countEl = card.querySelector('[data-stat-field]');
-
-      if (isSelected) {
-        if (cardStatus === 'ALL') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-[#1d1d1f] text-white border-black shadow-xs cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
-        } else if (cardStatus === 'PENDING_APPROVAL') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-amber-600 text-white border-amber-700 shadow-xs cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
-        } else if (cardStatus === 'APPROVED') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
-        } else if (cardStatus === 'SHIPPED') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-emerald-600 text-white border-emerald-700 shadow-xs cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
-        } else if (cardStatus === 'REJECTED') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-zinc-700 text-white border-zinc-800 shadow-xs cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-white';
-        }
-      } else {
-        if (cardStatus === 'ALL') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-[#1d1d1f] border-black/5 hover:border-black/20 cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-[#1d1d1f]';
-        } else if (cardStatus === 'PENDING_APPROVAL') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-amber-900 border-black/5 hover:border-amber-300 cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-amber-600';
-        } else if (cardStatus === 'APPROVED') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-blue-900 border-black/5 hover:border-blue-300 cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-blue-600';
-        } else if (cardStatus === 'SHIPPED') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-emerald-900 border-black/5 hover:border-emerald-300 cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-emerald-600';
-        } else if (cardStatus === 'REJECTED') {
-          card.className = 'stat-card p-3.5 rounded-xl border text-xs transition-all bg-white text-zinc-700 border-black/5 hover:border-zinc-300 cursor-pointer';
-          if (countEl) countEl.className = 'text-lg font-bold font-mono tabular-nums text-[#1d1d1f]';
-        }
-      }
-    });
-
-    // 2. Update status pills
+    // Update status pills
     document.querySelectorAll('#status-tabs-container .status-tab').forEach((tab) => {
       const tabStatus = tab.getAttribute('data-tab-status');
       const isSelected = tabStatus === currentStatus;
@@ -754,9 +702,6 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     };
 
     Object.entries(mapping).forEach(([key, val]) => {
-      const cardEl = document.querySelector(`[data-stat-field="${key}"]`);
-      if (cardEl) cardEl.textContent = String(val);
-
       const upperKey = key === 'all' ? 'ALL' : (key === 'pending' ? 'PENDING_APPROVAL' : (key === 'approved' ? 'APPROVED' : (key === 'shipped' ? 'SHIPPED' : 'REJECTED')));
       const tabEl = document.querySelector(`[data-tab-field="${upperKey}"]`);
       if (tabEl) tabEl.textContent = String(val);
@@ -913,6 +858,35 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     }).join('');
   }
 
+  function renderAssigneeWidget(order: any, safeId: string, compact = false) {
+    if (order.assigned_to) {
+      const rep = escapeHtml(order.assigned_to.split('@')[0]);
+      const badgeCls = compact
+        ? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60'
+        : 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60';
+      const btnCls = compact
+        ? 'btn-reassign-order p-0.5 text-zinc-400 hover:text-black cursor-pointer'
+        : 'btn-reassign-order p-1 rounded text-zinc-400 hover:text-black hover:bg-black/5 transition-colors cursor-pointer';
+      return `<span class="${badgeCls}" title="${escapeHtml(order.assigned_to)}"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>${rep}</span>${
+        canAssign
+          ? `<button type="button" class="${btnCls}" data-id="${safeId}" data-current="${escapeHtml(order.assigned_to)}" title="Reassign or return to pool"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg></button>`
+          : ''
+      }`;
+    }
+    const assignBtnCls = compact
+      ? 'btn-reassign-order p-0.5 text-zinc-400 hover:text-black cursor-pointer'
+      : 'btn-reassign-order p-1 rounded text-zinc-400 hover:text-black hover:bg-black/5 transition-colors cursor-pointer';
+    return `<div class="flex items-center gap-1"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">Pool</span>${
+      (canClaim || canAssign)
+        ? `<button type="button" class="btn-claim-order-row px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-2xs cursor-pointer" data-id="${safeId}" title="Claim order to your account">Claim</button>`
+        : ''
+    }${
+      canAssign
+        ? `<button type="button" class="${assignBtnCls}" data-id="${safeId}" data-current="" title="Assign to specific sales rep"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></button>`
+        : ''
+    }</div>`;
+  }
+
   function renderOrders(orders) {
     currentOrdersList = orders || [];
     const container = document.getElementById('orders-content');
@@ -964,15 +938,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
                   <span class="text-[10px] text-[#86868b] font-mono block mt-0.5">${dateStr}</span>
                 </div>
                 <div class="shrink-0 flex items-center gap-1.5 flex-wrap justify-end">
-                  ${order.assigned_to
-                    ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60" title="${escapeHtml(order.assigned_to)}"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>${escapeHtml(order.assigned_to.split('@')[0])}</span>
-                       ${canAssign ? `<button type="button" class="btn-reassign-order p-0.5 text-zinc-400 hover:text-black cursor-pointer" data-id="${safeId}" data-current="${escapeHtml(order.assigned_to)}" title="Reassign or return to pool"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg></button>` : ''}`
-                    : `<div class="flex items-center gap-1">
-                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">Pool</span>
-                        ${(canClaim || canAssign) ? `<button type="button" class="btn-claim-order-row px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-2xs cursor-pointer" data-id="${safeId}">Claim</button>` : ''}
-                        ${canAssign ? `<button type="button" class="btn-reassign-order p-0.5 text-zinc-400 hover:text-black cursor-pointer" data-id="${safeId}" data-current="" title="Assign to specific sales rep"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></button>` : ''}
-                       </div>`
-                  }
+                  ${renderAssigneeWidget(order, safeId, true)}
                   ${renderStatusBadge(order.status)}
                 </div>
               </div>
@@ -1088,64 +1054,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
               </td>
             `;
           case 'assigned_to':
-            if (order.assigned_to) {
-              const rep = escapeHtml(order.assigned_to.split('@')[0]);
-              return `
-                <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
-                  <div class="flex items-center gap-1">
-                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60" title="${escapeHtml(order.assigned_to)}">
-                      <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                      ${rep}
-                    </span>
-                    ${canAssign ? `
-                      <button
-                        type="button"
-                        class="btn-reassign-order p-1 rounded text-zinc-400 hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
-                        data-id="${safeId}"
-                        data-current="${escapeHtml(order.assigned_to)}"
-                        title="Reassign or return to pool"
-                      >
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                      </button>
-                    ` : ''}
-                  </div>
-                </td>
-              `;
-            }
-            return `
-              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
-                <div class="flex items-center gap-1">
-                  <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
-                    Pool
-                  </span>
-                  ${(canClaim || canAssign) ? `
-                    <button
-                      type="button"
-                      class="btn-claim-order-row px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1d1d1f] text-white hover:bg-black active:scale-95 transition-all shadow-2xs cursor-pointer"
-                      data-id="${safeId}"
-                      title="Claim order to your account"
-                    >
-                      Claim
-                    </button>
-                  ` : ''}
-                  ${canAssign ? `
-                    <button
-                      type="button"
-                      class="btn-reassign-order p-1 rounded text-zinc-400 hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
-                      data-id="${safeId}"
-                      data-current=""
-                      title="Assign to specific sales rep"
-                    >
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                      </svg>
-                    </button>
-                  ` : ''}
-                </div>
-              </td>
-            `;
+            return `<td style="width: ${col.defaultWidth}px;" class="${cellPad}"><div class="flex items-center gap-1">${renderAssigneeWidget(order, safeId, false)}</div></td>`;
           case 'destination':
             return `
               <td style="width: ${col.defaultWidth}px;" class="${cellPad} text-[#52525b]">${safeCountry}</td>
@@ -1327,38 +1236,10 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     updateActiveVisuals();
 
     if (updateUrl) {
-      const url = new URL(window.location.href);
-      if (currentStatus && currentStatus !== 'ALL') {
-        url.searchParams.set('status', currentStatus);
-      } else {
-        url.searchParams.delete('status');
-      }
-
-      if (currentSearch) {
-        url.searchParams.set('search', currentSearch);
-      } else {
-        url.searchParams.delete('search');
-      }
-
-      if (currentTimeWindow && currentTimeWindow !== 'ALL') {
-        url.searchParams.set('timeWindow', currentTimeWindow);
-      } else {
-        url.searchParams.delete('timeWindow');
-      }
-
-      if (currentAssignedTo) {
-        url.searchParams.set('assignedTo', currentAssignedTo);
-      } else {
-        url.searchParams.delete('assignedTo');
-      }
-
-      if (currentPage > 1) {
-        url.searchParams.set('page', String(currentPage));
-      } else {
-        url.searchParams.delete('page');
-      }
-
-      window.history.pushState({ status: currentStatus, search: currentSearch, timeWindow: currentTimeWindow, assignedTo: currentAssignedTo, page: currentPage }, '', url.toString());
+      syncUrlParams(
+        { status: currentStatus, search: currentSearch, timeWindow: currentTimeWindow, assignedTo: currentAssignedTo, page: currentPage > 1 ? currentPage : '' },
+        { status: 'ALL', timeWindow: 'ALL', page: '' }
+      );
     }
 
     try {
@@ -1547,18 +1428,6 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     }
   });
 
-  // Card filter clicks
-  document.getElementById('stats-cards-container')?.addEventListener('click', (e) => {
-    const card = e.target.closest('[data-status]');
-    if (!card) return;
-    e.preventDefault();
-    const status = card.getAttribute('data-status') || 'ALL';
-    if (status === currentStatus && currentPage === 1) return;
-    currentStatus = status;
-    currentPage = 1;
-    fetchOrders();
-  });
-
   // Tab filter clicks
   document.getElementById('status-tabs-container')?.addEventListener('click', (e) => {
     const tab = e.target.closest('[data-tab-status]');
@@ -1571,36 +1440,20 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     fetchOrders();
   });
 
-  // Search submission and clear
-  const searchForm = document.getElementById('orders-search-form');
-  const searchInput = document.getElementById('orders-search-input');
+  // Search submission, clear & refresh
+  const searchInput = document.getElementById('orders-search-input') as HTMLInputElement | null;
   const clearSearchBtn = document.getElementById('clear-search-btn');
-
-  searchInput?.addEventListener('input', () => {
-    if (clearSearchBtn) {
-      if (searchInput.value.trim()) {
-        clearSearchBtn.classList.remove('hidden');
-      } else {
-        clearSearchBtn.classList.add('hidden');
-      }
-    }
-  });
-
-  clearSearchBtn?.addEventListener('click', () => {
-    if (searchInput) searchInput.value = '';
-    clearSearchBtn.classList.add('hidden');
-    currentSearch = '';
-    currentPage = 1;
-    fetchOrders();
-  });
-
-  searchForm?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const val = searchInput?.value.trim() || '';
-    if (val === currentSearch && currentPage === 1) return;
-    currentSearch = val;
-    currentPage = 1;
-    fetchOrders();
+  bindSearchAndRefresh({
+    searchInputId: 'orders-search-input',
+    clearBtnId: 'clear-search-btn',
+    formId: 'orders-search-form',
+    onSearch: (val) => {
+      if (val === currentSearch && currentPage === 1) return;
+      currentSearch = val;
+      currentPage = 1;
+      fetchOrders();
+    },
+    onRefresh: () => fetchOrders(false),
   });
 
   // Scope filter clicks
@@ -1632,121 +1485,131 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     fetchOrders(false);
   }, { signal });
 
+  async function submitOrderAction({
+    btn,
+    loadingText,
+    defaultText,
+    url,
+    body,
+    errorEl,
+    fallbackError,
+    toastMsg,
+    toastType = 'success',
+    invalidateBuyer = false,
+    onSuccess,
+  }: {
+    btn?: HTMLButtonElement | null;
+    loadingText?: string;
+    defaultText?: string;
+    url: string;
+    body: Record<string, any>;
+    errorEl?: HTMLElement | null;
+    fallbackError: string;
+    toastMsg: string | ((data: any) => string);
+    toastType?: 'success' | 'info' | 'error';
+    invalidateBuyer?: boolean;
+    onSuccess?: () => void;
+  }) {
+    if (errorEl) clearError(errorEl);
+    if (btn) {
+      btn.disabled = true;
+      if (loadingText) btn.textContent = loadingText;
+    }
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success !== false) {
+        onSuccess?.();
+        (window as any).__showToast?.(typeof toastMsg === 'function' ? toastMsg(data) : toastMsg, toastType);
+        await clientCache.invalidatePrefix('admin:orders');
+        if (invalidateBuyer) await clientCache.invalidatePrefix('buyer:orders');
+        fetchOrders(false);
+        return true;
+      }
+      const msg = data.error || fallbackError;
+      if (errorEl) showError(errorEl, msg);
+      else (window as any).__showToast?.(msg, 'error');
+      return false;
+    } catch (err: any) {
+      const msg = err?.message || 'Network error';
+      if (errorEl) showError(errorEl, msg);
+      else (window as any).__showToast?.(msg, 'error');
+      return false;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        if (defaultText) btn.textContent = defaultText;
+      }
+    }
+  }
+
   // Modals confirmation logic
   // 1. Approve modal
   const approveModal = document.getElementById('approve-modal');
   const approveErrorEl = document.getElementById('approve-error');
-  const confirmApproveBtn = document.getElementById('confirm-approve-btn');
-  const cancelApproveBtn = document.getElementById('cancel-approve-btn');
-  const closeApproveModal = document.getElementById('close-approve-modal');
+  const confirmApproveBtn = document.getElementById('confirm-approve-btn') as HTMLButtonElement | null;
+  const hideApproveModal = () => { clearError(approveErrorEl); (approveModal as HTMLDialogElement)?.close(); };
+  document.getElementById('cancel-approve-btn')?.addEventListener('click', hideApproveModal);
+  document.getElementById('close-approve-modal')?.addEventListener('click', hideApproveModal);
 
-  const hideApproveModal = () => {
-    clearError(approveErrorEl);
-    approveModal?.close();
-  };
-  cancelApproveBtn?.addEventListener('click', hideApproveModal);
-  closeApproveModal?.addEventListener('click', hideApproveModal);
-
-  confirmApproveBtn?.addEventListener('click', async () => {
-    const orderId = document.getElementById('approve-order-id')?.value;
+  confirmApproveBtn?.addEventListener('click', () => {
+    const orderId = (document.getElementById('approve-order-id') as HTMLInputElement | null)?.value;
     if (!orderId) return;
-
-    clearError(approveErrorEl);
-    if (confirmApproveBtn) {
-      confirmApproveBtn.disabled = true;
-      confirmApproveBtn.textContent = 'Approving...';
-    }
-
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve' }),
-      });
-      if (res.ok) {
-        hideApproveModal();
-        (window as any).__showToast?.('Order approved successfully', 'success');
-        await clientCache.invalidatePrefix('admin:orders');
-        await clientCache.invalidatePrefix('buyer:orders');
-        fetchOrders(false);
-      } else {
-        const data = await res.json();
-        showError(approveErrorEl, data.error || 'Approval failed');
-      }
-    } catch (err) {
-      showError(approveErrorEl, err.message || 'Network error');
-    } finally {
-      if (confirmApproveBtn) {
-        confirmApproveBtn.disabled = false;
-        confirmApproveBtn.textContent = 'Confirm Approval';
-      }
-    }
+    submitOrderAction({
+      btn: confirmApproveBtn,
+      loadingText: 'Approving...',
+      defaultText: 'Confirm Approval',
+      url: `/api/admin/orders/${orderId}/status`,
+      body: { action: 'approve' },
+      errorEl: approveErrorEl,
+      fallbackError: 'Approval failed',
+      toastMsg: 'Order approved successfully',
+      invalidateBuyer: true,
+      onSuccess: hideApproveModal,
+    });
   });
 
   // 2. Reject modal
   const rejectModal = document.getElementById('reject-modal');
   const rejectErrorEl = document.getElementById('reject-error');
-  const confirmRejectBtn = document.getElementById('confirm-reject-btn');
-  const cancelRejectBtn = document.getElementById('cancel-reject-btn');
-  const closeRejectModal = document.getElementById('close-reject-modal');
+  const confirmRejectBtn = document.getElementById('confirm-reject-btn') as HTMLButtonElement | null;
+  const hideRejectModal = () => { clearError(rejectErrorEl); (rejectModal as HTMLDialogElement)?.close(); };
+  document.getElementById('cancel-reject-btn')?.addEventListener('click', hideRejectModal);
+  document.getElementById('close-reject-modal')?.addEventListener('click', hideRejectModal);
 
-  const hideRejectModal = () => {
-    clearError(rejectErrorEl);
-    rejectModal?.close();
-  };
-  cancelRejectBtn?.addEventListener('click', hideRejectModal);
-  closeRejectModal?.addEventListener('click', hideRejectModal);
-
-  confirmRejectBtn?.addEventListener('click', async () => {
-    const orderId = document.getElementById('reject-order-id')?.value;
-    const reason = document.getElementById('reject-reason-input')?.value?.trim();
+  confirmRejectBtn?.addEventListener('click', () => {
+    const orderId = (document.getElementById('reject-order-id') as HTMLInputElement | null)?.value;
+    const reason = (document.getElementById('reject-reason-input') as HTMLTextAreaElement | null)?.value?.trim();
     if (!orderId) return;
-
     clearError(rejectErrorEl);
     if (!reason) {
       showError(rejectErrorEl, 'Please provide a reason for rejecting this order.');
       document.getElementById('reject-reason-input')?.focus();
       return;
     }
-
-    if (confirmRejectBtn) {
-      confirmRejectBtn.disabled = true;
-      confirmRejectBtn.textContent = 'Rejecting...';
-    }
-
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reject', adminRemark: reason }),
-      });
-      if (res.ok) {
-        hideRejectModal();
-        (window as any).__showToast?.('Order rejected', 'info');
-        await clientCache.invalidatePrefix('admin:orders');
-        await clientCache.invalidatePrefix('buyer:orders');
-        fetchOrders(false);
-      } else {
-        const data = await res.json();
-        showError(rejectErrorEl, data.error || 'Rejection failed');
-      }
-    } catch (err) {
-      showError(rejectErrorEl, err.message || 'Network error');
-    } finally {
-      if (confirmRejectBtn) {
-        confirmRejectBtn.disabled = false;
-        confirmRejectBtn.textContent = 'Confirm Rejection';
-      }
-    }
+    submitOrderAction({
+      btn: confirmRejectBtn,
+      loadingText: 'Rejecting...',
+      defaultText: 'Confirm Rejection',
+      url: `/api/admin/orders/${orderId}/status`,
+      body: { action: 'reject', adminRemark: reason },
+      errorEl: rejectErrorEl,
+      fallbackError: 'Rejection failed',
+      toastMsg: 'Order rejected',
+      toastType: 'info',
+      invalidateBuyer: true,
+      onSuccess: hideRejectModal,
+    });
   });
 
   // 3. Ship modal
   const shipModal = document.getElementById('ship-modal');
-  const shipForm = document.getElementById('ship-form');
+  const shipForm = document.getElementById('ship-form') as HTMLFormElement | null;
   const shipErrorEl = document.getElementById('ship-error');
-  const closeShipModal = document.getElementById('close-ship-modal');
-  const cancelShipBtn = document.getElementById('cancel-ship-btn');
-
   const shipCarrierSelect = document.getElementById('ship-carrier-select') as HTMLSelectElement | null;
   const shipTrackingInput = document.getElementById('ship-tracking-number') as HTMLInputElement | null;
   const shipTrackingPreview = document.getElementById('carrier-tracking-preview');
@@ -1760,8 +1623,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     }
     const selectedOpt = shipCarrierSelect?.options[shipCarrierSelect.selectedIndex];
     const urlTpl = selectedOpt?.getAttribute('data-url-template') || '';
-    const carrierName = shipCarrierSelect?.value || '';
-    const resolved = resolveTrackingUrl(carrierName, trackingNo, urlTpl);
+    const resolved = resolveTrackingUrl(shipCarrierSelect?.value || '', trackingNo, urlTpl);
     shipTrackingPreview.innerHTML = `Track URL: <a href="${escapeHtml(resolved)}" target="_blank" rel="noopener noreferrer" class="hover:underline font-semibold">${escapeHtml(resolved)} ↗</a>`;
   }
 
@@ -1773,50 +1635,29 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     if (shipTrackingPreview) shipTrackingPreview.textContent = '';
     (shipModal as HTMLDialogElement)?.close();
   };
-  closeShipModal?.addEventListener('click', hideShipModal);
-  cancelShipBtn?.addEventListener('click', hideShipModal);
+  document.getElementById('close-ship-modal')?.addEventListener('click', hideShipModal);
+  document.getElementById('cancel-ship-btn')?.addEventListener('click', hideShipModal);
 
-  shipForm?.addEventListener('submit', async (e) => {
+  shipForm?.addEventListener('submit', (e) => {
     e.preventDefault();
-    const orderId = document.getElementById('ship-order-id')?.value;
+    const orderId = (document.getElementById('ship-order-id') as HTMLInputElement | null)?.value;
     if (!orderId) return;
-
-    clearError(shipErrorEl);
     const formData = new FormData(shipForm);
-    const carrier = formData.get('carrier')?.toString();
-    const trackingNumber = formData.get('tracking_number')?.toString();
-    const adminRemark = formData.get('admin_remark')?.toString();
-
-    const submitBtn = document.getElementById('confirm-ship-btn');
-    if (submitBtn) submitBtn.disabled = true;
-
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'ship',
-          carrier,
-          trackingNumber,
-          adminRemark,
-        }),
-      });
-
-      if (res.ok) {
-        hideShipModal();
-        (window as any).__showToast?.('Shipment dispatched & tracking updated', 'success');
-        await clientCache.invalidatePrefix('admin:orders');
-        await clientCache.invalidatePrefix('buyer:orders');
-        fetchOrders(false);
-      } else {
-        const data = await res.json();
-        showError(shipErrorEl, data.error || 'Failed to dispatch shipment');
-      }
-    } catch (err) {
-      showError(shipErrorEl, err.message || 'Network error');
-    } finally {
-      if (submitBtn) submitBtn.disabled = false;
-    }
+    submitOrderAction({
+      btn: document.getElementById('confirm-ship-btn') as HTMLButtonElement | null,
+      url: `/api/admin/orders/${orderId}/status`,
+      body: {
+        action: 'ship',
+        carrier: formData.get('carrier')?.toString(),
+        trackingNumber: formData.get('tracking_number')?.toString(),
+        adminRemark: formData.get('admin_remark')?.toString(),
+      },
+      errorEl: shipErrorEl,
+      fallbackError: 'Failed to dispatch shipment',
+      toastMsg: 'Shipment dispatched & tracking updated',
+      invalidateBuyer: true,
+      onSuccess: hideShipModal,
+    });
   });
 
   // Quick Reply Chip Insertion
@@ -1902,94 +1743,52 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   cancelAssignBtn?.addEventListener('click', closeAssign);
   closeAssignDialog?.addEventListener('click', closeAssign);
 
-  confirmAssignBtn?.addEventListener('click', async () => {
+  confirmAssignBtn?.addEventListener('click', () => {
     if (!assignTarget) return;
     const targetEmail = assignMemberSelect?.value?.trim() || null;
-    confirmAssignBtn.disabled = true;
-    confirmAssignBtn.textContent = 'Assigning...';
-
-    try {
-      if (assignTarget.mode === 'single') {
-        const res = await fetch(`/api/admin/orders/${assignTarget.orderId}/assign`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assignedTo: targetEmail }),
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          (window as any).__showToast?.(
-            targetEmail ? `Reassigned to ${targetEmail}` : 'Order returned to unassigned pool',
-            'success'
-          );
-          closeAssign();
-          await clientCache.invalidatePrefix('admin:orders');
-          fetchOrders(false);
-        } else {
-          (window as any).__showToast?.(data.error || 'Failed to reassign order', 'error');
-        }
-      } else if (assignTarget.mode === 'batch') {
-        const res = await fetch('/api/admin/orders/batch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderIds: Array.from(selectedOrderIds),
-            action: 'ASSIGN',
-            assignedTo: targetEmail,
-          }),
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          (window as any).__showToast?.(
-            `Batch assign completed: ${data.updatedCount} orders updated`,
-            'success'
-          );
+    if (assignTarget.mode === 'single') {
+      submitOrderAction({
+        btn: confirmAssignBtn,
+        loadingText: 'Assigning...',
+        defaultText: 'Confirm',
+        url: `/api/admin/orders/${assignTarget.orderId}/assign`,
+        body: { assignedTo: targetEmail },
+        fallbackError: 'Failed to reassign order',
+        toastMsg: targetEmail ? `Reassigned to ${targetEmail}` : 'Order returned to unassigned pool',
+        onSuccess: closeAssign,
+      });
+    } else {
+      submitOrderAction({
+        btn: confirmAssignBtn,
+        loadingText: 'Assigning...',
+        defaultText: 'Confirm',
+        url: '/api/admin/orders/batch',
+        body: { orderIds: Array.from(selectedOrderIds), action: 'ASSIGN', assignedTo: targetEmail },
+        fallbackError: 'Batch assign failed',
+        toastMsg: (d) => `Batch assign completed: ${d.updatedCount} orders updated`,
+        onSuccess: () => {
           closeAssign();
           selectedOrderIds.clear();
           updateBatchBar();
-          await clientCache.invalidatePrefix('admin:orders');
-          fetchOrders(false);
-        } else {
-          (window as any).__showToast?.(data.error || 'Batch assign failed', 'error');
-        }
-      }
-    } catch (err: any) {
-      (window as any).__showToast?.(err.message || 'Network error', 'error');
-    } finally {
-      if (confirmAssignBtn) {
-        confirmAssignBtn.disabled = false;
-        confirmAssignBtn.textContent = 'Confirm';
-      }
+        },
+      });
     }
   });
 
-  document.addEventListener('click', async (e) => {
-    const claimBtn = (e.target as HTMLElement).closest('.btn-claim-order-row') as HTMLElement | null;
+  document.addEventListener('click', (e) => {
+    const claimBtn = (e.target as HTMLElement).closest('.btn-claim-order-row') as HTMLButtonElement | null;
     if (claimBtn) {
       const orderId = claimBtn.getAttribute('data-id');
       if (!orderId) return;
-      claimBtn.setAttribute('disabled', 'true');
-      claimBtn.textContent = '...';
-      try {
-        const res = await fetch(`/api/admin/orders/${orderId}/assign`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          (window as any).__showToast?.('Order claimed successfully', 'success');
-          await clientCache.invalidatePrefix('admin:orders');
-          fetchOrders(false);
-        } else {
-          (window as any).__showToast?.(data.error || 'Failed to claim order', 'error');
-          claimBtn.removeAttribute('disabled');
-          claimBtn.textContent = 'Claim';
-        }
-      } catch (err: any) {
-        (window as any).__showToast?.(err.message || 'Network error', 'error');
-        claimBtn.removeAttribute('disabled');
-        claimBtn.textContent = 'Claim';
-      }
+      submitOrderAction({
+        btn: claimBtn,
+        loadingText: '...',
+        defaultText: 'Claim',
+        url: `/api/admin/orders/${orderId}/assign`,
+        body: {},
+        fallbackError: 'Failed to claim order',
+        toastMsg: 'Order claimed successfully',
+      });
     }
 
     const reassignBtn = (e.target as HTMLElement).closest('.btn-reassign-order') as HTMLElement | null;
@@ -2001,32 +1800,20 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     }
   }, { signal });
 
-  async function executeBatchAction(action: 'APPROVE' | 'REJECT') {
+  function executeBatchAction(action: 'APPROVE' | 'REJECT') {
     if (selectedOrderIds.size === 0) return;
-    const confirmMsg = action === 'APPROVE'
-      ? `Are you sure you want to approve ${selectedOrderIds.size} selected orders?`
-      : `Are you sure you want to reject ${selectedOrderIds.size} selected orders?`;
-    if (!confirm(confirmMsg)) return;
-
-    try {
-      const res = await fetch('/api/admin/orders/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds: Array.from(selectedOrderIds), action }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        (window as any).__showToast?.(`Batch ${action} completed: ${data.updatedCount} orders updated`, 'success');
+    const verb = action === 'APPROVE' ? 'approve' : 'reject';
+    if (!confirm(`Are you sure you want to ${verb} ${selectedOrderIds.size} selected orders?`)) return;
+    submitOrderAction({
+      url: '/api/admin/orders/batch',
+      body: { orderIds: Array.from(selectedOrderIds), action },
+      fallbackError: 'Batch operation failed',
+      toastMsg: (d) => `Batch ${action} completed: ${d.updatedCount} orders updated`,
+      onSuccess: () => {
         selectedOrderIds.clear();
         updateBatchBar();
-        await clientCache.invalidatePrefix('admin:orders');
-        fetchOrders(false);
-      } else {
-        (window as any).__showToast?.(data.error || 'Batch operation failed', 'error');
-      }
-    } catch (err: any) {
-      (window as any).__showToast?.(err.message || 'Network error', 'error');
-    }
+      },
+    });
   }
 
   btnBatchApprove?.addEventListener('click', () => executeBatchAction('APPROVE'));
