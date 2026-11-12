@@ -245,7 +245,7 @@ const BADGE_COLORS: [string, string, string][] = [
     let allItems: any[] = [];
     try {
       const fromSsr = ssrEl?.textContent ? JSON.parse(ssrEl.textContent).allItems : null;
-      allItems = fromSsr || (root.dataset.items ? JSON.parse(root.dataset.items) : []);
+      allItems = (root.dataset.items ? JSON.parse(root.dataset.items) : null) || fromSsr || [];
     } catch {}
     let currentGroup = root.dataset.initialGroup || 'shipping_carriers';
 
