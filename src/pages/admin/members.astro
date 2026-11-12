@@ -1,590 +1,345 @@
 ---
-// src/pages/admin/members.astro
-// Enterprise Team Member Management with Logto User Pool Integration & Direct Role Switching
-import AdminLayout from '@layouts/AdminLayout.astro';
-import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
-import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
-import { listAdminMembers, listAdminRoles } from '@utils/db';
-// @ts-ignore
-import { env as cfEnv } from 'cloudflare:workers';
-
 export const prerender = false;
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { getLangFromUrl, useTranslations } from '@i18n/utils';
 
-const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
-  Astro,
-  cfEnv,
-  '/admin/members',
-  { requiredMenu: 'members' }
-);
-if (redirectResponse) return redirectResponse;
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+const T = (en: string, zh: string) => (lang === 'zh' ? zh : en);
 
-const rootAdminEmailsRaw = getRuntimeEnv('ADMIN_EMAILS', cfEnv) || 'forhaisome@gmail.com';
-const rootAdminEmails = rootAdminEmailsRaw.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
+const currentRole = Astro.locals.adminRole || 'sales';
+const currentEmail = Astro.locals.adminEmail || '';
+const isSuperAdmin = currentRole === 'super_admin';
 
-const [members, roles] = await Promise.all([
-  listAdminMembers().catch(() => []),
-  listAdminRoles().catch(() => []),
-]);
-
-const pageTitle = 'Team Members Management';
+const KPI_CARDS: [string, string, string, string][] = [
+  ['kpi-total', T('Total Staff', '团队总人数'), 'text-slate-900', 'border-slate-200/80'],
+  ['kpi-active', T('Active Accounts', '正常启用中'), 'text-emerald-600', 'border-emerald-200/60'],
+  ['kpi-super', T('Super Admins', '超级管理员'), 'text-purple-600', 'border-purple-200/60'],
+  ['kpi-sales', T('Ops & Sales', '运营与业务员'), 'text-blue-600', 'border-blue-200/60'],
+];
 ---
 
-<AdminLayout
-  title={pageTitle}
-  currentTab="members"
-  sessionEmail={sessionUser?.email || ''}
-  adminName={adminContext?.name}
-  roleName={adminContext?.role?.name}
-  roleCode={adminContext?.role?.code}
-  menus={adminContext?.menus}
-  permissions={adminContext?.permissions}
-  dataScope={adminContext?.dataScope}
-  pendingOrdersCount={pendingOrdersCount}
-  fullscreenWorkbench={true}
->
-  <div class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-2">
-    <!-- 1. Header Command Bar -->
-    <AdminPageToolbar
-      title="Team Members"
-      subtitle={`· ${members.length + rootAdminEmails.length} staff accounts`}
-      badge="Logto Connected"
-      badgeColor="blue"
-    >
-      <div slot="actions" class="flex items-center gap-2">
-        <button
-          type="button"
-          id="btn-open-add-dialog"
-          class="h-8 px-3.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-        >
-          <span>＋ Add Member</span>
+<AdminLayout title={`${t('admin.nav.members')} - ${t('admin.OrderDesk')} | GwenVenni`} activeNav="members">
+  <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6 space-y-6" id="members-workbench" data-current-email={currentEmail} data-is-super={isSuperAdmin ? 'true' : 'false'}>
+    <!-- Header -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h1 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{T('Team Members & Role Assignments', '内部团队成员与角色授权')}</h1>
+          <span class="adm-badge bg-purple-50 text-purple-700 border-purple-200">RBAC</span>
+        </div>
+        <p class="mt-1 text-xs sm:text-sm text-slate-500">
+          {T('Manage staff accounts, assign functional roles, and control access to the Admin Workbench.', '管理允许登录后台的员工邮箱白名单、分配职能角色（超管/运营/业务员）及启停账号权限。')}
+        </p>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <a href="/admin/roles" class="adm-btn-secondary">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+          {T('Role Matrix', '角色权限矩阵')}
+        </a>
+        {isSuperAdmin && (
+          <button type="button" id="btn-open-add-member" class="adm-btn-primary">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            {T('Add Team Member', '添加团队成员')}
+          </button>
+        )}
+      </div>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+      {KPI_CARDS.map(([id, label, valCls, borderCls]) => (
+        <div class={`rounded-2xl border ${borderCls} bg-white p-4 shadow-xs`}>
+          <p class="text-xs font-medium text-slate-500">{label}</p>
+          <p id={id} class={`mt-1 text-2xl font-bold font-mono ${valCls}`}>—</p>
+        </div>
+      ))}
+    </div>
+
+    <!-- Members Table Card -->
+    <div class="adm-card overflow-hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input type="text" id="member-search-input" placeholder={T('Search email or name...', '搜索员工邮箱或姓名...')} class="w-64 rounded-xl border border-slate-200 bg-slate-50/60 pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden" />
+          </div>
+          <select id="member-role-filter" class="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-hidden">
+            <option value="">{T('All Roles', '全部角色')}</option>
+          </select>
+        </div>
+        <button type="button" id="btn-refresh-members" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          {T('Refresh', '刷新')}
         </button>
       </div>
-    </AdminPageToolbar>
 
-    <!-- 2. Main Content Card -->
-    <div class="flex-1 min-h-0 bg-white border border-black/5 rounded-2xl p-4 sm:p-5 shadow-2xs overflow-y-auto">
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs border-collapse">
+        <table class="w-full text-left border-collapse">
           <thead>
-            <tr class="border-b border-black/10 text-[#86868b] text-[11px] font-medium uppercase tracking-wider">
-              <th class="pb-3 px-3">Team Member</th>
-              <th class="pb-3 px-3">Logto Binding</th>
-              <th class="pb-3 px-3">Assigned Role</th>
-              <th class="pb-3 px-3">Data Scope</th>
-              <th class="pb-3 px-3">Active Workload</th>
-              <th class="pb-3 px-3">Last Active</th>
-              <th class="pb-3 px-3">Status</th>
-              <th class="pb-3 px-3 text-right">Actions</th>
+            <tr class="border-b border-slate-100 bg-slate-50/70">
+              <th class="adm-th">{T('Member', '成员信息')}</th>
+              <th class="adm-th">{T('Assigned Role', '分配角色')}</th>
+              <th class="adm-th">{T('Status', '状态')}</th>
+              <th class="adm-th">{T('Source', '授权来源')}</th>
+              <th class="adm-th">{T('Last Updated', '最后更新')}</th>
+              <th class="adm-th text-right">{T('Actions', '操作')}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-black/5">
-            <!-- Root Admins (Fixed by Environment) -->
-            {rootAdminEmails.map((email: string) => (
-              <tr class="bg-amber-50/30">
-                <td class="py-3 px-3">
-                  <div class="flex items-center gap-2.5">
-                    <div class="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                      {email[0]}
-                    </div>
-                    <div>
-                      <div class="flex items-center gap-1.5">
-                        <span class="font-semibold text-[#1d1d1f]">{email.split('@')[0]}</span>
-                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-bold uppercase">Root Env</span>
-                      </div>
-                      <span class="text-[#86868b] font-mono text-[11px]">{email}</span>
-                    </div>
-                  </div>
-                </td>
-                <td class="py-3 px-3">
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    Logto Synced
-                  </span>
-                </td>
-                <td class="py-3 px-3 font-semibold text-amber-900">
-                  超级管理员 (Super Admin)
-                </td>
-                <td class="py-3 px-3 text-[#52525b]">
-                  <span class="px-2 py-0.5 rounded-md text-[10px] bg-black/5 font-mono">ALL (全量)</span>
-                </td>
-                <td class="py-3 px-3 text-[#86868b] italic">Full Workspace Access</td>
-                <td class="py-3 px-3 text-[#86868b]">Root Security Principal</td>
-                <td class="py-3 px-3">
-                  <span class="text-emerald-700 font-semibold">ACTIVE</span>
-                </td>
-                <td class="py-3 px-3 text-right text-[#86868b] font-mono text-[11px]">Fixed Root</td>
-              </tr>
-            ))}
-
-            <!-- Configured Team Members -->
-            {members.map((m: any) => (
-              <tr class="hover:bg-[#fbfbfd] transition-colors">
-                <td class="py-3 px-3">
-                  <div class="flex items-center gap-2.5">
-                    <div class="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                      {(m.name || m.email)[0]}
-                    </div>
-                    <div>
-                      <span class="font-semibold text-[#1d1d1f] block">{m.name || m.email.split('@')[0]}</span>
-                      <span class="text-[#86868b] font-mono text-[11px] block">{m.email}</span>
-                    </div>
-                  </div>
-                </td>
-                <td class="py-3 px-3">
-                  {m.is_logto_synced ? (
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200" title="Account has signed in via Logto">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      Logto Synced
-                    </span>
-                  ) : (
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200" title="Pre-authorized: will auto-bind on user's first Logto sign-in">
-                      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                      Pending Logto Login
-                    </span>
-                  )}
-                </td>
-                <td class="py-3 px-3">
-                  <select
-                    class="select-member-role text-xs rounded-lg px-2 py-1 bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-semibold text-[#1d1d1f] cursor-pointer"
-                    data-email={m.email}
-                    data-status={m.status}
-                    data-name={m.name}
-                  >
-                    {roles.map((r: any) => (
-                      <option value={r.code} selected={m.role_code === r.code}>
-                        {r.name} ({r.code})
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td class="py-3 px-3">
-                  <span class="px-2 py-0.5 rounded-md text-[10px] bg-black/5 font-mono text-[#52525b]">
-                    {m.role?.data_scope || 'ALL'}
-                  </span>
-                </td>
-                <td class="py-3 px-3">
-                  <div class="flex items-center gap-2">
-                    <a
-                      href={`/admin/orders?assignedTo=${encodeURIComponent(m.email)}`}
-                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 transition-colors"
-                      title="View orders assigned to this rep"
-                    >
-                      <span>📦 {m.assigned_orders || 0}</span>
-                    </a>
-                    <a
-                      href={`/admin/users?assignedTo=${encodeURIComponent(m.email)}`}
-                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition-colors"
-                      title="View customers assigned to this rep"
-                    >
-                      <span>👥 {m.assigned_customers || 0}</span>
-                    </a>
-                  </div>
-                </td>
-                <td class="py-3 px-3 text-[#86868b] text-[11px]">
-                  {m.last_login_at ? (
-                    <div>
-                      <span class="text-[#1d1d1f] block">{m.last_login_at.slice(0, 16)}</span>
-                      {m.last_location && <span class="text-[10px]">📍 {m.last_location}</span>}
-                    </div>
-                  ) : (
-                    <span class="italic text-zinc-400">Never signed in</span>
-                  )}
-                </td>
-                <td class="py-3 px-3">
-                  <span class:list={[
-                    'px-2 py-0.5 rounded-full text-[10px] font-bold border',
-                    m.status === 'ACTIVE'
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      : 'bg-rose-50 text-rose-800 border-rose-200'
-                  ]}>
-                    {m.status}
-                  </span>
-                </td>
-                <td class="py-3 px-3 text-right space-x-2">
-                  <button
-                    type="button"
-                    class="btn-toggle-status text-blue-600 hover:underline cursor-pointer"
-                    data-email={m.email}
-                    data-status={m.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'}
-                    data-name={m.name}
-                    data-role={m.role_code}
-                  >
-                    {m.status === 'ACTIVE' ? 'Disable' : 'Enable'}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-delete-member text-rose-600 hover:underline cursor-pointer"
-                    data-email={m.email}
-                  >
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            ))}
+          <tbody id="members-table-body" class="divide-y divide-slate-100 text-xs">
+            <tr><td colspan="6" class="px-5 py-10 text-center text-slate-400">{T('Loading team members...', '正在加载团队成员列表...')}</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Add Member Modal -->
-  <Fragment slot="modals">
-    <dialog id="add-member-dialog" class="rounded-2xl p-0 shadow-2xl border border-black/10 backdrop:bg-black/40 max-w-md w-full mx-auto">
-      <div class="p-5 space-y-4 bg-white">
-        <div class="flex items-center justify-between pb-3 border-b border-black/5">
-          <div>
-            <h3 class="text-sm font-bold text-[#1d1d1f]">Add Team Member</h3>
-            <p class="text-[11px] text-[#86868b] mt-0.5">Authorize a Logto user as an internal team member</p>
-          </div>
-          <button type="button" id="close-add-dialog" class="text-zinc-400 hover:text-black cursor-pointer text-base">✕</button>
-        </div>
-
-        <!-- Mode Toggle Tabs -->
-        <div class="flex items-center gap-1 bg-[#f5f5f7] p-0.5 rounded-xl border border-black/5">
-          <button type="button" id="tab-choose-logto" class="flex-1 py-1 rounded-lg text-xs font-semibold bg-white text-[#1d1d1f] shadow-2xs transition-all cursor-pointer">
-            Select Logto User
-          </button>
-          <button type="button" id="tab-manual-email" class="flex-1 py-1 rounded-lg text-xs font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer">
-            Pre-authorize Email
-          </button>
-        </div>
-
-        <!-- Logto Search Section -->
-        <div id="section-logto-picker" class="space-y-2">
-          <label class="block text-xs font-semibold text-[#1d1d1f]">Search Registered Logto Accounts</label>
-          <input
-            type="text"
-            id="candidate-search-input"
-            placeholder="Search by name or email..."
-            class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans"
-          />
-          <div id="candidates-loading" class="text-[11px] text-[#86868b] hidden">Loading accounts...</div>
-          <div id="candidates-list" class="max-h-48 overflow-y-auto divide-y divide-black/5 border border-black/10 rounded-xl bg-white hidden">
-            <!-- Dynamically populated candidate items -->
-          </div>
-        </div>
-
-        <!-- Inputs Section -->
-        <div class="space-y-3">
-          <div>
-            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Staff Member Email *</label>
-            <input
-              type="email"
-              id="input-member-email"
-              placeholder="e.g. alice@gwenvenni.com"
-              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-mono"
-            />
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Display Name</label>
-            <input
-              type="text"
-              id="input-member-name"
-              placeholder="e.g. Alice Wang - Europe Lead"
-              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans"
-            />
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Assigned Role *</label>
-            <select
-              id="select-member-role"
-              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans font-medium cursor-pointer"
-            >
-              {roles.map((r: any) => (
-                <option value={r.code}>
-                  {r.name} ({r.code}) - {r.data_scope}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div id="add-member-error" class="hidden p-2.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200"></div>
-
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-black/5">
-          <button
-            type="button"
-            id="cancel-add-dialog"
-            class="h-8 px-3 rounded-xl text-xs font-medium text-[#52525b] hover:bg-[#f5f5f7] transition-all cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            id="submit-add-member"
-            class="h-8 px-4 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer shadow-2xs"
-          >
-            Authorize Member
-          </button>
-        </div>
+  <!-- Add / Edit Member Modal -->
+  <div id="member-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <h3 id="member-modal-title" class="text-base font-bold text-slate-900">{T('Add Team Member', '添加内部团队成员')}</h3>
+        <button type="button" id="btn-close-member-modal" class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
       </div>
-    </dialog>
-  </Fragment>
+      <form id="member-form" class="p-5 space-y-4">
+        <div>
+          <label class="adm-label">{T('Work Email (Logto SSO Account)', '工作邮箱 (需与登录邮箱一致)')} <span class="text-rose-500">*</span></label>
+          <input type="email" id="member-email-input" required placeholder="colleague@company.com" class="adm-input" />
+        </div>
+        <div>
+          <label class="adm-label">{T('Display Name / Title', '姓名或备注称呼')}</label>
+          <input type="text" id="member-name-input" placeholder={T('e.g. Alice (Senior Sales)', '例如：张经理 (外贸一部)')} class="adm-input" />
+        </div>
+        <div>
+          <label class="adm-label">{T('Functional Role', '分配职能角色')} <span class="text-rose-500">*</span></label>
+          <select id="member-role-select" required class="adm-input"></select>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" id="btn-cancel-member-modal" class="adm-btn-secondary">{T('Cancel', '取消')}</button>
+          <button type="submit" id="btn-submit-member" class="adm-btn-primary">{T('Save & Authorize', '保存并授权')}</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </AdminLayout>
 
 <script>
-  function initMembersPage() {
-    function showToast(msg: string, success: boolean = true) {
-      (window as any).__showToast?.(msg, success ? 'success' : 'error');
-    }
+  import { $id, $val, $txt, escapeHtml, showToast } from '@utils/adminWorkbench';
 
-  const addDialog = document.getElementById('add-member-dialog') as HTMLDialogElement | null;
-  const btnOpenAdd = document.getElementById('btn-open-add-dialog');
-  const btnCloseAdd = document.getElementById('close-add-dialog');
-  const btnCancelAdd = document.getElementById('cancel-add-dialog');
-  const btnSubmitAdd = document.getElementById('submit-add-member');
-
-  const tabChooseLogto = document.getElementById('tab-choose-logto');
-  const tabManualEmail = document.getElementById('tab-manual-email');
-  const sectionLogtoPicker = document.getElementById('section-logto-picker');
-
-  const candidateInput = document.getElementById('candidate-search-input') as HTMLInputElement | null;
-  const candidatesLoading = document.getElementById('candidates-loading');
-  const candidatesList = document.getElementById('candidates-list');
-
-  const inputEmail = document.getElementById('input-member-email') as HTMLInputElement | null;
-  const inputName = document.getElementById('input-member-name') as HTMLInputElement | null;
-  const selectRole = document.getElementById('select-member-role') as HTMLSelectElement | null;
-  const errorEl = document.getElementById('add-member-error');
-
-  function openModal() {
-    if (!addDialog) return;
-    if (errorEl) errorEl.classList.add('hidden');
-    if (inputEmail) inputEmail.value = '';
-    if (inputName) inputName.value = '';
-    if (candidateInput) candidateInput.value = '';
-    loadCandidates('');
-    addDialog.showModal();
+  interface MemberRow {
+    id: number | null;
+    email: string;
+    name: string;
+    role: string;
+    is_active: number;
+    created_by?: string;
+    updated_at?: string;
+    source?: 'd1' | 'env_fallback';
+  }
+  interface RoleOption {
+    role_code: string;
+    role_name: string;
+    description: string;
   }
 
-  function closeModal() {
-    addDialog?.close();
-  }
+  const ROLE_BADGE_MAP: Record<string, string> = {
+    super_admin: 'bg-purple-50 text-purple-700 border-purple-200',
+    merchandiser: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    sales: 'bg-blue-50 text-blue-700 border-blue-200',
+  };
 
-  btnOpenAdd?.addEventListener('click', openModal);
-  btnCloseAdd?.addEventListener('click', closeModal);
-  btnCancelAdd?.addEventListener('click', closeModal);
+  document.addEventListener('astro:page-load', () => {
+    const root = $id('members-workbench');
+    if (!root) return;
 
-  // Tab switching
-  tabChooseLogto?.addEventListener('click', () => {
-    tabChooseLogto.className = 'flex-1 py-1 rounded-lg text-xs font-semibold bg-white text-[#1d1d1f] shadow-2xs transition-all cursor-pointer';
-    tabManualEmail?.setAttribute('class', 'flex-1 py-1 rounded-lg text-xs font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer');
-    sectionLogtoPicker?.classList.remove('hidden');
-  });
+    const currentEmail = (root.dataset.currentEmail || '').toLowerCase();
+    const isSuper = root.dataset.isSuper === 'true';
+    const tbody = $id('members-table-body')!;
+    const searchInput = $id<HTMLInputElement>('member-search-input');
+    const roleFilter = $id<HTMLSelectElement>('member-role-filter');
+    const modal = $id('member-modal');
+    const emailInput = $id<HTMLInputElement>('member-email-input')!;
+    const nameInput = $id<HTMLInputElement>('member-name-input')!;
+    const roleSelect = $id<HTMLSelectElement>('member-role-select')!;
 
-  tabManualEmail?.addEventListener('click', () => {
-    tabManualEmail.className = 'flex-1 py-1 rounded-lg text-xs font-semibold bg-white text-[#1d1d1f] shadow-2xs transition-all cursor-pointer';
-    tabChooseLogto?.setAttribute('class', 'flex-1 py-1 rounded-lg text-xs font-medium text-[#52525b] hover:text-[#1d1d1f] transition-all cursor-pointer');
-    sectionLogtoPicker?.classList.add('hidden');
-  });
+    let allMembers: MemberRow[] = [];
+    let availableRoles: RoleOption[] = [];
 
-  // Candidate loading
-  let debounceTimer: any = null;
-  candidateInput?.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      loadCandidates(candidateInput.value.trim());
-    }, 250);
-  });
-
-  function escapeHtml(str: string): string {
-    return String(str ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  async function loadCandidates(search: string) {
-    if (!candidatesList) return;
-    candidatesLoading?.classList.remove('hidden');
-    try {
-      const res = await fetch(`/api/admin/members?candidates=true&search=${encodeURIComponent(search)}`);
-      const data = await res.json();
-      candidatesLoading?.classList.add('hidden');
-      if (res.ok && data.candidates) {
-        if (data.candidates.length === 0) {
-          candidatesList.innerHTML = `<div class="p-3 text-center text-xs text-[#86868b]">No Logto accounts found matching "${escapeHtml(search)}".</div>`;
-          candidatesList.classList.remove('hidden');
-          return;
-        }
-
-        candidatesList.innerHTML = data.candidates.map((c: any) => {
-          const safeEmail = escapeHtml(c.email);
-          const safeName = escapeHtml(c.name || c.email.split('@')[0]);
-          const rawName = escapeHtml(c.name || '');
-          const isMember = Boolean(c.is_member);
-          const lastLogin = c.last_login_at ? escapeHtml(c.last_login_at.slice(0, 10)) : 'No login';
-          return `
-            <div class="candidate-row p-2.5 hover:bg-[#f5f5f7] cursor-pointer flex items-center justify-between transition-colors ${isMember ? 'opacity-50' : ''}" data-email="${safeEmail}" data-name="${rawName}" data-is-member="${isMember ? 'true' : 'false'}">
-              <div>
-                <div class="flex items-center gap-1.5">
-                  <span class="font-semibold text-xs text-[#1d1d1f]">${safeName}</span>
-                  ${isMember ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-black/5 text-[#86868b]">Already Member</span>' : ''}
-                </div>
-                <span class="text-[11px] font-mono text-[#86868b]">${safeEmail}</span>
-              </div>
-              <span class="text-[10px] text-[#86868b]">${lastLogin}</span>
-            </div>
-          `;
-        }).join('');
-        candidatesList.classList.remove('hidden');
-
-        candidatesList.querySelectorAll('.candidate-row').forEach((row) => {
-          row.addEventListener('click', () => {
-            const email = row.getAttribute('data-email');
-            const name = row.getAttribute('data-name');
-            if (email && inputEmail) inputEmail.value = email;
-            if (name && inputName) inputName.value = name;
-            candidatesList.classList.add('hidden');
-          });
-        });
-      }
-    } catch {
-      candidatesLoading?.classList.add('hidden');
-    }
-  }
-
-  // Submit Add Member
-  btnSubmitAdd?.addEventListener('click', async () => {
-    const email = inputEmail?.value.trim().toLowerCase();
-    const name = inputName?.value.trim();
-    const roleCode = selectRole?.value;
-
-    if (!email || !email.includes('@')) {
-      if (errorEl) {
-        errorEl.textContent = 'Please enter a valid email address.';
-        errorEl.classList.remove('hidden');
-      }
-      return;
-    }
-
-    if (btnSubmitAdd) {
-      btnSubmitAdd.setAttribute('disabled', 'true');
-      btnSubmitAdd.textContent = 'Saving...';
-    }
-
-    try {
+    const upsertMember = async (payload: Record<string, any>, successMsg: string) => {
       const res = await fetch('/api/admin/members', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, roleCode, status: 'ACTIVE' }),
+        body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(`Member ${email} authorized successfully!`, true);
+      const json: any = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+      showToast(successMsg, 'success');
+      await loadMembers();
+    };
+
+    const renderTable = () => {
+      const q = (searchInput?.value || '').trim().toLowerCase();
+      const rf = roleFilter?.value || '';
+
+      $txt('kpi-total', String(allMembers.length));
+      $txt('kpi-active', String(allMembers.filter((m) => m.is_active === 1).length));
+      $txt('kpi-super', String(allMembers.filter((m) => m.role === 'super_admin' && m.is_active === 1).length));
+      $txt('kpi-sales', String(allMembers.filter((m) => m.role !== 'super_admin' && m.is_active === 1).length));
+
+      const filtered = allMembers.filter((m) => (!q || m.email.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q)) && (!rf || m.role === rf));
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-5 py-10 text-center text-slate-400">No matching team members found / 未找到匹配的团队成员</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map((m) => {
+        const isSelf = m.email.toLowerCase() === currentEmail;
+        const roleMeta = availableRoles.find((r) => r.role_code === m.role);
+        const roleLabel = roleMeta ? roleMeta.role_name : m.role;
+        const badgeCls = ROLE_BADGE_MAP[m.role] || 'bg-amber-50 text-amber-700 border-amber-200';
+        const activeBadge = m.is_active === 1
+          ? '<span class="adm-badge bg-emerald-50 text-emerald-700 border-emerald-200"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active</span>'
+          : '<span class="adm-badge bg-slate-100 text-slate-500 border-slate-200"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Disabled</span>';
+        const sourceBadge = m.source === 'env_fallback'
+          ? '<span class="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-mono text-amber-700 border border-amber-200" title="Configured via Environment Variables">ENV White-list</span>'
+          : '<span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">D1 Database</span>';
+
+        const roleCell = isSuper
+          ? `<select data-action="change-role" data-email="${escapeHtml(m.email)}" data-name="${escapeHtml(m.name || '')}" data-active="${m.is_active}" ${isSelf ? 'disabled title="Cannot downgrade your own role"' : ''} class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 focus:border-blue-500 focus:outline-hidden disabled:opacity-60">
+              ${availableRoles.map((r) => `<option value="${escapeHtml(r.role_code)}" ${r.role_code === m.role ? 'selected' : ''}>${escapeHtml(r.role_name)} (${escapeHtml(r.role_code)})</option>`).join('')}
+            </select>`
+          : `<span class="adm-badge ${badgeCls}">${escapeHtml(roleLabel)}</span>`;
+
+        const actionCell = isSuper && !isSelf
+          ? `<div class="inline-flex items-center gap-1.5">
+              <button type="button" data-action="toggle-active" data-email="${escapeHtml(m.email)}" data-name="${escapeHtml(m.name || '')}" data-role="${escapeHtml(m.role)}" data-next-active="${m.is_active === 1 ? '0' : '1'}" class="rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${m.is_active === 1 ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}">${m.is_active === 1 ? 'Disable' : 'Enable'}</button>
+              <button type="button" data-action="remove-member" data-email="${escapeHtml(m.email)}" class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100">Remove</button>
+            </div>`
+          : `<span class="text-[11px] text-slate-400">${isSelf ? 'Current Session' : 'Read Only'}</span>`;
+
+        return `<tr class="hover:bg-slate-50/70 transition-colors">
+          <td class="adm-td">
+            <div class="flex items-center gap-3">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white uppercase">${escapeHtml((m.name || m.email || '?').charAt(0))}</div>
+              <div>
+                <div class="font-semibold text-slate-900 flex items-center gap-1.5">
+                  <span>${escapeHtml(m.name || m.email.split('@')[0])}</span>
+                  ${isSelf ? '<span class="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">You</span>' : ''}
+                </div>
+                <div class="font-mono text-[11px] text-slate-500">${escapeHtml(m.email)}</div>
+              </div>
+            </div>
+          </td>
+          <td class="adm-td">${roleCell}</td>
+          <td class="adm-td">${activeBadge}</td>
+          <td class="adm-td">${sourceBadge}</td>
+          <td class="adm-td font-mono text-[11px] text-slate-500">${escapeHtml(m.updated_at || '—')}</td>
+          <td class="adm-td text-right">${actionCell}</td>
+        </tr>`;
+      }).join('');
+    };
+
+    const loadMembers = async () => {
+      try {
+        const res = await fetch('/api/admin/members', { headers: { Accept: 'application/json' } });
+        const json: any = await res.json();
+        if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+        allMembers = json.data?.members || [];
+        availableRoles = json.data?.roles || [];
+
+        if (roleFilter && roleFilter.options.length <= 1) {
+          roleFilter.innerHTML = `<option value="">All Roles / 全部角色</option>` +
+            availableRoles.map((r) => `<option value="${escapeHtml(r.role_code)}">${escapeHtml(r.role_name)} (${escapeHtml(r.role_code)})</option>`).join('');
+        }
+        if (roleSelect) {
+          roleSelect.innerHTML = availableRoles.map((r) => `<option value="${escapeHtml(r.role_code)}">${escapeHtml(r.role_name)} — ${escapeHtml(r.description || r.role_code)}</option>`).join('');
+        }
+        renderTable();
+      } catch (err: any) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-8 text-center text-rose-600">${escapeHtml(err?.message || 'Failed to load members')}</td></tr>`;
+      }
+    };
+
+    const closeModal = () => modal?.classList.replace('flex', 'hidden');
+    $id('btn-open-add-member')?.addEventListener('click', () => {
+      emailInput.value = '';
+      nameInput.value = '';
+      if (roleSelect.options.length) roleSelect.value = 'sales';
+      modal?.classList.replace('hidden', 'flex');
+      emailInput.focus();
+    });
+    $id('btn-close-member-modal')?.addEventListener('click', closeModal);
+    $id('btn-cancel-member-modal')?.addEventListener('click', closeModal);
+    searchInput?.addEventListener('input', renderTable);
+    roleFilter?.addEventListener('change', renderTable);
+    $id('btn-refresh-members')?.addEventListener('click', loadMembers);
+
+    $id('member-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = $val('member-email-input').toLowerCase();
+      if (!email) return;
+      const submitBtn = $id<HTMLButtonElement>('btn-submit-member')!;
+      submitBtn.disabled = true;
+      try {
+        await upsertMember({ email, name: $val('member-name-input'), role: roleSelect.value || 'sales', is_active: true }, `Authorized ${email} / 已授权团队成员`);
         closeModal();
-        setTimeout(() => window.location.reload(), 400);
-      } else {
-        if (errorEl) {
-          errorEl.textContent = data.error || 'Failed to authorize member';
-          errorEl.classList.remove('hidden');
-        }
-      }
-    } catch (err: any) {
-      if (errorEl) {
-        errorEl.textContent = err.message || 'Network error';
-        errorEl.classList.remove('hidden');
-      }
-    } finally {
-      if (btnSubmitAdd) {
-        btnSubmitAdd.removeAttribute('disabled');
-        btnSubmitAdd.textContent = 'Authorize Member';
-      }
-    }
-  });
-
-  // Role Inline Dropdown Switching
-  document.querySelectorAll('.select-member-role').forEach((sel) => {
-    sel.addEventListener('change', async () => {
-      const email = sel.getAttribute('data-email');
-      const status = sel.getAttribute('data-status') || 'ACTIVE';
-      const name = sel.getAttribute('data-name') || '';
-      const newRole = (sel as HTMLSelectElement).value;
-      if (!email) return;
-
-      (sel as HTMLSelectElement).disabled = true;
-      try {
-        const res = await fetch('/api/admin/members', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, roleCode: newRole, status, name }),
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          showToast(`Role updated to ${newRole}. Refreshing...`, true);
-          setTimeout(() => window.location.reload(), 400);
-        } else {
-          showToast(data.error || 'Failed to update role', false);
-          (sel as HTMLSelectElement).disabled = false;
-        }
-      } catch (e: any) {
-        showToast(e.message, false);
-        (sel as HTMLSelectElement).disabled = false;
+      } catch (err: any) {
+        showToast(err?.message || 'Failed to save member', 'error');
+      } finally {
+        submitBtn.disabled = false;
       }
     });
-  });
 
-  // Status Toggle
-  document.querySelectorAll('.btn-toggle-status').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const email = btn.getAttribute('data-email');
-      const targetStatus = btn.getAttribute('data-status');
-      const roleCode = btn.getAttribute('data-role');
-      const name = btn.getAttribute('data-name') || '';
-      if (!email) return;
-
+    tbody.addEventListener('change', async (e) => {
+      const target = e.target as HTMLSelectElement;
+      if (target?.dataset?.action !== 'change-role') return;
+      const email = target.dataset.email || '';
+      target.disabled = true;
       try {
-        const res = await fetch('/api/admin/members', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, status: targetStatus, roleCode, name }),
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          showToast(`Member status changed to ${targetStatus}`, true);
-          setTimeout(() => window.location.reload(), 400);
-        } else {
-          showToast(data.error || 'Failed to update status', false);
-        }
-      } catch (e: any) {
-        showToast(e.message, false);
+        await upsertMember({ email, name: target.dataset.name || '', role: target.value, is_active: target.dataset.active === '1' }, `Updated role for ${email} / 角色已更新`);
+      } catch (err: any) {
+        showToast(err?.message || 'Failed to update role', 'error');
+        await loadMembers();
+      } finally {
+        target.disabled = false;
       }
     });
-  });
 
-  // Delete Member
-  document.querySelectorAll('.btn-delete-member').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const email = btn.getAttribute('data-email');
+    tbody.addEventListener('click', async (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const email = btn.dataset.email || '';
       if (!email) return;
-      if (!confirm(`Are you sure you want to remove team member ${email}?`)) return;
 
-      try {
-        const res = await fetch(`/api/admin/members/${encodeURIComponent(email)}`, {
-          method: 'DELETE',
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          showToast(`Member ${email} removed.`, true);
-          setTimeout(() => window.location.reload(), 400);
-        } else {
-          showToast(data.error || 'Failed to remove member', false);
+      if (action === 'toggle-active') {
+        btn.disabled = true;
+        try {
+          await upsertMember({ email, name: btn.dataset.name || '', role: btn.dataset.role || 'sales', is_active: btn.dataset.nextActive === '1' }, `Updated status for ${email}`);
+        } catch (err: any) {
+          showToast(err?.message || 'Failed to update status', 'error');
+        } finally {
+          btn.disabled = false;
         }
-      } catch (e: any) {
-        showToast(e.message, false);
+      } else if (action === 'remove-member') {
+        if (!window.confirm(`Remove ${email} from team members? They will immediately lose access to the Admin Workbench.`)) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch(`/api/admin/members?email=${encodeURIComponent(email)}`, { method: 'DELETE' });
+          const json: any = await res.json().catch(() => ({}));
+          if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+          showToast(`Removed ${email} / 已移除成员`, 'info');
+          await loadMembers();
+        } catch (err: any) {
+          showToast(err?.message || 'Failed to remove member', 'error');
+        } finally {
+          btn.disabled = false;
+        }
       }
     });
-  });
-}
 
-initMembersPage();
-document.addEventListener('shell:page-load', () => {
-  if (document.getElementById('btn-open-add-dialog')) {
-    initMembersPage();
-  }
-});
+    loadMembers();
+  });
 </script>

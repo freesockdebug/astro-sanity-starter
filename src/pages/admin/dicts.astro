@@ -1,712 +1,466 @@
 ---
-// src/pages/admin/dicts.astro
-// Universal Data Dictionary Control Center (MineAdmin Style Double-Column Console)
-import AdminLayout from '@layouts/AdminLayout.astro';
-import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
-import { requireAdminContext } from '@utils/auth';
-import { listDictGroups } from '@utils/db';
-import { getBadgeColorClasses, getAllCachedDictItems } from '@utils/dicts';
-// @ts-ignore
-import { env as cfEnv } from 'cloudflare:workers';
-
 export const prerender = false;
+import AdminLayout from '@layouts/AdminLayout.astro';
+import { DICT_CATEGORIES, getBadgeColorClasses, type DictCategoryDef } from '@utils/dicts';
+import { getLangFromUrl } from '@i18n/utils';
 
-const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = await requireAdminContext(
-  Astro,
-  cfEnv,
-  '/admin/dicts',
-  { requiredMenu: 'dicts' }
-);
-if (redirectResponse) return redirectResponse;
+const lang = getLangFromUrl(Astro.url);
+const T = (en: string, zh: string) => (lang === 'zh' ? zh : en);
+const isSuperAdmin = Astro.locals.adminRole === 'super_admin';
+const canWrite = isSuperAdmin || (Astro.locals.adminPermissions || []).includes('settings.write');
 
-const [groups, allItems] = await Promise.all([
-  listDictGroups(),
-  getAllCachedDictItems(cfEnv),
-]);
+const GROUP_LABELS: Record<DictCategoryDef['group'], string> = {
+  orders_logistics: T('Orders & Logistics', '订单与物流'),
+  crm_inquiries: T('CRM & Inquiries', '客户与询盘'),
+  products_catalog: T('Products & Catalog', '商品与目录'),
+};
 
-const initialGroup = Astro.url.searchParams.get('group') || (groups[0]?.code || 'shipping_carriers');
-const pageTitle = 'Data Dictionaries';
+const groupedCategories = DICT_CATEGORIES.reduce((acc, cat) => {
+  (acc[cat.group] ||= []).push(cat);
+  return acc;
+}, {} as Record<DictCategoryDef['group'], DictCategoryDef[]>);
+
+const SWATCH_COLORS: [string, string][] = [
+  ['slate', 'bg-slate-400'], ['blue', 'bg-blue-500'], ['emerald', 'bg-emerald-500'],
+  ['amber', 'bg-amber-500'], ['rose', 'bg-rose-500'], ['purple', 'bg-purple-500'], ['indigo', 'bg-indigo-500'],
+];
 ---
 
-<AdminLayout
-  title={pageTitle}
-  currentTab="dicts"
-  sessionEmail={sessionUser.email}
-  adminName={adminContext?.name}
-  roleName={adminContext?.role?.name}
-  roleCode={adminContext?.role?.code}
-  menus={adminContext?.menus}
-  permissions={adminContext?.permissions}
-  dataScope={adminContext?.dataScope}
-  pendingOrdersCount={pendingOrdersCount}
->
-  <!-- Unified Page Header Toolbar -->
-  <AdminPageToolbar
-    title="Data Dictionaries"
-    badge="Universal Engine"
-    badgeColor="purple"
-    subtitle="Manage shipping carriers, multi-scene quick replies, customer tiers, CRM tags, and SLA thresholds without code deployments"
-    icon="🏷️"
-    class="mb-5"
-  >
-    <div slot="actions">
-      <button
-        id="btn-add-item"
-        type="button"
-        class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer"
-      >
-        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        <span>Add Dictionary Item</span>
-      </button>
-    </div>
-  </AdminPageToolbar>
-
-  <!-- Main Double-Column Layout -->
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-    <!-- Left Column: Dictionary Group Directory -->
-    <div class="lg:col-span-4 bg-white rounded-2xl border border-black/5 shadow-2xs p-3.5 space-y-3">
-      <div class="flex items-center justify-between px-1">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-[#1d1d1f]">Dictionary Categories</h2>
-        <span class="text-[10px] text-[#86868b] font-mono">{groups.length} groups</span>
+<AdminLayout title={T('Data Dictionaries', '数据字典与业务参数')} activeNav="dicts">
+  <div class="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-6">
+    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h1 class="text-xl font-bold tracking-tight text-slate-900">{T('Data Dictionaries & Parameters', '数据字典与业务参数')}</h1>
+          <span class="adm-badge bg-indigo-50 text-indigo-700 border-indigo-200">{T('D1 + KV Hot Cached', 'D1 落盘 + KV 热缓存')}</span>
+        </div>
+        <p class="mt-1 text-xs text-slate-500">
+          {T('Centralized management of business dropdowns, status badges, logistics carriers, and CRM quick reply templates.', '集中管控全站业务下拉选项、状态徽章配色、物流承运商轨迹模板及客诉快捷回复话术。')}
+        </p>
       </div>
+      <div class="flex items-center gap-2.5">
+        <button type="button" id="btn-refresh-dict" class="adm-btn-secondary px-3 py-2 text-xs">
+          <svg class="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          {T('Reload Cache', '刷新字典')}
+        </button>
+        {canWrite && (
+          <button type="button" id="btn-add-dict-item" class="adm-btn-primary px-3.5 py-2 text-xs">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+            {T('New Option', '新增字典项')}
+          </button>
+        )}
+      </div>
+    </div>
 
-      <input
-        type="text"
-        id="group-search"
-        placeholder="Filter categories..."
-        class="w-full px-3 py-1.5 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f]"
-      />
-
-      <div id="groups-list" class="space-y-1">
-        {groups.map((g) => {
-          const isActive = g.code === initialGroup;
-          return (
-            <button
-              type="button"
-              class={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer group-btn flex items-start justify-between gap-2 ${
-                isActive
-                  ? 'bg-black text-white border-black shadow-xs font-semibold'
-                  : 'bg-white hover:bg-[#f5f5f7] border-transparent text-[#1d1d1f]'
-              }`}
-              data-group-code={g.code}
-              data-group-name={g.name}
-              data-group-desc={g.description}
-            >
-              <div class="min-w-0">
-                <div class="text-xs truncate flex items-center gap-1.5">
-                  <span>{g.name}</span>
-                  {g.is_system && (
-                    <span class={`text-[9px] px-1 py-0.2 rounded font-mono ${isActive ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'}`}>
-                      SYS
-                    </span>
-                  )}
-                </div>
-                <p class={`text-[11px] truncate mt-0.5 ${isActive ? 'text-white/70' : 'text-[#86868b]'}`}>
-                  {g.code}
-                </p>
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <!-- Left Category Sidebar -->
+      <aside class="lg:col-span-3 space-y-4">
+        <div class="adm-card p-3 space-y-4">
+          {Object.entries(groupedCategories).map(([groupKey, cats]) => (
+            <div>
+              <div class="px-2.5 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                {GROUP_LABELS[groupKey as DictCategoryDef['group']]}
               </div>
-              <span class={`text-[10px] px-1.5 py-0.5 rounded-md font-mono shrink-0 ${
-                isActive ? 'bg-white/20 text-white' : 'bg-[#f0f0f2] text-[#52525b]'
-              }`}>
-                {g.enabled_count}/{g.items_count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+              <div class="space-y-1">
+                {cats.map((cat, idx) => {
+                  const isFirst = groupKey === 'orders_logistics' && idx === 0;
+                  return (
+                    <button
+                      type="button"
+                      data-cat-code={cat.code}
+                      data-cat-label={lang === 'zh' ? cat.label_zh : cat.label_en}
+                      data-cat-desc={lang === 'zh' ? cat.description_zh : cat.description_en}
+                      data-cat-meta-hint={cat.meta_schema_hint || ''}
+                      class:list={[
+                        'dict-cat-btn group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all',
+                        isFirst ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                      ]}
+                    >
+                      <div class="truncate pr-2">
+                        <div class="font-semibold truncate">{lang === 'zh' ? cat.label_zh : cat.label_en}</div>
+                        <div class:list={['dict-cat-sub text-[10px] font-mono truncate mt-0.5', isFirst ? 'text-slate-300' : 'text-slate-400']}>{cat.code}</div>
+                      </div>
+                      <svg class="h-3.5 w-3.5 shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
 
-    <!-- Right Column: Dictionary Items Workbench Table -->
-    <div class="lg:col-span-8 bg-white rounded-2xl border border-black/5 shadow-2xs overflow-hidden flex flex-col">
-      <!-- Active Group Info Header -->
-      <div class="p-4 sm:p-5 border-b border-black/5 bg-[#fafafa] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div class="flex items-center gap-2">
-            <h3 id="current-group-title" class="text-sm sm:text-base font-bold text-[#1d1d1f] tracking-tight">
-              {groups.find(g => g.code === initialGroup)?.name || 'Dictionary Items'}
-            </h3>
-            <span id="current-group-code-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-black/5 text-[#52525b]">
-              {initialGroup}
-            </span>
+      <!-- Right Table Panel -->
+      <section class="lg:col-span-9">
+        <div class="adm-card overflow-hidden">
+          <div class="border-b border-slate-100 bg-slate-50/70 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 id="active-cat-title" class="text-sm font-bold text-slate-900">{lang === 'zh' ? DICT_CATEGORIES[0].label_zh : DICT_CATEGORIES[0].label_en}</h2>
+                <code id="active-cat-code" class="rounded bg-slate-200/70 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">{DICT_CATEGORIES[0].code}</code>
+              </div>
+              <p id="active-cat-desc" class="mt-0.5 text-xs text-slate-500">{lang === 'zh' ? DICT_CATEGORIES[0].description_zh : DICT_CATEGORIES[0].description_en}</p>
+            </div>
+            <span id="dict-count-badge" class="adm-badge bg-white text-slate-600 border-slate-200 self-start sm:self-center">0 items</span>
           </div>
-          <p id="current-group-desc" class="text-xs text-[#86868b] mt-0.5">
-            {groups.find(g => g.code === initialGroup)?.description || 'Configurable key-value dictionary items.'}
-          </p>
-        </div>
-      </div>
 
-      <!-- Items Table -->
-      <div class="overflow-x-auto min-h-[360px]">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="border-b border-black/5 bg-[#fbfbfd] text-[#86868b] text-[11px] font-semibold uppercase tracking-wider">
-              <th class="py-2.5 px-3 w-14 text-center">Order</th>
-              <th class="py-2.5 px-3">Item Key</th>
-              <th class="py-2.5 px-3">Visual Label & Badge</th>
-              <th class="py-2.5 px-3">Extended Properties (Meta)</th>
-              <th class="py-2.5 px-3 w-24 text-center">Status</th>
-              <th class="py-2.5 px-3 w-24 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="dict-items-tbody" class="divide-y divide-black/5 font-sans">
-            <!-- Dynamically populated via client script -->
-          </tbody>
-        </table>
-        <div id="no-items-empty" class="hidden p-10 text-center text-xs text-[#86868b]">
-          No dictionary items found for this category. Click "+ Add Dictionary Item" above to add one.
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+              <thead class="bg-slate-50/50">
+                <tr>
+                  <th class="adm-th py-3 pl-5 pr-3">{T('Code / Key', '字典编码')}</th>
+                  <th class="adm-th px-3 py-3">{T('English Label', '英文名称')}</th>
+                  <th class="adm-th px-3 py-3">{T('Chinese Label', '中文名称')}</th>
+                  <th class="adm-th px-3 py-3">{T('Badge Preview', '徽章预览')}</th>
+                  <th class="adm-th px-3 py-3">{T('Extra Meta', '扩展参数')}</th>
+                  <th class="adm-th px-3 py-3 text-center">{T('Sort', '排序')}</th>
+                  <th class="adm-th px-3 py-3 text-center">{T('Status', '状态')}</th>
+                  <th class="adm-th py-3 pl-3 pr-5 text-right">{T('Actions', '操作')}</th>
+                </tr>
+              </thead>
+              <tbody id="dict-tbody" class="divide-y divide-slate-100 bg-white">
+                <tr><td colspan="8" class="py-12 text-center text-slate-400">{T('Loading dictionary items...', '正在加载字典数据...')}</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 
-  <!-- Add / Edit Item Modal -->
-  <Fragment slot="modals">
-    <dialog
-      id="dict-item-dialog"
-      class="backdrop:bg-black/40 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-lg m-auto"
-    >
-      <div class="p-5 sm:p-6 space-y-4">
-        <div class="flex items-center justify-between border-b border-black/5 pb-3">
-          <div class="flex items-center gap-2">
-            <span class="text-base">🏷️</span>
-            <h3 id="modal-title" class="text-sm font-bold text-[#1d1d1f]">Add Dictionary Item</h3>
+  <!-- Slide-over Modal for Add / Edit Dict Item -->
+  <div id="dict-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+    <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+        <div>
+          <h3 id="dict-modal-title" class="text-sm font-bold text-slate-900">{T('Edit Dictionary Option', '编辑字典项')}</h3>
+          <p id="dict-modal-subtitle" class="text-[11px] font-mono text-slate-400 mt-0.5"></p>
+        </div>
+        <button type="button" id="btn-close-dict-modal" class="rounded-lg p-1 text-slate-400 hover:bg-slate-200/60 hover:text-slate-600">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <form id="dict-form" class="p-5 space-y-4">
+        <input type="hidden" id="field-category-code" />
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label class="adm-label">{T('Item Code (Unique Key)', '字典编码 (唯一标识)')} *</label>
+            <input type="text" id="field-item-code" required pattern="[a-zA-Z0-9_-]+" placeholder="e.g. dhl_express" class="adm-input font-mono disabled:bg-slate-100 disabled:text-slate-500" />
           </div>
-          <button id="btn-close-modal" type="button" class="text-zinc-400 hover:text-black text-lg cursor-pointer">✕</button>
+          <div>
+            <label class="adm-label">{T('Sort Order', '排序权重 (越小越靠前)')}</label>
+            <input type="number" id="field-sort-order" value="10" class="adm-input" />
+          </div>
         </div>
 
-        <form id="dict-item-form" class="space-y-3.5">
-          <input type="hidden" id="form-group-code" name="group_code" value={initialGroup} />
-
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Item Key (Unique Key) *</label>
-            <input
-              type="text"
-              id="form-item-key"
-              name="item_key"
-              required
-              placeholder="e.g. dhl, VIP, swatch_request"
-              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-mono"
-            />
-            <p class="text-[10px] text-[#86868b] mt-0.5">Code identifier stored in database records.</p>
+            <label class="adm-label">{T('English Label', '英文显示名称')} *</label>
+            <input type="text" id="field-label-en" required placeholder="e.g. DHL Express" class="adm-input" />
           </div>
-
           <div>
-            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Display Label *</label>
-            <input
-              type="text"
-              id="form-item-label"
-              name="item_label"
-              required
-              placeholder="e.g. DHL Express, VIP Commercial"
-              class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans"
-            />
+            <label class="adm-label">{T('Chinese Label', '中文显示名称')} *</label>
+            <input type="text" id="field-label-zh" required placeholder="例如：DHL 国际快递" class="adm-input" />
           </div>
+        </div>
 
-          <!-- Badge Color Picker -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label class="block text-xs font-semibold text-[#1d1d1f] mb-1.5">Visual Badge Color</label>
-            <div class="grid grid-cols-4 min-[1760px]:grid-cols-7 gap-1.5">
-              {[
-                { name: 'slate', label: 'Slate', cls: 'bg-slate-100 text-slate-800 border-slate-300' },
-                { name: 'blue', label: 'Blue', cls: 'bg-blue-100 text-blue-800 border-blue-300' },
-                { name: 'emerald', label: 'Emerald', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
-                { name: 'amber', label: 'Amber', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
-                { name: 'purple', label: 'Purple', cls: 'bg-purple-100 text-purple-800 border-purple-300' },
-                { name: 'rose', label: 'Rose', cls: 'bg-rose-100 text-rose-800 border-rose-300' },
-                { name: 'indigo', label: 'Indigo', cls: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
-              ].map((c) => (
-                <label class="flex flex-col items-center gap-1 p-1.5 rounded-xl border border-black/10 hover:border-black/30 cursor-pointer text-center color-option">
-                  <input type="radio" name="badge_color" value={c.name} class="sr-only" />
-                  <span class={`w-4 h-4 rounded-full border ${c.cls} inline-block`}></span>
-                  <span class="text-[10px] text-[#52525b] font-medium">{c.label}</span>
-                </label>
+            <label class="adm-label">{T('Badge Color Style', '状态徽章颜色')}</label>
+            <div class="grid grid-cols-4 gap-1.5" id="badge-color-picker">
+              {SWATCH_COLORS.map(([colorName, dotClass]) => (
+                <button type="button" data-color={colorName} class="color-swatch-btn flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+                  <span class={`h-2.5 w-2.5 rounded-full ${dotClass}`}></span>
+                  <span class="capitalize">{colorName}</span>
+                </button>
               ))}
             </div>
+            <input type="hidden" id="field-badge-color" value="slate" />
           </div>
-
-          <!-- Dynamic Meta Fields Container -->
-          <div id="dynamic-meta-fields" class="space-y-3 pt-1 border-t border-black/5">
-            <!-- Dynamically populated per group schema -->
+          <div>
+            <label class="adm-label">{T('Status', '启用状态')}</label>
+            <label class="mt-2 inline-flex cursor-pointer items-center gap-2.5">
+              <input type="checkbox" id="field-is-active" checked class="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
+              <span class="text-xs font-medium text-slate-700">{T('Active (Visible in dropdowns)', '启用 (在业务下拉框中显示)')}</span>
+            </label>
           </div>
+        </div>
 
-          <!-- Sort Order & Enabled -->
-          <div class="grid grid-cols-2 gap-3 pt-1">
-            <div>
-              <label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Sort Order</label>
-              <input
-                type="number"
-                id="form-sort-order"
-                name="sort_order"
-                value="100"
-                class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-mono"
-              />
-            </div>
-            <div class="flex items-center pt-5">
-              <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1d1d1f]">
-                <input
-                  type="checkbox"
-                  id="form-is-enabled"
-                  name="is_enabled"
-                  checked
-                  class="w-4 h-4 rounded accent-black text-black cursor-pointer"
-                />
-                <span>Enable Dictionary Item</span>
-              </label>
-            </div>
+        <div id="dynamic-meta-fields" class="space-y-3 rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5"></div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-semibold text-slate-700">{T('Additional JSON Metadata (Optional)', '其他扩展 JSON 参数 (选填)')}</label>
+            <span id="meta-schema-hint" class="text-[10px] font-mono text-slate-400"></span>
           </div>
+          <textarea id="field-meta-json" rows="2" placeholder="{}" class="adm-input font-mono"></textarea>
+        </div>
 
-          <div id="form-error" class="hidden p-2.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-800 border border-rose-200"></div>
+        <div class="flex items-center justify-end gap-2.5 border-t border-slate-100 pt-4">
+          <button type="button" id="btn-cancel-dict-modal" class="adm-btn-secondary">{T('Cancel', '取消')}</button>
+          <button type="submit" id="btn-save-dict" class="adm-btn-primary">{T('Save Option', '保存字典项')}</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-          <div class="flex items-center justify-end gap-2 pt-3 border-t border-black/5">
-            <button
-              id="btn-cancel-modal"
-              type="button"
-              class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black/10 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              id="btn-submit-modal"
-              type="submit"
-              class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-xs"
-            >
-              Save Dictionary Item
-            </button>
-          </div>
-        </form>
-      </div>
-    </dialog>
-  </Fragment>
-</AdminLayout>
+  <script>
+    import { $id, $val, $chk, $txt, escapeHtml, showToast } from '@utils/adminWorkbench';
+    import { getBadgeColorClasses } from '@utils/dicts';
 
-<script define:vars={{ initialGroups: groups, initialItems: allItems, initialSelectedGroup: initialGroup }}>
-  (function () {
-    var groups = initialGroups;
-    var allItems = initialItems;
-    var currentGroup = initialSelectedGroup;
+    // Saltline Table-Driven Meta Field Schema: [key, label, type('text'|'textarea'|'number'), placeholder, defaultVal, extraHint]
+    type MetaFieldTuple = [string, string, 'text' | 'textarea' | 'number', string, string | number, string?];
+    const META_SCHEMA: Record<string, MetaFieldTuple[]> = {
+      shipping_carriers: [
+        ['tracking_url', 'Tracking URL Template / 物流轨迹查询链接模板', 'text', 'https://www.dhl.com/en/express/tracking.html?AWB={tracking_no}', '', 'Use {tracking_no} as placeholder for tracking number / 使用 {tracking_no} 作为运单号占位符'],
+      ],
+      quick_replies: [
+        ['template_en', 'English Reply Template / 英文快捷回复话术', 'textarea', 'Dear customer, thank you for your inquiry...', ''],
+        ['template_zh', 'Chinese Reply Template / 中文快捷回复话术', 'textarea', '尊敬的客户，感谢您的询盘...', ''],
+      ],
+      units_of_measure: [
+        ['decimals', 'Allowed Decimal Places / 允许小数位数', 'number', '0', 0],
+      ],
+      incoterms: [
+        ['desc_en', 'Term Responsibility Note (EN) / 贸易条款说明 (英)', 'text', 'Seller delivers goods on board the vessel...', ''],
+      ],
+    };
 
-    var tbody = document.getElementById('dict-items-tbody');
-    var emptyEl = document.getElementById('no-items-empty');
-    var dialog = document.getElementById('dict-item-dialog');
-    var modalTitle = document.getElementById('modal-title');
-    var form = document.getElementById('dict-item-form');
-    var formError = document.getElementById('form-error');
-
-    function showToast(msg, isSuccess) {
-      if (window.__showToast) {
-        window.__showToast(msg, isSuccess !== false ? 'success' : 'error');
-      }
-    }
-
-    function escapeHtml(str) {
-      return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
-
-    function getBadgeClass(color) {
-      switch (color) {
-        case 'blue': return 'bg-blue-50 text-blue-700 border-blue-200';
-        case 'emerald': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-        case 'amber': return 'bg-amber-50 text-amber-800 border-amber-200';
-        case 'purple': return 'bg-purple-50 text-purple-700 border-purple-200';
-        case 'rose': return 'bg-rose-50 text-rose-700 border-rose-200';
-        case 'indigo': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-        default: return 'bg-slate-100 text-slate-700 border-slate-200';
-      }
-    }
-
-    function renderItemsTable() {
+    document.addEventListener('astro:page-load', () => {
+      const tbody = $id('dict-tbody');
       if (!tbody) return;
-      var filtered = allItems.filter(function (i) {
-        return i.group_code.toLowerCase() === currentGroup.toLowerCase();
-      }).sort(function (a, b) {
-        return (a.sort_order ?? 100) - (b.sort_order ?? 100);
+
+      let activeCategory = 'order_statuses';
+      let currentItems: any[] = [];
+      let isEditing = false;
+
+      const selectSwatch = (color: string) => {
+        const input = $id<HTMLInputElement>('field-badge-color');
+        if (input) input.value = color || 'slate';
+        document.querySelectorAll<HTMLElement>('.color-swatch-btn').forEach((btn) => {
+          const matched = btn.dataset.color === color;
+          btn.classList.toggle('ring-2', matched);
+          btn.classList.toggle('ring-slate-900', matched);
+          btn.classList.toggle('bg-slate-100', matched);
+        });
+      };
+
+      document.querySelectorAll<HTMLElement>('.color-swatch-btn').forEach((btn) => {
+        btn.addEventListener('click', () => selectSwatch(btn.dataset.color || 'slate'));
       });
 
-      if (filtered.length === 0) {
-        tbody.innerHTML = '';
-        if (emptyEl) emptyEl.classList.remove('hidden');
-        return;
-      }
-
-      if (emptyEl) emptyEl.classList.add('hidden');
-      tbody.innerHTML = filtered.map(function (item) {
-        var badgeCls = getBadgeClass(item.badge_color);
-        var metaSummary = '';
-        if (item.meta) {
-          if (item.meta.tracking_url) {
-            metaSummary = '<span class="font-mono text-[10px] text-zinc-500 truncate max-w-xs block">' + escapeHtml(item.meta.tracking_url) + '</span>';
-          } else if (item.meta.scene && item.meta.content) {
-            metaSummary = '<div class="space-y-0.5"><span class="px-1 py-0.2 rounded text-[9px] bg-black/5 font-semibold uppercase">' + escapeHtml(item.meta.scene) + '</span><span class="text-[11px] text-zinc-600 italic block line-clamp-1">"' + escapeHtml(item.meta.content) + '"</span></div>';
-          } else if (item.meta.discount_label) {
-            metaSummary = '<span class="text-[11px] font-semibold text-emerald-700">' + escapeHtml(item.meta.discount_label) + '</span>';
-          } else if (item.meta.sla_hours) {
-            metaSummary = '<span class="text-[11px] font-mono font-semibold text-amber-700">SLA: ' + item.meta.sla_hours + 'h threshold</span>';
-          } else {
-            var keys = Object.keys(item.meta);
-            metaSummary = keys.length > 0 ? '<span class="text-[10px] font-mono text-zinc-400">' + keys.length + ' attributes</span>' : '<span class="text-[10px] text-zinc-300">-</span>';
+      const formatMetaSummary = (cat: string, metaStr: string) => {
+        if (!metaStr) return '<span class="text-slate-300">—</span>';
+        try {
+          const obj = JSON.parse(metaStr);
+          if (cat === 'shipping_carriers' && obj.tracking_url) {
+            return `<div class="max-w-[260px] truncate text-[11px] text-blue-600 font-mono" title="${escapeHtml(obj.tracking_url)}">🔗 ${escapeHtml(obj.tracking_url)}</div>`;
           }
+          if (cat === 'quick_replies' && (obj.template_zh || obj.template_en)) {
+            const preview = obj.template_zh || obj.template_en;
+            return `<div class="max-w-[260px] truncate text-[11px] text-slate-600" title="${escapeHtml(preview)}">💬 ${escapeHtml(preview)}</div>`;
+          }
+          if (cat === 'units_of_measure' && obj.decimals !== undefined) {
+            return `<span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">Decimals: ${escapeHtml(obj.decimals)}</span>`;
+          }
+          return `<code class="block max-w-[220px] truncate rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">${escapeHtml(metaStr)}</code>`;
+        } catch {
+          return `<code class="text-[10px] text-rose-500">${escapeHtml(metaStr)}</code>`;
         }
+      };
 
-        var isEnabled = item.is_enabled;
-        return (
-          '<tr class="hover:bg-[#fbfbfd] transition-colors">' +
-            '<td class="py-2.5 px-3 text-center font-mono text-xs text-zinc-400">' + item.sort_order + '</td>' +
-            '<td class="py-2.5 px-3 font-mono font-bold text-xs text-[#1d1d1f]">' + escapeHtml(item.item_key) + '</td>' +
-            '<td class="py-2.5 px-3">' +
-              '<span class="inline-flex items-center px-2 py-0.5 rounded-md border text-xs font-semibold ' + badgeCls + '">' +
-                escapeHtml(item.item_label) +
-              '</span>' +
-            '</td>' +
-            '<td class="py-2.5 px-3">' + metaSummary + '</td>' +
-            '<td class="py-2.5 px-3 text-center">' +
-              '<button type="button" class="btn-toggle-status px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer ' +
-                (isEnabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-zinc-100 text-zinc-500 border border-zinc-200') +
-                '" data-group="' + item.group_code + '" data-key="' + item.item_key + '" data-enabled="' + (isEnabled ? 'true' : 'false') + '">' +
-                (isEnabled ? '● Active' : '○ Inactive') +
-              '</button>' +
-            '</td>' +
-            '<td class="py-2.5 px-3 text-right space-x-1">' +
-              '<button type="button" class="btn-edit-item p-1 text-zinc-400 hover:text-black hover:bg-black/5 rounded-lg transition-colors cursor-pointer" data-group="' + item.group_code + '" data-key="' + item.item_key + '" title="Edit Item">✎</button>' +
-              '<button type="button" class="btn-delete-item p-1 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" data-group="' + item.group_code + '" data-key="' + item.item_key + '" title="Delete Item">🗑</button>' +
-            '</td>' +
-          '</tr>'
-        );
-      }).join('');
-
-      bindActionListeners();
-    }
-
-    function bindActionListeners() {
-      document.querySelectorAll('.btn-toggle-status').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-          var g = btn.getAttribute('data-group');
-          var k = btn.getAttribute('data-key');
-          var current = btn.getAttribute('data-enabled') === 'true';
-          btn.disabled = true;
-
-          try {
-            var res = await fetch('/api/admin/dicts', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'toggle_enabled', groupCode: g, itemKey: k, isEnabled: !current }),
-            });
-            var data = await res.json();
-            if (res.ok && data.success) {
-              allItems.forEach(function (i) {
-                if (i.group_code === g && i.item_key === k) i.is_enabled = !current;
-              });
-              renderItemsTable();
-              showToast(data.message || 'Status updated', true);
-            } else {
-              showToast(data.error || 'Failed to toggle status', false);
-              btn.disabled = false;
-            }
-          } catch (e) {
-            showToast(e.message, false);
-            btn.disabled = false;
-          }
-        });
-      });
-
-      document.querySelectorAll('.btn-delete-item').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-          var g = btn.getAttribute('data-group');
-          var k = btn.getAttribute('data-key');
-          if (!confirm('Are you sure you want to delete dictionary item "' + k + '"?')) return;
-
-          btn.disabled = true;
-          try {
-            var res = await fetch('/api/admin/dicts/' + encodeURIComponent(g) + '?itemKey=' + encodeURIComponent(k), {
-              method: 'DELETE',
-            });
-            var data = await res.json();
-            if (res.ok && data.success) {
-              allItems = allItems.filter(function (i) {
-                return !(i.group_code === g && i.item_key === k);
-              });
-              renderItemsTable();
-              showToast('Item deleted successfully', true);
-            } else {
-              showToast(data.error || 'Delete failed', false);
-              btn.disabled = false;
-            }
-          } catch (e) {
-            showToast(e.message, false);
-            btn.disabled = false;
-          }
-        });
-      });
-
-      document.querySelectorAll('.btn-edit-item').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var g = btn.getAttribute('data-group');
-          var k = btn.getAttribute('data-key');
-          var item = allItems.find(function (i) {
-            return i.group_code === g && i.item_key === k;
-          });
-          if (item) {
-            openModal(item);
-          }
-        });
-      });
-    }
-
-    function renderDynamicMetaFields(groupCode, itemMeta) {
-      var container = document.getElementById('dynamic-meta-fields');
-      if (!container) return;
-      container.innerHTML = '';
-      itemMeta = itemMeta || {};
-
-      if (groupCode === 'shipping_carriers') {
-        container.innerHTML =
-          '<div>' +
-            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Tracking URL Template</label>' +
-            '<input type="text" id="meta-tracking-url" name="meta_tracking_url" value="' + escapeHtml(itemMeta.tracking_url || '') + '" placeholder="https://example.com/track?no={tracking}" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-mono" />' +
-            '<p class="text-[10px] text-[#86868b] mt-0.5">Use <code class="font-mono">{tracking}</code> or <code class="font-mono">{tracking_no}</code> placeholder.</p>' +
-          '</div>';
-      } else if (groupCode === 'quick_replies') {
-        var scene = itemMeta.scene || 'approval';
-        container.innerHTML =
-          '<div>' +
-            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Reply Scene Category *</label>' +
-            '<select id="meta-scene" name="meta_scene" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs font-semibold">' +
-              '<option value="approval"' + (scene === 'approval' ? ' selected' : '') + '>Order Approval (通过)</option>' +
-              '<option value="shipping"' + (scene === 'shipping' ? ' selected' : '') + '>Shipping / Dispatch (发货)</option>' +
-              '<option value="rejection"' + (scene === 'rejection' ? ' selected' : '') + '>Order Rejection (驳回)</option>' +
-            '</select>' +
-          '</div>' +
-          '<div>' +
-            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Template Content *</label>' +
-            '<textarea id="meta-content" name="meta_content" rows="3" placeholder="Enter standard English reply message..." class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs">' + escapeHtml(itemMeta.content || '') + '</textarea>' +
-          '</div>';
-      } else if (groupCode === 'customer_tiers') {
-        container.innerHTML =
-          '<div>' +
-            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Discount Tagline / Tier Notice</label>' +
-            '<input type="text" id="meta-discount" name="meta_discount" value="' + escapeHtml(itemMeta.discount_label || '') + '" placeholder="e.g. 15% Volume Tier" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs" />' +
-          '</div>' +
-          '<div>' +
-            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Tier Benefits Description</label>' +
-            '<input type="text" id="meta-desc" name="meta_desc" value="' + escapeHtml(itemMeta.description || '') + '" placeholder="e.g. Priority dispatch and custom fabric specialist" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs" />' +
-          '</div>';
-      } else if (groupCode === 'order_statuses') {
-        container.innerHTML =
-          '<div>' +
-            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">SLA Alert Threshold (Hours)</label>' +
-            '<input type="number" id="meta-sla-hours" name="meta_sla_hours" value="' + (itemMeta.sla_hours || '') + '" placeholder="24" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs font-mono" />' +
-            '<p class="text-[10px] text-[#86868b] mt-0.5">Orders in this status exceeding this duration trigger urgent SLA warning tags.</p>' +
-          '</div>';
-      } else if (groupCode === 'audit_actions') {
-        var risk = itemMeta.risk_level || 'LOW';
-        container.innerHTML =
-          '<div>' +
-            '<label class="block text-xs font-semibold text-[#1d1d1f] mb-1">Action Risk Level</label>' +
-            '<select id="meta-risk" name="meta_risk" class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 text-xs font-semibold">' +
-              '<option value="LOW"' + (risk === 'LOW' ? ' selected' : '') + '>LOW (Normal Activity)</option>' +
-              '<option value="MEDIUM"' + (risk === 'MEDIUM' ? ' selected' : '') + '>MEDIUM (Privilege/Assignment Change)</option>' +
-              '<option value="HIGH"' + (risk === 'HIGH' ? ' selected' : '') + '>HIGH (Deletion / Account Lockout)</option>' +
-            '</select>' +
-          '</div>';
-      }
-    }
-
-    function openModal(editItem) {
-      if (!dialog) return;
-      if (formError) formError.classList.add('hidden');
-      var keyInput = document.getElementById('form-item-key');
-      var labelInput = document.getElementById('form-item-label');
-      var orderInput = document.getElementById('form-sort-order');
-      var enabledInput = document.getElementById('form-is-enabled');
-      var groupInput = document.getElementById('form-group-code');
-
-      if (groupInput) groupInput.value = currentGroup;
-
-      if (editItem) {
-        if (modalTitle) modalTitle.textContent = 'Edit Dictionary Item';
-        if (keyInput) { keyInput.value = editItem.item_key; keyInput.disabled = true; }
-        if (labelInput) labelInput.value = editItem.item_label;
-        if (orderInput) orderInput.value = editItem.sort_order ?? 100;
-        if (enabledInput) enabledInput.checked = editItem.is_enabled !== false;
-
-        // Color radio
-        var radio = document.querySelector('input[name="badge_color"][value="' + (editItem.badge_color || 'slate') + '"]');
-        if (radio) radio.checked = true;
-
-        renderDynamicMetaFields(currentGroup, editItem.meta);
-      } else {
-        if (modalTitle) modalTitle.textContent = 'Add Dictionary Item';
-        if (keyInput) { keyInput.value = ''; keyInput.disabled = false; }
-        if (labelInput) labelInput.value = '';
-        if (orderInput) orderInput.value = '100';
-        if (enabledInput) enabledInput.checked = true;
-
-        var defaultRadio = document.querySelector('input[name="badge_color"][value="slate"]');
-        if (defaultRadio) defaultRadio.checked = true;
-
-        renderDynamicMetaFields(currentGroup, {});
-      }
-
-      dialog.showModal();
-    }
-
-    // Modal submit handler
-    if (form) {
-      form.addEventListener('submit', async function (e) {
-        e.preventDefault();
-        var keyInput = document.getElementById('form-item-key');
-        var labelInput = document.getElementById('form-item-label');
-        var orderInput = document.getElementById('form-sort-order');
-        var enabledInput = document.getElementById('form-is-enabled');
-        var colorRadio = document.querySelector('input[name="badge_color"]:checked');
-
-        var itemKey = keyInput ? keyInput.value.trim() : '';
-        var itemLabel = labelInput ? labelInput.value.trim() : '';
-        var sortOrder = orderInput ? Number(orderInput.value) : 100;
-        var isEnabled = enabledInput ? enabledInput.checked : true;
-        var badgeColor = colorRadio ? colorRadio.value : 'slate';
-
-        if (!itemKey || !itemLabel) {
-          if (formError) {
-            formError.textContent = 'Item Key and Display Label are required.';
-            formError.classList.remove('hidden');
-          }
+      const renderTable = () => {
+        $txt('dict-count-badge', `${currentItems.length} items`);
+        if (!currentItems.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="py-12 text-center text-slate-400">No items in this category yet.</td></tr>';
           return;
         }
+        tbody.innerHTML = currentItems.map((item, idx) => {
+          const badgeCls = getBadgeColorClasses(item.badge_color || 'slate');
+          const activeDot = item.is_active
+            ? '<span class="inline-flex items-center gap-1 text-emerald-600 font-medium"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active</span>'
+            : '<span class="inline-flex items-center gap-1 text-slate-400"><span class="h-1.5 w-1.5 rounded-full bg-slate-300"></span>Disabled</span>';
+          const sysTag = item.is_system ? '<span class="ml-1.5 rounded bg-slate-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-slate-500 border border-slate-200">SYS</span>' : '';
+          const delBtn = item.is_system ? '' : `<button type="button" data-del-idx="${idx}" class="rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-100">Delete</button>`;
 
-        // Build meta object
-        var meta = {};
-        if (currentGroup === 'shipping_carriers') {
-          var trackingUrl = document.getElementById('meta-tracking-url');
-          if (trackingUrl) meta.tracking_url = trackingUrl.value.trim();
-        } else if (currentGroup === 'quick_replies') {
-          var sceneEl = document.getElementById('meta-scene');
-          var contentEl = document.getElementById('meta-content');
-          if (sceneEl) meta.scene = sceneEl.value;
-          if (contentEl) meta.content = contentEl.value.trim();
-        } else if (currentGroup === 'customer_tiers') {
-          var discEl = document.getElementById('meta-discount');
-          var descEl = document.getElementById('meta-desc');
-          if (discEl) meta.discount_label = discEl.value.trim();
-          if (descEl) meta.description = descEl.value.trim();
-        } else if (currentGroup === 'order_statuses') {
-          var slaEl = document.getElementById('meta-sla-hours');
-          if (slaEl && slaEl.value) meta.sla_hours = Number(slaEl.value);
-        } else if (currentGroup === 'audit_actions') {
-          var riskEl = document.getElementById('meta-risk');
-          if (riskEl) meta.risk_level = riskEl.value;
+          return `<tr class="hover:bg-slate-50/80 transition-colors">
+            <td class="whitespace-nowrap py-3 pl-5 pr-3 font-mono font-semibold text-slate-800">${escapeHtml(item.item_code)}${sysTag}</td>
+            <td class="px-3 py-3 font-medium text-slate-800">${escapeHtml(item.label_en)}</td>
+            <td class="px-3 py-3 text-slate-700">${escapeHtml(item.label_zh)}</td>
+            <td class="px-3 py-3"><span class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${badgeCls}">${escapeHtml(item.label_en)} / ${escapeHtml(item.label_zh)}</span></td>
+            <td class="px-3 py-3">${formatMetaSummary(item.category_code, item.meta_json)}</td>
+            <td class="px-3 py-3 text-center font-mono text-slate-500">${Number(item.sort_order || 0)}</td>
+            <td class="px-3 py-3 text-center text-[11px]">${activeDot}</td>
+            <td class="whitespace-nowrap py-3 pl-3 pr-5 text-right space-x-1.5">
+              <button type="button" data-edit-idx="${idx}" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">Edit</button>
+              ${delBtn}
+            </td>
+          </tr>`;
+        }).join('');
+      };
+
+      const loadCategory = async (catCode: string, forceRefresh = false) => {
+        activeCategory = catCode;
+        tbody.innerHTML = '<tr><td colspan="8" class="py-12 text-center text-slate-400">Loading...</td></tr>';
+        try {
+          const url = `/api/admin/dicts?category=${encodeURIComponent(catCode)}${forceRefresh ? `&t=${Date.now()}` : ''}`;
+          const res = await fetch(url, { headers: { Accept: 'application/json' } });
+          const data: any = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to load');
+          currentItems = data.items || [];
+          renderTable();
+        } catch (e: any) {
+          tbody.innerHTML = `<tr><td colspan="8" class="py-12 text-center text-rose-500">${escapeHtml(e.message)}</td></tr>`;
         }
+      };
 
-        var btnSubmit = document.getElementById('btn-submit-modal');
-        if (btnSubmit) { btnSubmit.disabled = true; btnSubmit.textContent = 'Saving...'; }
+      document.querySelectorAll<HTMLElement>('.dict-cat-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll<HTMLElement>('.dict-cat-btn').forEach((b) => {
+            b.className = 'dict-cat-btn group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900';
+            b.querySelector('.dict-cat-sub')?.classList.replace('text-slate-300', 'text-slate-400');
+          });
+          btn.className = 'dict-cat-btn group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all bg-slate-900 text-white shadow-sm';
+          btn.querySelector('.dict-cat-sub')?.classList.replace('text-slate-400', 'text-slate-300');
+
+          const code = btn.dataset.catCode || 'order_statuses';
+          $txt('active-cat-title', btn.dataset.catLabel || code);
+          $txt('active-cat-code', code);
+          $txt('active-cat-desc', btn.dataset.catDesc || '');
+          $txt('meta-schema-hint', btn.dataset.catMetaHint || '');
+          loadCategory(code);
+        });
+      });
+
+      const renderDynamicMetaFields = (categoryCode: string, metaObj: Record<string, any>) => {
+        const container = $id('dynamic-meta-fields');
+        if (!container) return;
+        const fields = META_SCHEMA[categoryCode];
+        if (!fields) {
+          container.classList.add('hidden');
+          container.innerHTML = '';
+          return;
+        }
+        container.classList.remove('hidden');
+        container.innerHTML = fields.map(([key, label, type, placeholder, defVal, hint]) => {
+          const val = escapeHtml(metaObj[key] ?? defVal);
+          const control = type === 'textarea'
+            ? `<textarea data-meta-key="${key}" rows="2" placeholder="${escapeHtml(placeholder)}" class="adm-input">${val}</textarea>`
+            : `<input type="${type}" data-meta-key="${key}" value="${val}" ${type === 'number' ? 'min="0" max="6"' : ''} placeholder="${escapeHtml(placeholder)}" class="adm-input ${type === 'text' ? 'font-mono' : ''}" />`;
+          const hintHtml = hint ? `<p class="mt-1 text-[10px] text-slate-400">${escapeHtml(hint)}</p>` : '';
+          return `<div><label class="adm-label">${escapeHtml(label)}</label>${control}${hintHtml}</div>`;
+        }).join('');
+      };
+
+      const modal = $id('dict-modal');
+      const openModal = (item: any) => {
+        isEditing = !!item;
+        $txt('dict-modal-title', item ? 'Edit Dictionary Option / 编辑字典项' : 'New Dictionary Option / 新增字典项');
+        $txt('dict-modal-subtitle', `Category: ${activeCategory}`);
+        ($id('field-category-code') as HTMLInputElement).value = activeCategory;
+
+        const codeInput = $id<HTMLInputElement>('field-item-code')!;
+        codeInput.value = item ? item.item_code : '';
+        codeInput.disabled = !!item && !!item.is_system;
+
+        ($id('field-sort-order') as HTMLInputElement).value = item ? String(item.sort_order ?? 10) : String((currentItems.length + 1) * 10);
+        ($id('field-label-en') as HTMLInputElement).value = item ? item.label_en : '';
+        ($id('field-label-zh') as HTMLInputElement).value = item ? item.label_zh : '';
+        ($id('field-is-active') as HTMLInputElement).checked = item ? Boolean(item.is_active) : true;
+
+        let parsedMeta: Record<string, any> = {};
+        if (item?.meta_json) {
+          try { parsedMeta = JSON.parse(item.meta_json) || {}; } catch {}
+        }
+        renderDynamicMetaFields(activeCategory, parsedMeta);
+
+        const remainingMeta = { ...parsedMeta };
+        (META_SCHEMA[activeCategory] || []).forEach(([k]) => delete remainingMeta[k]);
+        ($id('field-meta-json') as HTMLTextAreaElement).value = Object.keys(remainingMeta).length ? JSON.stringify(remainingMeta) : '';
+
+        selectSwatch(item ? item.badge_color : 'slate');
+        modal?.classList.replace('hidden', 'flex');
+      };
+
+      const closeModal = () => modal?.classList.replace('flex', 'hidden');
+      $id('btn-add-dict-item')?.addEventListener('click', () => openModal(null));
+      $id('btn-close-dict-modal')?.addEventListener('click', closeModal);
+      $id('btn-cancel-dict-modal')?.addEventListener('click', closeModal);
+      $id('btn-refresh-dict')?.addEventListener('click', () => loadCategory(activeCategory, true));
+
+      tbody.addEventListener('click', async (e) => {
+        const target = e.target as HTMLElement;
+        const editBtn = target.closest<HTMLElement>('[data-edit-idx]');
+        if (editBtn) {
+          const item = currentItems[Number(editBtn.dataset.editIdx)];
+          if (item) openModal(item);
+          return;
+        }
+        const delBtn = target.closest<HTMLElement>('[data-del-idx]');
+        if (delBtn) {
+          const item = currentItems[Number(delBtn.dataset.delIdx)];
+          if (!item || !window.confirm(`Delete dictionary option "${item.item_code}"?`)) return;
+          try {
+            const res = await fetch(`/api/admin/dicts?category_code=${encodeURIComponent(item.category_code)}&item_code=${encodeURIComponent(item.item_code)}`, { method: 'DELETE' });
+            const data: any = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Delete failed');
+            showToast('Deleted / 已删除', 'success');
+            loadCategory(activeCategory, true);
+          } catch (err: any) {
+            showToast(err.message || 'Delete failed', 'error');
+          }
+        }
+      });
+
+      $id('dict-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const saveBtn = $id<HTMLButtonElement>('btn-save-dict');
+        if (saveBtn) saveBtn.disabled = true;
 
         try {
-          var res = await fetch('/api/admin/dicts', {
+          let metaObj: Record<string, any> = {};
+          const rawJson = $val('field-meta-json');
+          if (rawJson) {
+            try { metaObj = JSON.parse(rawJson) || {}; } catch { throw new Error('Invalid JSON in Additional Metadata'); }
+          }
+          (META_SCHEMA[activeCategory] || []).forEach(([key, , type]) => {
+            const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-meta-key="${key}"]`);
+            const v = el?.value.trim() || '';
+            if (type === 'number') metaObj[key] = Number(v || '0');
+            else if (v) metaObj[key] = v;
+          });
+
+          const payload = {
+            category_code: $val('field-category-code'),
+            item_code: $val('field-item-code'),
+            label_en: $val('field-label-en'),
+            label_zh: $val('field-label-zh'),
+            badge_color: $val('field-badge-color') || 'slate',
+            sort_order: Number($val('field-sort-order') || '0'),
+            is_active: $chk('field-is-active'),
+            meta_json: Object.keys(metaObj).length ? JSON.stringify(metaObj) : '',
+          };
+
+          const res = await fetch('/api/admin/dicts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              groupCode: currentGroup,
-              itemKey: itemKey,
-              itemLabel: itemLabel,
-              badgeColor: badgeColor,
-              meta: meta,
-              sortOrder: sortOrder,
-              isEnabled: isEnabled,
-            }),
+            body: JSON.stringify(payload),
           });
-          var data = await res.json();
-          if (res.ok && data.success) {
-            var existingIdx = allItems.findIndex(function (i) {
-              return i.group_code === currentGroup && i.item_key === itemKey;
-            });
-            var newItem = {
-              group_code: currentGroup,
-              item_key: itemKey,
-              item_label: itemLabel,
-              badge_color: badgeColor,
-              meta: meta,
-              sort_order: sortOrder,
-              is_enabled: isEnabled,
-            };
+          const data: any = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
 
-            if (existingIdx >= 0) {
-              allItems[existingIdx] = newItem;
-            } else {
-              allItems.push(newItem);
-            }
-
-            renderItemsTable();
-            dialog.close();
-            showToast(data.message || 'Dictionary item saved', true);
-          } else {
-            if (formError) {
-              formError.textContent = data.error || 'Failed to save item';
-              formError.classList.remove('hidden');
-            }
-          }
-        } catch (err) {
-          if (formError) {
-            formError.textContent = err.message;
-            formError.classList.remove('hidden');
-          }
+          closeModal();
+          showToast(isEditing ? 'Updated / 已更新' : 'Created / 已创建', 'success');
+          loadCategory(activeCategory, true);
+        } catch (err: any) {
+          showToast(err.message || 'Save failed', 'error');
         } finally {
-          if (btnSubmit) { btnSubmit.disabled = false; btnSubmit.textContent = 'Save Dictionary Item'; }
+          if (saveBtn) saveBtn.disabled = false;
         }
       });
-    }
 
-    // Modal buttons
-    document.getElementById('btn-add-item')?.addEventListener('click', function () { openModal(null); });
-    document.getElementById('btn-close-modal')?.addEventListener('click', function () { dialog?.close(); });
-    document.getElementById('btn-cancel-modal')?.addEventListener('click', function () { dialog?.close(); });
-
-    // Category clicking & filtering
-    document.querySelectorAll('.group-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var gCode = btn.getAttribute('data-group-code');
-        var gName = btn.getAttribute('data-group-name');
-        var gDesc = btn.getAttribute('data-group-desc');
-        if (!gCode) return;
-        currentGroup = gCode;
-
-        // UI active classes
-        document.querySelectorAll('.group-btn').forEach(function (b) {
-          b.className = 'w-full text-left p-3 rounded-xl border transition-all cursor-pointer group-btn flex items-start justify-between gap-2 bg-white hover:bg-[#f5f5f7] border-transparent text-[#1d1d1f]';
-        });
-        btn.className = 'w-full text-left p-3 rounded-xl border transition-all cursor-pointer group-btn flex items-start justify-between gap-2 bg-black text-white border-black shadow-xs font-semibold';
-
-        var titleEl = document.getElementById('current-group-title');
-        var codeEl = document.getElementById('current-group-code-badge');
-        var descEl = document.getElementById('current-group-desc');
-        if (titleEl) titleEl.textContent = gName || gCode;
-        if (codeEl) codeEl.textContent = gCode;
-        if (descEl) descEl.textContent = gDesc || '';
-
-        renderItemsTable();
-      });
+      loadCategory(activeCategory);
     });
-
-    // Category filter search
-    var searchInput = document.getElementById('group-search');
-    if (searchInput) {
-      searchInput.addEventListener('input', function () {
-        var term = searchInput.value.trim().toLowerCase();
-        document.querySelectorAll('.group-btn').forEach(function (btn) {
-          var code = (btn.getAttribute('data-group-code') || '').toLowerCase();
-          var name = (btn.getAttribute('data-group-name') || '').toLowerCase();
-          var matched = !term || code.includes(term) || name.includes(term);
-          btn.style.display = matched ? 'flex' : 'none';
-        });
-      });
-    }
-
-    // Initial render
-    renderItemsTable();
-  })();
-</script>
+  </script>
+</AdminLayout>
