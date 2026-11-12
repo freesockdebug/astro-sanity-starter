@@ -294,6 +294,7 @@ const METRIC_CAPSULES: [string, string, string, string][] = [
       searchInputId: 'logins-search-input',
       clearBtnId: 'clear-logins-search',
       debounceMs: 0,
+      signal,
       onSearch: (val) => {
         currentSearch = val;
         syncUrlParams({ search: currentSearch, timeWindow: currentTimeWindow }, { timeWindow: 'ALL' }, false);

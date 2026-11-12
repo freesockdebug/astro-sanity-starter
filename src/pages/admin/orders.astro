@@ -1200,7 +1200,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     }
   }
 
-  async function fetchOrders(updateUrl = true) {
+  async function fetchOrders(updateUrl = true, pushUrl = true) {
     selectedOrderIds.clear();
     const selectAllEl = document.getElementById('orders-select-all') as HTMLInputElement | null;
     if (selectAllEl) selectAllEl.checked = false;
@@ -1238,7 +1238,8 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     if (updateUrl) {
       syncUrlParams(
         { status: currentStatus, search: currentSearch, timeWindow: currentTimeWindow, assignedTo: currentAssignedTo, page: currentPage > 1 ? currentPage : '' },
-        { status: 'ALL', timeWindow: 'ALL', page: '' }
+        { status: 'ALL', timeWindow: 'ALL', page: '' },
+        pushUrl
       );
     }
 
@@ -1447,11 +1448,12 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     searchInputId: 'orders-search-input',
     clearBtnId: 'clear-search-btn',
     formId: 'orders-search-form',
+    signal,
     onSearch: (val) => {
       if (val === currentSearch && currentPage === 1) return;
       currentSearch = val;
       currentPage = 1;
-      fetchOrders();
+      fetchOrders(true, false);
     },
     onRefresh: () => fetchOrders(false),
   });

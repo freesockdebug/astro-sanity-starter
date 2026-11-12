@@ -15,7 +15,10 @@ export const GET: APIRoute = async ({ request, url }) => {
   }
 
   const limit = Math.min(300, Math.max(1, parseInt(url.searchParams.get('limit') || '150', 10)));
-  const logins = await listAllLoginHistory(limit);
-
-  return jsonNoCache({ success: true, logins });
+  try {
+    const logins = await listAllLoginHistory(limit);
+    return jsonNoCache({ success: true, logins });
+  } catch (err: any) {
+    return jsonNoCache({ error: err?.message || 'Failed to load login audit records' }, 500);
+  }
 };

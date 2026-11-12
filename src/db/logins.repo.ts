@@ -101,8 +101,9 @@ export async function listAllLoginHistory(limit: number = 50): Promise<LoginReco
         [limit]
       );
     });
-  } catch {
-    return [];
+  } catch (err: any) {
+    console.error('[DB] Failed to query user_logins:', err);
+    throw err;
   }
 }
 

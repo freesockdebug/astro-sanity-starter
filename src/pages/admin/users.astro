@@ -772,11 +772,15 @@ const pageTitle = 'Customer & Access Management';
     },
   });
 
-  function loadUsers(updateUrl = true) {
+  function loadUsers(updateUrl = true, pushUrl = true) {
     $id('users-pagination-container')?.classList.add('hidden');
     updateActiveVisuals();
     if (updateUrl) {
-      syncUrlParams({ tier: currentTier, status: currentStatus, search: currentSearch, timeWindow: currentTimeWindow, assignedTo: currentAssignedTo, page: currentPage }, { page: 1 });
+      syncUrlParams(
+        { tier: currentTier, status: currentStatus, search: currentSearch, timeWindow: currentTimeWindow, assignedTo: currentAssignedTo, page: currentPage },
+        { page: 1 },
+        pushUrl
+      );
     }
     const qs = new URLSearchParams({ page: String(currentPage), limit: String(currentLimit) });
     if (currentTier !== 'ALL') qs.set('tier', currentTier);
@@ -1075,7 +1079,8 @@ const pageTitle = 'Customer & Access Management';
     searchInputId: 'users-search-input',
     clearBtnId: 'clear-users-search',
     formId: 'users-search-form',
-    onSearch: (val) => { currentSearch = val; currentPage = 1; loadUsers(); },
+    signal,
+    onSearch: (val) => { currentSearch = val; currentPage = 1; loadUsers(true, false); },
     onRefresh: () => loadUsers(false),
   });
 

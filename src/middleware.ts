@@ -325,9 +325,9 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
   }
 
   // 3. Bypass cache for APIs, Sanity Studio admin, private user routes (Orders, Account, Admin), and static asset chunks
-  const isOrdersPath = pathname === '/orders' || pathname.startsWith('/orders/') || pathname.includes('/orders');
-  const isAccountPath = pathname === '/account' || pathname.startsWith('/account/') || pathname.includes('/account');
-  const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.includes('/admin');
+  const isOrdersPath = pathname === '/orders' || pathname.startsWith('/orders/');
+  const isAccountPath = pathname === '/account' || pathname.startsWith('/account/');
+  const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/');
   const isPrivateUserPath = isOrdersPath || isAccountPath || isAdminPath;
 
   if (

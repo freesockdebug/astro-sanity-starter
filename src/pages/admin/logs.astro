@@ -930,8 +930,8 @@ const pageTitle = 'System Diagnostics & Performance';
     if (closeModalBtn) closeModalBtn.addEventListener('click', () => detailModal?.close());
     if (closeModalBottomBtn) closeModalBottomBtn.addEventListener('click', () => detailModal?.close());
 
-    async function loadLogs(updateUrl = true) {
-      if (updateUrl) syncUrl(true);
+    async function loadLogs(updateUrl = true, pushUrl = true) {
+      if (updateUrl) syncUrl(pushUrl);
       const cacheKey = `admin:logs:${currentLevel}:${currentEventCode}:${currentHealth}:${currentTimeWindow}:${currentSearch}:${currentSort}:${currentPage}`;
       try {
         const query = new URLSearchParams();
@@ -1104,10 +1104,11 @@ const pageTitle = 'System Diagnostics & Performance';
       clearBtnId: 'clear-search-btn',
       refreshBtnId: 'refresh-logs-btn',
       debounceMs: 300,
+      signal,
       onSearch: (val) => {
         currentSearch = val;
         currentPage = 1;
-        loadLogs();
+        loadLogs(true, false);
       },
       onRefresh: () => {
         loadLogs();

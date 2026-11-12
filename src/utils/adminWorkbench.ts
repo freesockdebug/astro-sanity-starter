@@ -222,6 +222,7 @@ export interface SearchRefreshBindingConfig {
   refreshBtnId?: string;
   formId?: string;
   debounceMs?: number;
+  signal?: AbortSignal;
   onSearch: (val: string) => void;
   onRefresh: () => void;
 }
@@ -234,6 +235,7 @@ export function bindSearchAndRefresh(cfg: SearchRefreshBindingConfig) {
   const clearBtn = cfg.clearBtnId ? document.getElementById(cfg.clearBtnId) : null;
   const refreshBtn = cfg.refreshBtnId ? document.getElementById(cfg.refreshBtnId) : null;
   const searchForm = cfg.formId ? document.getElementById(cfg.formId) : null;
+  const signalOpt = cfg.signal ? { signal: cfg.signal } : undefined;
 
   let searchTimer: any = null;
   const debounceMs = cfg.debounceMs ?? 250;
@@ -247,7 +249,7 @@ export function bindSearchAndRefresh(cfg: SearchRefreshBindingConfig) {
     searchTimer = setTimeout(() => {
       cfg.onSearch(val);
     }, debounceMs);
-  });
+  }, signalOpt);
 
   clearBtn?.addEventListener('click', () => {
     if (searchInput) {
@@ -255,28 +257,32 @@ export function bindSearchAndRefresh(cfg: SearchRefreshBindingConfig) {
     }
     clearBtn.classList.add('hidden');
     cfg.onSearch('');
-  });
+  }, signalOpt);
 
   searchForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     clearTimeout(searchTimer);
     const val = searchInput?.value.trim() || '';
     cfg.onSearch(val);
-  });
+  }, signalOpt);
 
   refreshBtn?.addEventListener('click', () => {
     cfg.onRefresh();
-  });
+  }, signalOpt);
 
   document.addEventListener('keydown', (e) => {
     if (
       (e.key === 'r' || e.key === 'R') &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      !(e.target as HTMLElement)?.isContentEditable &&
       !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)
     ) {
       e.preventDefault();
       cfg.onRefresh();
     }
-  });
+  }, signalOpt);
 }
 
 /**
