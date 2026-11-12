@@ -450,7 +450,6 @@ const pageTitle = 'System Diagnostics & Performance';
     let currentSearch = (urlParams.get('search') || '').trim();
     let currentSort = urlParams.get('sort') || 'newest';
     let currentPage = Math.max(1, parseInt(urlParams.get('page') || '1', 10));
-    let currentTotalPages = 1;
     const limit = 50;
 
     // Elements
@@ -469,7 +468,6 @@ const pageTitle = 'System Diagnostics & Performance';
     const healthSelect = document.getElementById('filter-health-select') as HTMLSelectElement | null;
     const timewindowSelect = document.getElementById('filter-timewindow-select') as HTMLSelectElement | null;
 
-    const refreshBtn = document.getElementById('refresh-logs-btn');
     const clearLogsBtn = document.getElementById('clear-logs-btn');
     const exportCsvBtn = document.getElementById('export-csv-btn');
     const pollToggleBtn = document.getElementById('poll-toggle-btn');
@@ -530,11 +528,6 @@ const pageTitle = 'System Diagnostics & Performance';
     const metricErrors = document.getElementById('metric-errors');
     const metricWarns = document.getElementById('metric-warns');
     const metricSlow = document.getElementById('metric-slow');
-
-    const metricCapsuleTotal = document.getElementById('metric-capsule-total');
-    const metricCapsuleErrors = document.getElementById('metric-capsule-errors');
-    const metricCapsuleWarns = document.getElementById('metric-capsule-warns');
-    const metricCapsuleSlow = document.getElementById('metric-capsule-slow');
 
     const detailModal = document.getElementById('log-detail-modal') as HTMLDialogElement | null;
     const modalLevelBadge = document.getElementById('modal-level-badge');
@@ -1184,13 +1177,8 @@ const pageTitle = 'System Diagnostics & Performance';
       loadLogs(false);
     }, { signal });
 
-    // Initial setup - echo dropdown UI state to match initial URL parameters
-    if (levelSelect) levelSelect.value = currentLevel;
-    if (eventSelect) eventSelect.value = currentEventCode;
-    if (healthSelect) healthSelect.value = currentHealth;
-    if (timewindowSelect) timewindowSelect.value = currentTimeWindow;
-    if (searchInput) searchInput.value = currentSearch;
-    if (sortSelect) sortSelect.value = currentSort;
+    // Initial setup - echo search input to match initial URL parameters
+    $val('logs-search-input', currentSearch);
 
     tableSettings.renderHeader();
     tableSettings.renderMenu();

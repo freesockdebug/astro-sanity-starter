@@ -406,8 +406,6 @@ const pageTitle = 'Customer & Access Management';
   let currentAssignedTo = '';
   let currentPage = 1;
   let currentLimit = 30;
-  let currentTotalPages = 1;
-  let activeAbortController: AbortController | null = null;
 
   const tableSettings = useTableSettings({
     tableKey: 'users',
@@ -791,10 +789,6 @@ const pageTitle = 'Customer & Access Management';
   }
 
   // Event Delegation for Drawer & Tabs
-  const backdrop = document.getElementById('drawer-backdrop');
-  const drawer = document.getElementById('user-drawer');
-  const closeBtn = document.getElementById('close-drawer-btn');
-  const cancelBtn = document.getElementById('cancel-drawer-btn');
   const saveBtn = document.getElementById('save-drawer-btn');
   const feedbackEl = document.getElementById('drawer-feedback');
 
@@ -1176,18 +1170,3 @@ const pageTitle = 'Customer & Access Management';
     }
   });
 </script>
-
-<style>
-  .user-physics-drawer {
-    transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
-    transform: translateY(100%);
-  }
-  @media (min-width: 640px) {
-    .user-physics-drawer {
-      transform: translateX(100%);
-    }
-  }
-  .user-physics-drawer[data-state="open"] {
-    transform: translate(0, 0) !important;
-  }
-</style>

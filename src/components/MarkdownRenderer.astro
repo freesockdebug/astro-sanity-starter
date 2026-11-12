@@ -115,7 +115,6 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
   }
 
   :global(.product-story-prose h4) {
-    font-size: clamp(0.9rem, 0.875rem + 0.1vw, 0.975rem);
     margin-top: 0.85rem;
     margin-bottom: 0.25rem;
     text-transform: uppercase;
@@ -147,8 +146,7 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
   }
 
-  :global(.product-story-prose ul) {
-    list-style-type: disc;
+  :global(.product-story-prose :is(ul, ol)) {
     padding-left: clamp(1.1rem, 1rem + 0.3vw, 1.35rem);
     margin-top: 0;
     margin-bottom: clamp(0.75rem, 0.7rem + 0.18vw, 0.875rem);
@@ -156,16 +154,8 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
     flex-direction: column;
     gap: 0.35rem;
   }
-
-  :global(.product-story-prose ol) {
-    list-style-type: decimal;
-    padding-left: clamp(1.1rem, 1rem + 0.3vw, 1.35rem);
-    margin-top: 0;
-    margin-bottom: clamp(0.75rem, 0.7rem + 0.18vw, 0.875rem);
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
+  :global(.product-story-prose ul) { list-style-type: disc; }
+  :global(.product-story-prose ol) { list-style-type: decimal; }
 
   :global(.product-story-prose li) {
     line-height: 1.55;
@@ -198,28 +188,27 @@ if (content && typeof content === 'string' && content.trim().length > 0) {
     background-color: #f8fafc;
   }
 
+  :global(.product-story-prose :is(th, td)) {
+    padding: clamp(0.48rem, 0.42rem + 0.2vw, 0.625rem) clamp(0.625rem, 0.5rem + 0.3vw, 0.875rem);
+    font-family: var(--font-mono, monospace);
+    text-align: left;
+  }
+
   :global(.product-story-prose th) {
     background-color: #f8fafc;
     color: #1e293b;
     font-weight: 600;
-    /* Responsive cell padding based on touch target ergonomics */
-    padding: clamp(0.48rem, 0.42rem + 0.2vw, 0.625rem) clamp(0.625rem, 0.5rem + 0.3vw, 0.875rem);
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     text-transform: uppercase;
-    font-family: var(--font-mono, monospace);
     font-size: clamp(0.625rem, 0.6rem + 0.1vw, 0.6875rem);
     letter-spacing: 0.04em;
-    text-align: left;
     white-space: nowrap;
   }
 
   :global(.product-story-prose td) {
-    padding: clamp(0.48rem, 0.42rem + 0.2vw, 0.625rem) clamp(0.625rem, 0.5rem + 0.3vw, 0.875rem);
     border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-    font-family: var(--font-mono, monospace);
     color: #374151;
     font-size: clamp(0.75rem, 0.72rem + 0.12vw, 0.8125rem);
-    text-align: left;
     vertical-align: middle;
   }
 
