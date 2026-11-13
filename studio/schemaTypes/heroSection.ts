@@ -117,7 +117,7 @@ export default defineType({
       name: 'secondaryButtonUrl',
       title: 'Secondary Button Link (次按钮链接)',
       type: 'string',
-      initialValue: '#collections',
+      initialValue: '/products',
       fieldset: 'buttons',
     }),
   ],

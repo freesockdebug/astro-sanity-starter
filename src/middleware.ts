@@ -58,8 +58,8 @@ const inFlightEdgeRenders = new Map<string, Promise<Response>>();
 
 // Fast 404 shield for vulnerability probes, scanner bots, and well-known paths
 // (Drops malicious probes at the worker edge in 0ms without DB queries, CMS trips, or telemetry loops)
-const SCANNER_EXTENSIONS = /\.(php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do)$/i;
-const SCANNER_PATTERN = /(?:^|\/)(?:wp-[a-z0-9_-]+|wordpress|phpmyadmin|pma|mysql|actuator|\.env|\.git|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest)(?:\/|$|\.)/i;
+const SCANNER_EXTENSIONS = /\.(php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do|key|pem|crt)$/i;
+const SCANNER_PATTERN = /(?:^|\/)(?:wp-[a-z0-9_-]+|wordpress|phpmyadmin|pma|mysql|actuator|\.(?:env|git|npmrc|htpasswd|htaccess)|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest|(?:credentials|secrets|service-account|serviceAccountKey|firebase-adminsdk|config)\.json)(?:\/|$|\.)/i;
 
 function isBlockedProbe(pathname: string): boolean {
   return pathname.startsWith('/.well-known/') || SCANNER_EXTENSIONS.test(pathname) || SCANNER_PATTERN.test(pathname);

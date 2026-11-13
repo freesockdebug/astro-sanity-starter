@@ -21,20 +21,24 @@ const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 const { slug } = Astro.params;
 
-// Multi-tier cached resolution: fetch current product & story settings concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
-const [currentProduct, allProductsRaw, siteConfig, rfqSettings, productStorySettings] = await Promise.all([
-  slug ? ProductService.getBySlug(slug) : null,
-  ProductService.getAll(),
+// Resolve cached product list first (L1 memory -> L2 KV) to avoid uncached Sanity lookups for invalid/bot slugs
+const allProductsRaw = await ProductService.getAll();
+const allProducts = allProductsRaw || [];
+if (!slug || (allProducts.length > 0 && !allProducts.some((p: any) => p.slug === slug))) {
+  return Astro.redirect(getLocalizedPath('/products', currentLang));
+}
+
+// Multi-tier cached resolution: fetch current product & story settings concurrently with shared CMS services
+const [currentProduct, siteConfig, rfqSettings, productStorySettings] = await Promise.all([
+  ProductService.getBySlug(slug),
   SiteConfigService.getConfig(),
   RfqSettingsService.getSettings(),
   ProductService.getProductStorySettings(),
 ]);
 
 if (!currentProduct) {
-  return Astro.redirect(getLocalizedPath('/#collections', currentLang));
+  return Astro.redirect(getLocalizedPath('/products', currentLang));
 }
-
-const allProducts = allProductsRaw || [];
 
 // Ensure product has fallbacks for arrays and images
 currentProduct.gallery = (currentProduct.gallery && currentProduct.gallery.length > 0)

@@ -120,7 +120,7 @@ export default defineType({
             {_key: 'l11', label: {en: 'Overview', de: 'Überblick', fr: 'Aperçu', es: 'Visión General'}, url: '/'},
             {_key: 'l12', label: {en: 'Hero Weave', de: 'Charakteristische Bindung', fr: 'Tricot Signature', es: 'Tejido Exclusivo'}, url: '#hero'},
             {_key: 'l13', label: {en: 'Technical Architecture', de: 'Technische Architektur', fr: 'Architecture Technique', es: 'Arquitectura Técnica'}, url: '#specs'},
-            {_key: 'l14', label: {en: 'Ready-to-Order', de: 'Bestellbares Archiv', fr: 'Catalogue Prêt-à-Commander', es: 'Catálogo Listo para Pedido'}, url: '#collections'},
+            {_key: 'l14', label: {en: 'Ready-to-Order', de: 'Bestellbares Archiv', fr: 'Catalogue Prêt-à-Commander', es: 'Catálogo Listo para Pedido'}, url: '/products'},
           ],
         },
         {
