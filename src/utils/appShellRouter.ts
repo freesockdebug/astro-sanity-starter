@@ -23,7 +23,7 @@ declare global {
   }
 }
 
-const PREFETCH_TTL_MS = 300_000;
+const PREFETCH_TTL_MS = 20_000; // 20s: 0 requests within 20s; silent SWR version check after 20s
 const PREFETCH_MAX_ENTRIES = 10;
 const prefetchCache = new Map<string, { html: string; timestamp: number }>();
 
@@ -389,29 +389,31 @@ async function syncHeadStyles(targetDoc: Document): Promise<void> {
 }
 
 function detectDeploymentDrift(targetDoc: Document): boolean {
-  const currentScripts = Array.from(document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]'));
-  const targetScripts = Array.from(targetDoc.querySelectorAll<HTMLScriptElement>('script[type="module"][src]'));
+  const selector = 'script[type="module"][src], link[rel="stylesheet"][href]';
+  const currentAssets = Array.from(document.querySelectorAll<HTMLElement>(selector));
+  const targetAssets = Array.from(targetDoc.querySelectorAll<HTMLElement>(selector));
 
-  const getScriptBase = (src: string) => {
-    const filename = src.split('/').pop()?.split('?')[0] || '';
-    return filename.replace(/\.[a-zA-Z0-9_-]+\.js$/, '');
+  const getAssetUrl = (el: HTMLElement) => el.getAttribute('src') || el.getAttribute('href') || '';
+  const getAssetBase = (url: string) => {
+    const filename = url.split('/').pop()?.split('?')[0] || '';
+    return filename.replace(/\.[a-zA-Z0-9_-]+\.(js|css)$/, '.$1');
   };
 
   const currentBases = new Map<string, string>();
-  for (const s of currentScripts) {
-    const src = s.getAttribute('src');
-    if (src) {
-      const base = getScriptBase(src);
-      if (base) currentBases.set(base, src);
+  for (const el of currentAssets) {
+    const url = getAssetUrl(el);
+    if (url) {
+      const base = getAssetBase(url);
+      if (base) currentBases.set(base, url);
     }
   }
 
-  for (const s of targetScripts) {
-    const src = s.getAttribute('src');
-    if (src) {
-      const base = getScriptBase(src);
-      const existingSrc = currentBases.get(base);
-      if (existingSrc && existingSrc !== src) {
+  for (const el of targetAssets) {
+    const url = getAssetUrl(el);
+    if (url) {
+      const base = getAssetBase(url);
+      const existingUrl = currentBases.get(base);
+      if (existingUrl && existingUrl !== url) {
         return true;
       }
     }
@@ -657,6 +659,23 @@ export function initAppShellRouter(options: AppShellOptions): void {
       window.dispatchEvent(new CustomEvent('app-shell:navigated', { detail: { url: targetUrl.href } }));
       if (snapshot.scrollY) {
         window.scrollTo({ top: snapshot.scrollY, behavior: 'instant' });
+      }
+      // SWR: if >20s since last HTML check, silently verify deployment hashes in background without touching DOM
+      if (!getCachedHtml(targetUrl.href)) {
+        fetchShellHtml(targetUrl.href, true, origFetch).then((res) => {
+          if (res.redirectUrl) {
+            window.location.href = res.redirectUrl;
+            return;
+          }
+          if (res.html) {
+            const doc = new DOMParser().parseFromString(res.html, 'text/html');
+            if (detectDeploymentDrift(doc)) {
+              snapshotCache.clear();
+              prefetchCache.clear();
+              window.location.href = targetUrl.href;
+            }
+          }
+        });
       }
       return;
     }
