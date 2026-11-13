@@ -7,6 +7,8 @@
  * Structure Basis (Narrative, Structural Pillars, Metrology Matrix, Care) ⊗ Language Tokens (en/de/fr/es).
  */
 
+import { getLocalizedValue } from '@i18n';
+
 export interface StoryContext {
   title?: string;
   sku?: string;
@@ -139,9 +141,9 @@ export function getProductStory(ctx: StoryContext, lang: string = 'en'): string 
   const selectedLang = ['de', 'fr', 'es', 'en'].includes(lang) ? lang : 'en';
   const t = STORY_DICTIONARY[selectedLang];
 
-  const catName = ctx.category || ctx.title || 'Curated Silhouette';
-  const fiber = ctx.composition || 'Premium Long-Staple Fibers';
-  const gauge = ctx.gauge || '200-Needle Lonati Cylinder';
+  const catName = getLocalizedValue(ctx.category, selectedLang) || getLocalizedValue(ctx.title, selectedLang) || 'Curated Silhouette';
+  const fiber = getLocalizedValue(ctx.composition, selectedLang) || 'Premium Long-Staple Fibers';
+  const gauge = getLocalizedValue(ctx.gauge, selectedLang) || '200-Needle Lonati Cylinder';
   const mainImg = ctx.image || '/images/hero-light.webp';
   const secondaryImg = ctx.secondaryImage || mainImg;
 

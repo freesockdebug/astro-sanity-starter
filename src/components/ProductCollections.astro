@@ -75,7 +75,8 @@ const activeCollections = normalizedProducts.map((p) => {
     ...p,
     title: localizedShortTitle,
     fullTitle: localizedTitle,
-    composition: getLocalizedValue(p.composition, currentLang)
+    composition: getLocalizedValue(p.composition, currentLang),
+    gauge: getLocalizedValue(p.gauge, currentLang),
   };
 });
 

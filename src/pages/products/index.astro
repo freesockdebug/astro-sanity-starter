@@ -55,7 +55,7 @@ const minimalProducts = mergedProducts.map((p: any) => {
     unit: p.unit || 'Pairs',
     sku: p.sku,
     tagline: getLocalizedValue(p.tagline, currentLang),
-    gauge: p.gauge
+    gauge: getLocalizedValue(p.gauge, currentLang)
   };
 });
 const initialProducts = minimalProducts.slice(0, BATCH_SIZE);
