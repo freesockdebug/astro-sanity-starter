@@ -2,7 +2,7 @@
 // Direct Sanity Singleton Configurations CMS API (siteConfig, catalogSettings, productStorySettings, rfqSettings)
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
-import { getSanityAdminClient } from '@utils/sanity-admin';
+import { getSanityAdminClient } from '@utils/sanity-client';
 import { ProductService } from '@data/products';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService, DEFAULT_RFQ_SETTINGS } from '@data/rfqSettings';
@@ -13,7 +13,7 @@ import {
   DEFAULT_CATALOG,
   DEFAULT_RFQ,
 } from '@data/defaults';
-import { computeJsonDiff, insertAuditLog } from '@utils/audit';
+import { computeJsonDiff, insertAuditLog } from '@db/audit.repo';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

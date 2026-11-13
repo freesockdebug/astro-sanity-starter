@@ -5,7 +5,7 @@ import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
-import { kvGet, kvPut, kvDelete } from '@utils/kv';
+import { kvGet, kvPut, kvDelete } from '@utils/cache';
 import { logger } from '@utils/logger';
 import { env as cfEnv } from 'cloudflare:workers';
 

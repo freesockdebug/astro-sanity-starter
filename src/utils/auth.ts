@@ -3,7 +3,7 @@
 
 // @ts-ignore
 import { env as cfWorkerEnv } from 'cloudflare:workers';
-import { kvGet, kvPut, kvDelete } from './kv';
+import { kvGet, kvPut, kvDelete } from './cache';
 
 export interface AuthUser {
   id: string;

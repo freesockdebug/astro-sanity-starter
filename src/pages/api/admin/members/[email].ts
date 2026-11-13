@@ -4,7 +4,7 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission, invalidateAdminRbacCache } from '@utils/rbac';
 import { deleteAdminMember, getAdminMember } from '@utils/db';
-import { recordAdminAudit } from '@utils/audit';
+import { recordAdminAudit } from '@db/audit.repo';
 import { getRuntimeEnv } from '@utils/auth';
 import { env as cfEnv } from 'cloudflare:workers';
 

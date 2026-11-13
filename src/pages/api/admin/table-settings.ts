@@ -6,7 +6,7 @@ import { env as cfEnv } from 'cloudflare:workers';
 import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { executeWithAutoSchema } from '../../../db/schema';
 import type { DbClient } from '../../../db/client';
-import { kvGet, kvPut, kvDelete } from '@utils/kv';
+import { kvGet, kvPut, kvDelete } from '@utils/cache';
 
 export const prerender = false;
 

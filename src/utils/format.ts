@@ -1,4 +1,6 @@
-// src/utils/date.ts
+// src/utils/format.ts
+// Unified date normalization and brand/text formatting utilities
+import { DEFAULT_BRAND_TITLE } from '@data/defaults';
 
 /**
  * Normalizes any date representation (SQLite datetime, ISO string, timestamp)
@@ -40,5 +42,23 @@ export function formatUtcFallback(dateStr?: string | number | Date | null): stri
   if (!iso) return '—';
   const clean = iso.replace('T', ' ').replace(/Z$/, '');
   return `${clean.slice(0, 16)} UTC`;
+}
+
+/**
+ * Strips Chinese characters and bracketed Chinese annotations from labels (e.g. "(款式系列)")
+ */
+export function cleanEnglishText(text?: string): string {
+  if (!text) return '';
+  return text
+    .replace(/[\(（][^\)）]*[\u4e00-\u9fa5]+[^\)）]*[\)）]|[\u4e00-\u9fa5]+/g, '')
+    .trim();
+}
+
+/**
+ * Extracts pure brand name from full titles (e.g. "GWENVENNI | Luxury Atelier" -> "GWENVENNI")
+ */
+export function cleanBrandTitle(title?: string, defaultTitle = DEFAULT_BRAND_TITLE): string {
+  if (!title) return defaultTitle;
+  return title.split(/\s*\|\s*/)[0].trim().toUpperCase();
 }
 

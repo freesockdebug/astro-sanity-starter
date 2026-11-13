@@ -4,7 +4,7 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { assignOrder, getOrderById } from '@utils/db';
-import { recordAdminAudit } from '@utils/audit';
+import { recordAdminAudit } from '@db/audit.repo';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

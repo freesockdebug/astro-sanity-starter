@@ -10,7 +10,7 @@ import {
   toggleDictItemEnabled,
 } from '@utils/db';
 import { getDictItems, getAllCachedDictItems, invalidateDictCache } from '@utils/dicts';
-import { recordAdminAudit } from '@utils/audit';
+import { recordAdminAudit } from '@db/audit.repo';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

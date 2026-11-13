@@ -13,7 +13,7 @@ import {
   invalidatePendingOrdersCountCache,
   invalidateDashboardStatsCache,
 } from '@utils/db';
-import { insertAuditLog } from '@utils/audit';
+import { insertAuditLog } from '@db/audit.repo';
 import { purgeEdgeHtmlCache } from '@utils/cmsSync';
 import { env as cfEnv } from 'cloudflare:workers';
 

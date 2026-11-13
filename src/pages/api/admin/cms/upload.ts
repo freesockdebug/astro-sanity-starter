@@ -2,7 +2,7 @@
 // Direct Sanity CDN Asset Uploader & Media Library Query API for CMS
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
-import { getSanityAdminClient } from '@utils/sanity-admin';
+import { getSanityAdminClient } from '@utils/sanity-client';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

@@ -11,7 +11,7 @@ import {
   type CustomerTier,
   type UserStatus,
 } from '@utils/db';
-import { recordAdminAudit } from '@utils/audit';
+import { recordAdminAudit } from '@db/audit.repo';
 import { getMergedAdminEmails } from '@utils/auth';
 import { getDictMap } from '@utils/dicts';
 import { env as cfEnv } from 'cloudflare:workers';

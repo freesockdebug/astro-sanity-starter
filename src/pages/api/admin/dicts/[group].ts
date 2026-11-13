@@ -6,7 +6,7 @@ import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { deleteDictItem } from '@utils/db';
 import { invalidateDictCache } from '@utils/dicts';
-import { recordAdminAudit } from '@utils/audit';
+import { recordAdminAudit } from '@db/audit.repo';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

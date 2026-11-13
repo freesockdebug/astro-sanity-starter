@@ -4,7 +4,7 @@
 import { getDb, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
-import { kvGet, kvPut, kvDelete } from '../utils/kv';
+import { kvGet, kvPut, kvDelete } from '../utils/cache';
 
 export type LogMinLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
 

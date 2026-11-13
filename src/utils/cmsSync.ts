@@ -8,7 +8,7 @@ import { RfqSettingsService } from '@data/rfqSettings';
 import { SecurityService } from '@utils/security';
 import { getSystemSettings } from '@utils/db';
 import { getRuntimeEnv } from '@utils/auth';
-import { kvGet, kvPut } from '@utils/kv';
+import { kvGet, kvPut } from '@utils/cache';
 import { runInBackground } from '@utils/cache';
 
 export interface CmsSyncOptions {

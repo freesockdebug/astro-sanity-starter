@@ -277,7 +277,7 @@ async function runSelfCheck() {
   console.log('✔ [PASS] Password update length validation guard verified');
 
   // 18. Multi-Timezone Date Utilities Verification
-  const { toIsoUtcString, formatUtcFallback } = await import('../src/utils/date');
+  const { toIsoUtcString, formatUtcFallback } = await import('../src/utils/format');
   assert.strictEqual(toIsoUtcString('2026-11-02 02:18:09'), '2026-11-02T02:18:09Z');
   assert.strictEqual(toIsoUtcString('2026-11-02T02:18:09Z'), '2026-11-02T02:18:09Z');
   assert.strictEqual(formatUtcFallback('2026-11-02 02:18:09'), '2026-11-02 02:18 UTC');
@@ -346,7 +346,7 @@ async function runSelfCheck() {
   console.log('✔ [PASS] D1 System Settings persistence, caching & merged admin authorization verified');
 
   // 20. Cloudflare Edge KV Caching & Graceful Degradation Engine
-  const { kvGet, kvPut, kvDelete } = await import('../src/utils/kv');
+  const { kvGet, kvPut, kvDelete } = await import('../src/utils/cache');
   // Case A: Graceful degradation when KV namespace is null
   const nullGet = await kvGet('any:key', {});
   assert.strictEqual(nullGet, null);

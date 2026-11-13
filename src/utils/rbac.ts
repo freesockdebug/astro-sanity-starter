@@ -1,7 +1,7 @@
 // src/utils/rbac.ts
 // RBAC Permission Engine with Cloudflare KV In-Memory Caching & Root Env Fallback
 import { getRuntimeEnv } from './auth';
-import { kvGet, kvPut, kvDelete } from './kv';
+import { kvGet, kvPut, kvDelete } from './cache';
 import {
   getAdminMember,
   getAdminRole,

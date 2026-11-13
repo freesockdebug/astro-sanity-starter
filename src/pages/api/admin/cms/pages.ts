@@ -2,10 +2,10 @@
 // Direct Sanity Pages & Modular Sections CMS API with Cache Invalidation and Differential Audit Logging
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
-import { getSanityAdminClient } from '@utils/sanity-admin';
+import { getSanityAdminClient } from '@utils/sanity-client';
 import { PageService } from '@data/page';
 import { syncCmsMutation, sanitizeSanityDocument } from '@utils/cmsSync';
-import { computeJsonDiff, insertAuditLog } from '@utils/audit';
+import { computeJsonDiff, insertAuditLog } from '@db/audit.repo';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
