@@ -19,6 +19,8 @@ export interface SessionData {
 }
 
 export const SESSION_COOKIE_NAME = 'b2b_session';
+export const TURNSTILE_PASS_COOKIE_NAME = 'gw_turnstile_pass';
+export const TURNSTILE_PASS_TTL_SECONDS = 1800; // 30 minutes
 const DEFAULT_TTL_SECONDS = 7 * 24 * 3600; // 7 days
 
 /**
@@ -287,6 +289,90 @@ export function formatSessionCookie(token: string, maxAge = DEFAULT_TTL_SECONDS,
  */
 export function formatClearSessionCookie(): string {
   return `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
+}
+
+async function signPayload(payloadObj: Record<string, any>, secret: string): Promise<string> {
+  const encodedPayload = base64UrlEncode(JSON.stringify(payloadObj));
+  const key = await getHmacKey(secret);
+  const signatureBytes = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(encodedPayload));
+  let binarySig = '';
+  const sigView = new Uint8Array(signatureBytes);
+  for (let i = 0; i < sigView.byteLength; i++) {
+    binarySig += String.fromCharCode(sigView[i]);
+  }
+  const encodedSig = btoa(binarySig).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${encodedPayload}.${encodedSig}`;
+}
+
+async function verifySignedPayload<T extends { exp?: number }>(token: string, customEnv?: any): Promise<T | null> {
+  if (!token || !token.includes('.')) return null;
+  const [encodedPayload, encodedSig] = token.split('.');
+  if (!encodedPayload || !encodedSig) return null;
+  try {
+    const secrets = getCandidateSecrets(customEnv);
+    let base64Sig = encodedSig.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64Sig.length % 4) base64Sig += '=';
+    const binarySig = atob(base64Sig);
+    const sigBytes = new Uint8Array(binarySig.length);
+    for (let i = 0; i < binarySig.length; i++) sigBytes[i] = binarySig.charCodeAt(i);
+
+    let isValid = false;
+    for (const sec of secrets) {
+      try {
+        const key = await getHmacKey(sec);
+        if (await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(encodedPayload))) {
+          isValid = true;
+          break;
+        }
+      } catch {}
+    }
+    if (!isValid) return null;
+    const payload: T = JSON.parse(base64UrlDecode(encodedPayload));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export async function createTurnstilePassToken(
+  ip: string,
+  ttlSeconds = TURNSTILE_PASS_TTL_SECONDS,
+  customEnv?: any
+): Promise<string | null> {
+  try {
+    const secret = getCandidateSecrets(customEnv)[0];
+    return await signPayload(
+      { typ: 'turnstile', ip: ip || '', exp: Math.floor(Date.now() / 1000) + ttlSeconds },
+      secret
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function verifyTurnstilePassToken(
+  token: string,
+  expectedIp: string,
+  customEnv?: any
+): Promise<boolean> {
+  const payload = await verifySignedPayload<{ typ?: string; ip?: string; exp?: number }>(token, customEnv);
+  if (!payload || payload.typ !== 'turnstile') return false;
+  if (payload.ip && expectedIp && payload.ip !== expectedIp) return false;
+  return true;
+}
+
+export function formatTurnstilePassCookie(
+  token: string,
+  maxAge = TURNSTILE_PASS_TTL_SECONDS,
+  isSecure?: boolean
+): string {
+  const secureFlag = typeof isSecure === 'boolean'
+    ? isSecure
+    : (typeof location !== 'undefined' ? location.protocol === 'https:' : true);
+  return `${TURNSTILE_PASS_COOKIE_NAME}=${encodeURIComponent(
+    token
+  )}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secureFlag ? '; Secure' : ''}`;
 }
 
 /**

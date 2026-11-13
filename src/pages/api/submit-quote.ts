@@ -3,7 +3,16 @@ import { SecurityService } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
 import { DEFAULT_BRAND_TITLE, DEFAULT_CONTACT_EMAIL } from '@data/defaults';
 import { fetchData as fetchSiteConfig } from '@data/siteConfig';
-import { getSessionFromRequest, getRuntimeEnv } from '@utils/auth';
+import {
+  getSessionFromRequest,
+  getRuntimeEnv,
+  getCookieValue,
+  TURNSTILE_PASS_COOKIE_NAME,
+  TURNSTILE_PASS_TTL_SECONDS,
+  createTurnstilePassToken,
+  verifyTurnstilePassToken,
+  formatTurnstilePassCookie,
+} from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
 import { kvGet, kvPut, kvDelete } from '@utils/cache';
 import { logger } from '@utils/logger';
@@ -240,17 +249,26 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // Environment resolution helper backed by unified getRuntimeEnv
     const getVal = (key: string): string | undefined => getRuntimeEnv(key, cfEnv);
 
-    // Load Studio site configuration (cached) and D1 system settings
-    const [siteConfig, systemSettings] = await Promise.all([
+    // Load Studio site configuration (cached), D1 system settings, and current buyer session
+    const [siteConfig, systemSettings, sessionUser] = await Promise.all([
       fetchSiteConfig(),
       getSystemSettings(cfEnv).catch(() => null),
+      getSessionFromRequest(request, cfEnv),
     ]);
     const effectiveBrand = systemSettings?.brand_name || DEFAULT_BRAND_TITLE;
 
     // 2. Cloudflare Turnstile Bot Verification
+    // Scheme B: Signed-in buyers bypass Turnstile; Scheme A: 30-min HMAC pass cookie bypasses repeat Turnstile
     const reqUrl = new URL(request.url);
     const isDev = Boolean(import.meta.env?.DEV);
     const isDummyTestToken = isDev && turnstileToken.includes('DUMMY.TOKEN');
+    const isAuthenticatedBuyer = Boolean(sessionUser?.id);
+    const passCookie = getCookieValue(request.headers.get('cookie'), TURNSTILE_PASS_COOKIE_NAME);
+    const hasValidTurnstilePass = !isAuthenticatedBuyer && passCookie
+      ? await verifyTurnstilePassToken(passCookie, visitorIp, cfEnv)
+      : false;
+    let shouldIssueTurnstilePass = false;
+
     const turnstileSecret = isDummyTestToken
       ? '1x0000000000000000000000000000000AA'
       : systemSettings?.turnstile_secret_key ||
@@ -258,10 +276,10 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         getVal('TURNSTILE_SECRET') ||
         getVal('turnstile_secret_key');
 
-    if (turnstileSecret && !isDummyTestToken) {
+    if (turnstileSecret && !isDummyTestToken && !isAuthenticatedBuyer && !hasValidTurnstilePass) {
       if (!turnstileToken || turnstileToken.length > 2048) {
         return new Response(
-          JSON.stringify({ error: 'Missing or invalid bot verification token. Please complete the verification.' }),
+          JSON.stringify({ code: 'TURNSTILE_REQUIRED', error: 'Missing or invalid bot verification token. Please complete the verification.' }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
         );
       }
@@ -310,7 +328,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       if (!verifyResult.success) {
         console.warn('Turnstile rejection error codes:', verifyResult['error-codes']);
         return new Response(
-          JSON.stringify({ error: 'Bot verification failed. Please refresh and try again.' }),
+          JSON.stringify({ code: 'TURNSTILE_REQUIRED', error: 'Bot verification failed. Please refresh and try again.' }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
         );
       }
@@ -318,10 +336,12 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       // Hostname validation
       if (verifyResult.hostname && expectedHostnames.size > 0 && !expectedHostnames.has(verifyResult.hostname)) {
         return new Response(
-          JSON.stringify({ error: 'Turnstile hostname mismatch.' }),
+          JSON.stringify({ code: 'TURNSTILE_REQUIRED', error: 'Turnstile hostname mismatch.' }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
         );
       }
+
+      shouldIssueTurnstilePass = true;
     }
 
     // 2.5 Edge Idempotency Guard (Anti-Replay via Cloudflare KV, 60s TTL)
@@ -356,7 +376,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     }
 
     // 3. Create Official B2B Order in Cloudflare D1
-    const sessionUser = await getSessionFromRequest(request, cfEnv);
+    // Reuse sessionUser resolved above
     const userId = sessionUser ? sessionUser.id : null;
 
     let existingBuyer: any = null;
@@ -547,14 +567,25 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       await kvPut(idempKey, { orderNo, email: normalizedEmail }, { expirationTtl: 60 }, cfEnv).catch(() => {});
     }
 
+    const resHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    let turnstilePassUntil: number | undefined;
+    if (shouldIssueTurnstilePass) {
+      const passToken = await createTurnstilePassToken(visitorIp, TURNSTILE_PASS_TTL_SECONDS, cfEnv);
+      if (passToken) {
+        resHeaders['Set-Cookie'] = formatTurnstilePassCookie(passToken, TURNSTILE_PASS_TTL_SECONDS, reqUrl.protocol === 'https:');
+        turnstilePassUntil = Date.now() + TURNSTILE_PASS_TTL_SECONDS * 1000;
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         orderNo: orderNo || undefined,
         orderId: orderId || undefined,
+        turnstilePassUntil,
         message: 'Your RFQ and Official Order have been received. Our account manager will contact you within 24 hours.',
       }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      { status: 200, headers: resHeaders }
     );
   } catch (error: any) {
     if (idempKey) {

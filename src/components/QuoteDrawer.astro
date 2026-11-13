@@ -231,9 +231,34 @@ if (reqCountryCode) {
     return true;
   };
 
+  let currentAuthUser: any = null;
+  const TURNSTILE_PASS_STORAGE_KEY = 'gw_turnstile_pass_until';
+
+  function hasTurnstilePass(): boolean {
+    if (currentAuthUser) return true;
+    try {
+      const until = Number(sessionStorage.getItem(TURNSTILE_PASS_STORAGE_KEY) || '0');
+      return until > Date.now();
+    } catch {
+      return false;
+    }
+  }
+
+  function syncTurnstileVisibility() {
+    const rfqForm = document.getElementById('rfq-form') as HTMLFormElement | null;
+    const turnstileContainer = rfqForm?.querySelector('.cf-turnstile') as HTMLElement | null;
+    if (!turnstileContainer) return;
+    if (hasTurnstilePass()) {
+      turnstileContainer.style.display = 'none';
+    } else {
+      turnstileContainer.style.display = '';
+      ensureTurnstileLoaded();
+    }
+  }
+
   // Lazy-load Turnstile on demand to eliminate ~700KB initial page load payload
   function ensureTurnstileLoaded() {
-    if (typeof window === 'undefined' || document.getElementById('cf-turnstile-script')) return;
+    if (typeof window === 'undefined' || hasTurnstilePass() || document.getElementById('cf-turnstile-script')) return;
     const script = document.createElement('script');
     script.id = 'cf-turnstile-script';
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
@@ -268,8 +293,6 @@ if (reqCountryCode) {
       .catch(() => {});
   }
 
-  let currentAuthUser: any = null;
-
   async function checkDrawerAuth() {
     try {
       // 1. Check local profile cache first
@@ -295,6 +318,7 @@ if (reqCountryCode) {
           userStatusLabel.classList.remove('hidden');
         }
       }
+      syncTurnstileVisibility();
 
       if (profile) {
         const emailInput = document.querySelector('#quote-drawer-root input[name="email"]') as HTMLInputElement | null;
@@ -330,9 +354,13 @@ if (reqCountryCode) {
       const rfqForm = document.getElementById('rfq-form') as HTMLFormElement | null;
       const turnstileContainer = rfqForm?.querySelector('.cf-turnstile') as HTMLElement | null;
       if (turnstileContainer) {
-        turnstileContainer.style.display = '';
-        if (typeof (window as any).turnstile !== 'undefined') {
-          try { (window as any).turnstile.reset(); } catch {}
+        if (hasTurnstilePass()) {
+          turnstileContainer.style.display = 'none';
+        } else {
+          turnstileContainer.style.display = '';
+          if (typeof (window as any).turnstile !== 'undefined') {
+            try { (window as any).turnstile.reset(); } catch {}
+          }
         }
       }
     }
@@ -659,7 +687,7 @@ if (reqCountryCode) {
 
     const formData = new FormData(rfqForm);
     const turnstileToken = formData.get('cf-turnstile-response')?.toString() || '';
-    if (!turnstileToken) {
+    if (!turnstileToken && !hasTurnstilePass()) {
       if (alertBox) {
         alertBox.className = 'p-3 rounded-xl text-xs bg-amber-50 text-amber-800 border border-amber-200 block';
         alertBox.textContent = rootEl?.dataset.securityError || 'Please complete the security check below.';
@@ -717,10 +745,17 @@ if (reqCountryCode) {
         clientCache.invalidatePrefix('buyer:orders').catch(() => {});
         clientCache.invalidatePrefix('admin:orders').catch(() => {});
 
-        // Hide Turnstile container on success so it does not re-verify or distract
+        // Cache 30-min Turnstile pass timestamp & hide widget so repeat submissions skip re-verification
+        if (data.turnstilePassUntil) {
+          try { sessionStorage.setItem(TURNSTILE_PASS_STORAGE_KEY, String(data.turnstilePassUntil)); } catch {}
+        }
         const turnstileContainer = rfqForm.querySelector('.cf-turnstile') as HTMLElement;
         if (turnstileContainer) turnstileContainer.style.display = 'none';
       } else {
+        if (res.status === 403 && data?.code === 'TURNSTILE_REQUIRED') {
+          try { sessionStorage.removeItem(TURNSTILE_PASS_STORAGE_KEY); } catch {}
+          syncTurnstileVisibility();
+        }
         throw new Error(data.error || 'Submission failed');
       }
     } catch (err: any) {
