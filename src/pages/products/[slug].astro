@@ -233,6 +233,28 @@ const resolvedCredentials = rawCards.map((card: any) => {
   };
 });
 
+const localizedSpecs = (currentProduct.specifications || [])
+  .map((spec: any) => ({
+    label: getLocalizedValue(spec?.label || spec?.name, currentLang, ''),
+    value: getLocalizedValue(spec?.value, currentLang, ''),
+  }))
+  .filter((s: { label: string; value: string }) => s.label && s.value);
+
+const quickSpecs = [
+  {
+    label: localizedSpecs[0]?.label || t('pdp.composition'),
+    value: localizedSpecs[0]?.value || 'Combed Cotton Blend',
+  },
+  {
+    label: localizedSpecs[1]?.label || t('pdp.quickGaugeLabel'),
+    value: localizedSpecs[1]?.value || t('pdp.quickGaugeValue'),
+  },
+  {
+    label: localizedSpecs[2]?.label || t('pdp.quickSeamLabel'),
+    value: localizedSpecs[2]?.value || t('pdp.quickSeamValue'),
+  },
+];
+
 const rawProductStory = getLocalizedValue(currentProduct.story, currentLang);
 const generatedStory = getProductStory(
   {
@@ -341,18 +363,18 @@ const productStructuredData: Record<string, any> = {
   <!-- Instant Perceived Performance Skeleton Overlay for Silhouette Navigation -->
   <AppleProductDetailSkeleton id="pdp-transition-skeleton" class="hidden" />
 
-  <div id="pdp-live-content">
-  <section id="product-overview" class="product-hero-overview w-full pt-3 pb-6 sm:pt-4 sm:pb-8 lg:py-0 lg:h-[calc(100svh-var(--apple-header-offset))] lg:max-h-[920px] lg:min-h-[580px] border-b border-black/5 bg-white overflow-visible scroll-mt-[var(--apple-header-offset)] flex flex-col justify-center">
+  <div id="pdp-live-content" class="bg-[#fdfcfb]">
+  <section id="product-overview" class="product-hero-overview w-full py-6 sm:py-10 lg:py-12 border-b border-stone-200/70 bg-[#fdfcfb] overflow-visible scroll-mt-[var(--apple-header-offset)]">
 
-        <!-- Center: 2-Column Showcase Grid -->
+        <!-- Center: 2-Column Editorial Showcase Grid -->
         <div class="apple-rail-bento w-full">
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 xl:gap-7 items-center">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-14 items-start">
             
-            <!-- LEFT: Apple-Style Multi-Image Carousel / Gallery (7 Cols for Balanced Ratio) -->
-            <div class="product-gallery-col w-full min-w-0 lg:col-span-7 flex flex-col justify-center space-y-2 sm:space-y-2.5">
+            <!-- LEFT: Sticky Editorial Gallery Canvas (7 Cols) -->
+            <div class="product-gallery-col w-full min-w-0 lg:col-span-7 lg:sticky lg:top-[calc(var(--apple-header-offset)+1.5rem)] flex flex-col space-y-3">
               
-              <!-- Main Viewport Box with Controls (Strict Responsive Aspect Ratio: Fluid & Adaptive to Screen Height) -->
-              <div class="relative w-full max-w-full min-w-0 aspect-square max-h-[min(58vh,540px)] lg:max-h-[min(calc(100svh-var(--apple-header-offset)-115px),580px)] rounded-2xl overflow-hidden bg-[#fafafa] border border-zinc-200/80 shadow-xs group flex items-center justify-center">
+              <!-- Main Viewport Box (Clean Photography Canvas with Warm Stone Studio Backdrop) -->
+              <div class="relative w-full max-w-full min-w-0 aspect-[4/3] sm:aspect-[16/13] lg:aspect-[5/4] max-h-[600px] rounded-2xl overflow-hidden bg-[#f6f3ee] border border-stone-200/60 group flex items-center justify-center">
                 <!-- Carousel Images Track (Native Scroll Snap for Silky Mobile Touch Swipe & Desktop Fluidity) -->
                 <div 
                   id="carousel-track" 
@@ -369,7 +391,7 @@ const productStructuredData: Record<string, any> = {
                         srcset={SanityImageService.srcSet(img.src, [480, 800, 1200]) || undefined}
                         sizes="(max-width: 1024px) 100vw, 800px"
                         alt={img.alt || currentProductTitle}
-                        class="pdp-gallery-img absolute inset-0 m-auto max-w-[calc(100%-0.75rem)] sm:max-w-[calc(100%-1.5rem)] max-h-[calc(100%-0.75rem)] sm:max-h-[calc(100%-1.5rem)] w-auto h-auto object-contain pointer-events-none select-none"
+                        class="pdp-gallery-img absolute inset-0 m-auto max-w-[calc(100%-2rem)] max-h-[calc(100%-2rem)] w-auto h-auto object-contain pointer-events-none select-none transition-transform duration-700 group-hover:scale-[1.02]"
                         draggable="false"
                         loading={idx === 0 ? 'eager' : 'lazy'}
                         fetchpriority={idx === 0 ? 'high' : 'auto'}
@@ -380,24 +402,14 @@ const productStructuredData: Record<string, any> = {
                   ))}
                 </div>
 
-                <!-- Top Indicator Badges -->
-                <div class="absolute top-3 left-3 z-20 flex items-center gap-1.5 sm:gap-2">
-                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-white/90 backdrop-blur-md text-zinc-900 border border-zinc-200/80 shadow-xs font-semibold">
-                    SKU: {currentProduct.sku}
-                  </span>
-                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-900 text-white shadow-xs font-medium">
-                    {resolvedMoq.formatted}
-                  </span>
-                </div>
-
-                <!-- Counter Badge -->
-                <div class="absolute top-3 right-3 z-20 px-2 py-0.5 rounded-full text-[10px] font-mono bg-black/60 backdrop-blur-md text-white shadow-xs">
+                <!-- Minimal Counter Badge -->
+                <div class="absolute bottom-3.5 right-3.5 z-20 px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-widest bg-stone-900/55 backdrop-blur-md text-stone-100">
                   <span id="carousel-counter-curr">1</span> / <span id="carousel-counter-total">{currentProduct.gallery.length}</span>
                 </div>
 
                 <!-- Mobile Pagination Dots (Visual swipe indicator for touch devices) -->
                 {currentProduct.gallery.length > 1 && (
-                  <div class="sm:hidden absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/35 backdrop-blur-md pointer-events-none">
+                  <div class="sm:hidden absolute bottom-3.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-900/40 backdrop-blur-md pointer-events-none">
                     {currentProduct.gallery.map((_: any, idx: number) => (
                       <span 
                         class={`carousel-dot h-1.5 rounded-full transition-all duration-300 ${idx === 0 ? 'bg-white w-3' : 'bg-white/50 w-1.5'}`} 
@@ -414,10 +426,10 @@ const productStructuredData: Record<string, any> = {
                       type="button"
                       id="carousel-prev"
                       aria-label={t('pdp.prev')}
-                      class="hidden sm:flex absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-zinc-900 shadow-sm backdrop-blur-md items-center justify-center transition-all opacity-80 group-hover:opacity-100 cursor-pointer"
+                      class="hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-[#fdfcfb]/85 hover:bg-[#fdfcfb] text-[#1c1917] border border-stone-200/70 shadow-sm backdrop-blur-md items-center justify-center transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
                     >
                       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                       </svg>
                     </button>
 
@@ -425,29 +437,29 @@ const productStructuredData: Record<string, any> = {
                       type="button"
                       id="carousel-next"
                       aria-label={t('pdp.next')}
-                      class="hidden sm:flex absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-zinc-900 shadow-sm backdrop-blur-md items-center justify-center transition-all opacity-80 group-hover:opacity-100 cursor-pointer"
+                      class="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-[#fdfcfb]/85 hover:bg-[#fdfcfb] text-[#1c1917] border border-stone-200/70 shadow-sm backdrop-blur-md items-center justify-center transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
                     >
                       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
                   </>
                 )}
               </div>
 
-              <!-- Thumbnail Gallery (Positioned below the main image across all viewports) -->
-              <div class="flex flex-row gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar shrink-0 w-full max-w-full pb-0.5 scrollbar-none justify-start">
+              <!-- Refined Thumbnail Strip -->
+              <div class="flex flex-row gap-2.5 overflow-x-auto no-scrollbar shrink-0 w-full max-w-full pb-0.5 scrollbar-none justify-start">
                 {currentProduct.gallery.map((img: any, idx: number) => (
                   <button
                     type="button"
                     data-thumb-index={idx}
                     aria-label={`View image ${idx + 1}`}
-                    class={`carousel-thumb shrink-0 w-12 h-12 sm:w-14 sm:h-14 lg:w-[58px] lg:h-[58px] xl:w-[64px] xl:h-[64px] rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer bg-[#fafafa] apple-skeleton-surface flex items-center justify-center ${idx === 0 ? 'border-zinc-950 scale-102 ring-2 ring-zinc-950/20' : 'border-zinc-200/80 hover:border-zinc-400 opacity-70 hover:opacity-100'}`}
+                    class={`carousel-thumb shrink-0 w-13 h-13 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-xl overflow-hidden border transition-all duration-200 cursor-pointer bg-[#f6f3ee] apple-skeleton-surface flex items-center justify-center ${idx === 0 ? 'border-stone-900 opacity-100 shadow-xs' : 'border-transparent opacity-55 hover:opacity-90'}`}
                   >
                     <img
                       src={SanityImageService.thumbnail(img.src, 160)}
                       alt={img.alt || currentProductTitle}
-                      class="pdp-gallery-img w-full h-full object-contain p-0.5"
+                      class="pdp-gallery-img w-full h-full object-contain p-1"
                       loading="lazy"
                       decoding="async"
                       onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
@@ -456,191 +468,208 @@ const productStructuredData: Record<string, any> = {
                 ))}
               </div>
 
-              <p class="text-[10px] text-zinc-400 font-mono text-center lg:text-left mt-1 shrink-0">
+              <p class="text-[11px] text-stone-400 font-mono text-center lg:text-left shrink-0">
                 {getLocalizedValue(currentProduct.galleryHint, currentLang, t('pdp.galleryHint'))}
               </p>
             </div>
 
-            <!-- RIGHT: Product Info, Tiered Wholesale Pricing & B2B Actions (5 Cols for Snug Symmetry) -->
-            <div class="product-info-col w-full min-w-0 lg:col-span-5 flex flex-col justify-center space-y-2.5 sm:space-y-3 xl:space-y-3.5">
-              <!-- Header Info -->
-              <div class="space-y-1 shrink-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-zinc-100 text-zinc-800 font-medium">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <!-- RIGHT: Hairline Architectural Product Details (5 Cols) -->
+            <div class="product-info-col w-full min-w-0 lg:col-span-5 flex flex-col divide-y divide-stone-200/75">
+              <!-- Block A: Eyebrow, Title & Tagline -->
+              <div class="pb-5 space-y-2.5">
+                <div class="flex items-center gap-2.5 flex-wrap text-[10px] font-mono uppercase tracking-[0.12em] text-stone-500">
+                  <span class="text-[#1c1917] font-semibold">SKU · {currentProduct.sku}</span>
+                  <span class="text-stone-300">/</span>
+                  <span>MOQ {resolvedMoq.formatted}</span>
+                  <span class="text-stone-300">/</span>
+                  <span class="inline-flex items-center gap-1.5 text-stone-700 normal-case tracking-normal font-medium">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                     <span>{getLocalizedValue(currentProduct.statusBadge, currentLang, t('pdp.statusBadge'))}</span>
                   </span>
                   {currentProduct.rating && (
-                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-stone-100 text-stone-700 border border-stone-200/60">
+                    <span class="px-2 py-0.5 rounded-full bg-[#f6f3ee] text-stone-700 border border-stone-200/70 normal-case tracking-normal">
                       {currentProduct.rating}
                     </span>
                   )}
                 </div>
-                <h1 class="text-xl sm:text-2xl xl:text-[28px] font-bold tracking-tight text-zinc-950 leading-tight">
+                <h1 class="text-2xl sm:text-3xl xl:text-[32px] font-semibold tracking-[-0.02em] text-[#1c1917] leading-[1.18]">
                   {currentProductTitle}
                 </h1>
-                <p class="text-xs sm:text-[13px] text-zinc-600 font-normal leading-relaxed line-clamp-2">
+                <p class="text-xs sm:text-[13.5px] text-stone-600 font-normal leading-relaxed">
                   {currentProductTagline}
                 </p>
               </div>
 
-              <!-- Tiered Wholesale Pricing Matrix (Compact) -->
-              <div class="pricing-tier-card p-2.5 sm:p-3 xl:p-3.5 rounded-xl xl:rounded-2xl bg-[#fbf9f5] border border-zinc-200/80 space-y-1 shrink-0">
-                <div class="flex items-center justify-between text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+              <!-- Block B: Horizontal Tiered Wholesale Pricing Matrix -->
+              <div class="py-5 space-y-2.5">
+                <div class="flex items-center justify-between text-[10px] text-stone-400 font-mono uppercase tracking-[0.14em]">
                   <span>{t('pdp.wholesaleTiers')}</span>
                   <span>{t('pdp.unitPrice')}</span>
                 </div>
-                <div class="space-y-1">
-                  {currentProduct.pricingTiers.map((tier: any) => (
-                    <div class="flex items-center justify-between text-xs sm:text-sm py-0.5 border-b border-zinc-200/50 last:border-none">
-                      <span class="text-zinc-700 font-medium">
-                        {tier.range}{tier.unit && !tier.range.toLowerCase().includes(tier.unit.toLowerCase()) ? ` ${tier.unit}` : ''}
-                      </span>
-                      <span class="text-zinc-950 font-bold font-mono text-xs sm:text-sm">
-                        {tier.price}{tier.unit ? ` / ${unitPairLabel}` : ''}
-                      </span>
-                    </div>
-                  ))}
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {currentProduct.pricingTiers.map((tier: any, tierIdx: number) => {
+                    const isBestTier = tierIdx === currentProduct.pricingTiers.length - 1 && currentProduct.pricingTiers.length > 1;
+                    return (
+                      <div class={`p-3 rounded-xl border transition-colors flex flex-col justify-between gap-1.5 ${isBestTier ? 'bg-[#f6f3ee] border-stone-300/90' : 'bg-white/80 border-stone-200/70'}`}>
+                        <span class="text-[11px] font-mono text-stone-500 block leading-tight">
+                          {tier.range}{tier.unit && !tier.range.toLowerCase().includes(tier.unit.toLowerCase()) ? ` ${tier.unit}` : ''}
+                        </span>
+                        <div class="flex items-baseline gap-0.5 flex-wrap">
+                          <span class="text-base sm:text-lg font-semibold font-mono tabular-nums text-[#1c1917]">
+                            {tier.price}
+                          </span>
+                          {tier.unit && (
+                            <span class="text-[11px] font-normal text-stone-400 font-mono">
+                              /{unitPairLabel}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <p class="text-[10px] text-zinc-400 font-mono pt-0.5">
+                <p class="text-[10px] text-stone-400 font-mono pt-0.5">
                   {getLocalizedValue(currentProduct.priceNote, currentLang, t('pdp.priceNote'))}
                 </p>
               </div>
 
-              <!-- Palette Selector & Quick Technical Specs Bar -->
-              <div class="space-y-1.5 shrink-0">
-                <!-- Available Color Swatches with interactive selection -->
-                <div class="space-y-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">
-                      {getLocalizedValue(currentProduct.paletteTitle, currentLang, t('pdp.paletteTitle'))}
-                    </span>
-                    <span id="selected-color-name" class="text-xs font-medium text-zinc-900">
-                      {getLocalizedValue(currentProduct.colors[0]?.name, currentLang) || "Default"}
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-1.5 flex-wrap">
-                    {currentProduct.colors.map((c: any, cIdx: number) => {
-                      const colorName = getLocalizedValue(c.name, currentLang);
-                      return (
-                        <button
-                          type="button"
-                          class={`color-variant-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-all cursor-pointer ${
-                            cIdx === 0
-                              ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
-                              : 'border-zinc-200 bg-white text-zinc-800 hover:border-zinc-400'
-                          }`}
-                          data-color={colorName}
-                          data-hex={c.hex}
-                        >
-                          <span class="w-2.5 h-2.5 rounded-full border border-black/20" style={`background-color: ${c.hex}`}></span>
-                          <span>{colorName}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              <!-- Block C: Loro Piana Double-Ring Circular Yarn Swatches -->
+              <div class="py-5 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-mono text-stone-400 uppercase tracking-[0.14em] block">
+                    {getLocalizedValue(currentProduct.paletteTitle, currentLang, t('pdp.paletteTitle'))}
+                  </span>
+                  <span id="selected-color-name" class="text-xs font-medium text-[#1c1917]">
+                    {getLocalizedValue(currentProduct.colors[0]?.name, currentLang) || "Default"}
+                  </span>
                 </div>
-
-                <!-- Quick Specs Micro Bento (High B2B credibility, compact) -->
-                <div class="grid grid-cols-3 gap-1.5 py-1.5 px-2.5 rounded-xl bg-[#f5f5f7] border border-black/5 text-[11px]">
-                  <div class="space-y-0.5">
-                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">{t('pdp.quickGaugeLabel')}</span>
-                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">{t('pdp.quickGaugeValue')}</span>
-                  </div>
-                  <div class="space-y-0.5 border-x border-black/5 px-2">
-                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">{t('pdp.quickSeamLabel')}</span>
-                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">{t('pdp.quickSeamValue')}</span>
-                  </div>
-                  <div class="space-y-0.5 pl-1">
-                    <span class="text-[9px] font-mono uppercase tracking-wider text-zinc-400 block truncate">{t('pdp.quickSamplingLabel')}</span>
-                    <span class="font-semibold text-zinc-900 truncate block text-[11px]">{t('pdp.quickSamplingValue')}</span>
-                  </div>
+                <div class="flex items-center gap-3 flex-wrap pt-0.5">
+                  {currentProduct.colors.map((c: any, cIdx: number) => {
+                    const colorName = getLocalizedValue(c.name, currentLang);
+                    return (
+                      <button
+                        type="button"
+                        title={colorName}
+                        aria-label={colorName}
+                        class={`color-variant-btn w-7 h-7 rounded-full transition-all cursor-pointer flex items-center justify-center ${
+                          cIdx === 0
+                            ? 'ring-1 ring-[#1c1917] ring-offset-2 ring-offset-[#fdfcfb] scale-105'
+                            : 'opacity-80 hover:opacity-100 hover:scale-105'
+                        }`}
+                        data-color={colorName}
+                        data-hex={c.hex}
+                      >
+                        <span
+                          class="w-full h-full rounded-full border border-black/15 shadow-[inset_0_1px_2px_rgba(255,255,255,0.35),inset_0_-1px_2px_rgba(0,0,0,0.15)] block"
+                          style={`background-color: ${c.hex}`}
+                        ></span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <!-- B2B Dual-Track RFQ Action Buttons -->
-              {(showAddToQuoteButton || showBuySampleButton || showSpecSheetButton) && (
-              <div class="space-y-1.5 pt-0.5 shrink-0">
-                {(showAddToQuoteButton || showBuySampleButton) && (
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-2">
-                  <!-- Track 1: Multi-Item Quote Basket -->
-                  {showAddToQuoteButton && (
-                  <button
-                    type="button"
-                    id="btn-add-quote"
-                    class="w-full py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-[#1d1d1f] hover:bg-black text-white group flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer"
-                    data-id={currentProduct.slug}
-                    data-title={currentProductShortTitle}
-                    data-sku={currentProduct.sku || "SKU"}
-                    data-image={SanityImageService.thumbnail(currentProduct.gallery[0]?.src || DEFAULT_FALLBACK_IMAGE, 200)}
-                    data-moq={resolvedMoq.formatted}
-                  >
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                    </svg>
-                    <span>{addToQuoteBtnText}</span>
-                  </button>
+              <!-- Block D: Dynamic 3-Column Architectural Quick Specs -->
+              <div class="py-4">
+                <div class="grid grid-cols-3 gap-3">
+                  {quickSpecs.map((spec, sIdx) => (
+                    <div class={`space-y-0.5 min-w-0 ${sIdx === 1 ? 'border-x border-stone-200/75 px-3' : sIdx === 2 ? 'pl-1' : ''}`}>
+                      <span class="text-[10px] font-mono uppercase tracking-[0.12em] text-stone-400 block truncate">
+                        {spec.label}
+                      </span>
+                      <span class="text-xs font-medium text-[#1c1917] truncate block mt-0.5" title={spec.value}>
+                        {spec.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <!-- Block E: B2B Dual-Track RFQ Action Buttons & Guarantee Strip -->
+              <div class="pt-5 space-y-3">
+                {(showAddToQuoteButton || showBuySampleButton || showSpecSheetButton) && (
+                <div class="space-y-2.5">
+                  {(showAddToQuoteButton || showBuySampleButton) && (
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <!-- Track 1: Multi-Item Quote Basket -->
+                    {showAddToQuoteButton && (
+                    <button
+                      type="button"
+                      id="btn-add-quote"
+                      class="w-full py-3 rounded-full text-xs sm:text-sm font-medium tracking-wide bg-[#1c1917] hover:bg-black text-[#fdfcfb] group flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                      data-id={currentProduct.slug}
+                      data-title={currentProductShortTitle}
+                      data-sku={currentProduct.sku || "SKU"}
+                      data-image={SanityImageService.thumbnail(currentProduct.gallery[0]?.src || DEFAULT_FALLBACK_IMAGE, 200)}
+                      data-moq={resolvedMoq.formatted}
+                    >
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                      </svg>
+                      <span>{addToQuoteBtnText}</span>
+                    </button>
+                    )}
+
+                    <!-- Track 2: Buy Sample Directly on Amazon (ASIN Link) -->
+                    {showBuySampleButton && (
+                    <a
+                      href={amazonSampleUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      id="btn-amazon-sample"
+                      class="w-full py-3 rounded-full text-xs sm:text-sm font-medium bg-[#f6f3ee] hover:bg-[#efeae1] text-[#1c1917] border border-stone-300/80 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
+                      title={sampleButtonText}
+                    >
+                      <svg class="w-4 h-4 text-[#232f3e] group-hover:text-[#ff9900] transition-colors" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15.93 17.09c-2.83 2.08-6.94 3.19-10.51 3.19-4.99 0-9.48-1.92-12.87-5.13-.27-.25-.03-.6.29-.42 3.65 2.11 8.08 3.38 12.58 3.38 3.17 0 6.64-.72 9.81-2.22.48-.23.95.35.7.7v-.5zM16.8 15.65c-.36-.46-2.38-.22-3.3-.11-.28.03-.32-.2-.07-.37 1.63-1.14 4.3-.81 4.6.21.3 1.01-1.28 3.39-2.83 4.61-.24.19-.47.09-.36-.16.36-.8 1.48-3.09 1.96-4.18z"/>
+                        <path d="M13.9 9.38c0 1.67-.32 2.97-.97 3.91-.65.94-1.57 1.41-2.76 1.41-1.07 0-1.92-.38-2.56-1.13-.64-.75-.96-1.83-.96-3.23 0-1.57.34-2.83 1.02-3.77.68-.94 1.63-1.41 2.84-1.41 1.05 0 1.88.38 2.5 1.13.44.53.73 1.34.87 2.42.04.22.06.44.06.67zm-2.07.12c0-.98-.14-1.74-.43-2.28-.29-.54-.73-.81-1.32-.81-.59 0-1.03.27-1.32.81-.29.54-.44 1.3-.44 2.28 0 .97.15 1.73.44 2.27.29.54.73.81 1.32.81.59 0 1.03.27 1.32.81 .29-.54.43-1.3.43-2.27z"/>
+                      </svg>
+                      <span>{sampleButtonText}</span>
+                      <svg class="w-3.5 h-3.5 text-stone-500 group-hover:text-[#1c1917] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                    )}
+                  </div>
                   )}
 
-                  <!-- Track 2: Buy Sample Directly on Amazon (ASIN Link) -->
-                  {showBuySampleButton && (
-                  <a
-                    href={amazonSampleUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    id="btn-amazon-sample"
-                    class="w-full py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold bg-[#f5f5f7] hover:bg-[#ff9900]/10 hover:border-[#ff9900]/40 text-[#1d1d1f] hover:text-[#111] border border-black/10 flex items-center justify-center gap-1.5 transition-all shadow-2xs group cursor-pointer"
-                    title={sampleButtonText}
-                  >
-                    <svg class="w-4 h-4 text-[#232f3e] group-hover:text-[#ff9900] transition-colors" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M15.93 17.09c-2.83 2.08-6.94 3.19-10.51 3.19-4.99 0-9.48-1.92-12.87-5.13-.27-.25-.03-.6.29-.42 3.65 2.11 8.08 3.38 12.58 3.38 3.17 0 6.64-.72 9.81-2.22.48-.23.95.35.7.7v-.5zM16.8 15.65c-.36-.46-2.38-.22-3.3-.11-.28.03-.32-.2-.07-.37 1.63-1.14 4.3-.81 4.6.21.3 1.01-1.28 3.39-2.83 4.61-.24.19-.47.09-.36-.16.36-.8 1.48-3.09 1.96-4.18z"/>
-                      <path d="M13.9 9.38c0 1.67-.32 2.97-.97 3.91-.65.94-1.57 1.41-2.76 1.41-1.07 0-1.92-.38-2.56-1.13-.64-.75-.96-1.83-.96-3.23 0-1.57.34-2.83 1.02-3.77.68-.94 1.63-1.41 2.84-1.41 1.05 0 1.88.38 2.5 1.13.44.53.73 1.34.87 2.42.04.22.06.44.06.67zm-2.07.12c0-.98-.14-1.74-.43-2.28-.29-.54-.73-.81-1.32-.81-.59 0-1.03.27-1.32.81-.29.54-.44 1.3-.44 2.28 0 .97.15 1.73.44 2.27.29.54.73.81 1.32.81.59 0 1.03.27 1.32.81 .29-.54.43-1.3.43-2.27z"/>
-                    </svg>
-                    <span>{sampleButtonText}</span>
-                    <svg class="w-3.5 h-3.5 text-[#86868b] group-hover:text-black group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
+                  <!-- Tech Pack / Spec Sheet Link -->
+                  {showSpecSheetButton && (
+                  <div class="flex items-center justify-between text-xs pt-0.5 px-0.5 text-stone-500">
+                    <button
+                      type="button"
+                      id="btn-download-spec"
+                      class="hover:text-[#1c1917] flex items-center gap-1.5 underline underline-offset-4 decoration-stone-300 hover:decoration-[#1c1917] transition-colors cursor-pointer text-[11px]"
+                      data-sku={currentProduct.sku}
+                      data-title={currentProductTitle}
+                      data-spec-title={`${t('pdp.specTitlePrefix')} ${currentProductTitle}`}
+                      data-variant={t('pdp.specVariant')}
+                      data-moq={t('pdp.specMoq')}
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>{getLocalizedValue(currentProduct.secondaryButtonText, currentLang, t('pdp.downloadSpecSheet'))}</span>
+                    </button>
+                  </div>
                   )}
                 </div>
                 )}
 
-                <!-- Tech Pack / Spec Sheet Link -->
-                {showSpecSheetButton && (
-                <div class="flex items-center justify-between text-xs pt-0.5 px-0.5 text-zinc-500">
-                  <button
-                    type="button"
-                    id="btn-download-spec"
-                    class="hover:text-black flex items-center gap-1 underline underline-offset-2 transition-colors cursor-pointer text-[11px]"
-                    data-sku={currentProduct.sku}
-                    data-title={currentProductTitle}
-                    data-spec-title={`${t('pdp.specTitlePrefix')} ${currentProductTitle}`}
-                    data-variant={t('pdp.specVariant')}
-                    data-moq={t('pdp.specMoq')}
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <!-- Lead Time & Guarantee Badges -->
+                <div class="grid grid-cols-2 gap-3 pt-2 text-[11px] text-stone-600">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <svg class="w-3.5 h-3.5 text-[#1c1917] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span>{getLocalizedValue(currentProduct.secondaryButtonText, currentLang, t('pdp.downloadSpecSheet'))}</span>
-                  </button>
-                </div>
-                )}
-              </div>
-              )}
-
-              <!-- Lead Time & Guarantee Badges -->
-              <div class="grid grid-cols-2 gap-2 pt-1.5 border-t border-zinc-100 text-[11px] text-zinc-600 shrink-0">
-                <div class="flex items-center gap-1.5">
-                  <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span class="truncate">{getLocalizedValue(currentProduct.leadTime, currentLang)}</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <svg class="w-3.5 h-3.5 text-zinc-950 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                  <span class="truncate">{getLocalizedValue(currentProduct.supportBadge, currentLang, t('pdp.supportBadge'))}</span>
+                    <span class="truncate">{getLocalizedValue(currentProduct.leadTime, currentLang)}</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <svg class="w-3.5 h-3.5 text-[#1c1917] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <span class="truncate">{getLocalizedValue(currentProduct.supportBadge, currentLang, t('pdp.supportBadge'))}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -699,8 +728,33 @@ const productStructuredData: Record<string, any> = {
               </div>
             </div>
 
-            <!-- RIGHT COLUMN: Full Markdown Prose Narrative & Spec Tables (8 cols, filled and balanced) -->
-            <div class="lg:col-span-8 w-full min-w-0 text-left">
+            <!-- RIGHT COLUMN: Swiss/Loro Piana Technical Specification Ledger & Editorial Narrative (8 cols) -->
+            <div class="lg:col-span-8 w-full min-w-0 text-left space-y-10">
+              {localizedSpecs.length > 0 && (
+              <div class="space-y-4">
+                <div class="space-y-1">
+                  <span class="text-[10px] font-mono uppercase tracking-[0.14em] text-stone-400 block">
+                    {t('pdp.specsBadge')}
+                  </span>
+                  <h3 class="text-lg sm:text-xl font-semibold tracking-tight text-[#1c1917]">
+                    {t('pdp.specs')}
+                  </h3>
+                </div>
+                <div class="divide-y divide-stone-200/80 border-y border-stone-200/90">
+                  {localizedSpecs.map((spec: { label: string; value: string }) => (
+                    <div class="flex items-baseline gap-4 py-3">
+                      <span class="w-2/5 sm:w-1/3 shrink-0 text-[11px] font-mono uppercase tracking-[0.1em] text-stone-500">
+                        {spec.label}
+                      </span>
+                      <span class="flex-1 text-xs sm:text-sm font-medium text-[#1c1917]">
+                        {spec.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              )}
+
               <SectionBoundary sectionName="productStory">
                 <MarkdownRenderer content={storyMarkdown} />
               </SectionBoundary>
@@ -822,12 +876,12 @@ const productStructuredData: Record<string, any> = {
 
         thumbs.forEach((thumb, i) => {
           if (i === currentSlide) {
-            thumb.classList.add('border-zinc-950', 'scale-102', 'ring-2', 'ring-zinc-950/20');
-            thumb.classList.remove('border-zinc-200/80', 'opacity-70');
+            thumb.classList.add('border-stone-900', 'opacity-100', 'shadow-xs');
+            thumb.classList.remove('border-transparent', 'opacity-55');
             thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
           } else {
-            thumb.classList.remove('border-zinc-950', 'scale-102', 'ring-2', 'ring-zinc-950/20');
-            thumb.classList.add('border-zinc-200/80', 'opacity-70');
+            thumb.classList.remove('border-stone-900', 'opacity-100', 'shadow-xs');
+            thumb.classList.add('border-transparent', 'opacity-55');
           }
         });
 
@@ -898,11 +952,11 @@ const productStructuredData: Record<string, any> = {
           selectedVariant = col;
           if (selectedColorLabel) selectedColorLabel.textContent = col;
           colorBtns.forEach((b) => {
-            b.classList.remove('border-zinc-950', 'bg-zinc-950', 'text-white', 'shadow-xs');
-            b.classList.add('border-zinc-200', 'bg-white', 'text-zinc-800');
+            b.classList.remove('ring-1', 'ring-[#1c1917]', 'ring-offset-2', 'ring-offset-[#fdfcfb]', 'scale-105');
+            b.classList.add('opacity-80');
           });
-          btn.classList.add('border-zinc-950', 'bg-zinc-950', 'text-white', 'shadow-xs');
-          btn.classList.remove('border-zinc-200', 'bg-white', 'text-zinc-800');
+          btn.classList.add('ring-1', 'ring-[#1c1917]', 'ring-offset-2', 'ring-offset-[#fdfcfb]', 'scale-105');
+          btn.classList.remove('opacity-80');
         });
       });
 
