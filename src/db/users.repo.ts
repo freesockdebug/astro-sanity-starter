@@ -288,10 +288,14 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     }
 
     // Concurrently execute users query, count, tier distribution stats, and unclaimed orders count (1 RTT)
-    const [users, countRow, statsRow, unclaimedRow] = await Promise.all([
+    const [users, countRow, statsRow, tierRows, unclaimedRow] = await Promise.all([
       db.query<UserRecord>(querySql, [...params, limit, offset]),
       db.first<{ cnt: number }>(countSql, params),
       db.first<any>(statsSql, statsParams),
+      db.query<{ tier: string; cnt: number }>(
+        `SELECT UPPER(COALESCE(tier, 'STANDARD')) as tier, COUNT(*) as cnt FROM users ${statsWhereSql} GROUP BY UPPER(COALESCE(tier, 'STANDARD'))`,
+        statsParams
+      ),
       db.first<{ unclaimed: number }>(unclaimedSql, unclaimedParams),
     ]);
 
@@ -328,11 +332,17 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
 
     const total = Number(countRow?.cnt || 0);
 
+    const tierCounts: Record<string, number> = {};
+    for (const r of tierRows || []) {
+      if (r?.tier) tierCounts[String(r.tier).toUpperCase()] = Number(r.cnt || 0);
+    }
+
     const stats = {
       all: Number(statsRow?.total_all || 0),
       vip: Number(statsRow?.total_vip || 0),
       partner: Number(statsRow?.total_partner || 0),
       standard: Number(statsRow?.total_standard || 0),
+      tierCounts,
       blocked: Number(statsRow?.total_blocked || 0),
       admins: Number(statsRow?.total_admins || 0),
       unclaimedGuestOrders: Number(unclaimedRow?.unclaimed || 0),

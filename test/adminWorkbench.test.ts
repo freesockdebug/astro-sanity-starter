@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { escapeHtml, exportToCsv, readJsonStore, renderTierBadgeHtml, renderOrderStatusBadge } from '../src/utils/adminWorkbench.js';
 import { getTrackingUrl } from '../src/utils/shipping.js';
+import { parsePaginationParams } from '../src/utils/format.js';
 
 test('escapeHtml escapes dangerous HTML characters to prevent XSS', () => {
   assert.equal(escapeHtml('<script>alert("xss")</script>'), '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;');
@@ -106,5 +107,20 @@ test('getTrackingUrl resolves default, custom template, and dynamic carrier dict
       { key: 'sf_express', name: 'SF Express', url: 'https://sf.example.com?no={tracking}' },
     ]),
     'https://sf.example.com?no=SF123'
+  );
+});
+
+test('parsePaginationParams bounds page, limit, offset, and trims search', () => {
+  assert.deepEqual(
+    parsePaginationParams(new URLSearchParams('page=-5&limit=999&search=%20abc%20'), 20, 100),
+    { page: 1, limit: 100, offset: 0, search: 'abc' }
+  );
+  assert.deepEqual(
+    parsePaginationParams(new URLSearchParams('page=3&limit=25'), 20, 100),
+    { page: 3, limit: 25, offset: 50, search: '' }
+  );
+  assert.deepEqual(
+    parsePaginationParams(new URLSearchParams('page=NaN&limit=0'), 50, 100),
+    { page: 1, limit: 50, offset: 0, search: '' }
   );
 });

@@ -2,7 +2,7 @@
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, getRuntimeEnv, jsonNoCache } from '@utils/auth';
 import { hasMenu } from '@utils/rbac';
-import { getSystemSettings, updateSystemSettings } from '@utils/db';
+import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, updateSystemSettings } from '@utils/db';
 import { SecurityService, sanitizeAdminSettings, isMaskedSecret, SECRET_SETTING_KEYS } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -144,104 +144,41 @@ export const POST: APIRoute = async ({ request }) => {
       updates.order_no_prefix = prefix;
     }
 
-    // Validate Retention Days
-    if (rawUpdates.login_retention_days !== undefined) {
-      const days = parseInt(rawUpdates.login_retention_days, 10);
-      if (isNaN(days) || days < 7 || days > 365) {
-        return jsonNoCache(
-          {
-            error: 'Login Retention Days must be an integer between 7 and 365.',
-          },
-          400
-        );
+    // Validate numeric settings via range table
+    const NUMBER_RANGES: Record<string, [number, number, string]> = {
+      login_retention_days: [7, 365, 'Login Retention Days must be an integer between 7 and 365.'],
+      log_retention_days: [1, 365, 'Log Retention Days must be an integer between 1 and 365.'],
+      slow_request_threshold_ms: [50, 30000, 'Slow Request Threshold must be between 50ms and 30000ms.'],
+    };
+    for (const [key, [min, max, errMsg]] of Object.entries(NUMBER_RANGES)) {
+      if (rawUpdates[key] !== undefined) {
+        const val = parseInt(rawUpdates[key], 10);
+        if (isNaN(val) || val < min || val > max) {
+          return jsonNoCache({ error: errMsg }, 400);
+        }
+        updates[key] = val;
       }
-      updates.login_retention_days = days;
-    }
-
-    // Validate Log Retention Days
-    if (rawUpdates.log_retention_days !== undefined) {
-      const days = parseInt(rawUpdates.log_retention_days, 10);
-      if (isNaN(days) || days < 1 || days > 365) {
-        return jsonNoCache(
-          {
-            error: 'Log Retention Days must be an integer between 1 and 365.',
-          },
-          400
-        );
-      }
-      updates.log_retention_days = days;
     }
 
     // Validate Minimum Log Level
     if (rawUpdates.log_min_level !== undefined) {
       const lvl = String(rawUpdates.log_min_level).trim().toLowerCase();
       if (!['debug', 'info', 'warn', 'error', 'critical'].includes(lvl)) {
-        return jsonNoCache(
-          {
-            error: 'Log Minimum Level must be one of: debug, info, warn, error, critical.',
-          },
-          400
-        );
+        return jsonNoCache({ error: 'Log Minimum Level must be one of: debug, info, warn, error, critical.' }, 400);
       }
       updates.log_min_level = lvl;
     }
 
-    // Validate Slow Request Threshold
-    if (rawUpdates.slow_request_threshold_ms !== undefined) {
-      const ms = parseInt(rawUpdates.slow_request_threshold_ms, 10);
-      if (isNaN(ms) || ms < 50 || ms > 30000) {
-        return jsonNoCache(
-          {
-            error: 'Slow Request Threshold must be between 50ms and 30000ms.',
-          },
-          400
-        );
-      }
-      updates.slow_request_threshold_ms = ms;
-    }
-
-    // Pass through string and boolean fields safely
-    const stringKeys = [
-      'brand_name',
-      'app_url',
-      'contact_email',
-      'whatsapp_number',
-      'whatsapp_prefill',
-      'resend_api_key',
-      'resend_from_email',
-      'resend_to_emails',
-      'resend_subject_prefix',
-      'shipping_carriers',
-      'print_sheet_title',
-      'print_sheet_footer',
-      'co_admin_emails',
-      'turnstile_site_key',
-      'turnstile_secret_key',
-      'turnstile_hostnames',
-      'revalidate_secret',
-      'cloudflare_zone_id',
-      'cloudflare_api_token',
-    ];
-
+    // Pass through remaining string and boolean fields driven by DEFAULT_SYSTEM_SETTINGS
     const secretSet = new Set<string>(SECRET_SETTING_KEYS);
-    for (const key of stringKeys) {
-      if (rawUpdates[key] !== undefined) {
+    for (const [key, defaultVal] of Object.entries(DEFAULT_SYSTEM_SETTINGS)) {
+      if (rawUpdates[key] === undefined || updates[key] !== undefined || key in NUMBER_RANGES || key === 'log_min_level') continue;
+      if (typeof defaultVal === 'boolean') {
+        updates[key] = Boolean(rawUpdates[key]);
+      } else if (typeof defaultVal === 'string') {
         const val = String(rawUpdates[key]).trim();
         if (secretSet.has(key) && isMaskedSecret(val)) continue;
         updates[key] = val;
-      }
-    }
-
-    const boolKeys = [
-      'enable_email_notify',
-      'enable_webhook_notify',
-      'enable_error_logging',
-      'log_authenticated_users',
-      'log_client_errors',
-    ];
-    for (const key of boolKeys) {
-      if (rawUpdates[key] !== undefined) {
-        updates[key] = Boolean(rawUpdates[key]);
       }
     }
 

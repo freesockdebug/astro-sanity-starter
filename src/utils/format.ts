@@ -62,3 +62,23 @@ export function cleanBrandTitle(title?: string, defaultTitle = DEFAULT_BRAND_TIT
   return title.split(/\s*\|\s*/)[0].trim().toUpperCase();
 }
 
+/**
+ * Parses URL pagination & search query parameters into safe bounded values.
+ */
+export function parsePaginationParams(
+  searchParams: URLSearchParams,
+  defaultLimit = 20,
+  maxLimit = 100
+): { page: number; limit: number; offset: number; search: string } {
+  const rawPage = parseInt(searchParams.get('page') || '1', 10);
+  const rawLimit = parseInt(searchParams.get('limit') || String(defaultLimit), 10);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(maxLimit, rawLimit) : defaultLimit;
+  return {
+    page,
+    limit,
+    offset: (page - 1) * limit,
+    search: (searchParams.get('search') || '').trim(),
+  };
+}
+

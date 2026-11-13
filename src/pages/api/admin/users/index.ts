@@ -1,26 +1,18 @@
 // src/pages/api/admin/users/index.ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
-import { checkIsAdmin } from '@utils/auth';
+import { defineAdminApi, checkIsAdmin, jsonNoCache } from '@utils/auth';
+import { parsePaginationParams } from '@utils/format';
 import { listAdminUsers, getSystemSettings } from '@utils/db';
-import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, url }) => {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
-  }
-
-  const search = url.searchParams.get('search') || '';
+export const GET: APIRoute = defineAdminApi({}, async ({ url, auth, cfEnv }) => {
   const tier = url.searchParams.get('tier') || 'ALL';
   const status = url.searchParams.get('status') || 'ALL';
   const timeWindow = url.searchParams.get('timeWindow') || 'ALL';
   const rawAssigned = url.searchParams.get('assignedTo');
   const assignedTo = rawAssigned === 'MINE' ? auth.user.email : (rawAssigned || undefined);
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '30', 10)));
+  const { page, limit, search } = parsePaginationParams(url.searchParams, 30, 100);
 
   const [result, settings] = await Promise.all([
     listAdminUsers({
@@ -56,4 +48,4 @@ export const GET: APIRoute = async ({ request, url }) => {
     users: enrichedUsers,
     totalPages: Math.max(1, Math.ceil(result.total / limit)),
   });
-};
+});

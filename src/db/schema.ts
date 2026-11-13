@@ -198,10 +198,12 @@ export const DDL_STATEMENTS = [
   ('inquiry_types', 'swatch_request', 'Swatch Sample', 'purple', '{"description":"Physical textile sample / swatch request"}', 20),
   ('inquiry_types', 'custom_oem', 'Custom OEM', 'amber', '{"description":"Bespoke textile development inquiry"}', 30),
 
-  ('order_statuses', 'PENDING_REVIEW', 'Pending Review', 'amber', '{"sla_hours":24}', 10),
+  ('order_statuses', 'PENDING_APPROVAL', 'Pending Approval', 'amber', '{"sla_hours":24}', 10),
   ('order_statuses', 'APPROVED', 'Approved / Processing', 'blue', '{}', 20),
   ('order_statuses', 'SHIPPED', 'Dispatched / In Transit', 'emerald', '{}', 30),
-  ('order_statuses', 'REJECTED', 'Rejected', 'rose', '{}', 40),
+  ('order_statuses', 'REJECTED', 'Rejected', 'rose', '{}', 40),`,
+  `UPDATE sys_dict_items SET item_key = 'PENDING_APPROVAL', item_label = 'Pending Approval' WHERE group_code = 'order_statuses' AND item_key = 'PENDING_REVIEW'`,
+  `INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_color, meta_json, sort_order) VALUES
 
   ('audit_actions', 'CREATE_ORDER', 'Create Requisition', 'blue', '{"risk_level":"LOW"}', 10),
   ('audit_actions', 'APPROVE_ORDER', 'Approve Order', 'emerald', '{"risk_level":"LOW"}', 20),

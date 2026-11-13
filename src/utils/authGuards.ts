@@ -1,5 +1,6 @@
 // src/utils/authGuards.ts
 // Contextual authentication guards for Buyer Workspace and Admin Portal
+import { env as cfEnv } from 'cloudflare:workers';
 import { getSessionFromRequest, checkIsAdmin, SESSION_COOKIE_NAME, type AuthUser } from './auth';
 import { getUserByIdOrEmail, getPendingOrdersCount, getSystemSettings, type UserRecord } from './db';
 import { resolveAdminContext, hasPermission, hasMenu, type AdminContextInfo } from './rbac';
@@ -289,6 +290,69 @@ export async function verifyAdminPermission(
     user: auth.user,
     adminContext: auth.adminContext,
     errorResponse: null,
+  };
+}
+
+export interface AdminApiOptions {
+  permission?: string | string[];
+  menu?: string | string[];
+  parseJson?: boolean;
+}
+
+/**
+ * Unified Admin API pipeline wrapper: auth -> RBAC permission/menu -> JSON body parsing -> error boundary.
+ */
+export function defineAdminApi<TBody = any>(
+  options: AdminApiOptions,
+  handler: (ctx: {
+    context: any;
+    request: Request;
+    params: Record<string, string | undefined>;
+    url: URL;
+    auth: { user: AuthUser; adminContext: AdminContextInfo };
+    body: TBody;
+    cfEnv: any;
+  }) => Promise<Response>
+) {
+  return async (context: any): Promise<Response> => {
+    const { request, params, url } = context;
+    const auth = await verifyAdminAuth(request, cfEnv);
+    if (!auth) {
+      return jsonNoCache({ error: 'Unauthorized: Admin session required' }, 401);
+    }
+
+    if (options.permission) {
+      const perms = Array.isArray(options.permission) ? options.permission : [options.permission];
+      if (!perms.some((p) => hasPermission(auth.adminContext, p))) {
+        return jsonNoCache(
+          { error: `Forbidden: Missing required permission (${perms.join(' or ')})`, yourRole: auth.adminContext.role.code },
+          403
+        );
+      }
+    }
+
+    if (options.menu) {
+      const menus = Array.isArray(options.menu) ? options.menu : [options.menu];
+      if (!menus.some((m) => hasMenu(auth.adminContext, m))) {
+        return jsonNoCache({ error: 'Forbidden: Menu access required' }, 403);
+      }
+    }
+
+    let body: any = {};
+    if (options.parseJson) {
+      try {
+        body = await request.json();
+      } catch {
+        return jsonNoCache({ error: 'Invalid JSON payload.' }, 400);
+      }
+    }
+
+    try {
+      return await handler({ context, request, params, url, auth, body, cfEnv });
+    } catch (err: any) {
+      console.error(`[AdminAPI Error] ${url?.pathname || ''}:`, err);
+      return jsonNoCache({ error: err?.message || 'Internal server error' }, 500);
+    }
   };
 }
 

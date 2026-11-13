@@ -136,7 +136,10 @@ const BADGE_COLORS: [string, string, string][] = [
   </div>
 
   <!-- SSR Data Store: application/json script preserved by appShellRouter across SPA navigation -->
-  <script type="application/json" id="dicts-ssr-data" set:html={JSON.stringify({ allItems })}></script>
+  <script type="application/json" id="dicts-ssr-data" set:html={JSON.stringify({
+    allItems,
+    groupSchemas: Object.fromEntries(groups.map((g) => [g.code, g.meta_schema || []])),
+  })}></script>
 
   <!-- Add / Edit Item Modal -->
   <Fragment slot="modals">
@@ -215,37 +218,17 @@ const BADGE_COLORS: [string, string, string][] = [
   };
   const getBadgeColorClasses = (c?: string) => BADGE_CLS[c || ''] || 'bg-slate-100 text-slate-700 border-slate-200';
 
-  // Saltline Table-Driven Meta Schema: [metaKey, label, type, placeholderOrOptions, defaultVal, hint]
-  type MetaFieldSpec = [string, string, 'text' | 'textarea' | 'number' | 'select', string | [string, string][], any, string?];
-  const META_SCHEMA: Record<string, MetaFieldSpec[]> = {
-    shipping_carriers: [
-      ['tracking_url', 'Tracking URL Template', 'text', 'https://example.com/track?no={tracking}', '', 'Use {tracking} or {tracking_no} placeholder.'],
-    ],
-    quick_replies: [
-      ['scene', 'Reply Scene Category *', 'select', [['approval', 'Order Approval (通过)'], ['shipping', 'Shipping / Dispatch (发货)'], ['rejection', 'Order Rejection (驳回)']], 'approval'],
-      ['content', 'Template Content *', 'textarea', 'Enter standard English reply message...', ''],
-    ],
-    customer_tiers: [
-      ['discount_label', 'Discount Tagline / Tier Notice', 'text', 'e.g. 15% Volume Tier', ''],
-      ['description', 'Tier Benefits Description', 'text', 'e.g. Priority dispatch and custom fabric specialist', ''],
-    ],
-    order_statuses: [
-      ['sla_hours', 'SLA Alert Threshold (Hours)', 'number', '24', '', 'Orders in this status exceeding this duration trigger urgent SLA warning tags.'],
-    ],
-    audit_actions: [
-      ['risk_level', 'Action Risk Level', 'select', [['LOW', 'LOW (Normal Activity)'], ['MEDIUM', 'MEDIUM (Privilege/Assignment Change)'], ['HIGH', 'HIGH (Deletion / Account Lockout)']], 'LOW'],
-    ],
-  };
-
   function initDictsPage() {
     const root = $id('dicts-root');
     const ssrEl = $id('dicts-ssr-data');
     if (!root) return;
 
     let allItems: any[] = [];
+    let groupSchemas: Record<string, any[]> = {};
     try {
-      const fromSsr = ssrEl?.textContent ? JSON.parse(ssrEl.textContent).allItems : null;
-      allItems = (root.dataset.items ? JSON.parse(root.dataset.items) : null) || fromSsr || [];
+      const ssrParsed = ssrEl?.textContent ? JSON.parse(ssrEl.textContent) : null;
+      groupSchemas = ssrParsed?.groupSchemas || {};
+      allItems = (root.dataset.items ? JSON.parse(root.dataset.items) : null) || ssrParsed?.allItems || [];
     } catch {}
     let currentGroup = root.dataset.initialGroup || 'shipping_carriers';
 
@@ -298,18 +281,24 @@ const BADGE_COLORS: [string, string, string][] = [
     const renderDynamicMetaFields = (groupCode: string, meta: Record<string, any> = {}) => {
       const container = $id('dynamic-meta-fields');
       if (!container) return;
-      const specs = META_SCHEMA[groupCode] || [];
-      container.innerHTML = specs.map(([key, label, type, phOrOpts, defVal, hint]) => {
-        const val = meta[key] ?? defVal ?? '';
+      const specs = groupSchemas[groupCode] || [];
+      container.innerHTML = specs.map((spec: any) => {
+        const key = spec.key;
+        const type = spec.type || 'text';
+        const val = meta[key] ?? spec.default ?? '';
         let control = '';
-        if (type === 'select' && Array.isArray(phOrOpts)) {
-          control = `<select data-meta-key="${key}" class="adm-input font-semibold">${phOrOpts.map(([v, l]) => `<option value="${escapeHtml(v)}" ${val === v ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`;
+        if (type === 'select' && Array.isArray(spec.options)) {
+          const optsHtml = spec.options.map((opt: any) => {
+            const [v, l] = Array.isArray(opt) ? opt : [opt, opt];
+            return `<option value="${escapeHtml(v)}" ${val === v ? 'selected' : ''}>${escapeHtml(l)}</option>`;
+          }).join('');
+          control = `<select data-meta-key="${key}" class="adm-input font-semibold">${optsHtml}</select>`;
         } else if (type === 'textarea') {
-          control = `<textarea data-meta-key="${key}" rows="3" placeholder="${escapeHtml(phOrOpts)}" class="adm-input">${escapeHtml(val)}</textarea>`;
+          control = `<textarea data-meta-key="${key}" rows="3" placeholder="${escapeHtml(spec.placeholder || '')}" class="adm-input">${escapeHtml(val)}</textarea>`;
         } else {
-          control = `<input type="${type}" data-meta-key="${key}" value="${escapeHtml(val)}" placeholder="${escapeHtml(phOrOpts)}" class="adm-input ${type === 'number' || key === 'tracking_url' ? 'font-mono' : ''}" />`;
+          control = `<input type="${type}" data-meta-key="${key}" value="${escapeHtml(val)}" placeholder="${escapeHtml(spec.placeholder || '')}" class="adm-input ${type === 'number' || key === 'tracking_url' ? 'font-mono' : ''}" />`;
         }
-        return `<div><label class="adm-label">${escapeHtml(label)}</label>${control}${hint ? `<p class="text-[10px] text-[#86868b] mt-0.5">${escapeHtml(hint)}</p>` : ''}</div>`;
+        return `<div><label class="adm-label">${escapeHtml(spec.label || key)}</label>${control}${spec.hint ? `<p class="text-[10px] text-[#86868b] mt-0.5">${escapeHtml(spec.hint)}</p>` : ''}</div>`;
       }).join('');
     };
 
@@ -433,7 +422,9 @@ const BADGE_COLORS: [string, string, string][] = [
       const badgeColor = document.querySelector<HTMLInputElement>('input[name="badge_color"]:checked')?.value || 'slate';
 
       const meta: Record<string, any> = {};
-      (META_SCHEMA[groupCode] || []).forEach(([k, , type]) => {
+      (groupSchemas[groupCode] || []).forEach((spec: any) => {
+        const k = spec.key;
+        const type = spec.type;
         const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-meta-key="${k}"]`);
         const v = el?.value.trim() || '';
         if (type === 'number') { if (v) meta[k] = Number(v); }

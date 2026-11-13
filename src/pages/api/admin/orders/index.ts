@@ -1,25 +1,18 @@
 // src/pages/api/admin/orders/index.ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
+import { defineAdminApi, jsonNoCache } from '@utils/auth';
+import { parsePaginationParams } from '@utils/format';
 import { listAdminOrders } from '@utils/db';
 import { resolveOrderItemImage, getOrderItemProductUrl } from '@data/products';
-import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, url }) => {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return jsonNoCache({ error: 'Forbidden. Administrator access required.' }, 403);
-  }
-
+export const GET: APIRoute = defineAdminApi({}, async ({ url, auth }) => {
   const status = url.searchParams.get('status') || 'ALL';
-  const search = url.searchParams.get('search') || '';
   const timeWindow = url.searchParams.get('timeWindow') || 'ALL';
   const rawAssigned = url.searchParams.get('assignedTo');
   const assignedTo = rawAssigned === 'MINE' ? auth.user.email : (rawAssigned || undefined);
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
+  const { page, limit, search } = parsePaginationParams(url.searchParams, 50, 100);
 
   const result = await listAdminOrders({
     status,
@@ -48,4 +41,4 @@ export const GET: APIRoute = async ({ request, url }) => {
     orders: enrichedOrders,
     totalPages: Math.max(1, Math.ceil(result.total / limit)),
   });
-};
+});

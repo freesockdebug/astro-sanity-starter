@@ -100,9 +100,7 @@ const pageTitle = 'Customer & Access Management';
         <div class="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-0.5 sm:pb-0 scrollbar-none" id="user-tabs-container">
           {[
             { key: 'ALL', label: 'All Buyers', isBlocked: false },
-            { key: 'VIP', label: 'VIP', isBlocked: false },
-            { key: 'PARTNER', label: 'Partners', isBlocked: false },
-            { key: 'STANDARD', label: 'Standard', isBlocked: false },
+            ...customerTiers.map((t: any) => ({ key: String(t.item_key), label: String(t.item_label), isBlocked: false })),
             { key: 'BLOCKED', label: 'Blocked', isBlocked: true },
           ].map((tab) => {
             const isActive = (tab.isBlocked ? initialStatus === 'BLOCKED' : initialTier === tab.key);
@@ -510,16 +508,16 @@ const pageTitle = 'Customer & Access Management';
     if (statGuest) statGuest.textContent = String(stats.unclaimedGuestOrders || 0);
     if (statBlocked) statBlocked.textContent = String(stats.blocked || 0);
 
-    const mapping = {
-      ALL: stats.all ?? 0,
-      VIP: stats.vip ?? 0,
-      PARTNER: stats.partner ?? 0,
-      STANDARD: stats.standard ?? 0,
-      BLOCKED: stats.blocked ?? 0,
-    };
-    Object.entries(mapping).forEach(([key, val]) => {
-      const tabCount = document.querySelector(`[data-tab-count="${key}"]`);
-      if (tabCount) tabCount.textContent = String(val);
+    const tierCounts = stats.tierCounts || {};
+    document.querySelectorAll<HTMLElement>('[data-tab-count]').forEach((tabCount) => {
+      const key = tabCount.getAttribute('data-tab-count') || '';
+      if (key === 'ALL') {
+        tabCount.textContent = String(stats.all ?? 0);
+      } else if (key === 'BLOCKED') {
+        tabCount.textContent = String(stats.blocked ?? 0);
+      } else {
+        tabCount.textContent = String(tierCounts[key.toUpperCase()] ?? stats[key.toLowerCase()] ?? 0);
+      }
     });
   }
 

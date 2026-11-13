@@ -1,41 +1,24 @@
 // src/pages/api/admin/logs.ts
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
-import { hasMenu, hasPermission } from '@utils/rbac';
+import { defineAdminApi, jsonNoCache } from '@utils/auth';
+import { parsePaginationParams } from '@utils/format';
 import { listErrorLogs, clearErrorLogs } from '@utils/db';
-import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, url }) => {
-  const admin = await verifyAdminAuth(request, cfEnv);
-  if (!admin || !hasMenu(admin.adminContext, 'logs')) {
-    return jsonNoCache({ error: 'Forbidden. Diagnostic logs access required.' }, 403);
-  }
+export const GET: APIRoute = defineAdminApi(
+  { menu: 'logs' },
+  async ({ url, cfEnv }) => {
+    const level = url.searchParams.get('level') || 'ALL';
+    const source = url.searchParams.get('source') || 'ALL';
+    const eventCode = url.searchParams.get('eventCode') || 'ALL';
+    const health = url.searchParams.get('health') || 'ALL';
+    const timeWindow = url.searchParams.get('timeWindow') || 'ALL';
+    const sort = (url.searchParams.get('sort') === 'slowest' ? 'slowest' : 'newest') as 'newest' | 'slowest';
+    const { page, limit, search } = parsePaginationParams(url.searchParams, 50, 100);
 
-  const level = url.searchParams.get('level') || 'ALL';
-  const source = url.searchParams.get('source') || 'ALL';
-  const eventCode = url.searchParams.get('eventCode') || 'ALL';
-  const health = url.searchParams.get('health') || 'ALL';
-  const timeWindow = url.searchParams.get('timeWindow') || 'ALL';
-  const search = url.searchParams.get('search') || '';
-  const sort = (url.searchParams.get('sort') === 'slowest' ? 'slowest' : 'newest') as 'newest' | 'slowest';
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
-
-  try {
     const result = await listErrorLogs(
-      {
-        level,
-        source,
-        eventCode,
-        health,
-        timeWindow,
-        search,
-        sort,
-        page,
-        limit,
-      },
+      { level, source, eventCode, health, timeWindow, search, sort, page, limit },
       cfEnv
     );
 
@@ -46,21 +29,17 @@ export const GET: APIRoute = async ({ request, url }) => {
       limit,
       totalPages: Math.max(1, Math.ceil(result.total / limit)),
     });
-  } catch (err: any) {
-    return jsonNoCache({ success: false, error: err?.message || 'Failed to load diagnostic logs.' }, 500);
   }
-};
+);
 
-export const DELETE: APIRoute = async ({ request }) => {
-  const admin = await verifyAdminAuth(request, cfEnv);
-  if (!admin || (!admin.adminContext.isRootAdmin && !hasPermission(admin.adminContext, '*'))) {
-    return jsonNoCache({ error: 'Forbidden. Super administrator privilege required to clear diagnostic logs.' }, 403);
+export const DELETE: APIRoute = defineAdminApi(
+  { permission: '*' },
+  async ({ cfEnv }) => {
+    const success = await clearErrorLogs(cfEnv);
+    return jsonNoCache({
+      success,
+      message: success ? 'Diagnostic logs cleared successfully.' : 'Failed to clear diagnostic logs.',
+    });
   }
-
-  const success = await clearErrorLogs(cfEnv);
-  return jsonNoCache({
-    success,
-    message: success ? 'Diagnostic logs cleared successfully.' : 'Failed to clear diagnostic logs.',
-  });
-};
+);
 

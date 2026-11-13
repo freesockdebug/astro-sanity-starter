@@ -19,6 +19,7 @@ export interface AdminContextInfo {
   menus: string[];
   permissions: string[];
   dataScope: DataScope;
+  queryScope?: { email: string; dataScope: DataScope };
 }
 
 interface L1RbacEntry {
@@ -71,6 +72,9 @@ export async function resolveAdminContext(
   try {
     const cached = await kvGet<AdminContextInfo>(cacheKey, cfEnv);
     if (cached) {
+      if (!cached.isRootAdmin && cached.dataScope !== 'ALL' && !cached.queryScope) {
+        cached.queryScope = { email: cached.email, dataScope: cached.dataScope };
+      }
       l1RbacCache.set(cleanEmail, { ctx: cached, expiresAt: now + L1_RBAC_TTL_MS });
       return cached;
     }
@@ -101,6 +105,7 @@ export async function resolveAdminContext(
         menus: managerRole.menus,
         permissions: managerRole.permissions,
         dataScope: managerRole.data_scope,
+        ...(managerRole.data_scope !== 'ALL' ? { queryScope: { email: cleanEmail, dataScope: managerRole.data_scope } } : {}),
       };
       l1RbacCache.set(cleanEmail, { ctx, expiresAt: now + L1_RBAC_TTL_MS });
       await kvPut(cacheKey, ctx, { expirationTtl: KV_TTL_SECONDS }, cfEnv).catch(() => {});
@@ -121,6 +126,7 @@ export async function resolveAdminContext(
     menus: role.menus,
     permissions: role.permissions,
     dataScope: role.data_scope,
+    ...(role.data_scope !== 'ALL' ? { queryScope: { email: member.email, dataScope: role.data_scope } } : {}),
   };
 
   // Cache in L1 memory and KV

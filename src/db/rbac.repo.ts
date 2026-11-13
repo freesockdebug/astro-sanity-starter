@@ -2,6 +2,7 @@
 // Repository for RBAC Roles and Admin Members Management
 import { executeWithAutoSchema } from './schema';
 import type { DbClient } from './client';
+import { ALL_MENU_KEYS } from '../config/adminNavigation';
 
 export type DataScope = 'ALL' | 'SELF_AND_POOL' | 'SELF_ONLY';
 
@@ -41,7 +42,7 @@ export const SYSTEM_ROLES: Record<string, AdminRole> = {
     code: 'super_admin',
     name: '超级管理员',
     data_scope: 'ALL',
-    menus: ['dashboard', 'orders', 'users', 'products', 'pages', 'cms_config', 'cache', 'members', 'roles', 'dicts', 'logins', 'logs', 'settings'],
+    menus: [...ALL_MENU_KEYS],
     permissions: ['*'],
     description: '全局最高权限，拥有全站所有操作及系统设置能力',
     is_system: true,

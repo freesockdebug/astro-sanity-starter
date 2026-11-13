@@ -184,43 +184,29 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
     return fallback;
   };
 
-  const settings: SystemSettings = {
-    brand_name: resolveStr('brand_name', 'PUBLIC_BRAND_NAME', DEFAULT_SYSTEM_SETTINGS.brand_name, false),
-    app_url: resolveStr('app_url', 'APP_URL', DEFAULT_SYSTEM_SETTINGS.app_url, false),
-    contact_email: resolveStr('contact_email', 'PUBLIC_CONTACT_EMAIL', DEFAULT_SYSTEM_SETTINGS.contact_email),
-    whatsapp_number: resolveStr('whatsapp_number', 'PUBLIC_WHATSAPP_NUMBER', DEFAULT_SYSTEM_SETTINGS.whatsapp_number),
-    whatsapp_prefill: resolveStr('whatsapp_prefill', 'PUBLIC_WHATSAPP_PREFILL', DEFAULT_SYSTEM_SETTINGS.whatsapp_prefill),
-
-    enable_email_notify: resolveBool('enable_email_notify', 'ENABLE_EMAIL_NOTIFY', DEFAULT_SYSTEM_SETTINGS.enable_email_notify),
-    resend_api_key: resolveStr('resend_api_key', 'RESEND_API_KEY', DEFAULT_SYSTEM_SETTINGS.resend_api_key),
-    resend_from_email: resolveStr('resend_from_email', 'RESEND_FROM_EMAIL', DEFAULT_SYSTEM_SETTINGS.resend_from_email),
-    resend_to_emails: resolveStr('resend_to_emails', 'RESEND_TO_EMAIL', DEFAULT_SYSTEM_SETTINGS.resend_to_emails),
-    resend_subject_prefix: resolveStr('resend_subject_prefix', 'RESEND_SUBJECT_PREFIX', DEFAULT_SYSTEM_SETTINGS.resend_subject_prefix),
-    enable_webhook_notify: resolveBool('enable_webhook_notify', 'ENABLE_WEBHOOK_NOTIFY', DEFAULT_SYSTEM_SETTINGS.enable_webhook_notify),
-    notification_webhook_url: resolveStr('notification_webhook_url', 'NOTIFICATION_WEBHOOK_URL', DEFAULT_SYSTEM_SETTINGS.notification_webhook_url),
-
-    order_no_prefix: resolveStr('order_no_prefix', 'ORDER_NO_PREFIX', DEFAULT_SYSTEM_SETTINGS.order_no_prefix, false),
-    shipping_carriers: resolveStr('shipping_carriers', 'SHIPPING_CARRIERS', DEFAULT_SYSTEM_SETTINGS.shipping_carriers),
-    print_sheet_title: resolveStr('print_sheet_title', 'PRINT_SHEET_TITLE', DEFAULT_SYSTEM_SETTINGS.print_sheet_title),
-    print_sheet_footer: resolveStr('print_sheet_footer', 'PRINT_SHEET_FOOTER', DEFAULT_SYSTEM_SETTINGS.print_sheet_footer),
-
-    co_admin_emails: resolveStr('co_admin_emails', 'CO_ADMIN_EMAILS', DEFAULT_SYSTEM_SETTINGS.co_admin_emails),
-    turnstile_site_key: resolveStr('turnstile_site_key', 'PUBLIC_TURNSTILE_SITE_KEY', DEFAULT_SYSTEM_SETTINGS.turnstile_site_key),
-    turnstile_secret_key: resolveStr('turnstile_secret_key', 'TURNSTILE_SECRET_KEY', DEFAULT_SYSTEM_SETTINGS.turnstile_secret_key),
-    turnstile_hostnames: resolveStr('turnstile_hostnames', 'TURNSTILE_HOSTNAMES', DEFAULT_SYSTEM_SETTINGS.turnstile_hostnames),
-    login_retention_days: resolveNum('login_retention_days', 'LOGIN_RETENTION_DAYS', DEFAULT_SYSTEM_SETTINGS.login_retention_days),
-
-    enable_error_logging: resolveBool('enable_error_logging', 'ENABLE_ERROR_LOGGING', DEFAULT_SYSTEM_SETTINGS.enable_error_logging),
-    log_authenticated_users: resolveBool('log_authenticated_users', 'LOG_AUTHENTICATED_USERS', DEFAULT_SYSTEM_SETTINGS.log_authenticated_users),
-    log_client_errors: resolveBool('log_client_errors', 'LOG_CLIENT_ERRORS', DEFAULT_SYSTEM_SETTINGS.log_client_errors),
-    log_retention_days: resolveNum('log_retention_days', 'LOG_RETENTION_DAYS', DEFAULT_SYSTEM_SETTINGS.log_retention_days),
-    log_min_level: (resolveStr('log_min_level', 'LOG_MIN_LEVEL', DEFAULT_SYSTEM_SETTINGS.log_min_level).toLowerCase() as LogMinLevel),
-    slow_request_threshold_ms: resolveNum('slow_request_threshold_ms', 'SLOW_REQUEST_THRESHOLD_MS', DEFAULT_SYSTEM_SETTINGS.slow_request_threshold_ms),
-
-    revalidate_secret: resolveStr('revalidate_secret', 'REVALIDATE_SECRET', DEFAULT_SYSTEM_SETTINGS.revalidate_secret),
-    cloudflare_zone_id: resolveStr('cloudflare_zone_id', 'CLOUDFLARE_ZONE_ID', DEFAULT_SYSTEM_SETTINGS.cloudflare_zone_id),
-    cloudflare_api_token: resolveStr('cloudflare_api_token', 'CLOUDFLARE_API_TOKEN', DEFAULT_SYSTEM_SETTINGS.cloudflare_api_token),
+  const ENV_KEY_OVERRIDES: Partial<Record<keyof SystemSettings, string>> = {
+    brand_name: 'PUBLIC_BRAND_NAME',
+    contact_email: 'PUBLIC_CONTACT_EMAIL',
+    whatsapp_number: 'PUBLIC_WHATSAPP_NUMBER',
+    whatsapp_prefill: 'PUBLIC_WHATSAPP_PREFILL',
+    resend_to_emails: 'RESEND_TO_EMAIL',
+    turnstile_site_key: 'PUBLIC_TURNSTILE_SITE_KEY',
   };
+  const NON_EMPTY_STRING_KEYS = new Set<keyof SystemSettings>(['brand_name', 'app_url', 'order_no_prefix']);
+
+  const settings = {} as SystemSettings;
+  for (const [rawKey, defaultVal] of Object.entries(DEFAULT_SYSTEM_SETTINGS)) {
+    const key = rawKey as keyof SystemSettings;
+    const envKey = ENV_KEY_OVERRIDES[key] || key.toUpperCase();
+    if (typeof defaultVal === 'boolean') {
+      (settings as any)[key] = resolveBool(key, envKey, defaultVal);
+    } else if (typeof defaultVal === 'number') {
+      (settings as any)[key] = resolveNum(key, envKey, defaultVal);
+    } else {
+      const val = resolveStr(key, envKey, String(defaultVal), !NON_EMPTY_STRING_KEYS.has(key));
+      (settings as any)[key] = key === 'log_min_level' ? (val.toLowerCase() as LogMinLevel) : val;
+    }
+  }
 
   cachedSettings = settings;
   cacheExpiry = now + CACHE_TTL_MS;

@@ -635,7 +635,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           COUNT(*) as total_orders,
           SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) as orders_7d,
           SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as pending_review,
-          SUM(CASE WHEN status = 'PENDING_APPROVAL' AND created_at <= datetime('now', '-24 hours') THEN 1 ELSE 0 END) as overdue_sla
+          SUM(CASE WHEN status = 'PENDING_APPROVAL' AND created_at <= datetime('now', '-' || COALESCE((SELECT CAST(json_extract(meta_json, '$.sla_hours') AS INTEGER) FROM sys_dict_items WHERE group_code = 'order_statuses' AND item_key = 'PENDING_APPROVAL' AND is_enabled = 1 LIMIT 1), 24) || ' hours') THEN 1 ELSE 0 END) as overdue_sla
         FROM orders
       `),
       db.query<any>(`SELECT status, COUNT(*) as count FROM orders GROUP BY status`),

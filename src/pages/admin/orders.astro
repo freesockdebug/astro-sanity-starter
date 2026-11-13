@@ -25,11 +25,16 @@ const teamMembers = await listActiveTeamMembersLite().catch(() => []);
 import { getDictItems } from '@utils/dicts';
 import { DEFAULT_CARRIERS } from '@utils/shipping';
 
-const [carrierDictItems, quickReplyItems, inquiryTypeItems] = await Promise.all([
+const [carrierDictItems, quickReplyItems, inquiryTypeItems, orderStatusItems] = await Promise.all([
   getDictItems(cfEnv, 'shipping_carriers', true).catch(() => []),
   getDictItems(cfEnv, 'quick_replies', true).catch(() => []),
   getDictItems(cfEnv, 'inquiry_types', true).catch(() => []),
+  getDictItems(cfEnv, 'order_statuses', true).catch(() => []),
 ]);
+const pendingSlaHours = Math.max(
+  1,
+  Number(orderStatusItems.find((s: any) => s.item_key === 'PENDING_APPROVAL')?.meta?.sla_hours) || 24
+);
 
 const carrierOptions = carrierDictItems.length > 0
   ? carrierDictItems.map((c: any) => ({ name: c.item_label, key: c.item_key, url: c.meta?.tracking_url || '' }))
@@ -447,6 +452,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     data-can-ship={canShip ? 'true' : 'false'}
     data-can-claim={canClaim ? 'true' : 'false'}
     data-can-assign={canAssign ? 'true' : 'false'}
+    data-sla-hours={String(pendingSlaHours)}
     class="hidden"
   ></div>
   <script type="application/json" id="orders-carriers-json" set:html={JSON.stringify(carrierOptions)}></script>
@@ -529,6 +535,8 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   const canShip = appMetaEl?.getAttribute('data-can-ship') === 'true';
   const canClaim = appMetaEl?.getAttribute('data-can-claim') === 'true';
   const canAssign = appMetaEl?.getAttribute('data-can-assign') === 'true';
+  const pendingSlaHours = Math.max(1, Number(appMetaEl?.getAttribute('data-sla-hours')) || 24);
+  const pendingSlaMs = pendingSlaHours * 3600 * 1000;
 
   const clientCarriers = readJsonStore<any[]>('orders-carriers-json', []);
   const clientInquiryTypes = readJsonStore<any[]>('orders-inquiry-types-json', []);
@@ -867,7 +875,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
           const totalQty = Number(order.total_quantity || 0);
           const totalStyles = Number(order.total_styles || 0);
           const isMobileExpanded = expandedMobileIds.has(`detail-m-${safeId}`);
-          const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(order.created_at).getTime() > 24 * 3600 * 1000);
+          const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(order.created_at).getTime() > pendingSlaMs);
 
           return `
             <div class="p-3.5 space-y-2.5 bg-white">
@@ -876,7 +884,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="font-mono font-bold text-xs text-[#1d1d1f] block truncate">${safeNo}</span>
                     ${renderInquiryBadge(order.inquiry_type)}
-                    ${isOverduePending ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse" title="Pending review over 24 hours">🔥 >24h SLA</span>` : ''}
+                    ${isOverduePending ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse" title="Pending review over ${pendingSlaHours} hours">🔥 >${pendingSlaHours}h SLA</span>` : ''}
                   </div>
                   <span class="text-[10px] text-[#86868b] font-mono block mt-0.5">${dateStr}</span>
                 </div>
@@ -966,7 +974,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
       const totalStyles = Number(order.total_styles || 0);
       const itemCount = order.items?.length || 0;
       const isDesktopExpanded = expandedDesktopIds.has(`detail-${safeId}`);
-      const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(order.created_at).getTime() > 24 * 3600 * 1000);
+      const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(order.created_at).getTime() > pendingSlaMs);
 
       const cells = visibleCols.map((col) => {
         switch (col.id) {
@@ -982,7 +990,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="font-semibold text-[#1d1d1f] block">${safeNo}</span>
                   ${renderInquiryBadge(order.inquiry_type)}
-                  ${isOverduePending ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse" title="Pending review over 24 hours">🔥 >24h SLA</span>` : ''}
+                  ${isOverduePending ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse" title="Pending review over ${pendingSlaHours} hours">🔥 >${pendingSlaHours}h SLA</span>` : ''}
                 </div>
                 <span class="text-[11px] text-[#86868b] block">${dateStr}</span>
               </td>
