@@ -466,13 +466,9 @@ export async function listErrorLogs(
         bottlenecks: bottlenecks || [],
       };
     });
-  } catch (err) {
-    return {
-      logs: [],
-      total: 0,
-      stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0, slow: 0 },
-      bottlenecks: [],
-    };
+  } catch (err: any) {
+    console.error('[D1 listErrorLogs] Query failed:', err?.message || err);
+    throw err;
   }
 }
 

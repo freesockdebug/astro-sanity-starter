@@ -4,11 +4,12 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
+import { sanitizeAdminSettings } from '@utils/security';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const { sessionUser, adminContext, pendingOrdersCount, systemSettings: settings, redirectResponse } = await requireAdminContext(
+const { sessionUser, adminContext, pendingOrdersCount, systemSettings: rawSettings, redirectResponse } = await requireAdminContext(
   Astro,
   cfEnv,
   '/admin/settings',
@@ -19,10 +20,11 @@ if (redirectResponse) return redirectResponse;
 const rootAdminEmails = getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '';
 const hasLogtoOidc = !!(getRuntimeEnv('LOGTO_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_ENDPOINT', cfEnv));
 const hasLogtoM2m = !!(getRuntimeEnv('LOGTO_M2M_APP_ID', cfEnv) && getRuntimeEnv('LOGTO_M2M_APP_SECRET', cfEnv));
-const hasTurnstile = !!(settings.turnstile_secret_key || settings.turnstile_site_key || getRuntimeEnv('TURNSTILE_SECRET_KEY', cfEnv) || getRuntimeEnv('PUBLIC_TURNSTILE_SITE_KEY', cfEnv) || getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv));
-const hasResend = !!(settings.resend_api_key || getRuntimeEnv('RESEND_API_KEY', cfEnv));
+const hasTurnstile = !!(rawSettings.turnstile_secret_key || rawSettings.turnstile_site_key || getRuntimeEnv('TURNSTILE_SECRET_KEY', cfEnv) || getRuntimeEnv('PUBLIC_TURNSTILE_SITE_KEY', cfEnv) || getRuntimeEnv('TURNSTILE_SITE_KEY', cfEnv));
+const hasResend = !!(rawSettings.resend_api_key || getRuntimeEnv('RESEND_API_KEY', cfEnv));
 const hasSanity = !!((getRuntimeEnv('SANITY_TOKEN', cfEnv) || getRuntimeEnv('SANITY_API_TOKEN', cfEnv)) && getRuntimeEnv('SANITY_PROJECT_ID', cfEnv));
-const hasCloudflareCdn = !!(settings.cloudflare_api_token || getRuntimeEnv('CLOUDFLARE_API_TOKEN', cfEnv));
+const hasCloudflareCdn = !!(rawSettings.cloudflare_api_token || getRuntimeEnv('CLOUDFLARE_API_TOKEN', cfEnv));
+const settings = sanitizeAdminSettings(rawSettings);
 
 const healthProbes = [
   { label: 'D1 Database', ok: true, on: 'Active', off: 'Inactive', warn: false },
@@ -393,31 +395,34 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
   </form>
 
   <!-- Client Script for Form Handling (Pure Vanilla JS - Zero TS Syntax) -->
-  <script is:inline>
-    (function() {
-      var form = document.getElementById('settings-form');
-      var saveTop = document.getElementById('save-settings-btn-top');
-      var saveBottom = document.getElementById('save-settings-btn-bottom');
-      var testBtn = document.getElementById('test-webhook-btn');
-      var webhookStatus = document.getElementById('webhook-test-status');
+  <script>
+    function initSettingsPage() {
+      const form = document.getElementById('settings-form') as HTMLFormElement | null;
+      if (!form || form.dataset.bound === 'true') return;
+      form.dataset.bound = 'true';
 
-      function showToast(message, isSuccess) {
-        if (window.__showToast) window.__showToast(message, isSuccess);
+      const saveTop = document.getElementById('save-settings-btn-top') as HTMLButtonElement | null;
+      const saveBottom = document.getElementById('save-settings-btn-bottom') as HTMLButtonElement | null;
+      const testBtn = document.getElementById('test-webhook-btn') as HTMLButtonElement | null;
+      const webhookStatus = document.getElementById('webhook-test-status');
+
+      function showToast(message: string, isSuccess: boolean) {
+        (window as any).__showToast?.(message, isSuccess);
       }
 
       function getFormUpdates() {
         if (!form) return {};
-        var updates = {};
-        form.querySelectorAll('[name]').forEach(function(el) {
-          var key = el.name;
+        const updates: Record<string, any> = {};
+        form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[name]').forEach((el) => {
+          const key = el.name;
           if (!key) return;
-          if (el.type === 'checkbox') {
-            updates[key] = el.checked;
-          } else if (el.type === 'number') {
-            var def = key === 'login_retention_days' ? '90' : key === 'log_retention_days' ? '30' : '1000';
+          if ((el as HTMLInputElement).type === 'checkbox') {
+            updates[key] = (el as HTMLInputElement).checked;
+          } else if ((el as HTMLInputElement).type === 'number') {
+            const def = key === 'login_retention_days' ? '90' : key === 'log_retention_days' ? '30' : '1000';
             updates[key] = parseInt(el.value || def, 10);
           } else {
-            var val = (el.value || '').toString().trim();
+            let val = (el.value || '').toString().trim();
             if (key === 'order_no_prefix') val = val.toUpperCase();
             if (key === 'log_min_level') val = (val || 'warn').toLowerCase();
             updates[key] = val;
@@ -427,79 +432,80 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
       }
 
       async function saveSettings() {
-        var updates = getFormUpdates();
-        var buttons = [saveTop, saveBottom];
-        buttons.forEach(function(b) {
+        const updates = getFormUpdates();
+        const buttons = [saveTop, saveBottom];
+        buttons.forEach((b) => {
           if (b) { b.disabled = true; b.classList.add('opacity-50', 'pointer-events-none'); }
         });
         try {
-          var res = await fetch('/api/admin/settings', {
+          const res = await fetch('/api/admin/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'save', updates: updates }),
+            body: JSON.stringify({ action: 'save', updates }),
           });
-          var data = await res.json();
+          const data = await res.json();
           if (!res.ok || !data.success) {
             showToast(data.error || 'Failed to update settings.', false);
           } else {
             showToast('Settings saved successfully and synced to D1.', true);
           }
-        } catch (err) {
+        } catch (err: any) {
           showToast('Network error while saving settings: ' + err.message, false);
         } finally {
-          buttons.forEach(function(b) {
+          buttons.forEach((b) => {
             if (b) { b.disabled = false; b.classList.remove('opacity-50', 'pointer-events-none'); }
           });
         }
       }
 
-      if (saveTop) saveTop.addEventListener('click', saveSettings);
-      if (saveBottom) saveBottom.addEventListener('click', saveSettings);
+      saveTop?.addEventListener('click', saveSettings);
+      saveBottom?.addEventListener('click', saveSettings);
 
-      if (testBtn) {
-        testBtn.addEventListener('click', async function() {
-          var urlInput = document.getElementById('notification_webhook_url');
-          var url = urlInput ? urlInput.value.trim() : '';
-          if (!url) { showToast('Please provide a webhook URL before testing.', false); return; }
+      testBtn?.addEventListener('click', async () => {
+        const urlInput = document.getElementById('notification_webhook_url') as HTMLInputElement | null;
+        const url = urlInput ? urlInput.value.trim() : '';
+        if (!url) { showToast('Please provide a webhook URL before testing.', false); return; }
 
-          testBtn.disabled = true;
-          testBtn.textContent = 'Sending...';
-          if (webhookStatus) {
-            webhookStatus.textContent = 'Sending test payload to webhook...';
-            webhookStatus.className = 'text-[11px] text-blue-600 mt-1.5 animate-pulse';
-          }
-          try {
-            var res = await fetch('/api/admin/settings', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'test_webhook', url: url }),
-            });
-            var data = await res.json();
-            if (res.ok && data.success) {
-              showToast('Webhook reached successfully! Check your bot channel.', true);
-              if (webhookStatus) {
-                webhookStatus.textContent = '✔ Live Test Passed: ' + (data.message || 'HTTP 200 OK');
-                webhookStatus.className = 'text-[11px] text-emerald-600 font-semibold mt-1.5';
-              }
-            } else {
-              showToast(data.error || 'Webhook test failed.', false);
-              if (webhookStatus) {
-                webhookStatus.textContent = '✖ Test Failed: ' + (data.error || 'Connection error');
-                webhookStatus.className = 'text-[11px] text-rose-600 font-semibold mt-1.5';
-              }
-            }
-          } catch (err) {
-            showToast('Test request failed: ' + err.message, false);
+        testBtn.disabled = true;
+        testBtn.textContent = 'Sending...';
+        if (webhookStatus) {
+          webhookStatus.textContent = 'Sending test payload to webhook...';
+          webhookStatus.className = 'text-[11px] text-blue-600 mt-1.5 animate-pulse';
+        }
+        try {
+          const res = await fetch('/api/admin/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'test_webhook', url }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            showToast('Webhook reached successfully! Check your bot channel.', true);
             if (webhookStatus) {
-              webhookStatus.textContent = '✖ Request error: ' + err.message;
+              webhookStatus.textContent = '✔ Live Test Passed: ' + (data.message || 'HTTP 200 OK');
+              webhookStatus.className = 'text-[11px] text-emerald-600 font-semibold mt-1.5';
+            }
+          } else {
+            showToast(data.error || 'Webhook test failed.', false);
+            if (webhookStatus) {
+              webhookStatus.textContent = '✖ Test Failed: ' + (data.error || 'Connection error');
               webhookStatus.className = 'text-[11px] text-rose-600 font-semibold mt-1.5';
             }
-          } finally {
-            testBtn.disabled = false;
-            testBtn.textContent = 'Test Connection';
           }
-        });
-      }
-    })();
+        } catch (err: any) {
+          showToast('Test request failed: ' + err.message, false);
+          if (webhookStatus) {
+            webhookStatus.textContent = '✖ Request error: ' + err.message;
+            webhookStatus.className = 'text-[11px] text-rose-600 font-semibold mt-1.5';
+          }
+        } finally {
+          testBtn.disabled = false;
+          testBtn.textContent = 'Test Connection';
+        }
+      });
+    }
+
+    initSettingsPage();
+    document.addEventListener('shell:page-load', initSettingsPage);
   </script>
 </AdminLayout>

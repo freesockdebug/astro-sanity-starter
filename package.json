@@ -7,7 +7,7 @@
     "build": "node ./astro-cli.mjs build && node ./scripts/ensure-asset-aliases.cjs",
     "build:analyze": "ANALYZE=true node ./astro-cli.mjs build && node ./scripts/ensure-asset-aliases.cjs",
     "check": "npx tsx scripts/check-preflight.ts",
-    "test": "npx tsx --test test/**/*.test.ts",
+    "test": "npx tsx --test test/*.test.ts",
     "check:fast": "npx tsx scripts/check-preflight.ts --fast",
     "check:full": "npx tsx scripts/check-preflight.ts --full",
     "check:cf": "node ./node_modules/typescript/bin/tsc --noEmit",

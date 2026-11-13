@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 import { verifyAdminAuth, getRuntimeEnv, jsonNoCache } from '@utils/auth';
 import { hasMenu } from '@utils/rbac';
 import { getSystemSettings, updateSystemSettings } from '@utils/db';
-import { SecurityService } from '@utils/security';
+import { SecurityService, sanitizeAdminSettings, isMaskedSecret, SECRET_SETTING_KEYS } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -35,7 +35,7 @@ export const GET: APIRoute = async ({ request }) => {
     rootAdminEmails: getRuntimeEnv('ADMIN_EMAILS', cfEnv) || '',
   };
 
-  return jsonNoCache({ success: true, settings, health });
+  return jsonNoCache({ success: true, settings: sanitizeAdminSettings(settings), health });
 };
 
 export const POST: APIRoute = async ({ request }) => {
@@ -223,9 +223,12 @@ export const POST: APIRoute = async ({ request }) => {
       'cloudflare_api_token',
     ];
 
+    const secretSet = new Set<string>(SECRET_SETTING_KEYS);
     for (const key of stringKeys) {
       if (rawUpdates[key] !== undefined) {
-        updates[key] = String(rawUpdates[key]).trim();
+        const val = String(rawUpdates[key]).trim();
+        if (secretSet.has(key) && isMaskedSecret(val)) continue;
+        updates[key] = val;
       }
     }
 
@@ -251,7 +254,7 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonNoCache({
       success: true,
       message: 'Settings saved successfully.',
-      settings: refreshedSettings,
+      settings: sanitizeAdminSettings(refreshedSettings),
     });
   }
 

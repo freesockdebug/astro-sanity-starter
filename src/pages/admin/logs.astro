@@ -1055,6 +1055,14 @@ const pageTitle = 'System Diagnostics & Performance';
 
     if (pollToggleBtn) pollToggleBtn.addEventListener('click', toggleAutoPoll);
 
+    signal.addEventListener('abort', () => {
+      if (autoPollTimer) {
+        clearInterval(autoPollTimer);
+        autoPollTimer = null;
+      }
+      isAutoPolling = false;
+    });
+
     // Bottlenecks drawer expand/collapse
     if (toggleBottlenecksBtn && bottlenecksGrid && bottlenecksToggleText && bottlenecksToggleIcon) {
       toggleBottlenecksBtn.addEventListener('click', () => {

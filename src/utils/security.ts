@@ -326,4 +326,30 @@ export class SecurityService {
 
 export const resolveCountryFromRequest = (request: Request) => SecurityService.resolveCountry(request);
 
+export const SECRET_SETTING_KEYS = [
+  'resend_api_key',
+  'turnstile_secret_key',
+  'revalidate_secret',
+  'cloudflare_api_token',
+] as const;
+
+export function maskSecret(value?: string | null): string {
+  const s = String(value || '').trim();
+  if (!s) return '';
+  if (s.length <= 8) return '••••••••';
+  return `${s.slice(0, 4)}••••${s.slice(-4)}`;
+}
+
+export function isMaskedSecret(value?: string | null): boolean {
+  return String(value || '').includes('••••');
+}
+
+export function sanitizeAdminSettings<T extends Record<string, any>>(settings: T): T {
+  const clone: Record<string, any> = { ...settings };
+  for (const key of SECRET_SETTING_KEYS) {
+    if (clone[key]) clone[key] = maskSecret(clone[key]);
+  }
+  return clone as T;
+}
+
 

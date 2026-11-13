@@ -23,28 +23,32 @@ export const GET: APIRoute = async ({ request, url }) => {
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
 
-  const result = await listErrorLogs(
-    {
-      level,
-      source,
-      eventCode,
-      health,
-      timeWindow,
-      search,
-      sort,
+  try {
+    const result = await listErrorLogs(
+      {
+        level,
+        source,
+        eventCode,
+        health,
+        timeWindow,
+        search,
+        sort,
+        page,
+        limit,
+      },
+      cfEnv
+    );
+
+    return jsonNoCache({
+      success: true,
+      ...result,
       page,
       limit,
-    },
-    cfEnv
-  );
-
-  return jsonNoCache({
-    success: true,
-    ...result,
-    page,
-    limit,
-    totalPages: Math.max(1, Math.ceil(result.total / limit)),
-  });
+      totalPages: Math.max(1, Math.ceil(result.total / limit)),
+    });
+  } catch (err: any) {
+    return jsonNoCache({ success: false, error: err?.message || 'Failed to load diagnostic logs.' }, 500);
+  }
 };
 
 export const DELETE: APIRoute = async ({ request }) => {
