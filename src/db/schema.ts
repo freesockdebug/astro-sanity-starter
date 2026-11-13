@@ -248,6 +248,8 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_error_logs_path ON system_error_logs(path)`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_ip ON system_error_logs(client_ip)`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_country ON system_error_logs(country)`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_bottlenecks ON system_error_logs(created_at, path, method, latency_ms, error_code) WHERE latency_ms > 0 AND path IS NOT NULL AND path != '' AND (method IS NULL OR method != 'CLIENT') AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_stats ON system_error_logs(created_at, level, error_code, latency_ms)`,
   `CREATE INDEX IF NOT EXISTS idx_admin_members_role ON admin_members(role_code)`,
   `CREATE INDEX IF NOT EXISTS idx_admin_members_status ON admin_members(status)`,
   `CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON admin_audit_logs(action)`,
