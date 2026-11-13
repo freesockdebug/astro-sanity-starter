@@ -470,6 +470,43 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       for (const [id, prop] of LOCALE_FIELDS) {
         (currentEditingProduct[prop] ||= {})[activeLanguage] = $val(id);
       }
+      syncSpecsToDoc();
+    }
+
+    function readLocalizedSpec(val: any, lang = activeLanguage): string {
+      if (typeof val === 'string') return val;
+      if (val && typeof val === 'object') {
+        const picked = val[lang] ?? val.en ?? Object.entries(val).find(([k, v]) => !k.startsWith('_') && typeof v === 'string')?.[1];
+        return typeof picked === 'string' ? picked : '';
+      }
+      return '';
+    }
+
+    function writeLocalizedSpec(prev: any, nextText: string, lang = activeLanguage): any {
+      if (prev && typeof prev === 'object') {
+        return { ...prev, [lang]: nextText };
+      }
+      return nextText;
+    }
+
+    function syncSpecsToDoc() {
+      const rows = document.querySelectorAll('#spec-rows > div');
+      if (!currentEditingProduct || rows.length === 0 && !(currentEditingProduct.specifications?.length)) return;
+      const prevSpecs = currentEditingProduct.specifications || [];
+      currentEditingProduct.specifications = Array.from(rows).map((div, idx) => {
+        const prev = prevSpecs[idx] || {};
+        const labelText = (div.querySelector('.s-name') as HTMLInputElement)?.value.trim() || '';
+        const valueText = (div.querySelector('.s-val') as HTMLInputElement)?.value.trim() || '';
+        const nextLabel = writeLocalizedSpec(prev.label ?? prev.name, labelText);
+        const nextValue = writeLocalizedSpec(prev.value, valueText);
+        return {
+          ...prev,
+          _key: prev._key || crypto.randomUUID().slice(0, 8),
+          label: nextLabel,
+          name: typeof prev.name === 'object' ? writeLocalizedSpec(prev.name, labelText) : (typeof nextLabel === 'string' ? nextLabel : labelText),
+          value: nextValue,
+        };
+      });
     }
 
     function updateActiveLang(lang: string) {
@@ -485,6 +522,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
         for (const [id, prop] of LOCALE_FIELDS) {
           $val(id, currentEditingProduct[prop]?.[lang] || '');
         }
+        renderSpecsList();
       }
     }
 
@@ -959,19 +997,21 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       const specs = currentEditingProduct?.specifications || [];
       container.innerHTML = specs.map((s: any, idx: number) => `
         <div class="flex items-center gap-2">
-          <input type="text" class="s-name w-1/3 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Name" value="${escapeHtml(s.label || s.name || '')}" />
-          <input type="text" class="s-val flex-1 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Value" value="${escapeHtml(s.value || '')}" />
+          <input type="text" class="s-name w-1/3 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Name" value="${escapeHtml(readLocalizedSpec(s.label ?? s.name))}" />
+          <input type="text" class="s-val flex-1 px-2.5 py-1 rounded-lg bg-white border border-black/10 text-xs" placeholder="Spec Value" value="${escapeHtml(readLocalizedSpec(s.value))}" />
           <button type="button" class="btn-del-spec text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
         </div>`).join('');
       container.querySelectorAll('.btn-del-spec').forEach((btn) => {
         btn.addEventListener('click', () => {
-          specs.splice(parseInt(btn.getAttribute('data-idx') || '0', 10), 1);
+          syncSpecsToDoc();
+          (currentEditingProduct?.specifications || []).splice(parseInt(btn.getAttribute('data-idx') || '0', 10), 1);
           renderSpecsList();
         });
       });
     }
 
     $id('btn-add-spec')?.addEventListener('click', () => {
+      syncSpecsToDoc();
       ((currentEditingProduct ||= { _type: 'product' }).specifications ||= []).push({ label: '', name: '', value: '' });
       renderSpecsList();
     });
@@ -1044,11 +1084,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
         hex: (div.querySelector('.c-hex') as HTMLInputElement)?.value.trim() || '#000000',
       }));
 
-      p.specifications = Array.from(document.querySelectorAll('#spec-rows > div')).map((div) => {
-        const label = (div.querySelector('.s-name') as HTMLInputElement)?.value.trim() || '';
-        const value = (div.querySelector('.s-val') as HTMLInputElement)?.value.trim() || '';
-        return { _key: crypto.randomUUID().slice(0, 8), label, name: label, value };
-      }).filter((s) => s.label);
+      p.specifications = (p.specifications || []).filter((s: any) => Boolean(readLocalizedSpec(s.label ?? s.name)));
 
       (window as any).__showToast?.('Saving product to Sanity CMS...', 'info');
       if (btnSave) { btnSave.disabled = true; btnSave.classList.add('opacity-50', 'pointer-events-none'); }

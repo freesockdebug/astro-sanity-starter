@@ -124,60 +124,51 @@ export function createCmsCache<T>(
 ): CmsCache<T> {
   let value: T | null = null;
   let timestamp = 0;
-  let inflight: Promise<T> | null = null;
   const kvKey = options?.kvKey;
   const ttlMs = options?.ttlMs ?? 300_000;
   const onUpdate = options?.onUpdate;
 
+  // Note: Do NOT store inflight Promises in module scope; Cloudflare Workers forbids cross-request Promise resolution.
   const load = async (forceRefresh = false, customEnv?: any): Promise<T> => {
-    if (!forceRefresh && inflight) return inflight;
-
-    const task = (async (): Promise<T> => {
-      try {
-        // 1. L1 expired -> sync from shared L2 KV (never poll Sanity on timer!)
-        if (!forceRefresh && kvKey) {
-          const kvVal = await kvGet<T>(kvKey, customEnv).catch(() => null);
-          if (kvVal !== null && kvVal !== undefined) {
-            value = kvVal;
-            timestamp = Date.now();
-            if (onUpdate) onUpdate(value);
-            return value;
-          }
-        }
-
-        // 2. Upstream Sanity fetch (Write-Through on forceRefresh, or first-ever KV miss)
-        const res = await fetcher(forceRefresh);
-        const hasValidData =
-          res !== undefined &&
-          res !== null &&
-          (forceRefresh || !Array.isArray(res) || res.length > 0);
-
-        if (hasValidData) {
-          value = res;
+    try {
+      // 1. L1 expired -> sync from shared L2 KV (never poll Sanity on timer!)
+      if (!forceRefresh && kvKey) {
+        const kvVal = await kvGet<T>(kvKey, customEnv).catch(() => null);
+        if (kvVal !== null && kvVal !== undefined) {
+          value = kvVal;
           timestamp = Date.now();
           if (onUpdate) onUpdate(value);
-
-          if (kvKey) {
-            if (forceRefresh) {
-              await kvPut(kvKey, value, undefined, customEnv).catch(() => {});
-            } else {
-              runInBackground(kvPut(kvKey, value, undefined, customEnv));
-            }
-          }
-        } else if (value === null) {
-          value = fallback;
+          return value;
         }
-        return (value ?? fallback) as T;
-      } catch (err) {
-        console.error('[createCmsCache] Fetch failed, falling back to cached value:', err);
-        return (value ?? fallback) as T;
-      } finally {
-        if (!forceRefresh) inflight = null;
       }
-    })();
 
-    if (!forceRefresh) inflight = task;
-    return task;
+      // 2. Upstream Sanity fetch (Write-Through on forceRefresh, or first-ever KV miss)
+      const res = await fetcher(forceRefresh);
+      const hasValidData =
+        res !== undefined &&
+        res !== null &&
+        (forceRefresh || !Array.isArray(res) || res.length > 0);
+
+      if (hasValidData) {
+        value = res;
+        timestamp = Date.now();
+        if (onUpdate) onUpdate(value);
+
+        if (kvKey) {
+          if (forceRefresh) {
+            await kvPut(kvKey, value, undefined, customEnv).catch(() => {});
+          } else {
+            runInBackground(kvPut(kvKey, value, undefined, customEnv));
+          }
+        }
+      } else if (value === null) {
+        value = fallback;
+      }
+      return (value ?? fallback) as T;
+    } catch (err) {
+      console.error('[createCmsCache] Fetch failed, falling back to cached value:', err);
+      return (value ?? fallback) as T;
+    }
   };
 
   return {
@@ -239,7 +230,6 @@ export function createCmsKeyedCache<T>(
   const negativeTtlMs = options?.negativeTtlMs ?? 30_000;
   const maxEntries = options?.maxL1Entries ?? 500;
   const l1Map = new Map<string, { data: T | null; timestamp: number }>();
-  const inflightMap = new Map<string, Promise<T | null>>();
 
   const setL1 = (key: string, data: T | null) => {
     l1Map.set(key, { data, timestamp: Date.now() });
@@ -249,6 +239,7 @@ export function createCmsKeyedCache<T>(
     }
   };
 
+  // Note: Do NOT store inflight Promises in module scope; Cloudflare Workers forbids cross-request Promise resolution.
   const get = async (rawKey: string, customEnv?: any, forceRefresh = false): Promise<T | null> => {
     if (!rawKey) return null;
     const now = Date.now();
@@ -263,51 +254,41 @@ export function createCmsKeyedCache<T>(
           return structuredClone(hit.data);
         }
       }
-
-      const existing = inflightMap.get(rawKey);
-      if (existing) return existing;
     }
 
     const cacheKey = `${keyPrefix}:${rawKey}`;
-    const task = (async (): Promise<T | null> => {
-      try {
-        if (!forceRefresh) {
-          try {
-            const kvHit = await kvGet<any>(cacheKey, customEnv);
-            if (kvHit && !kvHit.notFound) {
-              setL1(rawKey, kvHit);
-              return structuredClone(kvHit);
-            }
-          } catch {}
-        }
-
-        const data = await fetcher(rawKey, forceRefresh);
-        if (data) {
-          setL1(rawKey, data);
-          if (forceRefresh) {
-            await kvPut(cacheKey, data, undefined, customEnv).catch(() => {});
-          } else {
-            runInBackground(kvPut(cacheKey, data, undefined, customEnv));
+    try {
+      if (!forceRefresh) {
+        try {
+          const kvHit = await kvGet<any>(cacheKey, customEnv);
+          if (kvHit && !kvHit.notFound) {
+            setL1(rawKey, kvHit);
+            return structuredClone(kvHit);
           }
-          return structuredClone(data);
-        } else {
-          setL1(rawKey, null);
-          if (forceRefresh) {
-            await kvDelete(cacheKey, customEnv).catch(() => {});
-          }
-          return null;
-        }
-      } catch (err: any) {
-        console.error(`[createCmsKeyedCache:${keyPrefix}] Fetch failed for ${rawKey}:`, err?.message);
-        const stale = l1Map.get(rawKey);
-        return stale && stale.data ? structuredClone(stale.data) : null;
-      } finally {
-        if (!forceRefresh) inflightMap.delete(rawKey);
+        } catch {}
       }
-    })();
 
-    if (!forceRefresh) inflightMap.set(rawKey, task);
-    return task;
+      const data = await fetcher(rawKey, forceRefresh);
+      if (data) {
+        setL1(rawKey, data);
+        if (forceRefresh) {
+          await kvPut(cacheKey, data, undefined, customEnv).catch(() => {});
+        } else {
+          runInBackground(kvPut(cacheKey, data, undefined, customEnv));
+        }
+        return structuredClone(data);
+      } else {
+        setL1(rawKey, null);
+        if (forceRefresh) {
+          await kvDelete(cacheKey, customEnv).catch(() => {});
+        }
+        return null;
+      }
+    } catch (err: any) {
+      console.error(`[createCmsKeyedCache:${keyPrefix}] Fetch failed for ${rawKey}:`, err?.message);
+      const stale = l1Map.get(rawKey);
+      return stale && stale.data ? structuredClone(stale.data) : null;
+    }
   };
 
   return {
@@ -324,7 +305,6 @@ export function createCmsKeyedCache<T>(
     },
     invalidate() {
       l1Map.clear();
-      inflightMap.clear();
     },
   };
 }

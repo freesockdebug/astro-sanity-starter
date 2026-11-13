@@ -269,13 +269,12 @@ export const DDL_STATEMENTS = [
 export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
 
 let isSchemaVerifiedInIsolate = false;
-let schemaInitPromise: Promise<void> | null = null;
 
 /**
- * Ensures database tables, columns and indexes exist
+ * Ensures database tables, columns and indexes exist.
+ * Note: Never cache a Promise across requests in module scope (Cloudflare Workers forbids cross-request Promise resolution).
  */
 export async function ensureSchema(rawOrClient?: any, force = false): Promise<void> {
-  if (schemaInitPromise) return schemaInitPromise;
   if (!force && isSchemaVerifiedInIsolate) return;
   let target = rawOrClient;
   if (!target) {
@@ -286,65 +285,59 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
   }
   if (!target) return;
 
-  schemaInitPromise = (async () => {
-    // 1. Idempotent column migrations for existing databases before indexes
-    const columnMigrations = [
-      'ALTER TABLE system_error_logs ADD COLUMN latency_ms INTEGER DEFAULT NULL',
-      'ALTER TABLE system_error_logs ADD COLUMN method TEXT DEFAULT NULL',
-      'ALTER TABLE system_error_logs ADD COLUMN status_code INTEGER DEFAULT NULL',
-      'ALTER TABLE system_error_logs ADD COLUMN client_ip TEXT DEFAULT NULL',
-      'ALTER TABLE system_error_logs ADD COLUMN country TEXT DEFAULT NULL',
-      'ALTER TABLE system_error_logs ADD COLUMN city TEXT DEFAULT NULL',
-      'ALTER TABLE orders ADD COLUMN assigned_to TEXT DEFAULT NULL',
-      'ALTER TABLE orders ADD COLUMN assigned_at TEXT DEFAULT NULL',
-      'ALTER TABLE users ADD COLUMN assigned_to TEXT DEFAULT NULL',
-    ];
+  // 1. Idempotent column migrations for existing databases before indexes
+  const columnMigrations = [
+    'ALTER TABLE system_error_logs ADD COLUMN latency_ms INTEGER DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN method TEXT DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN status_code INTEGER DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN client_ip TEXT DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN country TEXT DEFAULT NULL',
+    'ALTER TABLE system_error_logs ADD COLUMN city TEXT DEFAULT NULL',
+    'ALTER TABLE orders ADD COLUMN assigned_to TEXT DEFAULT NULL',
+    'ALTER TABLE orders ADD COLUMN assigned_at TEXT DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN assigned_to TEXT DEFAULT NULL',
+  ];
 
-    for (const m of columnMigrations) {
+  for (const m of columnMigrations) {
+    try {
+      if (target.prepare) {
+        await target.prepare(m).run();
+      } else if (target.exec) {
+        await target.exec(m);
+      }
+    } catch {
+      // Column already exists or table not yet initialized
+    }
+  }
+
+  // 2. Ensure core tables exist first
+  let batchOk = false;
+  if (target.batch && target.prepare) {
+    try {
+      await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
+      batchOk = true;
+    } catch {
+      // Sequential fallback
+    }
+  }
+
+  // 3. Sequential execution fallback for statements and indexes only if batch was unavailable or failed
+  if (!batchOk) {
+    for (const sql of DDL_STATEMENTS) {
       try {
         if (target.prepare) {
-          await target.prepare(m).run();
+          await target.prepare(sql).run();
         } else if (target.exec) {
-          await target.exec(m);
+          await target.exec(sql);
         }
       } catch {
-        // Column already exists or table not yet initialized
+        // Already exists
       }
     }
+  }
 
-    // 2. Ensure core tables exist first
-    let batchOk = false;
-    if (target.batch && target.prepare) {
-      try {
-        await target.batch(DDL_STATEMENTS.map((sql) => target.prepare(sql)));
-        batchOk = true;
-      } catch {
-        // Sequential fallback
-      }
-    }
-
-    // 3. Sequential execution fallback for statements and indexes only if batch was unavailable or failed
-    if (!batchOk) {
-      for (const sql of DDL_STATEMENTS) {
-        try {
-          if (target.prepare) {
-            await target.prepare(sql).run();
-          } else if (target.exec) {
-            await target.exec(sql);
-          }
-        } catch {
-          // Already exists
-        }
-      }
-    }
-
-    // Mark as verified only after all DDL and migrations complete
-    isSchemaVerifiedInIsolate = true;
-  })().finally(() => {
-    schemaInitPromise = null;
-  });
-
-  return schemaInitPromise;
+  // Mark as verified only after all DDL and migrations complete
+  isSchemaVerifiedInIsolate = true;
 }
 
 /**
