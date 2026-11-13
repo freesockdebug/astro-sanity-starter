@@ -3,6 +3,7 @@
 
 import { toIsoUtcString } from './date';
 import { clientCache } from './clientCache';
+import { getTierConfig } from './tier';
 
 /**
  * Escapes HTML characters to prevent XSS in table & card rendering.
@@ -554,5 +555,36 @@ export function createSlideDrawer(cfg: {
   (cfg.closeIds || []).forEach((id) => $id(id)?.addEventListener('click', close));
 
   return { open, close };
+}
+
+/**
+ * Renders Buyer Tier badge HTML from the Single Source of Truth (`@utils/tier`).
+ */
+export function renderTierBadgeHtml(tier?: string | null): string {
+  const cfg = getTierConfig(tier);
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.badgeBg}">${escapeHtml(cfg.shortLabel)}</span>`;
+}
+
+const ORDER_STATUS_BADGE_MAP: Record<string, { cls: string; dot: string; label: string; shortLabel: string }> = {
+  PENDING_APPROVAL: { cls: 'bg-amber-50 text-amber-800 border-amber-200', dot: 'bg-amber-500', label: 'Pending Approval', shortLabel: 'Pending' },
+  APPROVED: { cls: 'bg-blue-50 text-blue-800 border-blue-200', dot: 'bg-blue-500', label: 'Approved', shortLabel: 'Approved' },
+  SHIPPED: { cls: 'bg-emerald-50 text-emerald-800 border-emerald-200', dot: 'bg-emerald-500', label: 'Shipped', shortLabel: 'Shipped' },
+  REJECTED: { cls: 'bg-zinc-100 text-zinc-700 border-zinc-200', dot: '', label: 'Rejected', shortLabel: 'Rejected' },
+};
+
+/**
+ * Renders Order Status badge HTML uniformly across admin order tables and customer drawers.
+ */
+export function renderOrderStatusBadge(status?: string | null, compact = false): string {
+  const key = String(status || '').toUpperCase();
+  const cfg = ORDER_STATUS_BADGE_MAP[key];
+  if (!cfg) {
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">${escapeHtml(status)}</span>`;
+  }
+  if (compact) {
+    return `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium border ${cfg.cls}">${cfg.shortLabel}</span>`;
+  }
+  const dotHtml = cfg.dot ? `<span class="w-1.5 h-1.5 rounded-full ${cfg.dot}"></span>` : '';
+  return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${cfg.cls}">${dotHtml}${cfg.label}</span>`;
 }
 

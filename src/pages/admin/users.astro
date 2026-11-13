@@ -376,7 +376,8 @@ const pageTitle = 'Customer & Access Management';
   import {
     escapeHtml, formatAdminTime, createPaginationController,
     createWorkbenchFetcher, bindSearchAndRefresh, exportToCsv,
-    $id, syncUrlParams, createSlideDrawer
+    $id, syncUrlParams, createSlideDrawer,
+    renderTierBadgeHtml, renderOrderStatusBadge
   } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
   import type { AdminUserListItem, AdminUsersApiResponse } from '../../db/adminDtos';
@@ -439,16 +440,6 @@ const pageTitle = 'Customer & Access Management';
       loadUsers();
     },
   });
-
-  function renderTierBadge(tier) {
-    if (tier === 'VIP') {
-      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">VIP</span>`;
-    }
-    if (tier === 'PARTNER') {
-      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-800 border border-purple-200">Partner</span>`;
-    }
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#f5f5f7] text-[#52525b] border border-black/5">Standard</span>`;
-  }
 
   function updateActiveVisuals() {
     // 1. Update blocked card state
@@ -585,7 +576,7 @@ const pageTitle = 'Customer & Access Management';
 
                 <div class="flex items-center gap-1">
                   ${u.assigned_to ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60">${escapeHtml(u.assigned_to.split('@')[0])}</span>` : `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">Pool</span>`}
-                  ${renderTierBadge(u.tier)}
+                  ${renderTierBadgeHtml(u.tier)}
                   ${isBlocked ? `<span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>` : ''}
                 </div>
               </div>
@@ -685,7 +676,7 @@ const pageTitle = 'Customer & Access Management';
             return `
               <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  ${renderTierBadge(u.tier)}
+                  ${renderTierBadgeHtml(u.tier)}
                   ${isBlocked
                     ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>`
                     : `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">ACTIVE</span>`}
@@ -836,23 +827,7 @@ const pageTitle = 'Customer & Access Management';
         ordersListEl.innerHTML = `<div class="p-3 rounded-xl bg-[#f5f5f7] text-[#86868b] text-[11px] text-center">No orders found for this customer.</div>`;
       } else {
         ordersListEl.innerHTML = recentOrders.map((order) => {
-          let badgeHtml = '';
-          switch (order.status) {
-            case 'PENDING_APPROVAL':
-              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">Pending</span>';
-              break;
-            case 'APPROVED':
-              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200">Approved</span>';
-              break;
-            case 'SHIPPED':
-              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">Shipped</span>';
-              break;
-            case 'REJECTED':
-              badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">Rejected</span>';
-              break;
-            default:
-              badgeHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700">${escapeHtml(order.status)}</span>`;
-          }
+          const badgeHtml = renderOrderStatusBadge(order.status, true);
           const date = order.created_at ? formatAdminTime(order.created_at, 'full').slice(0, 10) : '—';
           return `
             <a href="/admin/orders?search=${encodeURIComponent(order.order_no || '')}" class="block p-2.5 rounded-xl border border-black/5 hover:border-black/20 hover:bg-[#fbfbfd] transition-all bg-white">

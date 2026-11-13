@@ -23,6 +23,7 @@ if (redirectResponse) return redirectResponse;
 const teamMembers = await listActiveTeamMembersLite().catch(() => []);
 
 import { getDictItems } from '@utils/dicts';
+import { DEFAULT_CARRIERS } from '@utils/shipping';
 
 const [carrierDictItems, quickReplyItems, inquiryTypeItems] = await Promise.all([
   getDictItems(cfEnv, 'shipping_carriers', true).catch(() => []),
@@ -32,13 +33,11 @@ const [carrierDictItems, quickReplyItems, inquiryTypeItems] = await Promise.all(
 
 const carrierOptions = carrierDictItems.length > 0
   ? carrierDictItems.map((c: any) => ({ name: c.item_label, key: c.item_key, url: c.meta?.tracking_url || '' }))
-  : [
-      { name: 'DHL Express', key: 'dhl', url: 'https://www.dhl.com/global-en/home/tracking/tracking-express.html?submit=1&tracking-id={tracking}' },
-      { name: 'FedEx', key: 'fedex', url: 'https://www.fedex.com/fedextrack/?trknbr={tracking}' },
-      { name: 'UPS', key: 'ups', url: 'https://www.ups.com/track?tracknum={tracking}' },
-      { name: 'SF Express', key: 'sf_express', url: 'https://www.sf-international.com/us/en/dynamic_function/waybill/#search/bill-number/{tracking}' },
-      { name: 'EMS / China Post', key: 'ems', url: 'https://www.ems.com.cn/queryList?mailNos={tracking}' },
-    ];
+  : DEFAULT_CARRIERS.filter((c) => !c.id.startsWith('Other')).map((c) => ({
+      name: c.name,
+      key: c.id.toLowerCase().replace(/\s+/g, '_'),
+      url: c.urlTemplate,
+    }));
 
 const approveReplies = quickReplyItems.filter((q: any) => q.meta?.scene === 'approval');
 const shipReplies = quickReplyItems.filter((q: any) => q.meta?.scene === 'shipping');
@@ -502,7 +501,8 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
 
 <script>
   import { clientCache } from '@utils/clientCache';
-  import { escapeHtml, formatAdminTime, createPaginationController, syncUrlParams, bindSearchAndRefresh, readJsonStore } from '@utils/adminWorkbench';
+  import { escapeHtml, formatAdminTime, createPaginationController, syncUrlParams, bindSearchAndRefresh, readJsonStore, renderOrderStatusBadge } from '@utils/adminWorkbench';
+  import { getTrackingUrl } from '@utils/shipping';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
   import type { AdminOrderListItem, AdminOrdersApiResponse } from '../../db/adminDtos';
 
@@ -534,29 +534,8 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   const clientInquiryTypes = readJsonStore<any[]>('orders-inquiry-types-json', []);
   const inquiryTypeMap = new Map(clientInquiryTypes.map((i: any) => [String(i.item_key || '').toLowerCase(), i]));
 
-  function resolveTrackingUrl(carrier?: string, trackingNo?: string, customTemplate?: string): string {
-    if (!trackingNo) return '';
-    const cleanNo = encodeURIComponent(String(trackingNo).trim());
-    if (customTemplate && (customTemplate.includes('{tracking}') || customTemplate.includes('{tracking_no}'))) {
-      return customTemplate.replace('{tracking_no}', cleanNo).replace('{tracking}', cleanNo);
-    }
-    const c = String(carrier || '').toLowerCase();
-    const matched = clientCarriers.find((item: any) =>
-      item.key?.toLowerCase() === c ||
-      item.name?.toLowerCase() === c ||
-      item.name?.toLowerCase().includes(c) ||
-      c.includes(item.key?.toLowerCase())
-    );
-    if (matched && matched.url) {
-      return matched.url.replace('{tracking_no}', cleanNo).replace('{tracking}', cleanNo);
-    }
-    if (c.includes('dhl')) return `https://www.dhl.com/en/express/tracking.html?AWB=${cleanNo}`;
-    if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${cleanNo}`;
-    if (c.includes('ups')) return `https://www.ups.com/track?tracknum=${cleanNo}`;
-    if (c.includes('sf') || c.includes('顺丰')) return `https://www.sf-international.com/us/en/dynamic_function/waybill/#search/bill-number/${cleanNo}`;
-    if (c.includes('ems')) return `https://www.ems.com.cn/queryList?mailNum=${cleanNo}`;
-    return `https://t.17track.net/en#nums=${cleanNo}`;
-  }
+  const resolveTrackingUrl = (carrier?: string, trackingNo?: string, customTemplate?: string): string =>
+    getTrackingUrl(carrier, trackingNo, customTemplate, clientCarriers) || '';
 
   function renderInquiryBadge(type?: string): string {
     const raw = String(type || 'quote_cart').toLowerCase();
@@ -697,33 +676,6 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
       const tabEl = document.querySelector(`[data-tab-field="${upperKey}"]`);
       if (tabEl) tabEl.textContent = String(val);
     });
-  }
-
-  function renderStatusBadge(status) {
-    if (status === 'PENDING_APPROVAL') {
-      return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
-        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-        Pending Approval
-      </span>`;
-    }
-    if (status === 'APPROVED') {
-      return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
-        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-        Approved
-      </span>`;
-    }
-    if (status === 'SHIPPED') {
-      return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-        Shipped
-      </span>`;
-    }
-    if (status === 'REJECTED') {
-      return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">
-        Rejected
-      </span>`;
-    }
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">${escapeHtml(status)}</span>`;
   }
 
   function renderActionButtons(order, isMobile = false) {
@@ -930,7 +882,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
                 </div>
                 <div class="shrink-0 flex items-center gap-1.5 flex-wrap justify-end">
                   ${renderAssigneeWidget(order, safeId, true)}
-                  ${renderStatusBadge(order.status)}
+                  ${renderOrderStatusBadge(order.status)}
                 </div>
               </div>
 
@@ -1059,7 +1011,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
             `;
           case 'status':
             return `
-              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">${renderStatusBadge(order.status)}</td>
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">${renderOrderStatusBadge(order.status)}</td>
             `;
           case 'action':
             return `

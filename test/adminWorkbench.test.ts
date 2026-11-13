@@ -2,7 +2,8 @@
 // Unit tests for adminWorkbench pure utilities using Node 22 native test runner
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeHtml, exportToCsv, readJsonStore } from '../src/utils/adminWorkbench.js';
+import { escapeHtml, exportToCsv, readJsonStore, renderTierBadgeHtml, renderOrderStatusBadge } from '../src/utils/adminWorkbench.js';
+import { getTrackingUrl } from '../src/utils/shipping.js';
 
 test('escapeHtml escapes dangerous HTML characters to prevent XSS', () => {
   assert.equal(escapeHtml('<script>alert("xss")</script>'), '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;');
@@ -71,4 +72,39 @@ test('readJsonStore safely reads JSON from DOM element or returns fallback', () 
   assert.deepEqual(readJsonStore('valid-json', {}), { ok: true, count: 42 });
   assert.deepEqual(readJsonStore('invalid-json', { fallback: true }), { fallback: true });
   assert.deepEqual(readJsonStore('non-existent', ['default']), ['default']);
+});
+
+test('renderTierBadgeHtml and renderOrderStatusBadge render consistent SSOT HTML', () => {
+  const vipHtml = renderTierBadgeHtml('VIP');
+  assert.match(vipHtml, /VIP/);
+  assert.match(vipHtml, /bg-purple-50/);
+
+  const pendingFull = renderOrderStatusBadge('PENDING_APPROVAL');
+  assert.match(pendingFull, /Pending Approval/);
+  assert.match(pendingFull, /bg-amber-500/);
+
+  const pendingCompact = renderOrderStatusBadge('PENDING_APPROVAL', true);
+  assert.match(pendingCompact, /Pending/);
+  assert.doesNotMatch(pendingCompact, /Pending Approval/);
+
+  const unknownStatus = renderOrderStatusBadge('<xss>');
+  assert.match(unknownStatus, /&lt;xss&gt;/);
+});
+
+test('getTrackingUrl resolves default, custom template, and dynamic carrier dictionary URLs', () => {
+  assert.equal(getTrackingUrl('DHL', ''), null);
+  assert.equal(
+    getTrackingUrl('DHL', '123456'),
+    'https://www.dhl.com/en/express/tracking.html?AWB=123456'
+  );
+  assert.equal(
+    getTrackingUrl('Custom', 'TRK-9', 'https://track.example.com/{tracking_no}'),
+    'https://track.example.com/TRK-9'
+  );
+  assert.equal(
+    getTrackingUrl('sf_express', 'SF123', undefined, [
+      { key: 'sf_express', name: 'SF Express', url: 'https://sf.example.com?no={tracking}' },
+    ]),
+    'https://sf.example.com?no=SF123'
+  );
 });
