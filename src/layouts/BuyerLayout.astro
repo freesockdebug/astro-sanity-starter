@@ -349,8 +349,11 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
     <slot name="dialogs" />
   </div>
 
-  <!-- Pure Vanilla JS for Mobile Sidebar Drawer Toggle & Global openQuoteDrawer helper -->
-  <script is:inline data-shell-persist="true">
+  {
+    !isShellReq && (
+      <>
+        <!-- Pure Vanilla JS for Mobile Sidebar Drawer Toggle & Global openQuoteDrawer helper -->
+        <script is:inline data-shell-persist="true">
     (function() {
       // Global bridge for any caller triggering openQuoteDrawer()
       window.openQuoteDrawer = function() {
@@ -520,7 +523,10 @@ const initial = (displayName || sessionUser.email || 'B').slice(0, 1).toUpperCas
         }
       });
     })();
-  </script>
+        </script>
+      </>
+    )
+  }
 
   <script>
     import { initAppShellRouter } from '@utils/appShellRouter';

@@ -23,8 +23,8 @@ declare global {
   }
 }
 
-const PREFETCH_TTL_MS = 15_000;
-const PREFETCH_MAX_ENTRIES = 6;
+const PREFETCH_TTL_MS = 300_000;
+const PREFETCH_MAX_ENTRIES = 10;
 const prefetchCache = new Map<string, { html: string; timestamp: number }>();
 
 export interface ShellFetchResult {
@@ -697,9 +697,11 @@ export function initAppShellRouter(options: AppShellOptions): void {
       const applyFreshDom = () => {
         clearDimming();
         syncShellClasses(doc);
-        if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
-        if (curOverlays && newOverlays) {
-          curOverlays.innerHTML = newOverlays.innerHTML;
+        if (!snapshot) {
+          if (curCanvas) curCanvas.innerHTML = newCanvas.innerHTML;
+          if (curOverlays && newOverlays) {
+            curOverlays.innerHTML = newOverlays.innerHTML;
+          }
         }
       };
 
@@ -710,7 +712,9 @@ export function initAppShellRouter(options: AppShellOptions): void {
         applyFreshDom();
       }
 
-      document.title = doc.title;
+      if (!snapshot) {
+        document.title = doc.title;
+      }
       if (!isPopState) {
         window.history.pushState({ shell: true, url: targetUrl.href }, doc.title, targetUrl.href);
       }

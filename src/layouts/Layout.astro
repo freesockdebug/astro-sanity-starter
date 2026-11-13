@@ -55,15 +55,17 @@ if (!bare && !isShellReq) {
     SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
 }
 
-const rawImage = image ?? page?.socialImage;
+const rawImage = isShellReq ? undefined : (image ?? page?.socialImage);
 const rawImageSrc = typeof rawImage === 'string' ? rawImage : rawImage?.src;
 const imageSrc = rawImageSrc ? SanityImageService.hero(rawImageSrc, 1200) : undefined;
 const resolvedImage = imageSrc
     ? { src: imageSrc.startsWith('http') || imageSrc.startsWith('/') ? imageSrc : new URL(imageSrc, Astro.site || Astro.url).toString() }
     : undefined;
 
-const systemSettings = (Astro.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
-if (Astro.locals && !(Astro.locals as any).systemSettings) {
+const systemSettings = isShellReq
+    ? null
+    : ((Astro.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null));
+if (!isShellReq && Astro.locals && !(Astro.locals as any).systemSettings) {
   (Astro.locals as any).systemSettings = systemSettings;
 }
 const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_errors) : true;
