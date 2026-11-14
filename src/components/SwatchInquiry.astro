@@ -2,7 +2,7 @@
 // src/components/SwatchInquiry.astro
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { DEFAULT_SWATCH_INQUIRY } from '@data/defaults';
-import { getLangFromUrl, useTranslations, getLocalizedValue } from '@i18n';
+import { getLangFromUrl, useTranslations, getLocalizedValue, toText } from '@i18n';
 
 interface Props {
   badge?: string;
@@ -29,25 +29,14 @@ const {
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
-// Safe text extractor: resolves Sanity multilingual object ({ en: '...' }) or string safely without throwing .trim errors
-const toText = (val: any, fallback = ''): string => {
-  if (val === null || val === undefined) return fallback;
-  if (typeof val === 'string') return val.trim();
-  if (typeof val === 'object') {
-    const loc = getLocalizedValue(val, currentLang);
-    return typeof loc === 'string' ? loc.trim() : (loc ? String(loc).trim() : fallback);
-  }
-  return String(val).trim();
-};
-
-const safeBadge = toText(badge, DEFAULT_SWATCH_INQUIRY.badge);
-const safeHeadline = toText(headline, DEFAULT_SWATCH_INQUIRY.headline);
-const safeSubline = toText(subline, DEFAULT_SWATCH_INQUIRY.subline);
+const safeBadge = toText(badge, currentLang, DEFAULT_SWATCH_INQUIRY.badge);
+const safeHeadline = toText(headline, currentLang, DEFAULT_SWATCH_INQUIRY.headline);
+const safeSubline = toText(subline, currentLang, DEFAULT_SWATCH_INQUIRY.subline);
 
 const rfqSettings = await fetchRfqSettings();
 const showInquirySection = propShowSection !== undefined ? propShowSection : (rfqSettings?.showInquirySection ?? true);
 const showSwatchButton = propShowButton !== undefined ? Boolean(propShowButton) : true;
-const displayButtonText = toText(propButtonText) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
+const displayButtonText = toText(propButtonText, currentLang) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
 
 const I18N_COPY: Record<string, { tagText: string; tagSubtitle: string; verified: string; included: string; note: string }> = {
   de: {

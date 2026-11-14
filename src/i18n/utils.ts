@@ -296,5 +296,18 @@ export function getLocalizedValue(
     return trimmed;
   }
 
-  return fallback || '';
+  return String(field).trim() || fallback || '';
+}
+
+/**
+ * Safely extract and trim text from a string, primitive, or Sanity multilingual object.
+ */
+export function toText(val: any, lang: SupportedLocale = DEFAULT_LOCALE, fallback = ''): string {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') return val.trim() || fallback;
+  if (typeof val === 'object') {
+    const loc = getLocalizedValue(val, lang);
+    return (typeof loc === 'string' ? loc.trim() : String(loc ?? '').trim()) || fallback;
+  }
+  return String(val).trim() || fallback;
 }

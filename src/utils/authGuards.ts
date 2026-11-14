@@ -78,6 +78,51 @@ export async function verifyBuyerAuth(requestOrContext: any, cfEnv?: any): Promi
   };
 }
 
+export interface BuyerApiOptions {
+  parseJson?: boolean;
+}
+
+/**
+ * Unified Buyer API pipeline wrapper: buyer auth -> optional JSON parsing -> error boundary.
+ */
+export function defineBuyerApi<TBody = any>(
+  options: BuyerApiOptions,
+  handler: (ctx: {
+    context: any;
+    request: Request;
+    params: Record<string, string | undefined>;
+    url: URL;
+    user: AuthUser;
+    dbUser: UserRecord | null;
+    body: TBody;
+    cfEnv: any;
+  }) => Promise<Response>
+) {
+  return async (context: any): Promise<Response> => {
+    const { request, params, url } = context;
+    const { user, dbUser, errorResponse } = await verifyBuyerAuth(context, cfEnv);
+    if (errorResponse || !user) {
+      return errorResponse!;
+    }
+
+    let body: any = {};
+    if (options.parseJson) {
+      try {
+        body = await request.json();
+      } catch {
+        return jsonNoCache({ error: 'Invalid JSON payload.' }, 400);
+      }
+    }
+
+    try {
+      return await handler({ context, request, params, url, user, dbUser, body, cfEnv });
+    } catch (err: any) {
+      console.error(`[BuyerAPI Error] ${url?.pathname || ''}:`, err);
+      return jsonNoCache({ error: err?.message || 'Internal server error' }, 500);
+    }
+  };
+}
+
 export interface BuyerContextResult {
   sessionUser: AuthUser | null;
   dbUser: UserRecord | null;

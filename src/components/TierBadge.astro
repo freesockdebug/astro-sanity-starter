@@ -2,6 +2,8 @@
 // src/components/TierBadge.astro
 // Single Source of Truth for B2B Buyer Tier Badges
 import { getTierConfig } from '@utils/tier';
+import { getDictMap } from '@utils/dicts';
+import { env as cfEnv } from 'cloudflare:workers';
 
 interface Props {
   tier?: string | null;
@@ -17,7 +19,8 @@ const {
   variant = 'full',
 } = Astro.props;
 
-const config = getTierConfig(tier);
+const tierDict = await getDictMap(cfEnv, 'customer_tiers').catch(() => ({}));
+const config = getTierConfig(tier, tierDict);
 const sizeClass = size === 'sm' ? 'px-1.5 py-0.2 text-[9px]' : 'px-2.5 py-0.5 text-[10px]';
 const labelText = variant === 'short' ? config.shortLabel : config.label;
 ---

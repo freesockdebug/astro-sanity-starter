@@ -60,7 +60,16 @@ const minimalProducts = mergedProducts.map((p: any) => {
   };
 });
 const initialProducts = minimalProducts.slice(0, BATCH_SIZE);
-const catalogJson = JSON.stringify(minimalProducts);
+const catalogJson = JSON.stringify({
+  products: minimalProducts,
+  config: {
+    cardQuoteText,
+    currentLang,
+    moqPrefix: t('catalog.moqPrefix'),
+    productUrlPrefix: `${getLocalizedPath('/products', currentLang)}/`,
+    unitPairLabel,
+  },
+});
 
 const firstCardImg = mergedProducts[0]?.image;
 const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (firstCardImg.includes('cdn.sanity.io') || firstCardImg.includes('/cdn-image/'))
@@ -371,16 +380,30 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   <script type="application/json" id="catalog-products-data" set:html={catalogJson}></script>
 </Layout>
 
-<script define:vars={{ cardQuoteText, currentLang, moqPrefix: t('catalog.moqPrefix'), productUrlPrefix: `${getLocalizedPath('/products', currentLang)}/`, unitPairLabel }}>
-  // Catalog State Management
-  const catalogDataEl = document.getElementById('catalog-products-data');
-  const allProducts = catalogDataEl ? JSON.parse(catalogDataEl.textContent || '[]') : [];
+<script>
+  import { readJsonStore, syncUrlParams } from '@utils/adminWorkbench';
+
+  // Catalog State Management (unified SSR JSON store + closed client module scope)
+  const store = readJsonStore<{
+    products?: any[];
+    config?: {
+      moqPrefix?: string;
+      productUrlPrefix?: string;
+    };
+  }>('catalog-products-data', {});
+  const allProducts: any[] = Array.isArray(store.products) ? store.products : [];
+  const cfg = store.config || {};
+  const cfgMoqPrefix = typeof cfg.moqPrefix === 'string' ? cfg.moqPrefix : 'MOQ';
+  const cfgProductUrlPrefix = typeof cfg.productUrlPrefix === 'string' ? cfg.productUrlPrefix : '/products/';
+
   const BATCH_SIZE = 24; // LCM(2, 3, 4, 6) = 24 ensures zero ragged rows on 2, 3, 4, 6 column layouts
   let currentCategory = 'all';
   let searchQuery = '';
   let currentSort = 'featured';
   let displayedCount = 0;
-  let filteredList = [];
+  let filteredList: any[] = [];
+  let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   const gridContainer = document.getElementById('products-grid');
   const filterSkeleton = document.getElementById('catalog-filter-skeleton');
@@ -390,13 +413,16 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   const displayedCountLabel = document.getElementById('displayed-count-label');
   const totalCountLabel = document.getElementById('total-count-label');
   const activeCategoryIndicator = document.getElementById('active-category-indicator');
-  const searchInput = document.getElementById('catalog-search-input');
+  const searchInput = document.getElementById('catalog-search-input') as HTMLInputElement | null;
   const searchClearBtn = document.getElementById('catalog-search-clear');
-  const sortSelect = document.getElementById('catalog-sort-select');
+  const sortSelect = document.getElementById('catalog-sort-select') as HTMLSelectElement | null;
   const loadTriggerSentinel = document.getElementById('catalog-load-trigger');
-  let skeletonTimer = null;
+  const tabButtons = document.querySelectorAll('.category-tab-btn');
+  const VALID_SORTS = new Set(
+    sortSelect ? Array.from(sortSelect.options).map((o) => o.value) : ['featured']
+  );
 
-  var runCatalogIdle = function (cb) {
+  var runCatalogIdle = function (cb: () => void) {
     if ('requestIdleCallback' in window) {
       window.requestIdleCallback(cb, { timeout: 600 });
     } else {
@@ -479,11 +505,10 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   }
 
   // Create Product Card via template cloning (SSOT with SSR markup)
-  function createCardElement(item) {
-    const tpl = document.getElementById('catalog-card-tpl');
-    const card = tpl.content.firstElementChild.cloneNode(true);
-    const prefix = typeof productUrlPrefix !== 'undefined' ? productUrlPrefix : (typeof currentLang !== 'undefined' && currentLang !== 'en' ? `/${currentLang}/products/` : '/products/');
-    const productUrl = `${prefix}${item.slug}`;
+  function createCardElement(item: any) {
+    const tpl = document.getElementById('catalog-card-tpl') as HTMLTemplateElement | null;
+    const card = tpl?.content.firstElementChild?.cloneNode(true) as HTMLElement;
+    const productUrl = `${cfgProductUrlPrefix}${item.slug}`;
 
     card.dataset.productId = item.id;
 
@@ -521,7 +546,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     if (comp) comp.textContent = item.composition || 'Premium Knit';
     if (curr) curr.textContent = item.currencySymbol || item.currency || '$';
     if (price) price.textContent = item.price;
-    if (moq) moq.textContent = `${moqPrefix} ${item.moq}`;
+    if (moq) moq.textContent = `${cfgMoqPrefix} ${item.moq}`;
     if (quoteBtn) {
       quoteBtn.dataset.id = item.id;
       quoteBtn.dataset.title = item.shortTitle || item.title;
@@ -638,56 +663,58 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     observer.observe(loadTriggerSentinel);
   }
 
+  function setCategoryTabUi(targetCat: string) {
+    let activeLabel = 'All Silhouettes';
+    tabButtons.forEach((b) => {
+      const isCurrent = (b.getAttribute('data-category-id') || 'all') === targetCat;
+      if (isCurrent) {
+        activeLabel = b.querySelector('span:first-child')?.textContent || activeLabel;
+      }
+      b.className = `category-tab-btn shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+        isCurrent
+          ? 'bg-[#1d1d1f] text-white shadow-sm'
+          : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/5'
+      }`;
+      const badge = b.querySelector('span:last-child');
+      if (badge) {
+        badge.className = `text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+          isCurrent ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'
+        }`;
+      }
+    });
+    if (activeCategoryIndicator) {
+      activeCategoryIndicator.textContent = activeLabel;
+    }
+  }
+
+  function syncCatalogUrl() {
+    syncUrlParams(
+      { category: currentCategory, q: searchQuery, sort: currentSort },
+      { category: 'all', q: '', sort: 'featured' },
+      false
+    );
+  }
+
   // Category Tab Click Handler
-  const tabButtons = document.querySelectorAll('.category-tab-btn');
   tabButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
-      const targetCat = btn.getAttribute('data-category-id') || 'all';
-      currentCategory = targetCat;
-
-      // Update Active visual style
-      tabButtons.forEach((b) => {
-        const isCurrent = b === btn;
-        b.className = `category-tab-btn shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-          isCurrent
-            ? 'bg-[#1d1d1f] text-white shadow-sm'
-            : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/5'
-        }`;
-        const badge = b.querySelector('span:last-child');
-        if (badge) {
-          badge.className = `text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-            isCurrent ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'
-          }`;
-        }
-      });
-
-      if (activeCategoryIndicator) {
-        activeCategoryIndicator.textContent = btn.querySelector('span:first-child')?.textContent || 'All Silhouettes';
-      }
-
-      // Sync URL parameter without page reload
-      const url = new URL(window.location.href);
-      if (targetCat === 'all') {
-        url.searchParams.delete('category');
-      } else {
-        url.searchParams.set('category', targetCat);
-      }
-      window.history.replaceState({}, '', url.toString());
-
+      currentCategory = btn.getAttribute('data-category-id') || 'all';
+      setCategoryTabUi(currentCategory);
+      syncCatalogUrl();
       updateFilteredProducts(true);
     });
   });
 
   // Search input with debounce
-  let searchDebounceTimer;
   searchInput?.addEventListener('input', (e) => {
     clearTimeout(searchDebounceTimer);
-    const val = (e.target).value.trim();
+    const val = ((e.target as HTMLInputElement | null)?.value || '').trim();
     if (searchClearBtn) {
       searchClearBtn.classList.toggle('hidden', val.length === 0);
     }
     searchDebounceTimer = setTimeout(() => {
       searchQuery = val;
+      syncCatalogUrl();
       updateFilteredProducts(false);
     }, 250);
   });
@@ -695,9 +722,10 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   // Clear search
   searchClearBtn?.addEventListener('click', () => {
     if (searchInput) {
-      (searchInput).value = '';
+      searchInput.value = '';
       searchQuery = '';
       searchClearBtn.classList.add('hidden');
+      syncCatalogUrl();
       updateFilteredProducts(false);
     }
   });
@@ -706,29 +734,46 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   document.getElementById('catalog-reset-btn')?.addEventListener('click', () => {
     currentCategory = 'all';
     searchQuery = '';
-    if (searchInput) (searchInput).value = '';
+    currentSort = 'featured';
+    if (searchInput) searchInput.value = '';
     if (searchClearBtn) searchClearBtn.classList.add('hidden');
-    const allTab = document.querySelector('[data-category-id="all"]');
-    if (allTab) (allTab).click();
+    if (sortSelect) sortSelect.value = 'featured';
+    setCategoryTabUi('all');
+    syncCatalogUrl();
+    updateFilteredProducts(true);
   });
 
   // Sort dropdown
   sortSelect?.addEventListener('change', (e) => {
-    currentSort = (e.target).value;
+    const nextSort = (e.target as HTMLSelectElement | null)?.value || 'featured';
+    currentSort = VALID_SORTS.has(nextSort) ? nextSort : 'featured';
+    syncCatalogUrl();
     updateFilteredProducts(true);
   });
 
-  // Handle URL deep linking (e.g. /products?category=silk)
+  // Handle URL deep linking (e.g. /products?category=silk&q=glove&sort=moq_asc)
   function initFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    const cat = params.get('category');
-    if (cat && cat !== 'all') {
-      const matchBtn = document.querySelector(`[data-category-id="${cat}"]`);
-      if (matchBtn) {
-        matchBtn.click();
-        return;
-      }
+    const rawCat = params.get('category') || 'all';
+    const matchedTab = Array.from(tabButtons).find(
+      (btn) => btn.getAttribute('data-category-id') === rawCat
+    );
+    currentCategory = matchedTab ? rawCat : 'all';
+
+    searchQuery = (params.get('q') || '').trim();
+    if (searchInput) searchInput.value = searchQuery;
+    if (searchClearBtn) searchClearBtn.classList.toggle('hidden', searchQuery.length === 0);
+
+    const rawSort = params.get('sort') || 'featured';
+    currentSort = VALID_SORTS.has(rawSort) ? rawSort : 'featured';
+    if (sortSelect) sortSelect.value = currentSort;
+
+    if (currentCategory !== 'all' || searchQuery !== '' || currentSort !== 'featured') {
+      setCategoryTabUi(currentCategory);
+      updateFilteredProducts(false);
+      return;
     }
+
     // Default initial view: seamlessly hydrate SSR-rendered cards without clearing DOM!
     filteredList = allProducts.slice();
     displayedCount = Math.min(BATCH_SIZE, filteredList.length);

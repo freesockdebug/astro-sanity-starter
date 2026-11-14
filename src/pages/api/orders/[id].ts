@@ -1,16 +1,11 @@
 // src/pages/api/orders/[id].ts
 import type { APIRoute } from 'astro';
-import { verifyBuyerAuth, jsonNoCache } from '@utils/auth';
+import { defineBuyerApi, jsonNoCache } from '@utils/auth';
 import { getOrderById, getOrderByNo } from '@utils/db';
-import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, params }) => {
-  const { user, errorResponse } = await verifyBuyerAuth(request, cfEnv);
-  if (errorResponse || !user) {
-    return errorResponse!;
-  }
+export const GET: APIRoute = defineBuyerApi({}, async ({ params, user }) => {
 
   const idOrNo = params.id;
   if (!idOrNo) {
@@ -29,5 +24,5 @@ export const GET: APIRoute = async ({ request, params }) => {
   }
 
   return jsonNoCache({ success: true, order });
-};
+});
 

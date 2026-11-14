@@ -24,6 +24,66 @@ const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to
 const pageTitle = t('account.metaTitle');
 const pageDesc = t('account.metaDesc');
 const tier = dbUser?.tier || 'STANDARD';
+
+const PROFILE_FIELDS = [
+  {
+    id: 'profile-name',
+    name: 'name',
+    type: 'text' as const,
+    label: t('account.nameLabel'),
+    value: dbUser?.name || sessionUser!.name || '',
+    placeholder: t('account.namePlaceholder'),
+    disabled: false,
+    fullWidth: false,
+  },
+  {
+    id: 'profile-email',
+    name: undefined,
+    type: 'email' as const,
+    label: t('account.emailLabel'),
+    value: sessionUser!.email,
+    placeholder: '',
+    disabled: true,
+    fullWidth: false,
+  },
+  {
+    id: 'profile-company',
+    name: 'company',
+    type: 'text' as const,
+    label: t('account.companyLabel'),
+    value: dbUser?.company || '',
+    placeholder: t('account.companyPlaceholder'),
+    disabled: false,
+    fullWidth: false,
+  },
+  {
+    id: 'profile-country',
+    name: 'country',
+    type: 'text' as const,
+    label: t('account.countryLabel'),
+    value: dbUser?.country || '',
+    placeholder: t('account.countryPlaceholder'),
+    disabled: false,
+    fullWidth: false,
+  },
+  {
+    id: 'profile-phone',
+    name: 'phone',
+    type: 'text' as const,
+    label: t('account.phoneLabel'),
+    value: dbUser?.phone || '',
+    placeholder: 'e.g. +33 6 12 34 56 78',
+    disabled: false,
+    fullWidth: true,
+  },
+];
+
+const TIER_PERKS = [
+  { icon: '📦', title: 'Free Swatch Kits', desc: 'Physical swatches & seasonal color cards' },
+  { icon: '💳', title: 'Flexible Terms', desc: 'Wire Transfer, Net 30, and Irrevocable L/C' },
+  { icon: '⚡', title: 'Priority Production', desc: 'Fast-track sample weaving & dedicated lines' },
+  { icon: '💬', title: 'Key Account Manager', desc: 'Direct 1-on-1 technical consultation via WhatsApp' },
+];
 ---
 
 <BuyerLayout
@@ -57,64 +117,22 @@ const tier = dbUser?.tier || 'STANDARD';
               data-msg-failed={t('account.profileFailed')}
             >
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label for="profile-name" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.nameLabel')}</label>
-                  <input
-                    type="text"
-                    id="profile-name"
-                    name="name"
-                    value={dbUser?.name || sessionUser.name || ''}
-                    placeholder={t('account.namePlaceholder')}
-                    class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label for="profile-email" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.emailLabel')}</label>
-                  <input
-                    type="email"
-                    id="profile-email"
-                    value={sessionUser.email}
-                    disabled
-                    class="w-full px-3.5 py-2 rounded-xl bg-black/5 border border-black/10 text-[#86868b] font-mono cursor-not-allowed"
-                  />
-                </div>
-
-                <div>
-                  <label for="profile-company" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.companyLabel')}</label>
-                  <input
-                    type="text"
-                    id="profile-company"
-                    name="company"
-                    value={dbUser?.company || ''}
-                    placeholder={t('account.companyPlaceholder')}
-                    class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label for="profile-country" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.countryLabel')}</label>
-                  <input
-                    type="text"
-                    id="profile-country"
-                    name="country"
-                    value={dbUser?.country || ''}
-                    placeholder={t('account.countryPlaceholder')}
-                    class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
-                  />
-                </div>
-
-                <div class="sm:col-span-2">
-                  <label for="profile-phone" class="block font-semibold mb-1 text-[11px] text-[#52525b]">{t('account.phoneLabel')}</label>
-                  <input
-                    type="text"
-                    id="profile-phone"
-                    name="phone"
-                    value={dbUser?.phone || ''}
-                    placeholder="e.g. +33 6 12 34 56 78"
-                    class="w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all"
-                  />
-                </div>
+                {PROFILE_FIELDS.map((field) => (
+                  <div class={field.fullWidth ? 'sm:col-span-2' : undefined}>
+                    <label for={field.id} class="block font-semibold mb-1 text-[11px] text-[#52525b]">{field.label}</label>
+                    <input
+                      type={field.type}
+                      id={field.id}
+                      name={field.name}
+                      value={field.value}
+                      placeholder={field.placeholder || undefined}
+                      disabled={field.disabled}
+                      class={field.disabled
+                        ? 'w-full px-3.5 py-2 rounded-xl bg-black/5 border border-black/10 text-[#86868b] font-mono cursor-not-allowed'
+                        : 'w-full px-3.5 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black transition-all'}
+                    />
+                  </div>
+                ))}
               </div>
 
               <div id="profile-feedback" class="hidden p-3 rounded-xl text-xs font-medium"></div>
@@ -180,37 +198,15 @@ const tier = dbUser?.tier || 'STANDARD';
             </div>
 
             <div class="space-y-3 pt-1">
-              <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
-                <span class="text-base shrink-0">📦</span>
-                <div>
-                  <span class="font-semibold block">Free Swatch Kits</span>
-                  <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">Physical swatches & seasonal color cards</p>
+              {TIER_PERKS.map((perk) => (
+                <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
+                  <span class="text-base shrink-0">{perk.icon}</span>
+                  <div>
+                    <span class="font-semibold block">{perk.title}</span>
+                    <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">{perk.desc}</p>
+                  </div>
                 </div>
-              </div>
-
-              <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
-                <span class="text-base shrink-0">💳</span>
-                <div>
-                  <span class="font-semibold block">Flexible Terms</span>
-                  <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">Wire Transfer, Net 30, and Irrevocable L/C</p>
-                </div>
-              </div>
-
-              <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
-                <span class="text-base shrink-0">⚡</span>
-                <div>
-                  <span class="font-semibold block">Priority Production</span>
-                  <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">Fast-track sample weaving & dedicated lines</p>
-                </div>
-              </div>
-
-              <div class="flex items-start gap-2.5 text-xs text-[#1d1d1f]">
-                <span class="text-base shrink-0">💬</span>
-                <div>
-                  <span class="font-semibold block">Key Account Manager</span>
-                  <p class="text-[11px] text-[#86868b] leading-tight mt-0.5">Direct 1-on-1 technical consultation via WhatsApp</p>
-                </div>
-              </div>
+              ))}
             </div>
 
             {whatsappNumber && (

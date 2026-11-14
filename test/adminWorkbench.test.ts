@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { escapeHtml, exportToCsv, readJsonStore, renderTierBadgeHtml, renderOrderStatusBadge } from '../src/utils/adminWorkbench.js';
 import { getTrackingUrl } from '../src/utils/shipping.js';
 import { parsePaginationParams } from '../src/utils/format.js';
+import { getTierConfig, DICT_COLOR_TO_TIER_STYLE } from '../src/utils/tier.js';
+import { toText } from '../src/i18n/utils.js';
 
 test('escapeHtml escapes dangerous HTML characters to prevent XSS', () => {
   assert.equal(escapeHtml('<script>alert("xss")</script>'), '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;');
@@ -123,4 +125,42 @@ test('parsePaginationParams bounds page, limit, offset, and trims search', () =>
     parsePaginationParams(new URLSearchParams('page=NaN&limit=0'), 50, 100),
     { page: 1, limit: 50, offset: 0, search: '' }
   );
+});
+
+test('getTierConfig resolves built-in configs and D1 tier dictionary overrides', () => {
+  assert.equal(getTierConfig(null).shortLabel, 'Standard');
+  assert.equal(getTierConfig('vip').label, 'VIP Commercial');
+
+  const dynamicDict = {
+    KEY_ACCOUNT: {
+      label: 'Key Account',
+      badge_color: 'amber',
+      meta: { short_label: 'KA' },
+    },
+    VIP: {
+      label: 'Custom VIP',
+      badge_color: 'rose',
+    },
+  };
+
+  const ka = getTierConfig('key_account', dynamicDict);
+  assert.equal(ka.label, 'Key Account');
+  assert.equal(ka.shortLabel, 'KA');
+  assert.equal(ka.bg, DICT_COLOR_TO_TIER_STYLE.amber.bg);
+  assert.equal(ka.badgeBg, DICT_COLOR_TO_TIER_STYLE.amber.badgeBg);
+
+  const customVip = getTierConfig('VIP', dynamicDict);
+  assert.equal(customVip.label, 'Custom VIP');
+  assert.equal(customVip.shortLabel, 'Custom VIP');
+  assert.equal(customVip.bg, DICT_COLOR_TO_TIER_STYLE.rose.bg);
+});
+
+test('toText extracts trimmed localized strings, preserves custom strings across locales, and handles primitives', () => {
+  assert.equal(toText(null, 'en', 'Default'), 'Default');
+  assert.equal(toText('   ', 'fr', 'Default'), 'Default');
+  assert.equal(toText('  Custom Atelier  ', 'fr', 'Fallback'), 'Custom Atelier');
+  assert.equal(toText({ en: ' Gloves ', fr: ' Gants ' }, 'fr', 'Fallback'), 'Gants');
+  assert.equal(toText({ en: 'Fallback EN' }, 'es', 'Default ES'), 'Fallback EN');
+  assert.equal(toText({}, 'en', 'Empty Obj'), 'Empty Obj');
+  assert.equal(toText(0, 'en', 'Fallback'), '0');
 });

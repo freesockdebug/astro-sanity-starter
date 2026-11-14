@@ -225,6 +225,7 @@ if (reqCountryCode) {
 <script>
   import { quoteCart, addToQuote, removeFromQuote, updateQuoteQuantity, clearQuote } from '@stores/quoteCart';
   import { clientCache } from '@utils/clientCache';
+  import { escapeHtml } from '@utils/adminWorkbench';
 
   // Prevent cross-origin Turnstile script from throwing uncaught Script error. on domain/network mismatch
   (window as any).onTurnstileError = () => {
@@ -519,15 +520,6 @@ if (reqCountryCode) {
   const submitBtn = document.getElementById('rfq-submit-btn') as HTMLButtonElement | null;
   const submitText = document.getElementById('rfq-submit-text');
   const alertBox = document.getElementById('rfq-alert');
-
-  function escapeHtml(val: unknown): string {
-    return String(val ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
 
   function renderCart() {
     const items = quoteCart.get() || [];

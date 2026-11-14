@@ -4,6 +4,7 @@ import Layout from '@layouts/Layout.astro';
 import BuyerLayout from '@layouts/BuyerLayout.astro';
 import { getBuyerContext } from '@utils/auth';
 import { getLangFromUrl, getLocalizedPath, useTranslations } from '@i18n';
+import { getDictMap } from '@utils/dicts';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -14,9 +15,12 @@ const t = useTranslations(currentLang);
 const { sessionUser, dbUser, systemSettings, redirectResponse } = await getBuyerContext(Astro, cfEnv);
 if (redirectResponse) return redirectResponse;
 
-const initialStatus = Astro.url.searchParams.get('status') || 'ALL';
+const VALID_ORDER_STATUSES = new Set(['ALL', 'PENDING_APPROVAL', 'APPROVED', 'SHIPPED', 'REJECTED']);
+const rawStatus = (Astro.url.searchParams.get('status') || 'ALL').toUpperCase();
+const initialStatus = VALID_ORDER_STATUSES.has(rawStatus) ? rawStatus : 'ALL';
 const initialSearch = (Astro.url.searchParams.get('search') || '').trim();
-const initialView = Astro.url.searchParams.get('view') || 'my';
+const initialView = Astro.url.searchParams.get('view') === 'all' && sessionUser?.isAdmin ? 'all' : 'my';
+const carrierDict = sessionUser ? await getDictMap(cfEnv, 'shipping_carriers').catch(() => ({})) : {};
 
 const printSheetTitle = systemSettings?.print_sheet_title || 'OFFICIAL B2B PROCUREMENT REQUISITION';
 const printSheetFooter = systemSettings?.print_sheet_footer || 'B2B Sample & Procurement Requisition Sheet';
@@ -24,52 +28,19 @@ const printSheetFooter = systemSettings?.print_sheet_footer || 'B2B Sample & Pro
 const pageTitle = t('orders.metaTitle');
 const pageDesc = t('orders.metaDesc');
 
-const i18nClient = {
-  myOrders: t('orders.myOrders'),
-  allPlatformOrders: t('orders.allPlatformOrders'),
-  totalOrders: t('orders.totalOrders'),
-  autoClaimActive: t('orders.autoClaimActive'),
-  claimedSuccess: t('orders.claimedSuccess'),
-  tabAll: t('orders.tabAll'),
-  tabPending: t('orders.tabPending'),
-  tabApproved: t('orders.tabApproved'),
-  tabShipped: t('orders.tabShipped'),
-  tabRejected: t('orders.tabRejected'),
-  searchPlaceholder: t('orders.searchPlaceholder'),
-  noMatching: t('orders.noMatching'),
-  noMatchingDesc: t('orders.noMatchingDesc'),
-  noOrders: t('orders.noOrders'),
-  noOrdersDesc: t('orders.noOrdersDesc'),
-  clearFilters: t('orders.clearFilters'),
-  exploreStyles: t('orders.exploreStyles'),
-  copy: t('orders.copy'),
-  submitted: t('orders.submitted'),
-  statusPending: t('orders.statusPending'),
-  statusApproved: t('orders.statusApproved'),
-  statusShipped: t('orders.statusShipped'),
-  statusRejected: t('orders.statusRejected'),
-  carrierTracking: t('orders.carrierTracking'),
-  shippedAt: t('orders.shippedAt'),
-  carrier: t('orders.carrier'),
-  trackingNo: t('orders.trackingNo'),
-  copyTracking: t('orders.copyTracking'),
-  note: t('orders.note'),
-  rejectionReason: t('orders.rejectionReason') || 'Order Inquiry Closed',
-  destination: t('orders.destination'),
-  worldwide: t('orders.worldwide'),
-  totalQuantity: t('orders.totalQuantity'),
-  pcs: t('orders.pcs'),
-  standardSpec: t('orders.standardSpec'),
-  recently: t('orders.recently'),
-  stepSubmitted: t('orders.stepSubmitted'),
-  stepInReview: t('orders.stepInReview'),
-  stepApproved: t('orders.stepApproved'),
-  stepDispatched: t('orders.stepDispatched'),
-  stepDelivered: t('orders.stepDelivered'),
-  actionReorder: t('orders.actionReorder'),
-  actionPrint: t('orders.actionPrint'),
-  actionTrack: t('orders.actionTrack'),
-};
+const ORDER_I18N_KEYS = [
+  'myOrders', 'allPlatformOrders', 'totalOrders', 'autoClaimActive', 'claimedSuccess',
+  'tabAll', 'tabPending', 'tabApproved', 'tabShipped', 'tabRejected',
+  'searchPlaceholder', 'noMatching', 'noMatchingDesc', 'noOrders', 'noOrdersDesc',
+  'clearFilters', 'exploreStyles', 'copy', 'submitted',
+  'statusPending', 'statusApproved', 'statusShipped', 'statusRejected',
+  'carrierTracking', 'shippedAt', 'carrier', 'trackingNo', 'copyTracking',
+  'note', 'rejectionReason', 'destination', 'worldwide', 'totalQuantity',
+  'pcs', 'standardSpec', 'recently',
+  'stepSubmitted', 'stepInReview', 'stepApproved', 'stepDispatched', 'stepDelivered',
+  'actionReorder', 'actionPrint', 'actionTrack',
+] as const;
+const i18nClient = Object.fromEntries(ORDER_I18N_KEYS.map((k) => [k, t(`orders.${k}`)]));
 ---
 
 {sessionUser ? (
@@ -303,14 +274,17 @@ const i18nClient = {
   </Layout>
 )}
 
-<script id="orders-app-data" type="application/json" set:html={JSON.stringify({
-  userId: sessionUser?.id || '',
-  i18n: i18nClient,
-  lang: currentLang,
-  isAdmin: !!sessionUser?.isAdmin,
-  printSheetTitle,
-  printSheetFooter,
-})} />
+{sessionUser && (
+  <script id="orders-app-data" type="application/json" set:html={JSON.stringify({
+    userId: sessionUser.id,
+    i18n: i18nClient,
+    lang: currentLang,
+    isAdmin: !!sessionUser.isAdmin,
+    printSheetTitle,
+    printSheetFooter,
+    carrierDict,
+  })} />
+)}
 
 <style>
   @media print {
@@ -338,6 +312,8 @@ const i18nClient = {
 <script>
   import { clientCache } from '@utils/clientCache';
   import { getTrackingUrl } from '@utils/shipping';
+  import { escapeHtml, readJsonStore, syncUrlParams } from '@utils/adminWorkbench';
+  import { toIsoUtcString } from '@utils/format';
 
   let pageAbort: AbortController | null = null;
 
@@ -349,25 +325,31 @@ const i18nClient = {
     const dataEl = document.getElementById('orders-app-data');
     if (!dataEl) return;
 
-    let appData = {};
-    try {
-      appData = JSON.parse(dataEl.textContent || '{}');
-    } catch (e) {
-      console.error('Failed to parse app data', e);
-    }
+    const appData = readJsonStore<Record<string, any>>('orders-app-data', {});
 
     const i18n = appData.i18n || {};
     const currentLang = appData.lang || 'en';
     const isAdmin = !!appData.isAdmin;
+    const carrierDict = appData.carrierDict || {};
     const printSheetTitle = appData.printSheetTitle || 'OFFICIAL B2B PROCUREMENT REQUISITION';
     const printSheetFooter = appData.printSheetFooter || 'B2B Sample & Procurement Requisition Sheet';
+    const VALID_ORDER_STATUSES = new Set(['ALL', 'PENDING_APPROVAL', 'APPROVED', 'SHIPPED', 'REJECTED']);
+
+    function parseOrderStatus(raw: string | null) {
+      const upper = (raw || 'ALL').toUpperCase();
+      return VALID_ORDER_STATUSES.has(upper) ? upper : 'ALL';
+    }
+
+    function getParam(key: string) {
+      return new URLSearchParams(window.location.search).get(key);
+    }
 
     // State
-    let ordersList = [];
+    let ordersList: any[] = [];
     let stats = { all: 0, pending: 0, approved: 0, shipped: 0, rejected: 0 };
-    let currentStatus = getParam('status') || 'ALL';
+    let currentStatus = parseOrderStatus(getParam('status'));
     let currentSearch = (getParam('search') || '').trim();
-    let currentView = getParam('view') || 'my';
+    let currentView = getParam('view') === 'all' && isAdmin ? 'all' : 'my';
 
     // DOM Elements
     const skeletonEl = document.getElementById('orders-skeleton');
@@ -377,7 +359,7 @@ const i18nClient = {
     const emptyDescEl = document.getElementById('empty-desc');
     const emptyClearBtn = document.getElementById('empty-clear-btn');
     const emptyExploreBtn = document.getElementById('empty-explore-btn');
-    const searchInput = document.getElementById('orders-search-input');
+    const searchInput = document.getElementById('orders-search-input') as HTMLInputElement | null;
     const clearSearchBtn = document.getElementById('clear-search-btn');
     const claimBanner = document.getElementById('auto-claim-banner');
     const totalCountEl = document.getElementById('orders-total-count');
@@ -386,24 +368,11 @@ const i18nClient = {
     const viewMyBtn = document.getElementById('view-my-btn');
     const viewAllBtn = document.getElementById('view-all-btn');
 
-    function getParam(key) {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get(key);
-    }
-
-    function escapeHtml(str) {
-      if (str === null || str === undefined) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function formatLocalTime(datetime) {
+    function formatLocalTime(datetime: any) {
       if (!datetime) return '';
-      const d = new Date(datetime);
+      const iso = toIsoUtcString(datetime);
+      if (!iso) return '';
+      const d = new Date(iso);
       if (isNaN(d.getTime())) return String(datetime);
       return d.toLocaleString(undefined, {
         year: 'numeric',
@@ -414,20 +383,16 @@ const i18nClient = {
       });
     }
 
-    function updateUrlState() {
-      const params = new URLSearchParams();
-      if (currentStatus && currentStatus !== 'ALL') {
-        params.set('status', currentStatus);
-      }
-      if (currentSearch) {
-        params.set('search', currentSearch);
-      }
-      if (isAdmin && currentView === 'all') {
-        params.set('view', 'all');
-      }
-      const newQuery = params.toString();
-      const newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '');
-      window.history.pushState({}, '', newUrl);
+    function updateUrlState(push = true) {
+      syncUrlParams(
+        {
+          status: currentStatus,
+          search: currentSearch,
+          view: isAdmin && currentView === 'all' ? 'all' : undefined,
+        },
+        { status: 'ALL', search: '', view: 'my' },
+        push
+      );
     }
 
     function updateTabCounts() {
@@ -712,7 +677,7 @@ const i18nClient = {
                 </div>
                 ${order.tracking_number ? `
                   <a
-                    href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
+                    href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number, carrierDict) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline print:hidden"
@@ -753,7 +718,7 @@ const i18nClient = {
             <div class="flex items-center gap-2 flex-wrap order-actions print:hidden shrink-0">
               ${isShipped && order.tracking_number ? `
                 <a
-                  href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
+                  href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number, carrierDict) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all shadow-2xs"
@@ -994,7 +959,7 @@ const i18nClient = {
         }
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(() => {
-          updateUrlState();
+          updateUrlState(false);
           applyFilter();
         }, 150);
       });
@@ -1005,7 +970,7 @@ const i18nClient = {
         if (searchInput) searchInput.value = '';
         currentSearch = '';
         clearSearchBtn.classList.add('hidden');
-        updateUrlState();
+        updateUrlState(false);
         applyFilter();
       });
     }
@@ -1048,9 +1013,9 @@ const i18nClient = {
     // History popstate
     window.addEventListener('popstate', () => {
       const prevView = currentView;
-      currentStatus = getParam('status') || 'ALL';
+      currentStatus = parseOrderStatus(getParam('status'));
       currentSearch = (getParam('search') || '').trim();
-      currentView = getParam('view') || 'my';
+      currentView = getParam('view') === 'all' && isAdmin ? 'all' : 'my';
       if (searchInput) searchInput.value = currentSearch;
       if (clearSearchBtn) {
         if (currentSearch) clearSearchBtn.classList.remove('hidden');

@@ -1,17 +1,12 @@
 // src/pages/api/orders/index.ts
 import type { APIRoute } from 'astro';
-import { verifyBuyerAuth, jsonNoCache } from '@utils/auth';
+import { defineBuyerApi, jsonNoCache } from '@utils/auth';
 import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders } from '@utils/db';
 import { resolveOrderItemImage, getOrderItemProductUrl } from '@data/products';
-import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, url }) => {
-  const { user, errorResponse } = await verifyBuyerAuth(request, cfEnv);
-  if (errorResponse || !user) {
-    return errorResponse!;
-  }
+export const GET: APIRoute = defineBuyerApi({}, async ({ url, user }) => {
 
   // Idempotently claim any new guest orders matching user's email
   let claimedCount = 0;
@@ -68,6 +63,6 @@ export const GET: APIRoute = async ({ request, url }) => {
     },
     claimedCount,
   });
-};
+});
 
 

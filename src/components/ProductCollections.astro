@@ -5,7 +5,7 @@ import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_COLLECTIONS, DEFAULT_RFQ, DEFAULT_HERO } from '@data/defaults';
-import { getLangFromUrl, getLocalizedPath, getLocalizedValue, useTranslations } from '@i18n';
+import { getLangFromUrl, getLocalizedPath, getLocalizedValue, toText, useTranslations } from '@i18n';
 import AppleProductGridSkeleton from './AppleProductGridSkeleton.astro';
 
 interface Props {
@@ -27,17 +27,6 @@ interface Props {
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
-// Safe text extractor: resolves Sanity multilingual object ({ en: '...' }) or string safely without throwing .trim errors
-const toText = (val: any, fallback = ''): string => {
-  if (val === null || val === undefined) return fallback;
-  if (typeof val === 'string') return val.trim();
-  if (typeof val === 'object') {
-    const loc = getLocalizedValue(val, currentLang);
-    return typeof loc === 'string' ? loc.trim() : (loc ? String(loc).trim() : fallback);
-  }
-  return String(val).trim();
-};
-
 const {
   elementId,
   sectionAnchor,
@@ -54,14 +43,14 @@ const {
   products: propProducts
 } = Astro.props;
 
-const safeBadge = toText(badge, DEFAULT_COLLECTIONS.badge);
-const safeTitle = toText(title, DEFAULT_COLLECTIONS.title);
-const safeSubtitle = toText(subtitle, DEFAULT_COLLECTIONS.subtitle);
+const safeBadge = toText(badge, currentLang, DEFAULT_COLLECTIONS.badge);
+const safeTitle = toText(title, currentLang, DEFAULT_COLLECTIONS.title);
+const safeSubtitle = toText(subtitle, currentLang, DEFAULT_COLLECTIONS.subtitle);
 
 const rfqSettings = await fetchRfqSettings();
-const actionButtonText = toText(propActionText) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
-const resolvedCardQuoteText = toText(cardQuoteButtonText) || getLocalizedValue(rfqSettings?.cardQuoteBtnText, currentLang, t('catalog.requestQuote'));
-const cardDetailsText = toText(cardDetailsButtonText, t('catalog.viewDetail'));
+const actionButtonText = toText(propActionText, currentLang) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
+const resolvedCardQuoteText = toText(cardQuoteButtonText, currentLang) || getLocalizedValue(rfqSettings?.cardQuoteBtnText, currentLang, t('catalog.requestQuote'));
+const cardDetailsText = toText(cardDetailsButtonText, currentLang, t('catalog.viewDetail'));
 
 // Only display products added to this section in Sanity Studio; unadded products fall back to normalized catalog
 const normalizedProducts = propProducts !== undefined

@@ -1,17 +1,18 @@
 // src/pages/api/user/profile.ts
 import type { APIRoute } from 'astro';
-import { verifyBuyerAuth, jsonNoCache } from '@utils/auth';
+import { defineBuyerApi, jsonNoCache } from '@utils/auth';
 import { getUserByIdOrEmail, getUserLoginHistory, updateUserProfile } from '@utils/db';
-import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request }) => {
-  const { user: sessionUser, dbUser, errorResponse } = await verifyBuyerAuth(request, cfEnv);
-  if (errorResponse || !sessionUser) {
-    return errorResponse!;
-  }
+const PROFILE_FIELD_LIMITS: Array<[string, string, number]> = [
+  ['name', 'Name', 100],
+  ['company', 'Company', 150],
+  ['country', 'Country', 100],
+  ['phone', 'Phone', 50],
+];
 
+export const GET: APIRoute = defineBuyerApi({}, async ({ user: sessionUser, dbUser }) => {
   const logins = await getUserLoginHistory(sessionUser.id, 20);
 
   return jsonNoCache({
@@ -25,36 +26,19 @@ export const GET: APIRoute = async ({ request }) => {
     },
     loginHistory: logins,
   });
-};
+});
 
-export const POST: APIRoute = async ({ request }) => {
-  const { user: sessionUser, errorResponse } = await verifyBuyerAuth(request, cfEnv);
-  if (errorResponse || !sessionUser) {
-    return errorResponse!;
-  }
+export const POST: APIRoute = defineBuyerApi({ parseJson: true }, async ({ user: sessionUser, body }) => {
+  const payload = body && typeof body === 'object' ? body : {};
 
-  let body: any = {};
-  try {
-    body = await request.json();
-  } catch {
-    return jsonNoCache({ error: 'Invalid JSON payload.' }, 400);
+  for (const [key, label, maxLen] of PROFILE_FIELD_LIMITS) {
+    const val = payload[key];
+    if (val && typeof val === 'string' && val.length > maxLen) {
+      return jsonNoCache({ error: `${label} must not exceed ${maxLen} characters.` }, 400);
+    }
   }
 
-  const { name, company, country, phone } = body || {};
-
-  // Basic validation: prevent excessively long strings
-  if (name && name.length > 100) {
-    return jsonNoCache({ error: 'Name must not exceed 100 characters.' }, 400);
-  }
-  if (company && company.length > 150) {
-    return jsonNoCache({ error: 'Company must not exceed 150 characters.' }, 400);
-  }
-  if (country && country.length > 100) {
-    return jsonNoCache({ error: 'Country must not exceed 100 characters.' }, 400);
-  }
-  if (phone && phone.length > 50) {
-    return jsonNoCache({ error: 'Phone must not exceed 50 characters.' }, 400);
-  }
+  const { name, company, country, phone } = payload;
 
   await updateUserProfile(sessionUser.id, {
     name,
@@ -70,4 +54,4 @@ export const POST: APIRoute = async ({ request }) => {
     message: 'Profile updated successfully.',
     user: updatedUser,
   });
-};
+});

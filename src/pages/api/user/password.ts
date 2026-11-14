@@ -1,26 +1,13 @@
 // src/pages/api/user/password.ts
 import type { APIRoute } from 'astro';
-import { verifyBuyerAuth, jsonNoCache, updateLogtoUserPassword } from '@utils/auth';
+import { defineBuyerApi, jsonNoCache, updateLogtoUserPassword } from '@utils/auth';
 import { recordUserLogin } from '@utils/db';
 import { SecurityService } from '@utils/security';
-import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ request }) => {
-  const { user, errorResponse } = await verifyBuyerAuth(request, cfEnv);
-  if (errorResponse || !user) {
-    return errorResponse!;
-  }
-
-  let body: any = {};
-  try {
-    body = await request.json();
-  } catch {
-    return jsonNoCache({ error: 'Invalid JSON request payload.' }, 400);
-  }
-
-  const { password, confirmPassword } = body;
+export const POST: APIRoute = defineBuyerApi({ parseJson: true }, async ({ request, user, body, cfEnv }) => {
+  const { password, confirmPassword } = body || {};
 
   if (!password || typeof password !== 'string' || password.length < 8) {
     return jsonNoCache({ error: 'Password must be at least 8 characters long.' }, 400);
@@ -56,4 +43,4 @@ export const POST: APIRoute = async ({ request }) => {
     success: true,
     message: 'Your account password has been updated successfully.',
   });
-};
+});
