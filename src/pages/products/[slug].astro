@@ -363,17 +363,17 @@ const productStructuredData: Record<string, any> = {
   </Breadcrumbs>
 
   <div id="pdp-live-content" class="bg-[#fdfcfb]">
-  <section id="product-overview" class="product-hero-overview w-full pt-3 pb-6 sm:py-6 md:py-8 lg:py-5 xl:py-8 2xl:py-10 lg:min-h-[calc(100svh-var(--apple-header-offset))] border-b border-stone-200/70 bg-[#fdfcfb] overflow-visible scroll-mt-[var(--apple-header-offset)] flex flex-col justify-center">
+  <section id="product-overview" class="product-hero-overview w-full pt-3 pb-6 sm:py-6 md:py-8 lg:py-6 xl:py-8 2xl:py-10 border-b border-stone-200/70 bg-[#fdfcfb] overflow-visible scroll-mt-[var(--apple-header-offset)]">
 
         <!-- Center: Multi-Screen Responsive Editorial Showcase Grid -->
         <div class="apple-rail-bento w-full">
-          <div class="grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6 md:gap-7 lg:gap-10 xl:gap-14 items-start lg:items-center">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6 md:gap-7 lg:gap-10 xl:gap-14 items-start">
             
             <!-- LEFT: Adaptive Editorial Gallery Canvas (6 Cols on Tablet, 7 Cols on Desktop) -->
-            <div class="product-gallery-col w-full min-w-0 md:col-span-6 lg:col-span-7 md:sticky md:top-[calc(var(--apple-header-offset)+1rem)] lg:static flex flex-col space-y-2 sm:space-y-2.5">
+            <div class="product-gallery-col w-full min-w-0 md:col-span-6 lg:col-span-7 md:sticky md:top-[calc(var(--apple-header-offset)+1rem)] flex flex-col space-y-2 sm:space-y-2.5 lg:grid lg:grid-cols-[56px_minmax(0,1fr)] xl:grid-cols-[64px_minmax(0,1fr)] lg:gap-3 lg:space-y-0">
               
               <!-- Main Viewport Box (Viewport-Height & Breakpoint Adaptive Canvas) -->
-              <div class="relative w-full max-w-full min-w-0 aspect-square sm:aspect-[4/3] md:aspect-square lg:aspect-[5/4] max-h-[min(50svh,360px)] sm:max-h-[min(54svh,430px)] md:max-h-[min(56svh,460px)] lg:max-h-[min(calc(100svh-var(--apple-header-offset)-125px),540px)] xl:max-h-[min(calc(100svh-var(--apple-header-offset)-130px),600px)] rounded-xl sm:rounded-2xl overflow-hidden bg-[#f6f3ee] border border-stone-200/60 group flex items-center justify-center">
+              <div class="relative w-full max-w-full min-w-0 aspect-square sm:aspect-[4/3] md:aspect-square max-h-[min(50svh,360px)] sm:max-h-[min(54svh,430px)] md:max-h-[min(56svh,460px)] lg:aspect-auto lg:h-[var(--pdp-stage-h)] lg:max-h-none lg:col-start-2 lg:row-start-1 rounded-xl sm:rounded-2xl overflow-hidden bg-[#f6f3ee] border border-stone-200/60 group flex items-center justify-center">
                 <!-- Carousel Images Track (Native Scroll Snap for Silky Mobile Touch Swipe & Desktop Fluidity) -->
                 <div 
                   id="carousel-track" 
@@ -447,7 +447,7 @@ const productStructuredData: Record<string, any> = {
               </div>
 
               <!-- Refined Thumbnail Strip -->
-              <div class="flex flex-row gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar shrink-0 w-full max-w-full pb-0.5 scrollbar-none justify-start">
+              <div class="pdp-thumb-rail relative flex flex-row gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar shrink-0 w-full max-w-full pb-0.5 scrollbar-none justify-start lg:col-start-1 lg:row-start-1 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto lg:max-h-[var(--pdp-stage-h)] lg:pb-0">
                 {currentProduct.gallery.map((img: any, idx: number) => (
                   <button
                     type="button"
@@ -467,7 +467,7 @@ const productStructuredData: Record<string, any> = {
                 ))}
               </div>
 
-              <p class="hidden sm:block text-[10px] xl:text-[11px] text-stone-400 font-mono text-left shrink-0">
+              <p class="hidden sm:block lg:hidden text-[10px] text-stone-400 font-mono text-left shrink-0">
                 {getLocalizedValue(currentProduct.galleryHint, currentLang, t('pdp.galleryHint'))}
               </p>
             </div>
@@ -494,7 +494,7 @@ const productStructuredData: Record<string, any> = {
                 <h1 class="text-xl sm:text-2xl lg:text-[26px] xl:text-[30px] 2xl:text-[32px] font-semibold tracking-[-0.02em] text-[#1c1917] leading-[1.18]">
                   {currentProductTitle}
                 </h1>
-                <p class="text-xs sm:text-[13px] xl:text-[13.5px] text-stone-600 font-normal leading-relaxed">
+                <p class="pdp-tagline text-xs sm:text-[13px] xl:text-[13.5px] text-stone-600 font-normal leading-relaxed">
                   {currentProductTagline}
                 </p>
               </div>
@@ -894,7 +894,14 @@ const productStructuredData: Record<string, any> = {
           if (i === currentSlide) {
             thumb.classList.add('border-stone-900', 'opacity-100', 'shadow-xs');
             thumb.classList.remove('border-transparent', 'opacity-55');
-            thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            // Scroll only the thumbnail rail (horizontal on mobile, vertical on desktop) — never the page
+            const rail = thumb.parentElement as HTMLElement | null;
+            const t = thumb as HTMLElement;
+            rail?.scrollTo({
+              left: t.offsetLeft - (rail.clientWidth - t.clientWidth) / 2,
+              top: t.offsetTop - (rail.clientHeight - t.clientHeight) / 2,
+              behavior: 'smooth',
+            });
           } else {
             thumb.classList.remove('border-stone-900', 'opacity-100', 'shadow-xs');
             thumb.classList.add('border-transparent', 'opacity-55');
@@ -1028,6 +1035,32 @@ const productStructuredData: Record<string, any> = {
     </script>
 
   <style>
+    /* Desktop gallery stage height follows the viewport, so short-wide windows (e.g. 1280×608) keep the whole gallery on screen */
+    @media (min-width: 1024px) {
+      .product-gallery-col {
+        --pdp-stage-h: clamp(340px, calc(100svh - var(--apple-header-offset) - 3rem), 640px);
+      }
+    }
+    /* Short laptop / split-window viewports: tighten the info column rhythm */
+    @media (min-width: 1024px) and (max-height: 760px) {
+      .product-info-col > div {
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+      }
+      .product-info-col > div:first-child {
+        padding-top: 0;
+      }
+      .product-info-col h1 {
+        font-size: 1.5rem;
+      }
+      .pdp-tagline {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+    }
+
     #pdp-live-content {
       view-transition-name: pdp-stage;
       transition: opacity 180ms ease, transform 180ms ease;
