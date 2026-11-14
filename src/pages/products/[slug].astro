@@ -550,7 +550,7 @@ const productStructuredData: Record<string, any> = {
                         type="button"
                         title={colorName}
                         aria-label={colorName}
-                        class={`color-variant-btn w-6 h-6 sm:w-7 sm:h-7 rounded-full transition-all cursor-pointer flex items-center justify-center ${
+                        class={`color-variant-btn w-8 h-8 sm:w-7 sm:h-7 rounded-full transition-all cursor-pointer flex items-center justify-center ${
                           cIdx === 0
                             ? 'ring-1 ring-[#1c1917] ring-offset-2 ring-offset-[#fdfcfb] scale-105'
                             : 'opacity-80 hover:opacity-100 hover:scale-105'
@@ -576,7 +576,7 @@ const productStructuredData: Record<string, any> = {
                       <span class="text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.1em] sm:tracking-[0.12em] text-stone-400 block truncate">
                         {spec.label}
                       </span>
-                      <span class="text-[11px] sm:text-xs font-medium text-[#1c1917] truncate block mt-0.5" title={spec.value}>
+                      <span class="text-[11px] sm:text-xs font-medium text-[#1c1917] line-clamp-2 sm:truncate block mt-0.5 leading-snug" title={spec.value}>
                         {spec.value}
                       </span>
                     </div>
@@ -766,7 +766,7 @@ const productStructuredData: Record<string, any> = {
 
       <!-- Bottom Style Navigation Cards (Previous / Next Silhouette) -->
       {allProducts.length > 1 && (
-      <section class="w-full py-8 sm:py-10 bg-[#fbf9f5]/50 border-t border-black/5">
+      <section class={`w-full py-8 sm:py-10 ${showAddToQuoteButton ? 'pb-20 md:pb-10' : ''} bg-[#fbf9f5]/50 border-t border-black/5`}>
         <div class="apple-rail-bento">
           <div class="grid grid-cols-2 gap-2.5 sm:gap-4 items-stretch">
             <!-- Previous Product Card -->
@@ -821,6 +821,42 @@ const productStructuredData: Record<string, any> = {
       </section>
       )}
   </div>
+
+  <!-- Sticky Mobile Bottom CTA Bar (Shown when primary CTA scrolls above viewport) -->
+  {showAddToQuoteButton && (
+    <div
+      id="pdp-mobile-sticky-bar"
+      class="md:hidden fixed inset-x-0 bottom-0 z-40 bg-[#fdfcfb]/90 backdrop-blur-md border-t border-stone-200/80 px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] translate-y-full opacity-0 pointer-events-none transition-all duration-300 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+    >
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0 flex items-center gap-2.5">
+          <span
+            id="mobile-sticky-color-dot"
+            class="w-4 h-4 rounded-full border border-black/15 shrink-0 shadow-inner"
+            style={`background-color: ${currentProduct.colors[0]?.hex || '#1c1917'}`}
+          ></span>
+          <div class="min-w-0">
+            <span id="mobile-sticky-color-name" class="text-xs font-medium text-[#1c1917] block truncate">
+              {getLocalizedValue(currentProduct.colors[0]?.name, currentLang) || currentProductShortTitle}
+            </span>
+            <span class="text-[10px] font-mono text-stone-500 block truncate">
+              MOQ {resolvedMoq.formatted}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          id="btn-mobile-add-quote"
+          class="shrink-0 px-4 py-2 rounded-full text-xs font-medium tracking-wide bg-[#1c1917] hover:bg-black text-[#fdfcfb] flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+          </svg>
+          <span>{addToQuoteBtnText}</span>
+        </button>
+      </div>
+    </div>
+  )}
 
   <script>
       import { useIntersectionShimmer } from '@utils/useIntersectionShimmer';
@@ -968,12 +1004,17 @@ const productStructuredData: Record<string, any> = {
       let selectedVariant = firstColorBtn?.dataset.color || 'Standard';
       const colorBtns = document.querySelectorAll('.color-variant-btn');
       const selectedColorLabel = document.getElementById('selected-color-name');
+      const mobileStickyColorDot = document.getElementById('mobile-sticky-color-dot');
+      const mobileStickyColorName = document.getElementById('mobile-sticky-color-name');
 
       colorBtns.forEach((btn) => {
         btn.addEventListener('click', () => {
           const col = btn.getAttribute('data-color') || '';
+          const hex = btn.getAttribute('data-hex') || '';
           selectedVariant = col;
           if (selectedColorLabel) selectedColorLabel.textContent = col;
+          if (mobileStickyColorName && col) mobileStickyColorName.textContent = col;
+          if (mobileStickyColorDot && hex) mobileStickyColorDot.style.backgroundColor = hex;
           colorBtns.forEach((b) => {
             b.classList.remove('ring-1', 'ring-[#1c1917]', 'ring-offset-2', 'ring-offset-[#fdfcfb]', 'scale-105');
             b.classList.add('opacity-80');
@@ -985,6 +1026,29 @@ const productStructuredData: Record<string, any> = {
 
       // Track 1: Add to Multi-Item Quote Basket
       const addQuoteBtn = document.getElementById('btn-add-quote');
+      const mobileStickyBar = document.getElementById('pdp-mobile-sticky-bar');
+      const mobileAddQuoteBtn = document.getElementById('btn-mobile-add-quote');
+      if (mobileAddQuoteBtn && addQuoteBtn) {
+        mobileAddQuoteBtn.addEventListener('click', () => addQuoteBtn.click());
+      }
+      if (mobileStickyBar && addQuoteBtn && 'IntersectionObserver' in window) {
+        const stickyObserver = new IntersectionObserver(
+          (entries) => {
+            const entry = entries[0];
+            if (!entry) return;
+            const passedAbove = !entry.isIntersecting && entry.boundingClientRect.bottom < 0;
+            if (passedAbove) {
+              mobileStickyBar.classList.remove('translate-y-full', 'opacity-0', 'pointer-events-none');
+              mobileStickyBar.classList.add('translate-y-0', 'opacity-100', 'pointer-events-auto');
+            } else {
+              mobileStickyBar.classList.add('translate-y-full', 'opacity-0', 'pointer-events-none');
+              mobileStickyBar.classList.remove('translate-y-0', 'opacity-100', 'pointer-events-auto');
+            }
+          },
+          { threshold: 0 }
+        );
+        stickyObserver.observe(addQuoteBtn);
+      }
       if (addQuoteBtn) {
         addQuoteBtn.addEventListener('click', () => {
           const id = addQuoteBtn.dataset.id || 'product';

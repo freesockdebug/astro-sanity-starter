@@ -235,7 +235,7 @@ export async function measure<T>(
       profiler.addSpan(label, latencyMs);
     }
 
-    const warnThreshold = options.warnThresholdMs ?? 500;
+    const warnThreshold = options.warnThresholdMs ?? 1000;
     const level: LogLevel = latencyMs >= warnThreshold ? 'warn' : 'debug';
 
     emit(
@@ -403,6 +403,7 @@ export function withApiPerf(
           },
           { cfEnv, ctx: runtimeCtx }
         );
+        (context.locals as any)._apiPerfLogged = true;
       }
 
       const activeProfiler = getActiveProfiler();
@@ -411,6 +412,7 @@ export function withApiPerf(
       return appendTimingHeaders(response, latencyMs, combinedSpans);
     } catch (err: any) {
       const latencyMs = Math.round((performance.now() - start) * 100) / 100;
+      (context.locals as any)._apiPerfLogged = true;
       emit(
         'error',
         {

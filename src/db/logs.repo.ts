@@ -142,6 +142,15 @@ export async function recordErrorLog(
       }
     }
 
+    // 1. 普通前端路由切换不落库 D1（仅保留在 console.log 和错误面包屑中）
+    if (errorCode === 'CLIENT_NAVIGATION') {
+      return false;
+    }
+    // 2. 健康的 Web Vitals 指标（!isSlow）即使在 info/debug 模式下也不落库 D1
+    if (errorCode === 'WEB_VITALS' && !isSlow) {
+      return false;
+    }
+
     // Filter out verbose messages below min level unless marked as a slow request
     if (currentWeight < minWeight && !isSlow) {
       return false;
@@ -254,6 +263,13 @@ export async function recordErrorLogsBatch(
       } else {
         isSlow = input.latencyMs >= slowThreshold;
       }
+    }
+
+    if (errorCode === 'CLIENT_NAVIGATION') {
+      continue;
+    }
+    if (errorCode === 'WEB_VITALS' && !isSlow) {
+      continue;
     }
 
     if (currentWeight < minWeight && !isSlow) {

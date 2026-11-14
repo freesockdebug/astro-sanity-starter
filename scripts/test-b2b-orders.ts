@@ -376,6 +376,7 @@ async function runSelfCheck() {
   // 21. System Error & Diagnostics Logging with User Toggle Control
   const { recordErrorLog, listErrorLogs, clearErrorLogs } = await import('../src/db/logs.repo');
   const { logger } = await import('../src/utils/logger');
+  await clearErrorLogs();
 
   // Record an error log for guest/system
   const logRecorded = await recordErrorLog({
@@ -472,6 +473,7 @@ async function runSelfCheck() {
   assert.strictEqual(apiRouteResp.status, 200);
   assert.ok(apiRouteResp.headers.has('X-Response-Time'));
   assert.ok(apiRouteResp.headers.has('Server-Timing'));
+  assert.strictEqual(mockApiContext.locals._apiPerfLogged, true);
 
   // Test dynamic log level governance & latency profiling
   await updateSystemSettings({ log_min_level: 'warn', slow_request_threshold_ms: 1000 }, 'admin@test.com');
@@ -497,8 +499,8 @@ async function runSelfCheck() {
   });
   assert.strictEqual(infoSlowCaptured, true);
 
-  // Query bottlenecks & slowest sorting
-  const bottleneckRes = await listErrorLogs({ sort: 'slowest' });
+  // Query bottlenecks & slowest sorting (use '1h' window to bypass the '-7 days' overview cache populated earlier in this run)
+  const bottleneckRes = await listErrorLogs({ sort: 'slowest', timeWindow: '1h' });
   assert(bottleneckRes.logs.length >= 1);
   assert.strictEqual(bottleneckRes.logs[0].path, '/api/slow-endpoint');
   assert.strictEqual(bottleneckRes.logs[0].latency_ms, 1250);
@@ -573,7 +575,7 @@ async function runSelfCheck() {
   assert.strictEqual(breadcrumbs.length, 3);
   assert.strictEqual(breadcrumbs[1].to, '/products');
 
-  // Test 2.5: Navigation event handling under log_min_level: 'info'
+  // Test 2.5: Navigation event handling under log_min_level: 'info' (accepted for console telemetry, skipped from D1)
   await updateSystemSettings({ log_min_level: 'info' }, 'admin@test.com');
   const navReqContext: any = {
     request: new Request('http://localhost/api/client-error', {
@@ -600,7 +602,7 @@ async function runSelfCheck() {
 
   await new Promise((resolve) => setTimeout(resolve, 50));
   const logsWithNav = await listErrorLogs({ level: 'info' });
-  assert(logsWithNav.logs.some(l => l.source === 'client/navigation'));
+  assert(!logsWithNav.logs.some(l => l.source === 'client/navigation'));
 
   // Test 3: Noisy errors (e.g. ResizeObserver) are ignored
   const noiseReqContext: any = {
@@ -617,7 +619,7 @@ async function runSelfCheck() {
   const noiseBody = await noiseResp.json();
   assert.strictEqual(noiseBody.skipped, true);
 
-  // Test 4: RUM Web Vitals metric reporting
+  // Test 4: RUM Web Vitals metric reporting (healthy 'good' stays out of D1; 'poor' persists to D1)
   const vitalsReqContext: any = {
     request: new Request('http://localhost/api/client-error', {
       method: 'POST',
@@ -644,8 +646,35 @@ async function runSelfCheck() {
   assert.strictEqual(vitalsBody.level, 'info');
 
   await new Promise((resolve) => setTimeout(resolve, 50));
-  const logsWithVitals = await listErrorLogs({ level: 'info' });
-  assert(logsWithVitals.logs.some(l => l.source === 'client/web-vitals'));
+  const logsWithGoodVitals = await listErrorLogs({ level: 'info' });
+  assert(!logsWithGoodVitals.logs.some(l => l.source === 'client/web-vitals'));
+
+  const poorVitalsReqContext: any = {
+    request: new Request('http://localhost/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'origin': 'http://localhost' },
+      body: JSON.stringify({
+        type: 'web-vitals',
+        message: 'Web Vitals: LCP 4500ms, CLS 0.35, INP 320ms, TTFB 400ms (poor)',
+        path: '/products',
+        latencyMs: 4500,
+        lcp: 4500,
+        cls: 0.35,
+        inp: 320,
+        ttfb: 400,
+        rating: 'poor',
+      }),
+    }),
+    url: new URL('http://localhost/api/client-error'),
+    locals: {},
+  };
+  const poorVitalsResp = await clientErrorPost(poorVitalsReqContext);
+  assert.strictEqual(poorVitalsResp.status, 202);
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const logsWithPoorVitals = await listErrorLogs();
+  assert(logsWithPoorVitals.logs.some(l => l.source === 'client/web-vitals'));
+  await clearErrorLogs();
 
   console.log('✔ [PASS] System Error, Performance Profiling & Log Level Governance verified');
 

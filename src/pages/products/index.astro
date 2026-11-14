@@ -45,6 +45,7 @@ const minimalProducts = mergedProducts.map((p: any) => {
     shortTitle: locShortTitle,
     category: p.category,
     image: p.image,
+    srcset: SanityImageService.srcSet(p.image, [240, 360, 480]) || '',
     colors: p.colors,
     leadTime: p.leadTime,
     composition: getLocalizedValue(p.composition, currentLang),
@@ -65,7 +66,7 @@ const firstCardImg = mergedProducts[0]?.image;
 const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (firstCardImg.includes('cdn.sanity.io') || firstCardImg.includes('/cdn-image/'))
   ? {
       src: SanityImageService.thumbnail(firstCardImg, 480),
-      srcset: SanityImageService.srcSet(firstCardImg, [240, 480]),
+      srcset: SanityImageService.srcSet(firstCardImg, [240, 360, 480]),
       sizes: '(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px',
     }
   : undefined;
@@ -199,7 +200,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               >
                 <img
                   src={item.image}
-                  srcset={SanityImageService.srcSet(item.image, [240, 480]) || undefined}
+                  srcset={SanityImageService.srcSet(item.image, [240, 360, 480]) || undefined}
                   sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
                   alt={getLocalizedValue(item.title, currentLang)}
                   class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
@@ -277,6 +278,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             >
               <img
                 src=""
+                sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
                 alt=""
                 class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
                 loading="lazy"
@@ -501,6 +503,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     if (linkMain) linkMain.href = productUrl;
     if (img) {
       img.src = item.image;
+      if (item.srcset) img.srcset = item.srcset;
       img.alt = item.title;
     }
     if (cat) cat.textContent = item.category ? item.category.toUpperCase() : 'OEM';

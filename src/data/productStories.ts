@@ -138,7 +138,8 @@ const STORY_DICTIONARY: Record<string, LanguageTokens> = {
  * Resolves a tailored, elegant editorial narrative in Markdown using parameterized templates.
  */
 export function getProductStory(ctx: StoryContext, lang: string = 'en'): string {
-  const selectedLang = ['de', 'fr', 'es', 'en'].includes(lang) ? lang : 'en';
+  const selectedLang: 'en' | 'de' | 'fr' | 'es' =
+    lang === 'de' || lang === 'fr' || lang === 'es' || lang === 'en' ? lang : 'en';
   const t = STORY_DICTIONARY[selectedLang];
 
   const catName = getLocalizedValue(ctx.category, selectedLang) || getLocalizedValue(ctx.title, selectedLang) || 'Curated Silhouette';
