@@ -4,7 +4,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getRuntimeEnv, getMergedAdminEmails } from '../utils/auth';
+import { getMergedAdminEmails } from '../utils/auth';
 import { getActiveProfiler } from '../utils/profiler';
 
 export function getAdminEmailList(): string[] {
@@ -276,11 +276,5 @@ export async function getDb(): Promise<DbClient> {
   }
   const localDb = getLocalNodeDb();
   return getLocalSQLiteAdapter(localDb);
-}
-
-// Backward-compatible handle resolver for existing callers
-export async function getDbHandle(): Promise<{ isD1: boolean; db: any }> {
-  const client = await getDb();
-  return { isD1: client.isD1, db: client.raw };
 }
 

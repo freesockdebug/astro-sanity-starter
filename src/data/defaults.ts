@@ -244,18 +244,3 @@ export const DEFAULT_CATALOG = {
   ],
 };
 
-// =============================================================================
-// 6. Product Detail Page (/products/[slug]) Defaults
-// =============================================================================
-export const DEFAULT_PRODUCT_DETAIL = {
-  galleryHint: 'Click thumbnails or use arrows to inspect fabric weave, tactile finish, and construction details.',
-  statusBadge: 'Active Production Ready',
-  priceNote: '* Customs, freight, and custom branded packaging quoted upon destination.',
-  paletteTitle: 'Available In-Stock Yarn Palette:',
-  supportBadge: 'Full Private Label Support',
-  specsBadge: 'Factory Quality Standard',
-  specsHeading: 'Technical Specifications & Construction',
-  fallbackMoq: '200 Units',
-  fallbackVariant: 'Standard Spec',
-};
-

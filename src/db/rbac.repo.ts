@@ -481,26 +481,3 @@ export async function listCandidateLogtoUsers(search?: string): Promise<{ id: st
   });
 }
 
-/**
- * Migration helper: imports legacy co_admin_emails from settings into admin_members
- */
-export async function syncLegacyCoAdmins(coAdminEmailsStr?: string): Promise<void> {
-  if (!coAdminEmailsStr) return;
-  const emails = coAdminEmailsStr
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (emails.length === 0) return;
-
-  await executeWithAutoSchema(async (db: DbClient) => {
-    const ops = emails.map((email) => ({
-      sql: `INSERT OR IGNORE INTO admin_members (email, name, role_code, status, created_by)
-            VALUES (?, ?, 'sales_manager', 'ACTIVE', 'legacy_import')`,
-      params: [email, email.split('@')[0]],
-    }));
-    await db.batch(ops);
-    invalidateRbacCache();
-  });
-}
-

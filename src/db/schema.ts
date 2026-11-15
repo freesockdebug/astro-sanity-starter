@@ -202,8 +202,6 @@ export const DDL_STATEMENTS = [
   ('order_statuses', 'APPROVED', 'Approved / Processing', 'blue', '{}', 20),
   ('order_statuses', 'SHIPPED', 'Dispatched / In Transit', 'emerald', '{}', 30),
   ('order_statuses', 'REJECTED', 'Rejected', 'rose', '{}', 40)`,
-  `UPDATE OR IGNORE sys_dict_items SET item_key = 'PENDING_APPROVAL', item_label = 'Pending Approval' WHERE group_code = 'order_statuses' AND item_key = 'PENDING_REVIEW'`,
-  `DELETE FROM sys_dict_items WHERE group_code = 'order_statuses' AND item_key = 'PENDING_REVIEW'`,
   `INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_color, meta_json, sort_order) VALUES
 
   ('audit_actions', 'CREATE_ORDER', 'Create Requisition', 'blue', '{"risk_level":"LOW"}', 10),
@@ -240,14 +238,7 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_orders_lower_email ON orders(LOWER(buyer_email))`,
   `CREATE INDEX IF NOT EXISTS idx_user_logins_user_id ON user_logins(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_user_logins_created_at ON user_logins(created_at)`,
-  `DROP INDEX IF EXISTS idx_error_logs_level`,
-  `DROP INDEX IF EXISTS idx_error_logs_source`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_ray_id ON system_error_logs(ray_id)`,
-  `DROP INDEX IF EXISTS idx_error_logs_created_at`,
-  `DROP INDEX IF EXISTS idx_error_logs_latency`,
-  `DROP INDEX IF EXISTS idx_error_logs_path`,
-  `DROP INDEX IF EXISTS idx_error_logs_ip`,
-  `DROP INDEX IF EXISTS idx_error_logs_country`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_bottlenecks ON system_error_logs(created_at, path, method, latency_ms, error_code) WHERE latency_ms > 0 AND path IS NOT NULL AND path != '' AND (method IS NULL OR method != 'CLIENT') AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))`,
   `CREATE INDEX IF NOT EXISTS idx_error_logs_stats ON system_error_logs(created_at, level, error_code, latency_ms)`,
   `CREATE INDEX IF NOT EXISTS idx_admin_members_role ON admin_members(role_code)`,
@@ -266,8 +257,6 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_email ON admin_audit_logs(admin_email)`
 ];
 
-export const SCHEMA_DDL = DDL_STATEMENTS.join(';\n');
-
 let isSchemaVerifiedInIsolate = false;
 
 /**
@@ -285,32 +274,7 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
   }
   if (!target) return;
 
-  // 1. Idempotent column migrations for existing databases before indexes
-  const columnMigrations = [
-    'ALTER TABLE system_error_logs ADD COLUMN latency_ms INTEGER DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN method TEXT DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN status_code INTEGER DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN client_ip TEXT DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN country TEXT DEFAULT NULL',
-    'ALTER TABLE system_error_logs ADD COLUMN city TEXT DEFAULT NULL',
-    'ALTER TABLE orders ADD COLUMN assigned_to TEXT DEFAULT NULL',
-    'ALTER TABLE orders ADD COLUMN assigned_at TEXT DEFAULT NULL',
-    'ALTER TABLE users ADD COLUMN assigned_to TEXT DEFAULT NULL',
-  ];
-
-  for (const m of columnMigrations) {
-    try {
-      if (target.prepare) {
-        await target.prepare(m).run();
-      } else if (target.exec) {
-        await target.exec(m);
-      }
-    } catch {
-      // Column already exists or table not yet initialized
-    }
-  }
-
-  // 2. Ensure core tables exist first
+  // 1. Ensure core tables and indexes exist
   let batchOk = false;
   if (target.batch && target.prepare) {
     try {
@@ -342,34 +306,10 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
 
 /**
  * Lazy self-healing wrapper: only runs DDL if database throws "no such table"
- * Supports both modern executeWithAutoSchema((db) => Promise<T>)
- * and legacy executeWithAutoSchema(isD1, rawDb, () => Promise<T>)
  */
 export async function executeWithAutoSchema<T>(
-  arg1: any,
-  arg2?: any,
-  arg3?: any
+  fn: (db: DbClient) => Promise<T>
 ): Promise<T> {
-  // Legacy signature: executeWithAutoSchema(isD1: boolean, rawDb: any, fn: () => Promise<T>)
-  if (typeof arg1 === 'boolean') {
-    const isD1 = arg1;
-    const rawDb = arg2;
-    const fn = arg3 as () => Promise<T>;
-    try {
-      return await fn();
-    } catch (err: any) {
-      const errMsg = (err?.message || String(err)).toLowerCase();
-      if (isD1 && rawDb && (errMsg.includes('no such table') || errMsg.includes('no such column') || errMsg.includes('has no column named'))) {
-        console.warn('[DB] Schema discrepancy detected; triggering lazy schema migration...');
-        await ensureSchema(rawDb, true);
-        return await fn();
-      }
-      throw err;
-    }
-  }
-
-  // Modern signature: executeWithAutoSchema((db: DbClient) => Promise<T>)
-  const fn = arg1 as (db: DbClient) => Promise<T>;
   const db = await getDb();
 
   try {

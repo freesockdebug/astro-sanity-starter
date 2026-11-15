@@ -1,4 +1,4 @@
-import { client, getSanityClient } from '@utils/sanity-client';
+import { getSanityClient } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
 import { createCmsCache } from '@utils/cache';
 import { IMAGE } from './blocks';

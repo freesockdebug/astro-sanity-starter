@@ -196,8 +196,6 @@ INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_co
   ('order_statuses', 'APPROVED', 'Approved / Processing', 'blue', '{}', 20),
   ('order_statuses', 'SHIPPED', 'Dispatched / In Transit', 'emerald', '{}', 30),
   ('order_statuses', 'REJECTED', 'Rejected', 'rose', '{}', 40);
-UPDATE OR IGNORE sys_dict_items SET item_key = 'PENDING_APPROVAL', item_label = 'Pending Approval' WHERE group_code = 'order_statuses' AND item_key = 'PENDING_REVIEW';
-DELETE FROM sys_dict_items WHERE group_code = 'order_statuses' AND item_key = 'PENDING_REVIEW';
 INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_color, meta_json, sort_order) VALUES
 
   ('audit_actions', 'CREATE_ORDER', 'Create Requisition', 'blue', '{"risk_level":"LOW"}', 10),
@@ -234,14 +232,7 @@ CREATE INDEX IF NOT EXISTS idx_users_assigned_to ON users(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_orders_lower_email ON orders(LOWER(buyer_email));
 CREATE INDEX IF NOT EXISTS idx_user_logins_user_id ON user_logins(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_logins_created_at ON user_logins(created_at);
-DROP INDEX IF EXISTS idx_error_logs_level;
-DROP INDEX IF EXISTS idx_error_logs_source;
 CREATE INDEX IF NOT EXISTS idx_error_logs_ray_id ON system_error_logs(ray_id);
-DROP INDEX IF EXISTS idx_error_logs_created_at;
-DROP INDEX IF EXISTS idx_error_logs_latency;
-DROP INDEX IF EXISTS idx_error_logs_path;
-DROP INDEX IF EXISTS idx_error_logs_ip;
-DROP INDEX IF EXISTS idx_error_logs_country;
 CREATE INDEX IF NOT EXISTS idx_error_logs_bottlenecks ON system_error_logs(created_at, path, method, latency_ms, error_code) WHERE latency_ms > 0 AND path IS NOT NULL AND path != '' AND (method IS NULL OR method != 'CLIENT') AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'));
 CREATE INDEX IF NOT EXISTS idx_error_logs_stats ON system_error_logs(created_at, level, error_code, latency_ms);
 CREATE INDEX IF NOT EXISTS idx_admin_members_role ON admin_members(role_code);

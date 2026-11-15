@@ -1,7 +1,7 @@
 // src/db/dicts.repo.ts
 // Universal Data Dictionary Data Access Layer (D1-backed)
 
-import { getDb, type DbClient } from './client';
+import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 
 export type DictBadgeColor = 'slate' | 'blue' | 'emerald' | 'amber' | 'purple' | 'rose' | 'indigo';
@@ -86,34 +86,6 @@ export async function listDictGroups(): Promise<SysDictGroup[]> {
       if (msg.includes('no such table') || msg.includes('no such column')) throw e;
       console.error('[DictsRepo] listDictGroups error:', e);
       return [];
-    }
-  });
-}
-
-/**
- * Gets a single dictionary group by code
- */
-export async function getDictGroup(code: string): Promise<SysDictGroup | null> {
-  const cleanCode = code.trim().toLowerCase();
-  if (!cleanCode) return null;
-
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
-      const row = await db.first<any>('SELECT * FROM sys_dict_groups WHERE code = ?', [cleanCode]);
-      if (!row) return null;
-      return {
-        code: row.code,
-        name: row.name,
-        description: row.description || '',
-        meta_schema_json: row.meta_schema_json || '[]',
-        meta_schema: parseJsonSafe(row.meta_schema_json, []),
-        is_system: Boolean(row.is_system),
-        updated_at: row.updated_at,
-      };
-    } catch (e: any) {
-      const msg = (e?.message || String(e)).toLowerCase();
-      if (msg.includes('no such table') || msg.includes('no such column')) throw e;
-      return null;
     }
   });
 }

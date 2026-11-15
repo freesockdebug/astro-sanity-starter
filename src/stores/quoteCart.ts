@@ -65,9 +65,3 @@ export function removeFromQuote(id: string, variant: string) {
 export function clearQuote() {
   quoteCart.set([]);
 }
-
-// Get total count of items in quote
-export function getQuoteTotalCount(): number {
-  const current = quoteCart.get() || [];
-  return current.reduce((sum, item) => sum + item.quantity, 0);
-}

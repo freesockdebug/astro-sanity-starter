@@ -118,24 +118,3 @@ export function getBadgeColorClasses(color?: string): string {
       return 'bg-slate-100 text-slate-700 border-slate-200';
   }
 }
-
-/**
- * Generates uniform Tailwind badge HTML for any dictionary item
- */
-export function renderDictBadgeHtml(
-  itemOrLabel: SysDictItem | { item_label: string; badge_color?: string } | string,
-  size: 'xs' | 'sm' | 'md' = 'sm'
-): string {
-  if (!itemOrLabel) return '';
-  const label = typeof itemOrLabel === 'string' ? itemOrLabel : itemOrLabel.item_label;
-  const color = typeof itemOrLabel === 'string' ? 'slate' : (itemOrLabel.badge_color || 'slate');
-  const colorCls = getBadgeColorClasses(color);
-
-  const sizeCls = size === 'xs'
-    ? 'text-[10px] px-1.5 py-0.2'
-    : size === 'md'
-    ? 'text-xs px-2.5 py-1'
-    : 'text-[11px] px-2 py-0.5';
-
-  return `<span class="inline-flex items-center font-semibold rounded-md border tracking-tight ${sizeCls} ${colorCls}">${label}</span>`;
-}

@@ -203,23 +203,13 @@ export const ADMIN_PERMISSION_GROUPS: AdminPermissionGroup[] = [
 // Flat lists & helpers
 export const ALL_MENU_KEYS: string[] = ADMIN_MENU_GROUPS.flatMap((g) => g.items.map((i) => i.key));
 
-export const ALL_PERMISSION_KEYS: string[] = ADMIN_PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => i.key));
-
 export function getAllMenuItems(): AdminMenuItem[] {
   return ADMIN_MENU_GROUPS.flatMap((g) => g.items);
 }
 
 const MENU_MAP = new Map<string, AdminMenuItem>(getAllMenuItems().map((item) => [item.key, item]));
 
-export function getMenuItem(key: string): AdminMenuItem | undefined {
-  return MENU_MAP.get(key);
-}
-
 export function getTabTitle(key: string, fallback = 'Workspace'): string {
   return MENU_MAP.get(key)?.label || fallback;
-}
-
-export function getTabDescription(key: string, fallback = ''): string {
-  return MENU_MAP.get(key)?.desc || fallback;
 }
 

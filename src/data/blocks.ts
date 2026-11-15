@@ -10,15 +10,15 @@ export const IMAGE = `{
 
 export const SECTIONS = `{
   ...,
-  _type in ["heroSection", "hosieryHeroSection"] => {
+  _type == "heroSection" => {
     ...,
     "heroImage": heroImage.asset->url
   },
-  _type in ["featureMatrixSection", "hosierySpecSection"] => {
+  _type == "featureMatrixSection" => {
     ...,
     "macroImage": macroImage.asset->url
   },
-  _type in ["productShowcaseSection", "hosieryCollectionSection"] => {
+  _type == "productShowcaseSection" => {
     ...,
     products[]->{
       title,
@@ -331,17 +331,17 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
     const s = { ...section };
 
     // 1. Hero Sections (1600px High-Res Banner)
-    if ((s._type === 'heroSection' || s._type === 'hosieryHeroSection') && s.heroImage) {
+    if (s._type === 'heroSection' && s.heroImage) {
       s.heroImage = SanityImageService.hero(s.heroImage, 1600);
     }
 
     // 2. Technical Matrix / Specs Sections (1200px Macro Detail)
-    if ((s._type === 'featureMatrixSection' || s._type === 'hosierySpecSection') && s.macroImage) {
+    if (s._type === 'featureMatrixSection' && s.macroImage) {
       s.macroImage = SanityImageService.macro(s.macroImage, 1200);
     }
 
     // 3. Product Showcase / Collections Sections
-    if ((s._type === 'productShowcaseSection' || s._type === 'hosieryCollectionSection') && Array.isArray(s.products)) {
+    if (s._type === 'productShowcaseSection' && Array.isArray(s.products)) {
       s.products = s.products.map((p: any) => {
         if (!p) return p;
         const mainImg = p.mainImage || (p.gallery && p.gallery[0]?.src);
@@ -430,14 +430,7 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
 
     // Second: if non-default locale and translation dictionary exists, fill in any fields not explicitly localized in CMS
     if (lang && lang !== DEFAULT_LOCALE) {
-      const transKey = s._type === 'hosieryHeroSection' ? 'heroSection'
-        : s._type === 'hosierySpecSection' ? 'featureMatrixSection'
-        : s._type === 'hosieryCollectionSection' ? 'productShowcaseSection'
-        : s._type === 'hosieryManufacturingSection' ? 'manufacturingSection'
-        : s._type === 'hosieryInquirySection' ? 'inquirySection'
-        : s._type;
-
-      const trans = SECTION_TRANSLATIONS[lang]?.[transKey];
+      const trans = SECTION_TRANSLATIONS[lang]?.[s._type];
       if (trans) {
         Object.keys(trans).forEach((key) => {
           if (key === 'capabilities' && Array.isArray(trans.capabilities)) {
@@ -476,7 +469,7 @@ export function normalizeSections(sections: any[] = [], lang: SupportedLocale = 
  */
 export function extractHeroPreload(sections: any[] = []): { src: string; srcset?: string; sizes?: string } | undefined {
   if (!Array.isArray(sections)) return undefined;
-  const heroSection = sections.find((s: any) => s && (s._type === 'heroSection' || s._type === 'hosieryHeroSection'));
+  const heroSection = sections.find((s: any) => s && s._type === 'heroSection');
   if (!heroSection) return undefined;
   const rawHeroImg = heroSection.heroImage || DEFAULT_FALLBACK_IMAGE;
   return SanityImageService.resolveHeroPreload(rawHeroImg);

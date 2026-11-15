@@ -1,10 +1,9 @@
 ---
 // src/components/ProductCollections.astro
 import { fetchNormalizedProducts, ProductService } from '@data/products';
-import { fetchData as fetchSiteConfig } from '@data/siteConfig';
 import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
-import { DEFAULT_COLLECTIONS, DEFAULT_RFQ, DEFAULT_HERO } from '@data/defaults';
+import { DEFAULT_COLLECTIONS, DEFAULT_HERO } from '@data/defaults';
 import { getLangFromUrl, getLocalizedPath, getLocalizedValue, toText, useTranslations } from '@i18n';
 import AppleProductGridSkeleton from './AppleProductGridSkeleton.astro';
 

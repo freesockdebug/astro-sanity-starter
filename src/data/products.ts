@@ -1,4 +1,4 @@
-import { client, getSanityClient } from '@utils/sanity-client';
+import { getSanityClient } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
 import { createCmsCache, createCmsKeyedCache } from '@utils/cache';
 import { DEFAULT_CATALOG } from './defaults';
@@ -474,24 +474,12 @@ export class ProductService {
 }
 
 // Backward-compatible function exports
-export const fetchAllProducts = (forceRefresh?: boolean) => ProductService.getAll(forceRefresh);
 export const fetchNormalizedProducts = (imageWidth?: number, forceRefresh?: boolean) => ProductService.getNormalizedAll(imageWidth, forceRefresh);
 export const fetchAllCategories = (forceRefresh?: boolean) => ProductService.getCategories(forceRefresh);
-export const fetchCategories = fetchAllCategories;
 export const fetchCatalogCategories = (products: NormalizedProduct[], allLabel?: string) => ProductService.getCatalogCategories(products, allLabel);
-export const fetchCatalogSettings = (forceRefresh?: boolean) => ProductService.getCatalogSettings(forceRefresh);
-export const fetchProductBySlug = (slug: string) => ProductService.getBySlug(slug);
 
 // Order item helpers (Single Source of Truth for Orders & Inquiries)
 export type ProductMap = Map<string, { image: string; slug: string }>;
-
-export function buildProductMap(products: NormalizedProduct[] | any[]): ProductMap {
-  const map: ProductMap = new Map();
-  (products || []).forEach((p) => {
-    if (p?.id) map.set(p.id, { image: p.image, slug: p.id });
-  });
-  return map;
-}
 
 export function resolveOrderItemImage(item: any, productMap?: ProductMap): string {
   if (item?.image_url && item.image_url.trim()) {

@@ -1,4 +1,4 @@
-import { client, getSanityClient } from '@utils/sanity-client';
+import { getSanityClient } from '@utils/sanity-client';
 import { createCmsCache } from '@utils/cache';
 import { DEFAULT_RFQ } from './defaults';
 import type { RfqSettings } from 'types';

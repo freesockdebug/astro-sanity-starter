@@ -194,19 +194,6 @@ export const liveClient = createEdgeSanityClient(
   'Live'
 );
 
-// Public Live API fallback client if SANITY_TOKEN is expired or 401 Unauthorized
-export const publicLiveClient = createEdgeSanityClient(
-  {
-    projectId: SANITY_PROJECT_ID,
-    dataset: SANITY_DATASET,
-    useCdn: false,
-    apiVersion: '2024-01-31',
-    token: undefined,
-    perspective: 'published',
-  },
-  'Live'
-);
-
 /**
  * Returns either the cached API CDN client (default) or the Live API client (when forceLive = true)
  */

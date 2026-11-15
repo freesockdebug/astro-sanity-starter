@@ -299,45 +299,6 @@ export async function verifyAdminAuth(
   return { user: sessionUser, adminContext: adminCtx };
 }
 
-/**
- * High-precision API permission guard: checks specific button/action permission code
- */
-export async function verifyAdminPermission(
-  request: Request,
-  requiredPerm: string,
-  cfEnv?: any
-): Promise<{ user: AuthUser; adminContext: AdminContextInfo; errorResponse: null } | { user: null; adminContext: null; errorResponse: Response }> {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return {
-      user: null,
-      adminContext: null,
-      errorResponse: jsonNoCache({ error: 'Unauthorized: Admin session required' }, 401),
-    };
-  }
-
-  if (!hasPermission(auth.adminContext, requiredPerm)) {
-    return {
-      user: null,
-      adminContext: null,
-      errorResponse: jsonNoCache(
-        {
-          error: 'Forbidden: Insufficient privileges',
-          requiredPermission: requiredPerm,
-          yourRole: auth.adminContext.role.code,
-        },
-        403
-      ),
-    };
-  }
-
-  return {
-    user: auth.user,
-    adminContext: auth.adminContext,
-    errorResponse: null,
-  };
-}
-
 export interface AdminApiOptions {
   permission?: string | string[];
   menu?: string | string[];

@@ -17,25 +17,16 @@ import WhatsAppWidget from './WhatsAppWidget.astro';
 import LanguagePicker from './LanguagePicker.astro';
 import SEO from './SEO.astro';
 import AppleProductGridSkeleton from './AppleProductGridSkeleton.astro';
-import AppleProductDetailSkeleton from './AppleProductDetailSkeleton.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
 import MarkdownRenderer from './MarkdownRenderer.astro';
 import LocalTime from './LocalTime.astro';
 import NotFoundView from './NotFoundView.astro';
-
-// Backward compatibility aliases for category-neutral refactoring
-const SockHero = AppleHero;
-const SockSpecMatrix = BentoSpecMatrix;
-const SockCollections = ProductCollections;
 
 export {
   SectionBoundary,
   AppleHero,
   BentoSpecMatrix,
   ProductCollections,
-  SockHero,
-  SockSpecMatrix,
-  SockCollections,
   ManufacturingCapabilities,
   SwatchInquiry,
   CustomSection,
@@ -47,7 +38,6 @@ export {
   LanguagePicker,
   SEO,
   AppleProductGridSkeleton,
-  AppleProductDetailSkeleton,
   Breadcrumbs,
   MarkdownRenderer,
   LocalTime,
@@ -64,10 +54,4 @@ export const componentMap: Record<string, any> = {
   manufacturingSection: ManufacturingCapabilities,
   inquirySection: SwatchInquiry,
   customSection: CustomSection,
-  // Legacy alias support
-  hosieryHeroSection: AppleHero,
-  hosierySpecSection: BentoSpecMatrix,
-  hosieryCollectionSection: ProductCollections,
-  hosieryManufacturingSection: ManufacturingCapabilities,
-  hosieryInquirySection: SwatchInquiry,
 };

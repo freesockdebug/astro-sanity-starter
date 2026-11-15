@@ -3,9 +3,7 @@
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-client';
-import { ProductService } from '@data/products';
-import { SiteConfigService } from '@data/siteConfig';
-import { RfqSettingsService, DEFAULT_RFQ_SETTINGS } from '@data/rfqSettings';
+import { DEFAULT_RFQ_SETTINGS } from '@data/rfqSettings';
 import { syncCmsMutation, sanitizeSanityDocument } from '@utils/cmsSync';
 import {
   DEFAULT_BRAND_TITLE,

@@ -3,7 +3,6 @@
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-client';
-import { ProductService } from '@data/products';
 import { syncCmsMutation, sanitizeSanityDocument, hasProductCardFieldsChanged } from '@utils/cmsSync';
 import { computeJsonDiff, insertAuditLog } from '@db/audit.repo';
 import { env as cfEnv } from 'cloudflare:workers';

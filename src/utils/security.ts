@@ -324,8 +324,6 @@ export class SecurityService {
   }
 }
 
-export const resolveCountryFromRequest = (request: Request) => SecurityService.resolveCountry(request);
-
 export const SECRET_SETTING_KEYS = [
   'resend_api_key',
   'turnstile_secret_key',

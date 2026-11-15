@@ -34,7 +34,7 @@ if (!sections || sections.length === 0) {
     { _type: 'inquirySection' },
   ], currentLang);
 }
-const heroSection = sections.find((s: any) => s._type === 'heroSection' || s._type === 'hosieryHeroSection');
+const heroSection = sections.find((s: any) => s._type === 'heroSection');
 const metaTitle = (homeData?.metaTitle && typeof homeData.metaTitle === 'object' ? getLocalizedValue(homeData.metaTitle, currentLang) : '') || homeData?.metaTitle || DEFAULT_META_TITLE;
 const metaDescription = (homeData?.metaDescription && typeof homeData.metaDescription === 'object' ? getLocalizedValue(homeData.metaDescription, currentLang) : '') || homeData?.metaDescription || DEFAULT_META_DESCRIPTION;
 const ogImage = homeData?.socialImage?.src || heroSection?.heroImage || DEFAULT_FALLBACK_IMAGE;
@@ -44,15 +44,10 @@ const heroPreload = extractHeroPreload(sections);
 // 100% Dynamic section resolver based strictly on Studio CMS configuration & order
 const SECTION_DEFAULTS: Record<string, { id: string; label: string }> = {
   heroSection: { id: 'hero', label: t('stage.overview') },
-  hosieryHeroSection: { id: 'hero', label: t('stage.overview') },
   featureMatrixSection: { id: 'specs', label: t('stage.specs') },
-  hosierySpecSection: { id: 'specs', label: t('stage.specs') },
   productShowcaseSection: { id: 'collections', label: t('stage.collections') },
-  hosieryCollectionSection: { id: 'collections', label: t('stage.collections') },
   manufacturingSection: { id: 'manufacturing', label: t('stage.infrastructure') },
-  hosieryManufacturingSection: { id: 'manufacturing', label: t('stage.infrastructure') },
   inquirySection: { id: 'inquiry', label: t('stage.sampleRequest') },
-  hosieryInquirySection: { id: 'inquiry', label: t('stage.sampleRequest') },
   customSection: { id: 'custom', label: 'Feature' },
 };
 

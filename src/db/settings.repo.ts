@@ -1,7 +1,7 @@
 // src/db/settings.repo.ts
 // System Settings Repository: Unified Dynamic Configuration Engine with In-Memory Caching
 
-import { getDb, type DbClient } from './client';
+import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
 import { kvGet, kvPut, kvDelete } from '../utils/cache';

@@ -76,22 +76,6 @@ export class PageService {
   }
 
   /**
-   * Fetch a page by Sanity document ID using parameterized GROQ
-   */
-  public static async getById(id: string): Promise<Page | null> {
-    try {
-      const data = await client.fetch<Page[]>(
-        `*[_type == "page" && _id == $id] ${PAGE_QUERY_OBJ}`,
-        { id }
-      );
-      return data && data.length > 0 ? data[0] : null;
-    } catch (err: any) {
-      console.error(`PageService.getById failed for id ${id}:`, err?.message);
-      return null;
-    }
-  }
-
-  /**
    * Fetch a page by URL slug (L1 Memory 5m -> L2 Permanent KV -> L3 Sanity + 30s L1 negative caching)
    */
   public static async getBySlug(slug?: string | null, customEnv?: any, forceRefresh = false): Promise<Page[]> {
@@ -116,5 +100,3 @@ export class PageService {
 
 // Backward-compatible function exports
 export const fetchData = () => PageService.getAll();
-export const getPageById = (id: string) => PageService.getById(id);
-export const getPageBySlug = (slug?: string | null) => PageService.getBySlug(slug);

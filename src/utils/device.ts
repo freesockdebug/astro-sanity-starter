@@ -127,22 +127,6 @@ export function getClientScreenInfo(): ClientScreenInfo {
 }
 
 /**
- * Backward compatibility alias for right gutter center calculation
- */
-export function getRightGutterCenterAxis(): {
-  isDockMode: boolean;
-  centerX: number | null;
-  remainingRight: number;
-} {
-  const info = getClientScreenInfo();
-  return {
-    isDockMode: info.isDockMode,
-    centerX: info.gutterCenterX,
-    remainingRight: info.remainingRight
-  };
-}
-
-/**
  * Helper: Align any fixed/floating dock element directly to the right gutter center axis.
  * Automatically handles desktop center-alignment and mobile safe-dock fallback.
  */
