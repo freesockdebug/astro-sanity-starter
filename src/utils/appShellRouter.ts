@@ -11,6 +11,7 @@
  * - Dynamic class morphing between fullscreen workbench & stream layouts
  * - Dual-track script reactivation (Vite ES modules + inline scripts)
  */
+import { DEFAULT_SITE_URL } from '@data/defaults';
 
 export interface AppShellOptions {
   scope: 'admin' | 'buyer';
@@ -229,7 +230,7 @@ export function isNavigableLink(a: HTMLAnchorElement, scope: 'admin' | 'buyer', 
   const hrefAttr = a.getAttribute('href') || '';
   if (hrefAttr.startsWith('#') || hrefAttr.startsWith('javascript:')) return false;
   try {
-    const origin = baseOrigin || (typeof window !== 'undefined' ? window.location.origin : 'https://gwenvenni.com');
+    const origin = baseOrigin || (typeof window !== 'undefined' ? window.location.origin : DEFAULT_SITE_URL);
     const url = new URL(a.href, origin);
     if (url.pathname.startsWith('/api/')) return false;
     return isScopeMatch(url, scope, origin);

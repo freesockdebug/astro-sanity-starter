@@ -1,7 +1,7 @@
 // src/pages/api/admin/cms/config.ts
 // Direct Sanity Singleton Configurations CMS API (siteConfig, catalogSettings, productStorySettings, rfqSettings)
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
+import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-client';
 import { DEFAULT_RFQ_SETTINGS } from '@data/rfqSettings';
 import { syncCmsMutation, sanitizeSanityDocument } from '@utils/cmsSync';
@@ -10,28 +10,20 @@ import {
   DEFAULT_COPYRIGHT_TEXT,
   DEFAULT_CATALOG,
   DEFAULT_RFQ,
+  DEFAULT_WHATSAPP_PREFILL,
 } from '@data/defaults';
-import { computeJsonDiff, insertAuditLog } from '@db/audit.repo';
-import { env as cfEnv } from 'cloudflare:workers';
+import { recordAdminAudit } from '@db/audit.repo';
 
 export const prerender = false;
 
 const VALID_CONFIG_TYPES = new Set(['siteConfig', 'catalogSettings', 'productStorySettings', 'rfqSettings']);
 
-export const GET: APIRoute = async ({ request, url }) => {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return jsonNoCache({ error: 'Unauthorized admin access required.' }, 401);
-  }
+export const GET: APIRoute = defineAdminApi(
+  { permission: 'cms:read' },
+  async ({ url, cfEnv }) => {
+    const client = getSanityAdminClient(cfEnv);
+    const type = url.searchParams.get('type');
 
-  if (!hasPermission(auth.adminContext, 'cms:read')) {
-    return jsonNoCache({ error: 'Forbidden: Missing cms:read permission.' }, 403);
-  }
-
-  const client = getSanityAdminClient(cfEnv);
-  const type = url.searchParams.get('type');
-
-  try {
     if (type && VALID_CONFIG_TYPES.has(type)) {
       const doc = await client.fetch(`*[_type == $type][0]`, { type });
       return jsonNoCache({ success: true, document: doc || { _type: type } });
@@ -65,7 +57,7 @@ export const GET: APIRoute = async ({ request, url }) => {
       },
       enableWhatsApp: false,
       whatsAppNumber: '',
-      whatsAppPrefillText: 'Hello Gwen & Venni team, I would like to inquire about wholesale production.',
+      whatsAppPrefillText: DEFAULT_WHATSAPP_PREFILL,
       enableNotificationWebhook: false,
       notificationWebhookUrl: '',
       notificationRecipientEmail: '',
@@ -143,28 +135,16 @@ export const GET: APIRoute = async ({ request, url }) => {
         rfqSettings: mergedRfq,
       },
     });
-  } catch (err: any) {
-    console.error('[CMS Config GET API] Error fetching configs:', err);
-    return jsonNoCache({ error: err.message || 'Failed to fetch CMS configs.' }, 500);
   }
-};
+);
 
-export const POST: APIRoute = async ({ request }) => {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return jsonNoCache({ error: 'Unauthorized admin access required.' }, 401);
-  }
+export const POST: APIRoute = defineAdminApi(
+  { permission: 'cms:write', parseJson: true },
+  async ({ context, request, auth, body, cfEnv }) => {
+    const startTime = Date.now();
+    const client = getSanityAdminClient(cfEnv);
 
-  if (!hasPermission(auth.adminContext, 'cms:write')) {
-    return jsonNoCache({ error: 'Forbidden: Missing cms:write permission.' }, 403);
-  }
-
-  const startTime = Date.now();
-  const client = getSanityAdminClient(cfEnv);
-
-  try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, any>;
-    const rawDoc = body.document;
+    const rawDoc = body?.document;
     if (!rawDoc || !VALID_CONFIG_TYPES.has(rawDoc._type)) {
       return jsonNoCache({ error: `Invalid config document: must be one of ${Array.from(VALID_CONFIG_TYPES).join(', ')}` }, 400);
     }
@@ -186,25 +166,18 @@ export const POST: APIRoute = async ({ request }) => {
       cfEnv,
     }).catch((e) => console.warn('[CMS Config POST] Cache sync warning:', e));
 
-    // Audit Log
-    const diff = computeJsonDiff(existingDoc, result);
-    await insertAuditLog({
-      admin_email: auth.user.email,
+    recordAdminAudit(context, {
+      adminEmail: auth.user.email,
       action: 'CMS_CONFIG_UPDATE',
-      target_type: docType,
-      target_id: singletonId,
-      before_json: existingDoc ? JSON.stringify(existingDoc) : null,
-      after_json: JSON.stringify(result),
-      diff_json: diff ? JSON.stringify(diff) : null,
-      client_ip: request.headers.get('cf-connecting-ip') || '127.0.0.1',
-      country: request.headers.get('cf-ipcountry') || 'US',
-      duration_ms: Date.now() - startTime,
-    }).catch((e) => console.warn('[CMS Audit] Failed to record audit log:', e));
+      targetType: docType,
+      targetId: singletonId,
+      before: existingDoc,
+      after: result,
+      durationMs: Date.now() - startTime,
+      cfEnv,
+    });
 
     return jsonNoCache({ success: true, document: result });
-  } catch (err: any) {
-    console.error('[CMS Config POST API] Error mutating config:', err);
-    return jsonNoCache({ error: err.message || 'Failed to save config in Sanity.' }, 500);
   }
-};
+);
 

@@ -1,29 +1,20 @@
 // src/pages/api/admin/cms/products.ts
 // Direct Sanity Products & Categories CMS CRUD API with Automated Cache Purge & Audit Logging
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
+import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { getSanityAdminClient } from '@utils/sanity-client';
 import { syncCmsMutation, sanitizeSanityDocument, hasProductCardFieldsChanged } from '@utils/cmsSync';
-import { computeJsonDiff, insertAuditLog } from '@db/audit.repo';
-import { env as cfEnv } from 'cloudflare:workers';
+import { recordAdminAudit } from '@db/audit.repo';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, url }) => {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return jsonNoCache({ error: 'Unauthorized admin access required.' }, 401);
-  }
+export const GET: APIRoute = defineAdminApi(
+  { permission: 'cms:read' },
+  async ({ url, cfEnv }) => {
+    const client = getSanityAdminClient(cfEnv);
+    const type = url.searchParams.get('type');
+    const id = url.searchParams.get('id');
 
-  if (!hasPermission(auth.adminContext, 'cms:read')) {
-    return jsonNoCache({ error: 'Forbidden: Missing cms:read permission.' }, 403);
-  }
-
-  const client = getSanityAdminClient(cfEnv);
-  const type = url.searchParams.get('type');
-  const id = url.searchParams.get('id');
-
-  try {
     if (id) {
       const doc = await client.fetch(`*[_id == $id][0]`, { id });
       if (!doc) {
@@ -65,28 +56,16 @@ export const GET: APIRoute = async ({ request, url }) => {
     ]);
 
     return jsonNoCache({ success: true, products, categories });
-  } catch (err: any) {
-    console.error('[CMS Products GET API] Error querying Sanity:', err);
-    return jsonNoCache({ error: err.message || 'Failed to query Sanity CMS.' }, 500);
   }
-};
+);
 
-export const POST: APIRoute = async ({ request }) => {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return jsonNoCache({ error: 'Unauthorized admin access required.' }, 401);
-  }
+export const POST: APIRoute = defineAdminApi(
+  { permission: 'cms:write', parseJson: true },
+  async ({ context, request, auth, body, cfEnv }) => {
+    const startTime = Date.now();
+    const client = getSanityAdminClient(cfEnv);
 
-  if (!hasPermission(auth.adminContext, 'cms:write')) {
-    return jsonNoCache({ error: 'Forbidden: Missing cms:write permission.' }, 403);
-  }
-
-  const startTime = Date.now();
-  const client = getSanityAdminClient(cfEnv);
-
-  try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, any>;
-    const rawDoc = body.document;
+    const rawDoc = body?.document;
     if (!rawDoc || !rawDoc._type) {
       return jsonNoCache({ error: 'Invalid document payload: missing _type.' }, 400);
     }
@@ -99,12 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Save or update in Sanity
-    let result: any;
-    if (doc._id) {
-      result = await client.createOrReplace(doc);
-    } else {
-      result = await client.create(doc);
-    }
+    const result: any = doc._id ? await client.createOrReplace(doc) : await client.create(doc);
 
     // Write-Through Cache Update & Edge HTML Purge
     const oldSlug = existingDoc?.slug?.current || (typeof existingDoc?.slug === 'string' ? existingDoc.slug : '');
@@ -120,51 +94,36 @@ export const POST: APIRoute = async ({ request }) => {
       cardFieldsChanged,
     }).catch((e) => console.warn('[CMS Products POST] Cache sync warning:', e));
 
-    // Audit Logging with Differential Snapshot
-    const diff = computeJsonDiff(existingDoc, result);
     const actionName = existingDoc
       ? docType === 'category' ? 'CMS_CATEGORY_UPDATE' : 'CMS_PRODUCT_UPDATE'
       : docType === 'category' ? 'CMS_CATEGORY_CREATE' : 'CMS_PRODUCT_CREATE';
 
-    await insertAuditLog({
-      admin_email: auth.user.email,
+    recordAdminAudit(context, {
+      adminEmail: auth.user.email,
       action: actionName,
-      target_type: docType,
-      target_id: result._id || slugStr || result.sku || 'unknown',
-      before_json: existingDoc ? JSON.stringify(existingDoc) : null,
-      after_json: JSON.stringify(result),
-      diff_json: diff ? JSON.stringify(diff) : null,
-      client_ip: request.headers.get('cf-connecting-ip') || '127.0.0.1',
-      country: request.headers.get('cf-ipcountry') || 'US',
-      duration_ms: Date.now() - startTime,
-    }).catch((e) => console.warn('[CMS Audit] Failed to record audit log:', e));
+      targetType: docType,
+      targetId: result._id || slugStr || result.sku || 'unknown',
+      before: existingDoc,
+      after: result,
+      durationMs: Date.now() - startTime,
+      cfEnv,
+    });
 
     return jsonNoCache({ success: true, document: result });
-  } catch (err: any) {
-    console.error('[CMS Products POST API] Failed to mutate Sanity:', err);
-    return jsonNoCache({ error: err.message || 'Failed to save document in Sanity.' }, 500);
   }
-};
+);
 
-export const DELETE: APIRoute = async ({ request, url }) => {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return jsonNoCache({ error: 'Unauthorized admin access required.' }, 401);
-  }
+export const DELETE: APIRoute = defineAdminApi(
+  { permission: 'cms:delete' },
+  async ({ context, request, url, auth, cfEnv }) => {
+    const startTime = Date.now();
+    const client = getSanityAdminClient(cfEnv);
+    const id = url.searchParams.get('id');
 
-  if (!hasPermission(auth.adminContext, 'cms:delete')) {
-    return jsonNoCache({ error: 'Forbidden: Missing cms:delete permission.' }, 403);
-  }
+    if (!id) {
+      return jsonNoCache({ error: 'Document ID is required for deletion.' }, 400);
+    }
 
-  const startTime = Date.now();
-  const client = getSanityAdminClient(cfEnv);
-  const id = url.searchParams.get('id');
-
-  if (!id) {
-    return jsonNoCache({ error: 'Document ID is required for deletion.' }, 400);
-  }
-
-  try {
     const existingDoc = await client.fetch(`*[_id == $id][0]`, { id }).catch(() => null);
     if (!existingDoc) {
       return jsonNoCache({ error: 'Document not found.' }, 404);
@@ -182,24 +141,17 @@ export const DELETE: APIRoute = async ({ request, url }) => {
       cfEnv,
     }).catch((e) => console.warn('[CMS Products DELETE] Cache sync warning:', e));
 
-    // Audit Logging
-    await insertAuditLog({
-      admin_email: auth.user.email,
+    recordAdminAudit(context, {
+      adminEmail: auth.user.email,
       action: existingDoc._type === 'category' ? 'CMS_CATEGORY_DELETE' : 'CMS_PRODUCT_DELETE',
-      target_type: existingDoc._type,
-      target_id: id,
-      before_json: JSON.stringify(existingDoc),
-      after_json: null,
-      diff_json: JSON.stringify({ deleted: { from: existingDoc.title || existingDoc._id, to: null } }),
-      client_ip: request.headers.get('cf-connecting-ip') || '127.0.0.1',
-      country: request.headers.get('cf-ipcountry') || 'US',
-      duration_ms: Date.now() - startTime,
-    }).catch((e) => console.warn('[CMS Audit] Failed to record audit log:', e));
+      targetType: existingDoc._type,
+      targetId: id,
+      before: existingDoc,
+      durationMs: Date.now() - startTime,
+      cfEnv,
+    });
 
     return jsonNoCache({ success: true, message: `Document "${id}" deleted successfully.` });
-  } catch (err: any) {
-    console.error('[CMS Products DELETE API] Failed to delete in Sanity:', err);
-    return jsonNoCache({ error: err.message || 'Failed to delete document in Sanity.' }, 500);
   }
-};
+);
 

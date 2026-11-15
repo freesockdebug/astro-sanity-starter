@@ -279,6 +279,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
 </AdminLayout>
 
 <script>
+  import { DEFAULT_BRAND_TITLE } from '@data/defaults';
   import { escapeHtml, getFallbackEn, setLocaleVal, $val, $chk } from '@utils/adminWorkbench';
 
   const getLocaleVal = getFallbackEn;
@@ -316,7 +317,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
         configs = data.configs;
 
         const s = configs.siteConfig || {};
-        $val('site-brand-name', s.header?.title || s.brandName || 'Gwen & Venni');
+        $val('site-brand-name', s.header?.title || s.brandName || DEFAULT_BRAND_TITLE);
         $val('site-tagline', getLocaleVal(s.header?.subtitle) || s.tagline || '');
         $val('site-copyright', getLocaleVal(s.footer?.text) || s.copyright || '');
         $chk('site-enable-whatsapp', Boolean(s.enableWhatsApp));
@@ -434,7 +435,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
 
       if (activeTab === 'site') {
         targetDocType = 'siteConfig';
-        const brand = $val('site-brand-name') || 'Gwen & Venni';
+        const brand = $val('site-brand-name') || DEFAULT_BRAND_TITLE;
         const tagline = $val('site-tagline');
         const copyright = $val('site-copyright');
         const labels = document.querySelectorAll<HTMLInputElement>('#nav-items-container .nav-label');

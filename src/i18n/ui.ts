@@ -269,6 +269,15 @@ const I18N_MATRIX: Record<string, readonly [string, string?, string?, string?]> 
   "account.passwordMismatch": ["Passwords do not match", "Passwörter stimmen nicht überein", "Les mots de passe ne correspondent pas", "Las contraseñas no coinciden"],
   "account.passwordTooShort": ["Password must be at least 8 characters long", "Passwort muss mindestens 8 Zeichen lang sein", "Le mot de passe doit comporter au moins 8 caractères", "La contraseña debe tener al menos 8 caracteres"],
   "account.passwordSuccess": ["✓ Password updated successfully!", "✓ Passwort erfolgreich aktualisiert!", "✓ Mot de passe mis à jour avec succès !", "¡Contraseña actualizada exitosamente!"],
+  "inquiry.tagText": ["Physical Sample Dossier", "Physisches Muster-Dossier", "Dossier d’Échantillons Physiques", "Dossier de Muestras Físicas"],
+  "inquiry.tagSubtitle": ["Curated Yarn Rings, Fabric Swatches & DHL Air Dispatch", "Kuratierte Garnringe, Stoffmuster & DHL-Expressversand", "Nuanciers de fils, échantillons de tissus et envoi DHL Express", "Anillas de hilo, muestrarios de tejido y envío por DHL Express"],
+  "inquiry.verified": ["Free for Verified Brands", "Kostenlos für verifizierte Marken", "Offert aux marques vérifiées", "Gratis para marcas verificadas"],
+  "inquiry.included": ["Included in Sample Dossier:", "Im Muster-Dossier enthalten:", "Inclus dans le dossier d’échantillons :", "Incluido en el dossier de muestras:"],
+  "inquiry.note": ["Priority Handling for Fashion Labels & Buying Offices", "Prioritätsprüfung für Modemarken & Einkaufsbüros", "Traitement prioritaire pour marques de mode et bureaux d’achat", "Gestión prioritaria para marcas de moda y oficinas de compras"],
+  "mfg.footer0": ["Lonati Single & Double Cylinders", "Lonati Ein- & Doppelzylinder", "Monocylindre & double cylindre Lonati", "Cilindros simples y dobles Lonati"],
+  "mfg.footer1": ["CAD to Sample with DHL Express", "CAD bis Musterversand mit DHL Express", "Du patronage CAO à l'envoi DHL Express", "Del patronaje CAD al envío DHL Express"],
+  "mfg.footer2": ["Pantone Dyeing & Custom Packaging", "Pantone-Färbung & Private-Label-Verpackung", "Teinture Pantone & packaging sur mesure", "Tintado Pantone y embalaje personalizado"],
+  "mfg.footer3": ["Sedex, BSCI & OEKO-TEX 100", "Sedex, BSCI & OEKO-TEX 100", "Certifié Sedex, BSCI & OEKO-TEX 100", "Certificado Sedex, BSCI y OEKO-TEX 100"],
 };
 
 export const UI_STRINGS = Object.fromEntries(

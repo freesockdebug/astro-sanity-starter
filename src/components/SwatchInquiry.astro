@@ -38,37 +38,13 @@ const showInquirySection = propShowSection !== undefined ? propShowSection : (rf
 const showSwatchButton = propShowButton !== undefined ? Boolean(propShowButton) : true;
 const displayButtonText = toText(propButtonText, currentLang) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));
 
-const I18N_COPY: Record<string, { tagText: string; tagSubtitle: string; verified: string; included: string; note: string }> = {
-  de: {
-    tagText: 'Physisches Muster-Dossier',
-    tagSubtitle: 'Kuratierte Garnringe, Stoffmuster & DHL-Expressversand',
-    verified: 'Kostenlos für verifizierte Marken',
-    included: 'Im Muster-Dossier enthalten:',
-    note: 'Prioritätsprüfung für Modemarken & Einkaufsbüros'
-  },
-  fr: {
-    tagText: 'Dossier d’Échantillons Physiques',
-    tagSubtitle: 'Nuanciers de fils, échantillons de tissus et envoi DHL Express',
-    verified: 'Offert aux marques vérifiées',
-    included: 'Inclus dans le dossier d’échantillons :',
-    note: 'Traitement prioritaire pour marques de mode et bureaux d’achat'
-  },
-  es: {
-    tagText: 'Dossier de Muestras Físicas',
-    tagSubtitle: 'Anillas de hilo, muestrarios de tejido y envío por DHL Express',
-    verified: 'Gratis para marcas verificadas',
-    included: 'Incluido en el dossier de muestras:',
-    note: 'Gestión prioritaria para marcas de moda y oficinas de compras'
-  },
-  en: {
-    tagText: 'Physical Sample Dossier',
-    tagSubtitle: 'Curated Yarn Rings, Fabric Swatches & DHL Air Dispatch',
-    verified: 'Free for Verified Brands',
-    included: 'Included in Sample Dossier:',
-    note: 'Priority Handling for Fashion Labels & Buying Offices'
-  }
+const copy = {
+  tagText: t('inquiry.tagText'),
+  tagSubtitle: t('inquiry.tagSubtitle'),
+  verified: t('inquiry.verified'),
+  included: t('inquiry.included'),
+  note: t('inquiry.note'),
 };
-const copy = I18N_COPY[currentLang] || I18N_COPY.en;
 ---
 
 {showInquirySection && (

@@ -671,17 +671,16 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
     const totalEl = document.getElementById('total-orders-count');
     if (totalEl) totalEl.textContent = String(total ?? stats.all ?? 0);
 
-    const mapping = {
-      all: stats.all ?? 0,
-      pending: stats.pending ?? 0,
-      approved: stats.approved ?? 0,
-      shipped: stats.shipped ?? 0,
-      rejected: stats.rejected ?? 0,
-    };
+    const statPairs: Array<[string, number]> = [
+      ['ALL', stats.all ?? 0],
+      ['PENDING_APPROVAL', stats.pending ?? 0],
+      ['APPROVED', stats.approved ?? 0],
+      ['SHIPPED', stats.shipped ?? 0],
+      ['REJECTED', stats.rejected ?? 0],
+    ];
 
-    Object.entries(mapping).forEach(([key, val]) => {
-      const upperKey = key === 'all' ? 'ALL' : (key === 'pending' ? 'PENDING_APPROVAL' : (key === 'approved' ? 'APPROVED' : (key === 'shipped' ? 'SHIPPED' : 'REJECTED')));
-      const tabEl = document.querySelector(`[data-tab-field="${upperKey}"]`);
+    statPairs.forEach(([tabKey, val]) => {
+      const tabEl = document.querySelector(`[data-tab-field="${tabKey}"]`);
       if (tabEl) tabEl.textContent = String(val);
     });
   }

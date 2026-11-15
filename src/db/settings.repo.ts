@@ -5,6 +5,12 @@ import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
 import { kvGet, kvPut, kvDelete } from '../utils/cache';
+import {
+  DEFAULT_BRAND_TITLE,
+  DEFAULT_SITE_URL,
+  DEFAULT_WHATSAPP_PREFILL,
+  DEFAULT_CONTACT_EMAIL,
+} from '../data/defaults';
 
 export type LogMinLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
 
@@ -53,11 +59,11 @@ export interface SystemSettings {
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
-  brand_name: 'B2B ATELIER',
-  app_url: 'https://gwenvenni.com',
-  contact_email: '',
+  brand_name: DEFAULT_BRAND_TITLE,
+  app_url: DEFAULT_SITE_URL,
+  contact_email: DEFAULT_CONTACT_EMAIL,
   whatsapp_number: '',
-  whatsapp_prefill: 'Hello, I would like to consult on custom manufacturing & wholesale orders.',
+  whatsapp_prefill: DEFAULT_WHATSAPP_PREFILL,
   enable_email_notify: true,
   resend_api_key: '',
   resend_from_email: '',

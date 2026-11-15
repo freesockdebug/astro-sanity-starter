@@ -1,7 +1,7 @@
 // src/pages/api/admin/cache/purge.ts
 // Cloudflare Edge HTML & L2 KV Multi-Tier Cache Purge API
 import type { APIRoute } from 'astro';
-import { verifyAdminAuth, hasPermission, jsonNoCache } from '@utils/auth';
+import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { ProductService } from '@data/products';
 import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
@@ -13,25 +13,16 @@ import {
   invalidatePendingOrdersCountCache,
   invalidateDashboardStatsCache,
 } from '@utils/db';
-import { insertAuditLog } from '@db/audit.repo';
+import { recordAdminAudit } from '@db/audit.repo';
 import { purgeEdgeHtmlCache } from '@utils/cmsSync';
-import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ request }) => {
-  const auth = await verifyAdminAuth(request, cfEnv);
-  if (!auth) {
-    return jsonNoCache({ error: 'Unauthorized admin access required.' }, 401);
-  }
+export const POST: APIRoute = defineAdminApi(
+  { permission: 'cache:purge' },
+  async ({ context, request, auth, cfEnv }) => {
+    const startTime = Date.now();
 
-  if (!hasPermission(auth.adminContext, 'cache:purge')) {
-    return jsonNoCache({ error: 'Forbidden: Missing cache:purge permission.' }, 403);
-  }
-
-  const startTime = Date.now();
-
-  try {
     const body = (await request.json().catch(() => ({}))) as Record<string, any>;
     const scope = body.scope || 'all'; // 'all' | 'products' | 'pages' | 'dicts' | 'path'
     const targetPath = body.path ? String(body.path).trim() : null;
@@ -124,19 +115,15 @@ export const POST: APIRoute = async ({ request }) => {
 
     const durationMs = Date.now() - startTime;
 
-    // Record in Audit Trail
-    await insertAuditLog({
-      admin_email: auth.user.email,
+    recordAdminAudit(context, {
+      adminEmail: auth.user.email,
       action: 'CACHE_PURGE',
-      target_type: 'cache',
-      target_id: scope + (targetPath ? `:${targetPath}` : ''),
-      before_json: null,
-      after_json: JSON.stringify({ scope, targetPath, purgedItems }),
-      diff_json: null,
-      client_ip: request.headers.get('cf-connecting-ip') || '127.0.0.1',
-      country: request.headers.get('cf-ipcountry') || 'US',
-      duration_ms: durationMs,
-    }).catch(() => {});
+      targetType: 'cache',
+      targetId: scope + (targetPath ? `:${targetPath}` : ''),
+      after: { scope, targetPath, purgedItems },
+      durationMs,
+      cfEnv,
+    });
 
     return jsonNoCache({
       success: true,
@@ -146,9 +133,6 @@ export const POST: APIRoute = async ({ request }) => {
       durationMs,
       message: `Cache successfully purged (${purgedItems.length} cache partitions cleared in ${durationMs}ms).`,
     });
-  } catch (err: any) {
-    console.error('[Cache Purge API] Purge error:', err);
-    return jsonNoCache({ error: err.message || 'Cache purge failed.' }, 500);
   }
-};
+);
 

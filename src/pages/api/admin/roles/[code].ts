@@ -3,6 +3,7 @@
 import type { APIRoute } from 'astro';
 import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { deleteAdminRole, getAdminRole } from '@utils/db';
+import { SYSTEM_ROLES } from '@db/rbac.repo';
 import { recordAdminAudit } from '@db/audit.repo';
 
 export const prerender = false;
@@ -15,7 +16,7 @@ export const DELETE: APIRoute = defineAdminApi(
       return jsonNoCache({ error: 'Role code is required' }, 400);
     }
 
-    if (['super_admin', 'sales_manager', 'sales_rep', 'auditor'].includes(code)) {
+    if (code in SYSTEM_ROLES) {
       return jsonNoCache({ error: 'Cannot delete built-in system role' }, 400);
     }
 

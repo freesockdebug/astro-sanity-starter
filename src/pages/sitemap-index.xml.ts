@@ -2,10 +2,11 @@ import type { APIRoute } from 'astro';
 import { client } from '../utils/sanity-client';
 import { ALL_LOCALE_CODES, DEFAULT_LOCALE, type SupportedLocale } from '../i18n/ui';
 import { getLocalizedPath } from '../i18n/utils';
+import { getSystemSettings } from '../db/settings.repo';
+import { DEFAULT_SITE_URL } from '../data/defaults';
 
 export const prerender = false;
 
-const SITE_URL = 'https://gwenvenni.com';
 const EXCLUDED_SLUGS = new Set(['test', 'draft', 'preview', '404', '500']);
 
 interface SanityDoc {
@@ -34,7 +35,9 @@ function formatLastmod(dateStr?: string): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ url }) => {
+  const sysSettings = await getSystemSettings().catch(() => null);
+  const siteUrl = (sysSettings?.app_url || url?.origin || DEFAULT_SITE_URL).replace(/\/+$/, '');
   const entries: SitemapEntry[] = [
     { path: '/' },
     { path: '/products' },
@@ -80,16 +83,16 @@ export const GET: APIRoute = async () => {
 
     for (const locale of ALL_LOCALE_CODES) {
       const localizedPath = getLocalizedPath(entry.path, locale as SupportedLocale);
-      const locUrl = escapeXml(`${SITE_URL}${localizedPath}`);
+      const locUrl = escapeXml(`${siteUrl}${localizedPath}`);
 
       const alternateLinks = ALL_LOCALE_CODES.map((altLocale) => {
         const altPath = getLocalizedPath(entry.path, altLocale as SupportedLocale);
-        const altUrl = escapeXml(`${SITE_URL}${altPath}`);
+        const altUrl = escapeXml(`${siteUrl}${altPath}`);
         return `    <xhtml:link rel="alternate" hreflang="${altLocale}" href="${altUrl}" />`;
       });
 
       const defaultPath = getLocalizedPath(entry.path, DEFAULT_LOCALE);
-      const defaultUrl = escapeXml(`${SITE_URL}${defaultPath}`);
+      const defaultUrl = escapeXml(`${siteUrl}${defaultPath}`);
       alternateLinks.push(`    <xhtml:link rel="alternate" hreflang="x-default" href="${defaultUrl}" />`);
 
       const tags = [

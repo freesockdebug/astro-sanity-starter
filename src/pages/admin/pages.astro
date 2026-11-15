@@ -244,6 +244,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
 </AdminLayout>
 
 <script>
+  import { DEFAULT_BRAND_TITLE } from '@data/defaults';
   import {
     escapeHtml,
     getLocaleVal,
@@ -1691,7 +1692,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
         _type: 'page',
         title: { _type: 'localeString', en: titlePrompt.trim() },
         slug: { _type: 'slug', current: cleanSlug },
-        metaTitle: { _type: 'localeString', en: `${titlePrompt.trim()} | Gwen & Venni Luxury Apparel` },
+        metaTitle: { _type: 'localeString', en: `${titlePrompt.trim()} | ${DEFAULT_BRAND_TITLE}` },
         metaDescription: { _type: 'localeText', en: 'B2B Wholesale & Luxury Apparel Manufacturing' },
         addTitleSuffix: true,
         sections: [getSectionInitialValues('heroSection')],

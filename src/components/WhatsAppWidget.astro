@@ -1,5 +1,7 @@
 ---
 // src/components/WhatsAppWidget.astro
+import { DEFAULT_WHATSAPP_PREFILL } from '@data/defaults';
+
 interface Props {
   phoneNumber?: string;
   prefillText?: string;
@@ -8,7 +10,7 @@ interface Props {
 
 const {
   phoneNumber = "",
-  prefillText = "Hello Gwenvenni, I'm interested in your private-label knitwear collection.",
+  prefillText = DEFAULT_WHATSAPP_PREFILL,
   tooltip = "Chat with B2B Specialist"
 } = Astro.props;
 

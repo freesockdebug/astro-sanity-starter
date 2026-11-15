@@ -52,8 +52,15 @@ const roleBadgeClasses: Record<string, string> = {
   sales_rep: 'bg-blue-50 text-blue-800 border-blue-200/80',
   auditor: 'bg-zinc-100 text-zinc-800 border-zinc-200',
 };
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: 'Super Admin',
+  content_editor: 'Content Editor',
+  sales_manager: 'Sales Manager',
+  sales_rep: 'Sales Rep',
+  auditor: 'Auditor',
+};
 const badgeClass = roleBadgeClasses[roleCode] || roleBadgeClasses.super_admin;
-const roleDisplay = roleName || (roleCode === 'content_editor' ? 'Content Editor' : roleCode === 'sales_manager' ? 'Sales Manager' : roleCode === 'sales_rep' ? 'Sales Rep' : roleCode === 'auditor' ? 'Auditor' : 'Super Admin');
+const roleDisplay = roleName || ROLE_LABELS[roleCode] || 'Super Admin';
 
 const siteCfg = isShellReq ? null : await SiteConfigService.getConfig();
 if (!isShellReq) {

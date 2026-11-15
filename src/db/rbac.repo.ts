@@ -421,7 +421,7 @@ export async function upsertAdminRole(role: {
  */
 export async function deleteAdminRole(code: string): Promise<{ success: boolean; error?: string }> {
   const cleanCode = code.trim().toLowerCase();
-  if (['super_admin', 'sales_manager', 'sales_rep', 'auditor'].includes(cleanCode)) {
+  if (cleanCode in SYSTEM_ROLES) {
     return { success: false, error: 'Cannot delete built-in system role' };
   }
 

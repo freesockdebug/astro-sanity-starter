@@ -9,6 +9,8 @@
 // =============================================================================
 const envBrandName = (typeof process !== 'undefined' && process.env?.PUBLIC_BRAND_NAME) || (import.meta.env && import.meta.env.PUBLIC_BRAND_NAME);
 export const DEFAULT_BRAND_TITLE = envBrandName || 'B2B ATELIER';
+export const DEFAULT_SITE_URL = (typeof process !== 'undefined' && process.env?.PUBLIC_SITE_URL) || (import.meta.env && import.meta.env.PUBLIC_SITE_URL) || 'https://gwenvenni.com';
+export const DEFAULT_WHATSAPP_PREFILL = 'Hello, I would like to consult on custom manufacturing & wholesale orders.';
 export const DEFAULT_META_TITLE = 'B2B Manufacturing & Wholesale Portal';
 export const DEFAULT_META_DESCRIPTION =
   'Specialized B2B manufacturing, luxury fabrics, fine apparel, and seamless essentials. Low MOQ, rapid sample dispatch, and full OEM/ODM customization.';
@@ -226,7 +228,7 @@ export const DEFAULT_CATALOG = {
   title: 'Product Catalog & Line Sheets',
   subtitle:
     'Select proprietary silhouettes engineered for white-label branding, customized colorways, and rapid low-MOQ reordering.',
-  metaTitle: 'Complete Product Archive & Line Sheets | Gwenvenni B2B Atelier',
+  metaTitle: `Complete Product Archive & Line Sheets | ${DEFAULT_BRAND_TITLE}`,
   metaDescription:
     'Explore our full ready-to-order capsule silhouettes, technical knit compositions, and low-MOQ rapid wholesale reordering archive.',
   searchPlaceholder: 'Search silhouette, SKU...',
