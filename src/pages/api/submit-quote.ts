@@ -49,6 +49,7 @@ interface ValidationResult {
     buyerInfo: ValidatedBuyerInfo;
     items: ValidatedItem[];
     inquiryType: string;
+    locale: string;
     turnstileToken: string;
   };
 }
@@ -61,7 +62,10 @@ function validateQuotePayload(body: any): ValidationResult {
     return { valid: false, error: 'Invalid request body format.' };
   }
 
-  const { buyerInfo, items, turnstileToken, inquiryType = 'quote_cart' } = body;
+  const { buyerInfo, items, turnstileToken, inquiryType = 'quote_cart', locale } = body;
+  const ALLOWED_LOCALES = new Set(['en', 'de', 'fr', 'es']);
+  const rawLocale = typeof locale === 'string' ? locale.trim().toLowerCase().slice(0, 2) : 'en';
+  const sanitizedLocale = ALLOWED_LOCALES.has(rawLocale) ? rawLocale : 'en';
 
   if (!buyerInfo || typeof buyerInfo !== 'object' || Array.isArray(buyerInfo)) {
     return { valid: false, error: 'Buyer information is required.' };
@@ -137,6 +141,7 @@ function validateQuotePayload(body: any): ValidationResult {
       buyerInfo: buyer,
       items: validatedItems,
       inquiryType: sanitizedInquiryType,
+      locale: sanitizedLocale,
       turnstileToken: cleanTurnstileToken,
     },
   };
@@ -156,10 +161,11 @@ function buildRfqEmailHtml(params: {
   safeVisitorIp?: string;
   safeDetectedCountry?: string;
   safeInquiryType: string;
+  safeLocale?: string;
   safeMessage: string;
   items: ValidatedItem[];
 }): string {
-  const { orderNo, brandName, safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeVisitorIp, safeDetectedCountry, safeInquiryType, safeMessage, items } = params;
+  const { orderNo, brandName, safeCompany, safeName, safeEmail, safeWhatsapp, safeDestination, safeVisitorIp, safeDetectedCountry, safeInquiryType, safeLocale, safeMessage, items } = params;
   const brand = SecurityService.escapeHtml(brandName || DEFAULT_BRAND_TITLE);
 
   const itemsRows = items
@@ -184,7 +190,7 @@ function buildRfqEmailHtml(params: {
         <p style="margin: 4px 0;"><strong>WhatsApp / Tel:</strong> ${safeWhatsapp}</p>
         <p style="margin: 4px 0;"><strong>Destination:</strong> ${safeDestination}</p>
         ${safeVisitorIp ? `<p style="margin: 4px 0;"><strong>Visitor IP:</strong> ${safeVisitorIp} ${safeDetectedCountry ? `(${safeDetectedCountry})` : ''}</p>` : ''}
-        <p style="margin: 4px 0;"><strong>Type:</strong> ${safeInquiryType}</p>
+        <p style="margin: 4px 0;"><strong>Type:</strong> ${safeInquiryType}${safeLocale ? ` | <strong>Locale:</strong> ${safeLocale.toUpperCase()}` : ''}</p>
       </div>
       ${
         safeMessage
@@ -229,7 +235,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       });
     }
 
-    const { buyerInfo, items, inquiryType, turnstileToken } = validation.data;
+    const { buyerInfo, items, inquiryType, locale, turnstileToken } = validation.data;
 
     // Extract real visitor IP & Cloudflare Geo details
     const clientMeta = SecurityService.resolveClientMeta(request);
@@ -460,6 +466,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         const safeDetectedCountry = detectedCountry ? SecurityService.escapeHtml(detectedCountry) : '';
         const safeMessage = buyerInfo.message ? SecurityService.escapeHtml(buyerInfo.message) : '';
         const safeInquiryType = SecurityService.escapeHtml(inquiryType);
+        const safeLocale = SecurityService.escapeHtml(locale);
 
         const emailHtml = buildRfqEmailHtml({
           orderNo,
@@ -472,6 +479,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           safeVisitorIp,
           safeDetectedCountry,
           safeInquiryType,
+          safeLocale,
           safeMessage,
           items,
         });
@@ -490,7 +498,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         const safeCompanyForSubject = (buyerInfo.company || buyerInfo.name || 'Anonymous Buyer')
           .replace(/[\r\n]+/g, ' ')
           .trim();
-        const cleanSubject = `${subjectPrefix} [${orderNo}] ${safeCompanyForSubject} - ${items.length} Style(s)`.replace(/[\r\n]+/g, ' ');
+        const cleanSubject = `${subjectPrefix} [${orderNo}] [${locale.toUpperCase()}] ${safeCompanyForSubject} - ${items.length} Style(s)`.replace(/[\r\n]+/g, ' ');
 
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -525,8 +533,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         
         const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
         const ipNotice = visitorIp ? `\n🌐 访客 IP：${visitorIp} ${detectedCountry ? `(${detectedCountry})` : ''}` : '';
-        const plainText = `🔔 【${effectiveBrand} 收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n📦 订单号：${orderNo}\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${resolvedDestination}${ipNotice}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
-        const markdownText = `### 🔔 ${effectiveBrand} 收到新询价单\n\n- **订单号**：${orderNo}\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`;
+        const plainText = `🔔 【${effectiveBrand} 收到新询价单 / 索样请求】\n━━━━━━━━━━━━━━━━━━━━━\n📦 订单号：${orderNo}\n🏢 采购商：${buyerInfo.company || '独立采购商/买手'}\n👤 联系人：${buyerInfo.name || '未提供'}\n📧 邮箱：${buyerInfo.email}\n📱 WhatsApp/电话：${buyerInfo.whatsapp || '未提供'}\n🌍 目的国：${resolvedDestination}${ipNotice}\n🗣️ 界面语种：${locale.toUpperCase()}\n🏷️ 询盘类型：${inquiryType}\n📦 意向款式清单 (${items.length} 款)：\n${itemLines}\n💬 客户留言：${buyerInfo.message || '无'}\n⏰ 提交时间：${timestamp}`;
+        const markdownText = `### 🔔 ${effectiveBrand} 收到新询价单\n\n- **订单号**：${orderNo}\n- **采购商**：${buyerInfo.company || '独立买手'}\n- **联系人**：${buyerInfo.name || '未提供'}\n- **邮箱**：${buyerInfo.email}\n- **电话/WA**：${buyerInfo.whatsapp || '未提供'}\n- **目的国**：${resolvedDestination}\n- **界面语种**：${locale.toUpperCase()}\n- **访客 IP**：${visitorIp || '未获取'} ${detectedCountry ? `(${detectedCountry})` : ''}\n- **意向款式**：${items.length} 款\n\n> 留言：${buyerInfo.message || '无'}`;
 
         await dispatchWebhookMessage(webhookUrl, {
           title: `【新询盘】${buyerInfo.company || buyerInfo.name || '买手咨询'} [${orderNo}]`,

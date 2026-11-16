@@ -65,6 +65,11 @@ if (reqCountryCode) {
   data-security-error={t('rfq.securityCheckError')}
   data-network-error={t('rfq.networkError')}
   data-empty-error={t('rfq.emptyMessage')}
+  data-signed-in-prefix={t('rfq.signedInPrefix')}
+  data-success-title={t('rfq.successTitle')}
+  data-order-no-label={t('rfq.orderNoLabel')}
+  data-track-orders-label={t('rfq.trackInOrders')}
+  data-sign-in-track-label={t('rfq.signInToTrack')}
   data-visitor-country={visitorCountry}
 >
   <input id="quote-drawer-toggle" type="checkbox" class="drawer-toggle" aria-label={drawerTitle} />
@@ -315,7 +320,9 @@ if (reqCountryCode) {
         currentAuthUser = data.user;
         const userStatusLabel = document.getElementById('quote-user-auth-status');
         if (userStatusLabel) {
-          userStatusLabel.textContent = `✓ Signed in: ${data.user.email}`;
+          const drawerRoot = document.getElementById('quote-drawer-root');
+          const signedInPrefix = drawerRoot?.dataset.signedInPrefix || '✓ Signed in:';
+          userStatusLabel.textContent = `${signedInPrefix} ${data.user.email}`;
           userStatusLabel.classList.remove('hidden');
         }
       }
@@ -699,6 +706,7 @@ if (reqCountryCode) {
       items,
       turnstileToken,
       inquiryType: 'quote_cart',
+      locale: document.documentElement.lang || 'en',
     };
 
     if (submitBtn && submitText) {
@@ -717,17 +725,21 @@ if (reqCountryCode) {
 
       if (res.ok && data.success) {
         const orderNo = data.orderNo || 'Recorded';
-        const targetOrdersUrl = document.getElementById('quote-drawer-root')?.getAttribute('data-orders-url') || '/orders';
+        const targetOrdersUrl = rootEl?.getAttribute('data-orders-url') || '/orders';
+        const successTitle = escapeHtml(rootEl?.dataset.successTitle || 'Official RFQ Received!');
+        const orderNoLabel = escapeHtml(rootEl?.dataset.orderNoLabel || 'Official Order No:');
+        const trackOrdersLabel = escapeHtml(rootEl?.dataset.trackOrdersLabel || 'Track in My Orders →');
+        const signInTrackLabel = escapeHtml(rootEl?.dataset.signInTrackLabel || 'Sign In with this email to Track Order →');
         if (alertBox) {
           alertBox.className = 'p-3.5 rounded-xl text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 block space-y-2';
           alertBox.innerHTML = `
-            <div class="font-semibold text-emerald-900">✓ Official RFQ & Order Received!</div>
-            <div class="text-[11px]">Official Order No: <strong class="font-mono">${escapeHtml(orderNo)}</strong></div>
+            <div class="font-semibold text-emerald-900">✓ ${successTitle}</div>
+            <div class="text-[11px]">${orderNoLabel} <strong class="font-mono">${escapeHtml(orderNo)}</strong></div>
             <div class="pt-1">
               ${
                 currentAuthUser
-                  ? `<a href="${targetOrdersUrl}" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all">Track in My Orders →</a>`
-                  : `<button type="button" onclick="window.openAuthLogin && window.openAuthLogin('${targetOrdersUrl}')" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer">Sign In with this email to Track Order →</button>`
+                  ? `<a href="${targetOrdersUrl}" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all">${trackOrdersLabel}</a>`
+                  : `<button type="button" onclick="window.openAuthLogin && window.openAuthLogin('${targetOrdersUrl}')" class="inline-block text-center w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer">${signInTrackLabel}</button>`
               }
             </div>
           `;

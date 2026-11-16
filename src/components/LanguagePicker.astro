@@ -25,6 +25,7 @@ const pathname = currentUrl.pathname;
         return (
           <a
             href={targetUrl}
+            data-lang={code}
             class={`px-3 py-2.5 rounded-xl text-xs flex items-center justify-between border transition-all ${
               isActive
                 ? 'bg-zinc-950 text-white border-zinc-950 font-semibold shadow-xs'
@@ -71,6 +72,7 @@ const pathname = currentUrl.pathname;
           return (
             <a
               href={targetUrl}
+              data-lang={code}
               class={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors touch-manipulation ${
                 isActive
                   ? 'bg-zinc-100 font-semibold text-black'
@@ -132,6 +134,16 @@ const pathname = currentUrl.pathname;
         } else {
           picker.classList.add('is-open');
           btn.setAttribute('aria-expanded', 'true');
+        }
+      });
+    });
+    document.querySelectorAll('a[data-lang]').forEach((link) => {
+      if ((link as any).__langBound === true) return;
+      (link as any).__langBound = true;
+      link.addEventListener('click', () => {
+        const lang = link.getAttribute('data-lang');
+        if (lang) {
+          document.cookie = `gw_lang=${encodeURIComponent(lang)}; path=/; max-age=31536000; SameSite=Lax`;
         }
       });
     });

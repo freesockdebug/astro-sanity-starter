@@ -29,9 +29,9 @@ const t = useTranslations(currentLang);
 const {
   elementId,
   sectionAnchor,
-  badge = DEFAULT_COLLECTIONS.badge,
-  title = DEFAULT_COLLECTIONS.title,
-  subtitle = DEFAULT_COLLECTIONS.subtitle,
+  badge,
+  title,
+  subtitle,
   swatchSku,
   showActionButton: propShowAction,
   actionButtonText: propActionText,
@@ -42,9 +42,9 @@ const {
   products: propProducts
 } = Astro.props;
 
-const safeBadge = toText(badge, currentLang, DEFAULT_COLLECTIONS.badge);
-const safeTitle = toText(title, currentLang, DEFAULT_COLLECTIONS.title);
-const safeSubtitle = toText(subtitle, currentLang, DEFAULT_COLLECTIONS.subtitle);
+const safeBadge = toText(badge, currentLang) || t('catalog.badge') || DEFAULT_COLLECTIONS.badge;
+const safeTitle = toText(title, currentLang) || t('catalog.title') || DEFAULT_COLLECTIONS.title;
+const safeSubtitle = toText(subtitle, currentLang) || t('catalog.subtitle') || DEFAULT_COLLECTIONS.subtitle;
 
 const rfqSettings = await fetchRfqSettings();
 const actionButtonText = toText(propActionText, currentLang) || getLocalizedValue(rfqSettings?.heroSwatchBtnText, currentLang, t('hero.requestSwatch'));

@@ -137,7 +137,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
       <a href={getLocalizedPath(link.url, currentLang)} class="block py-1 text-zinc-700 hover:text-black">{getLocalizedNavLabel(link)}</a>
     ))}
     <a href={getLocalizedPath('/orders', currentLang)} class="block py-1 text-zinc-700 hover:text-black font-medium">
-      My Orders & RFQs
+      {t('orders.title')}
     </a>
     <a id="nav-mobile-admin-link" href="/admin/orders" class="hidden block py-1 text-amber-700 hover:text-amber-900 font-semibold">
       ⚙️ Admin Workspace

@@ -374,7 +374,9 @@ const i18nClient = Object.fromEntries(ORDER_I18N_KEYS.map((k) => [k, t(`orders.$
       if (!iso) return '';
       const d = new Date(iso);
       if (isNaN(d.getTime())) return String(datetime);
-      return d.toLocaleString(undefined, {
+      const localeMap: Record<string, string> = { en: 'en-US', de: 'de-DE', fr: 'fr-FR', es: 'es-ES' };
+      const intlLocale = localeMap[document.documentElement.lang] || undefined;
+      return d.toLocaleString(intlLocale, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
