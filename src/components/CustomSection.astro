@@ -549,8 +549,10 @@ const sectionId = elementId || sectionAnchor || 'custom';
 
 <script>
   // 一键呼出询盘抽屉客户端事件触发器
-  document.addEventListener('DOMContentLoaded', () => {
+  function bindCustomRfqTriggers() {
     document.querySelectorAll('.js-custom-rfq-trigger').forEach((button) => {
+      if ((button as any).__bound === true) return;
+      (button as any).__bound = true;
       button.addEventListener('click', (e) => {
         e.preventDefault();
         const sku = (button as HTMLElement).dataset.sku;
@@ -561,5 +563,9 @@ const sectionId = elementId || sectionAnchor || 'custom';
         );
       });
     });
-  });
+  }
+
+  bindCustomRfqTriggers();
+  document.addEventListener('astro:page-load', bindCustomRfqTriggers);
+  document.addEventListener('shell:page-load', bindCustomRfqTriggers);
 </script>

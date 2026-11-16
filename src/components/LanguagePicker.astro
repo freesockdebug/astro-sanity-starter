@@ -107,8 +107,8 @@ const pathname = currentUrl.pathname;
   function initLanguagePickers() {
     const pickers = document.querySelectorAll('.language-picker');
     pickers.forEach((picker) => {
-      if (picker.getAttribute('data-ready') === 'true') return;
-      picker.setAttribute('data-ready', 'true');
+      if ((picker as any).__ready === true) return;
+      (picker as any).__ready = true;
 
       const btn = picker.querySelector('button');
       if (!btn) return;
@@ -161,4 +161,5 @@ const pathname = currentUrl.pathname;
 
   initLanguagePickers();
   document.addEventListener('astro:page-load', initLanguagePickers);
-</script>}
+  document.addEventListener('shell:page-load', initLanguagePickers);
+</script>

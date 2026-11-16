@@ -169,9 +169,8 @@ const pageTitle = 'Edge & KV Cache Console';
 <script>
   import { escapeHtml } from '@utils/adminWorkbench';
 
-  const logContainer = document.getElementById('purge-events-log');
-
   function appendLog(text: string, isError = false) {
+    const logContainer = document.getElementById('purge-events-log');
     if (!logContainer) return;
     const time = new Date().toLocaleTimeString();
     const line = document.createElement('div');
@@ -205,20 +204,26 @@ const pageTitle = 'Edge & KV Cache Console';
 
   function initCachePage() {
     document.querySelectorAll('.btn-purge').forEach((btn) => {
+      if ((btn as any).__bound === true) return;
+      (btn as any).__bound = true;
       btn.addEventListener('click', () => {
         const scope = btn.getAttribute('data-scope') || 'all';
         executePurge(scope);
       });
     });
 
-    document.getElementById('path-purge-form')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const pathInput = document.getElementById('target-path-input') as HTMLInputElement | null;
-      const path = pathInput?.value.trim();
-      if (path) {
-        executePurge('path', path);
-      }
-    });
+    const pathForm = document.getElementById('path-purge-form');
+    if (pathForm && (pathForm as any).__bound !== true) {
+      (pathForm as any).__bound = true;
+      pathForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pathInput = document.getElementById('target-path-input') as HTMLInputElement | null;
+        const path = pathInput?.value.trim();
+        if (path) {
+          executePurge('path', path);
+        }
+      });
+    }
   }
 
   initCachePage();

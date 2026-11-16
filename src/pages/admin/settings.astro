@@ -397,8 +397,8 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
   <script>
     function initSettingsPage() {
       const form = document.getElementById('settings-form') as HTMLFormElement | null;
-      if (!form || form.dataset.bound === 'true') return;
-      form.dataset.bound = 'true';
+      if (!form || (form as any).__bound === true) return;
+      (form as any).__bound = true;
 
       const saveTop = document.getElementById('save-settings-btn-top') as HTMLButtonElement | null;
       const saveBottom = document.getElementById('save-settings-btn-bottom') as HTMLButtonElement | null;

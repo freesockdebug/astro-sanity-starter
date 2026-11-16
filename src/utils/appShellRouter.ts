@@ -456,20 +456,20 @@ async function reactivateScripts(targetDoc: Document): Promise<void> {
     document.body.appendChild(newScript);
   }
 
-  // 2. Dual-Track Track B: Inline scripts anywhere in targetDoc (including define:vars placed outside layout)
-  // First strip inert executable non-module scripts from newly swapped containers to avoid dead script clutter (preserve application/json SSR stores)
+  // 2. Dual-Track Track B: Inline scripts anywhere in targetDoc (including define:vars and inlined module scripts without src)
+  // First strip inert executable inline scripts from newly swapped containers to avoid dead script clutter (preserve application/json SSR stores)
   const containers = [
     document.getElementById('shell-main-canvas'),
     document.getElementById('shell-overlays'),
   ].filter(Boolean) as HTMLElement[];
   containers.forEach((container) => {
-    container.querySelectorAll('script:not([type="module"]):not([type="application/json"]):not([type="application/ld+json"])').forEach((s) => s.remove());
+    container.querySelectorAll('script:not([src]):not([data-shell-persist]):not([type="application/json"]):not([type="application/ld+json"])').forEach((s) => s.remove());
   });
 
-  // Query all non-module inline scripts that are not persistent layout scripts or JSON data stores
+  // Query all inline scripts (classic and Astro-inlined type="module" without src) that are not persistent layout scripts or JSON data stores
   const inlineScripts = Array.from(
     targetDoc.querySelectorAll<HTMLScriptElement>(
-      'script:not([type="module"]):not([src]):not([data-shell-persist]):not([type="application/ld+json"]):not([type="application/json"])'
+      'script:not([src]):not([data-shell-persist]):not([type="application/ld+json"]):not([type="application/json"])'
     )
   );
 
@@ -645,7 +645,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
           if (snapshot.canvasScrollTop) curCanvas.scrollTop = snapshot.canvasScrollTop;
         }
         const curOverlays = document.getElementById('shell-overlays');
-        if (curOverlays && snapshot.overlaysHtml) {
+        if (curOverlays && typeof snapshot.overlaysHtml === 'string') {
           curOverlays.innerHTML = snapshot.overlaysHtml;
         }
       });
