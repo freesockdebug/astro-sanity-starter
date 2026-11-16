@@ -660,6 +660,47 @@ export function initAppShellRouter(options: AppShellOptions): void {
   // Concurrency navigation sequence counter
   let navSeq = 0;
 
+  function confirmDiscardUnsavedChanges(): Promise<boolean> {
+    return new Promise((resolve) => {
+      let dialog = document.getElementById('shell-unsaved-dialog') as HTMLDialogElement | null;
+      if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'shell-unsaved-dialog';
+        dialog.className = 'rounded-2xl p-5 bg-white border border-black/10 shadow-xl max-w-sm w-full backdrop:bg-black/30 m-auto';
+        dialog.innerHTML = `
+          <div class="space-y-3">
+            <div class="flex items-center gap-2 text-amber-700 font-bold text-sm">
+              <span>⚠️ Unsaved Changes</span>
+            </div>
+            <p class="text-xs text-[#52525b] leading-relaxed">
+              You have unsaved changes on this page. If you leave now, your edits will be discarded.
+            </p>
+            <div class="flex justify-end gap-2 pt-2 border-t border-black/5">
+              <button type="button" data-action="stay" class="adm-btn-secondary h-auto px-3 py-1.5 text-xs">Stay on Page</button>
+              <button type="button" data-action="leave" class="adm-btn h-auto px-3.5 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white">Discard & Leave</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(dialog);
+      }
+      const stayBtn = dialog.querySelector('[data-action="stay"]');
+      const leaveBtn = dialog.querySelector('[data-action="leave"]');
+      const ac = new AbortController();
+      const finish = (result: boolean) => {
+        ac.abort();
+        dialog?.close();
+        resolve(result);
+      };
+      stayBtn?.addEventListener('click', () => finish(false), { once: true, signal: ac.signal });
+      leaveBtn?.addEventListener('click', () => finish(true), { once: true, signal: ac.signal });
+      dialog.addEventListener('cancel', (e) => {
+        e.preventDefault();
+        finish(false);
+      }, { once: true, signal: ac.signal });
+      dialog.showModal();
+    });
+  }
+
   // Core navigation function
   async function navigateTo(
     targetUrlStr: string,
@@ -667,15 +708,27 @@ export function initAppShellRouter(options: AppShellOptions): void {
     targetTabKey?: string,
     targetTabTitle?: string
   ): Promise<void> {
-    const currentSeq = ++navSeq;
     const targetUrl = new URL(targetUrlStr, window.location.origin);
+    let discardedDirtyState = false;
+    if ((window as any).__adminHasUnsavedChanges === true && targetUrl.href !== currentRenderedUrl) {
+      const shouldLeave = await confirmDiscardUnsavedChanges();
+      if (!shouldLeave) return;
+      (window as any).__adminHasUnsavedChanges = false;
+      discardedDirtyState = true;
+    }
+
+    const currentSeq = ++navSeq;
 
     // Cancel pending hover prefetch and abort any in-flight requests for other URLs
     clearTimeout(hoverTimer);
     abortOtherInFlightRequests(targetUrl.href);
 
     // 1. Hot DOM Snapshot: save current view state using currentRenderedUrl before departing
-    saveCurrentSnapshot(currentRenderedUrl);
+    if (!discardedDirtyState) {
+      saveCurrentSnapshot(currentRenderedUrl);
+    } else {
+      snapshotCache.delete(currentRenderedUrl);
+    }
 
     // 2. Check if target URL has warm DOM snapshot
     const snapshot = getDomSnapshot(targetUrl.href);
