@@ -336,8 +336,19 @@ const pageTitle = 'Pages & Modular Visual Builder';
         if (seoLang) seoLang.textContent = `Editing Language: ${currentLang.toUpperCase()}`;
 
         // 3. Re-render forms with new language values
+        renderPagesList();
+        const badge = document.getElementById('current-page-badge');
+        if (badge && activePageDoc) {
+          badge.textContent = getLocaleVal(activePageDoc.title, currentLang) || getFallbackEn(activePageDoc.title) || activePageDoc.slug?.current || 'Page';
+        }
         populateMetaInputs();
         renderSections();
+        if (previewFrame && !canvasPane?.classList.contains('hidden')) {
+          const slug = activePageDoc?.slug?.current || '/';
+          const cleanSlug = slug === '/' ? '' : (slug.startsWith('/') ? slug : `/${slug}`);
+          const langPrefix = currentLang === 'en' ? '' : `/${currentLang}`;
+          previewFrame.src = `${langPrefix}${cleanSlug}` || '/';
+        }
         (window as any).__showToast?.(`Switched editing language to ${currentLang.toUpperCase()}`, 'info');
       });
     });
@@ -392,7 +403,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
             data-id="${p._id}"
           >
             <div class="flex items-center justify-between gap-1.5 mb-1">
-              <span class="font-semibold text-xs truncate">${escapeHtml(getFallbackEn(p.title) || (isHome ? 'Homepage' : 'Untitled Page'))}</span>
+              <span class="font-semibold text-xs truncate">${escapeHtml(getLocaleVal(p.title, currentLang) || getFallbackEn(p.title) || (isHome ? 'Homepage' : 'Untitled Page'))}</span>
               ${isHome ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'}">Home</span>` : ''}
             </div>
             <div class="flex items-center justify-between text-[10px] ${isSelected ? 'text-white/70' : 'text-[#86868b]'} font-mono">
@@ -430,7 +441,7 @@ const pageTitle = 'Pages & Modular Visual Builder';
         renderPagesList();
 
         const badge = document.getElementById('current-page-badge');
-        if (badge) badge.textContent = getFallbackEn(activePageDoc.title) || activePageDoc.slug?.current || 'Page';
+        if (badge) badge.textContent = getLocaleVal(activePageDoc.title, currentLang) || getFallbackEn(activePageDoc.title) || activePageDoc.slug?.current || 'Page';
 
         populateMetaInputs();
         renderSocialImagePreview();

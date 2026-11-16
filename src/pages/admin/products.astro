@@ -420,7 +420,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
     let currentProducts: any[] = [];
     let currentCategories: any[] = [];
     let currentEditingProduct: any = null;
-    let activeLanguage = 'en';
+    let activeLanguage = (window as any).__getAdminContentLocale?.() || 'en';
     const canDelete = metaEl.getAttribute('data-can-delete') === 'true';
 
     const drawerCtrl = createSlideDrawer({
@@ -458,15 +458,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
     });
 
     function syncInputsToActiveDoc() {
-      if (!currentEditingProduct) {
-        currentEditingProduct = {
-          _type: 'product',
-          _id: $val('p-id') || undefined,
-          title: {}, shortTitle: {}, tagline: {}, story: {},
-          pricingTiers: [], colors: [], specifications: [],
-          minOrderQuantity: 200, moq: '200 Pairs', currency: 'USD', isDraft: false, isArchived: false,
-        };
-      }
+      if (!currentEditingProduct) return;
       for (const [id, prop] of LOCALE_FIELDS) {
         (currentEditingProduct[prop] ||= {})[activeLanguage] = $val(id);
       }
@@ -524,6 +516,10 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
         }
         renderSpecsList();
       }
+      if (currentProducts.length > 0 || currentCategories.length > 0) {
+        renderProductsTable();
+        renderCategoriesTable();
+      }
     }
 
     document.querySelectorAll('.btn-lang-toggle').forEach((btn) => {
@@ -568,10 +564,10 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       const status = $val('status-filter') || 'ALL';
 
       const filtered = currentProducts.filter((p: any) => {
-        const titleEn = (p.title?.en || '').toLowerCase();
+        const titleText = `${p.title?.[activeLanguage] || ''} ${p.title?.en || ''}`.toLowerCase();
         const sku = (p.sku || '').toLowerCase();
         const catSlug = (p.category?.slug?.current || p.category?._id || '').toLowerCase();
-        if (search && !titleEn.includes(search) && !sku.includes(search) && !catSlug.includes(search)) return false;
+        if (search && !titleText.includes(search) && !sku.includes(search) && !catSlug.includes(search)) return false;
         if (cat !== 'ALL' && catSlug !== cat.toLowerCase()) return false;
         if (status === 'DRAFT' && !p.isDraft) return false;
         if (status === 'ARCHIVED' && !p.isArchived) return false;
@@ -586,9 +582,9 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
 
       tbody.innerHTML = filtered.map((p: any) => {
         const imgUrl = (window as any).resolveSanityRefUrl?.(p.mainImage || p.mainImageUrl, { width: 120 }) || p.mainImageUrl || p.mainImage?.asset?.url || '';
-        const title = p.title?.en || p.shortTitle?.en || 'Untitled Product';
+        const title = p.title?.[activeLanguage] || p.title?.en || p.shortTitle?.[activeLanguage] || p.shortTitle?.en || 'Untitled Product';
         const sku = p.sku || 'NO-SKU';
-        const catName = p.category?.title?.en || p.category?.slug?.current || '—';
+        const catName = p.category?.title?.[activeLanguage] || p.category?.title?.en || p.category?.slug?.current || '—';
 
         let priceText = '—';
         if (Array.isArray(p.pricingTiers) && p.pricingTiers.length > 0) {
@@ -660,8 +656,8 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
         <tr class="hover:bg-[#fafafc]">
           <td class="py-2.5 px-3.5 font-mono text-[11px]">${c.order ?? 10}</td>
           <td class="py-2.5 px-3.5 font-mono font-semibold">${escapeHtml(c.slug?.current || '—')}</td>
-          <td class="py-2.5 px-3.5 font-medium text-[#1d1d1f]">${escapeHtml(`EN: ${c.title?.en || '—'} · DE: ${c.title?.de || '—'}`)}</td>
-          <td class="py-2.5 px-3.5 text-[#86868b]">${escapeHtml(c.description?.en || '—')}</td>
+          <td class="py-2.5 px-3.5 font-medium text-[#1d1d1f]">${escapeHtml(c.title?.[activeLanguage] || c.title?.en || '—')} <span class="text-[10px] font-mono text-[#86868b]">(${activeLanguage.toUpperCase()})</span></td>
+          <td class="py-2.5 px-3.5 text-[#86868b]">${escapeHtml(c.description?.[activeLanguage] || c.description?.en || '—')}</td>
           <td class="py-2.5 px-3.5 text-right whitespace-nowrap">
             <button type="button" class="btn-edit-cat px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black shadow-2xs cursor-pointer" data-id="${c._id}">Edit</button>
           </td>
@@ -735,7 +731,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       renderPricingTiersTable();
       renderColorsList();
       renderSpecsList();
-      updateActiveLang('en');
+      updateActiveLang((window as any).__getAdminContentLocale?.() || activeLanguage || 'en');
       drawerCtrl.open();
     }
 
