@@ -35,17 +35,15 @@ const rfqToggles = [
 ] as const;
 
 const rfqCopyFields = [
-  ['rfq-title-en', 'Drawer Header Title (EN)'],
-  ['rfq-empty-en', 'Empty Cart Message (EN)'],
-  ['rfq-btn-en', 'Add to Quote Button Text (EN)'],
-  ['rfq-submit-en', 'Submit Inquiry Button Text (EN)'],
+  ['rfq-title-en', 'Drawer Header Title'],
+  ['rfq-empty-en', 'Empty Cart Message'],
+  ['rfq-btn-en', 'Add to Quote Button Text'],
+  ['rfq-submit-en', 'Submit Inquiry Button Text'],
 ] as const;
 
 const catalogFields = [
-  ['cat-title-en', 'Banner Title (EN)'],
-  ['cat-title-de', 'Banner Title (DE)'],
-  ['cat-sub-en', 'Banner Subtitle (EN)'],
-  ['cat-sub-de', 'Banner Subtitle (DE)'],
+  ['cat-title-input', 'Banner Title'],
+  ['cat-sub-input', 'Banner Subtitle'],
 ] as const;
 
 const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs';
@@ -187,7 +185,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {catalogFields.map(([id, label]) => (
                 <div>
-                  <label class="block font-semibold mb-1">{label}</label>
+                  <label class="block font-semibold mb-1">{label} (<span class="cms-lang-badge font-mono">EN</span>)</label>
                   <input type="text" id={id} class={inpCls} />
                 </div>
               ))}
@@ -201,11 +199,11 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
             <span class="font-bold text-xs text-[#1d1d1f] block">Sidebar Story Header (Global Defaults)</span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label class="block font-semibold mb-1">Badge Text (EN)</label>
+                <label class="block font-semibold mb-1">Badge Text (<span class="cms-lang-badge font-mono">EN</span>)</label>
                 <input type="text" id="story-badge-text" placeholder="CRAFTSMANSHIP & STORY" class={inpCls} />
               </div>
               <div>
-                <label class="block font-semibold mb-1">Story Heading (EN)</label>
+                <label class="block font-semibold mb-1">Story Heading (<span class="cms-lang-badge font-mono">EN</span>)</label>
                 <input type="text" id="story-heading" placeholder="The Story Behind the Silhouette" class={inpCls} />
               </div>
             </div>
@@ -230,7 +228,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {rfqCopyFields.map(([id, label]) => (
                 <div>
-                  <label class="block font-semibold mb-1">{label}</label>
+                  <label class="block font-semibold mb-1">{label} (<span class="cms-lang-badge font-mono">EN</span>)</label>
                   <input type="text" id={id} class={inpCls} />
                 </div>
               ))}
@@ -263,7 +261,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
                 <input type="text" id="rfq-swatch-sku" placeholder="SWATCH-KIT" class={`${inpCls} font-mono`} />
               </div>
               <div>
-                <label class="block font-semibold mb-1 text-[11px]">Swatch Kit Title (EN)</label>
+                <label class="block font-semibold mb-1 text-[11px]">Swatch Kit Title (<span class="cms-lang-badge font-mono">EN</span>)</label>
                 <input type="text" id="rfq-swatch-title" placeholder="Curated Fabric Swatch Kit" class={inpCls} />
               </div>
               <div>
@@ -280,12 +278,26 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
 
 <script>
   import { DEFAULT_BRAND_TITLE } from '@data/defaults';
-  import { escapeHtml, getFallbackEn, setLocaleVal, $val, $chk } from '@utils/adminWorkbench';
+  import { escapeHtml, getLocaleVal, getFallbackEn, setLocaleVal, $val, $chk } from '@utils/adminWorkbench';
 
-  const getLocaleVal = getFallbackEn;
-  const makeLocaleVal = (str: string, orig?: any) => setLocaleVal(orig, str, 'en');
+  const getCurrentLocale = () => ((window as any).__getAdminContentLocale?.() || 'en') as string;
+  function readLangVal(obj: any): string {
+    const loc = getCurrentLocale();
+    if (!obj) return '';
+    if (typeof obj === 'string') return obj;
+    if (loc === 'en') return getLocaleVal(obj, 'en') || getFallbackEn(obj);
+    return getLocaleVal(obj, loc);
+  }
+  const makeLocaleVal = (str: string, orig?: any, type: 'localeString' | 'localeText' = 'localeString') =>
+    setLocaleVal(orig, str, getCurrentLocale(), type);
+
+  let cmsLocaleAbort: AbortController | null = null;
 
   function initCmsConfig() {
+    if (cmsLocaleAbort) {
+      cmsLocaleAbort.abort();
+      cmsLocaleAbort = null;
+    }
     let activeTab = 'site';
     let configs: any = {
       siteConfig: { _type: 'siteConfig', nav: [] },
@@ -309,51 +321,57 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
       });
     });
 
+    function populateFormFromConfigs() {
+      const langUpper = getCurrentLocale().toUpperCase();
+      document.querySelectorAll('.cms-lang-badge').forEach((el) => {
+        el.textContent = langUpper;
+      });
+
+      const s = configs.siteConfig || {};
+      $val('site-brand-name', s.header?.title || s.brandName || DEFAULT_BRAND_TITLE);
+      $val('site-tagline', readLangVal(s.header?.subtitle) || (getCurrentLocale() === 'en' ? (s.tagline || '') : ''));
+      $val('site-copyright', readLangVal(s.footer?.text) || (getCurrentLocale() === 'en' ? (s.copyright || '') : ''));
+      $chk('site-enable-whatsapp', Boolean(s.enableWhatsApp));
+      $val('site-whatsapp-number', s.whatsAppNumber || '');
+      $val('site-whatsapp-prefill', readLangVal(s.whatsAppPrefillText) || '');
+      $chk('site-enable-webhook', Boolean(s.enableNotificationWebhook));
+      $val('site-webhook-url', s.notificationWebhookUrl || '');
+      $val('site-recipient-email', s.notificationRecipientEmail || '');
+      $chk('site-enable-image-proxy', s.enableImageProxy !== undefined ? Boolean(s.enableImageProxy) : true);
+      $val('site-edge-cache-ttl', String(s.edgeCacheTtl ?? 300));
+      renderNavItems();
+
+      const c = configs.catalogSettings || {};
+      $val('cat-title-input', readLangVal(c.title) || '');
+      $val('cat-sub-input', readLangVal(c.subtitle) || '');
+
+      const st = configs.productStorySettings || {};
+      $val('story-badge-text', readLangVal(st.storyBadgeText) || (getCurrentLocale() === 'en' ? 'CRAFTSMANSHIP & STORY' : ''));
+      $val('story-heading', readLangVal(st.storyHeading) || (getCurrentLocale() === 'en' ? 'The Story Behind the Silhouette' : ''));
+      renderStoryBadges();
+
+      const r = configs.rfqSettings || {};
+      $val('rfq-title-en', readLangVal(r.drawerTitle) || '');
+      $val('rfq-empty-en', readLangVal(r.drawerEmptyTitle) || readLangVal(r.emptyCartNotice) || '');
+      $val('rfq-btn-en', readLangVal(r.btnAddToQuoteText) || readLangVal(r.addToQuoteBtn) || '');
+      $val('rfq-submit-en', readLangVal(r.drawerSubmitButtonText) || readLangVal(r.submitInquiryBtn) || '');
+      document.querySelectorAll<HTMLInputElement>('[data-rfq-prop]').forEach((el) => {
+        const prop = el.dataset.rfqProp!;
+        const def = el.dataset.rfqDef === 'true';
+        el.checked = r[prop] !== undefined ? Boolean(r[prop]) : def;
+      });
+      $val('rfq-swatch-sku', r.swatchKitSku || 'SWATCH-KIT');
+      $val('rfq-swatch-title', readLangVal(r.swatchKitTitle) || '');
+      $val('rfq-amazon-store-url', r.defaultAmazonStoreUrl || '');
+    }
+
     async function loadConfigs() {
       try {
         const res = await fetch('/api/admin/cms/config');
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load configs');
         configs = data.configs;
-
-        const s = configs.siteConfig || {};
-        $val('site-brand-name', s.header?.title || s.brandName || DEFAULT_BRAND_TITLE);
-        $val('site-tagline', getLocaleVal(s.header?.subtitle) || s.tagline || '');
-        $val('site-copyright', getLocaleVal(s.footer?.text) || s.copyright || '');
-        $chk('site-enable-whatsapp', Boolean(s.enableWhatsApp));
-        $val('site-whatsapp-number', s.whatsAppNumber || '');
-        $val('site-whatsapp-prefill', getLocaleVal(s.whatsAppPrefillText) || '');
-        $chk('site-enable-webhook', Boolean(s.enableNotificationWebhook));
-        $val('site-webhook-url', s.notificationWebhookUrl || '');
-        $val('site-recipient-email', s.notificationRecipientEmail || '');
-        $chk('site-enable-image-proxy', s.enableImageProxy !== undefined ? Boolean(s.enableImageProxy) : true);
-        $val('site-edge-cache-ttl', String(s.edgeCacheTtl ?? 300));
-        renderNavItems();
-
-        const c = configs.catalogSettings || {};
-        $val('cat-title-en', c.title?.en || '');
-        $val('cat-title-de', c.title?.de || '');
-        $val('cat-sub-en', c.subtitle?.en || '');
-        $val('cat-sub-de', c.subtitle?.de || '');
-
-        const st = configs.productStorySettings || {};
-        $val('story-badge-text', getLocaleVal(st.storyBadgeText) || 'CRAFTSMANSHIP & STORY');
-        $val('story-heading', getLocaleVal(st.storyHeading) || 'The Story Behind the Silhouette');
-        renderStoryBadges();
-
-        const r = configs.rfqSettings || {};
-        $val('rfq-title-en', getLocaleVal(r.drawerTitle) || '');
-        $val('rfq-empty-en', getLocaleVal(r.drawerEmptyTitle) || getLocaleVal(r.emptyCartNotice) || '');
-        $val('rfq-btn-en', getLocaleVal(r.btnAddToQuoteText) || getLocaleVal(r.addToQuoteBtn) || '');
-        $val('rfq-submit-en', getLocaleVal(r.drawerSubmitButtonText) || getLocaleVal(r.submitInquiryBtn) || '');
-        document.querySelectorAll<HTMLInputElement>('[data-rfq-prop]').forEach((el) => {
-          const prop = el.dataset.rfqProp!;
-          const def = el.dataset.rfqDef === 'true';
-          el.checked = r[prop] !== undefined ? Boolean(r[prop]) : def;
-        });
-        $val('rfq-swatch-sku', r.swatchKitSku || 'SWATCH-KIT');
-        $val('rfq-swatch-title', getLocaleVal(r.swatchKitTitle) || '');
-        $val('rfq-amazon-store-url', r.defaultAmazonStoreUrl || '');
+        populateFormFromConfigs();
       } catch (e: any) {
         (window as any).__showToast?.(e.message, 'error');
       }
@@ -367,7 +385,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
         ? `<div class="py-2 text-[#86868b] text-[11px]">No custom navigation links.</div>`
         : nav.map((item: any, idx: number) => `
           <div class="flex items-center gap-2">
-            <input type="text" class="nav-label w-1/3 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Label" value="${escapeHtml(getLocaleVal(item.label) || '')}" />
+            <input type="text" class="nav-label w-1/3 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 text-xs" placeholder="Label" value="${escapeHtml(readLangVal(item.label) || '')}" />
             <input type="text" class="nav-href flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-black/10 font-mono text-xs" placeholder="/products" value="${escapeHtml(item.url || item.href || '')}" />
             <button type="button" class="btn-del-nav text-[#86868b] hover:text-rose-600 p-1" data-idx="${idx}">✕</button>
           </div>
@@ -404,8 +422,8 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
             <select class="badge-icon-type px-2 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs shrink-0">
               ${icons.map(([v, l]) => `<option value="${v}" ${b.iconType === v ? 'selected' : ''}>${l}</option>`).join('')}
             </select>
-            <input type="text" class="badge-title flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Card Title" value="${escapeHtml(getLocaleVal(b.title) || '')}" />
-            <input type="text" class="badge-desc flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Detail Description" value="${escapeHtml(getLocaleVal(b.description) || '')}" />
+            <input type="text" class="badge-title flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Card Title" value="${escapeHtml(readLangVal(b.title) || '')}" />
+            <input type="text" class="badge-desc flex-1 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-black/10 text-xs" placeholder="Detail Description" value="${escapeHtml(readLangVal(b.description) || '')}" />
             <button type="button" class="btn-del-badge text-[#86868b] hover:text-rose-600 p-1 self-end sm:self-center" data-idx="${idx}">✕</button>
           </div>
         `).join('');
@@ -440,10 +458,11 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
         const copyright = $val('site-copyright');
         const labels = document.querySelectorAll<HTMLInputElement>('#nav-items-container .nav-label');
         const hrefs = document.querySelectorAll<HTMLInputElement>('#nav-items-container .nav-href');
+        const existingNav = configs.siteConfig.header?.navLinks || configs.siteConfig.nav || [];
         const navLinks = Array.from(labels).map((lInput, idx) => ({
-          _key: crypto.randomUUID().slice(0, 8),
+          _key: existingNav[idx]?._key || crypto.randomUUID().slice(0, 8),
           _type: 'actionLink',
-          label: makeLocaleVal(lInput.value.trim()),
+          label: makeLocaleVal(lInput.value.trim(), existingNav[idx]?.label),
           url: hrefs[idx]?.value.trim() || '/',
         }));
 
@@ -465,8 +484,9 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
         targetPayload = s;
       } else if (activeTab === 'catalog') {
         targetDocType = 'catalogSettings';
-        configs.catalogSettings.title = { en: $val('cat-title-en'), de: $val('cat-title-de') };
-        configs.catalogSettings.subtitle = { en: $val('cat-sub-en'), de: $val('cat-sub-de') };
+        const c = configs.catalogSettings;
+        c.title = makeLocaleVal($val('cat-title-input'), c.title);
+        c.subtitle = makeLocaleVal($val('cat-sub-input'), c.subtitle, 'localeText');
         targetPayload = configs.catalogSettings;
       } else if (activeTab === 'story') {
         targetDocType = 'productStorySettings';
@@ -476,11 +496,12 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
         const iconSelects = document.querySelectorAll<HTMLSelectElement>('#story-badges-container .badge-icon-type');
         const titles = document.querySelectorAll<HTMLInputElement>('#story-badges-container .badge-title');
         const descs = document.querySelectorAll<HTMLInputElement>('#story-badges-container .badge-desc');
+        const existingCreds = st.credentials || st.badges || [];
         const credentials = Array.from(titles).map((tInput, idx) => ({
-          _key: crypto.randomUUID().slice(0, 8),
+          _key: existingCreds[idx]?._key || crypto.randomUUID().slice(0, 8),
           iconType: iconSelects[idx]?.value || 'lonati',
-          title: makeLocaleVal(tInput.value.trim() || 'Standard'),
-          description: { _type: 'localeText', en: descs[idx]?.value.trim() || '' },
+          title: makeLocaleVal(tInput.value.trim() || 'Standard', existingCreds[idx]?.title),
+          description: makeLocaleVal(descs[idx]?.value.trim() || '', existingCreds[idx]?.description, 'localeText'),
         }));
         st.credentials = credentials;
         st.badges = credentials.map((c) => ({ icon: c.iconType, title: c.title }));
@@ -523,6 +544,13 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-white border border-black/10 focu
         (window as any).__showToast?.(e.message, 'error');
       }
     });
+
+    cmsLocaleAbort = new AbortController();
+    window.addEventListener('admin:locale-change', () => {
+      if (document.getElementById('btn-save-current-config')) {
+        populateFormFromConfigs();
+      }
+    }, { signal: cmsLocaleAbort.signal });
 
     loadConfigs();
   }
