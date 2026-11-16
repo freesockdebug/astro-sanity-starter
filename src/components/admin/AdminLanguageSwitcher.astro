@@ -1,0 +1,204 @@
+---
+// src/components/admin/AdminLanguageSwitcher.astro
+import { LANGUAGES, DEFAULT_LOCALE, type SupportedLocale } from '@i18n';
+
+const localeEntries = Object.entries(LANGUAGES) as [SupportedLocale, (typeof LANGUAGES)[SupportedLocale]][];
+const FLAGS: Record<string, string> = {
+  en: '🇬🇧',
+  de: '🇩🇪',
+  fr: '🇫🇷',
+  es: '🇪🇸',
+};
+---
+
+<div class="relative inline-block text-left" data-admin-lang-switcher data-default-lang={DEFAULT_LOCALE}>
+  <button
+    type="button"
+    data-lang-trigger
+    aria-haspopup="true"
+    aria-expanded="false"
+    title="Switch CMS Content Locale across Dashboard"
+    class="group inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#f5f5f7] hover:bg-black/5 border border-black/10 text-xs text-[#1d1d1f] transition-all cursor-pointer shadow-2xs select-none"
+  >
+    <span data-lang-flag class="text-xs leading-none">{FLAGS[DEFAULT_LOCALE] || '🌐'}</span>
+    <span class="text-[10px] font-mono uppercase tracking-wider text-[#86868b] hidden sm:inline">Locale:</span>
+    <span data-lang-code class="font-mono font-bold text-[11px] uppercase text-[#1d1d1f]">{DEFAULT_LOCALE.toUpperCase()}</span>
+    <svg class="w-3 h-3 text-[#86868b] transition-transform duration-200 group-aria-expanded:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+    </svg>
+  </button>
+
+  <div
+    data-lang-menu
+    role="menu"
+    class="hidden absolute right-0 mt-2 w-48 rounded-2xl bg-white border border-black/10 shadow-xl p-1.5 z-50 origin-top-right space-y-0.5 text-xs"
+  >
+    <div class="px-2.5 py-1.5 border-b border-black/5 mb-1">
+      <p class="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">Content Locale</p>
+      <p class="text-[10px] text-[#a1a1aa] truncate">Syncs CMS fields &amp; drawers</p>
+    </div>
+    {localeEntries.map(([code, meta]) => (
+      <button
+        type="button"
+        role="menuitem"
+        data-admin-lang-item={code}
+        data-lang-flag-val={FLAGS[code] || '🌐'}
+        class="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer text-[#1d1d1f] hover:bg-[#f5f5f7]"
+      >
+        <span class="flex items-center gap-2">
+          <span>{FLAGS[code] || '🌐'}</span>
+          <span class="font-medium">{meta.label}</span>
+        </span>
+        <span class="font-mono text-[10px] uppercase text-[#86868b]" data-lang-badge>{meta.short}</span>
+      </button>
+    ))}
+  </div>
+</div>
+
+<script is:inline data-shell-persist="true">
+  (function () {
+    if (window.__adminLangSwitcherBound) return;
+    window.__adminLangSwitcherBound = true;
+
+    var STORAGE_KEY = 'gw_admin_content_locale';
+    var FLAGS = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷', es: '🇪🇸' };
+    var VALID_LANGS = { en: true, de: true, fr: true, es: true };
+
+    function getStoredLocale() {
+      try {
+        var saved = localStorage.getItem(STORAGE_KEY);
+        if (saved && VALID_LANGS[saved]) return saved;
+      } catch (e) {}
+      return 'en';
+    }
+
+    function closeAllMenus() {
+      document.querySelectorAll('[data-admin-lang-switcher]').forEach(function (root) {
+        var menu = root.querySelector('[data-lang-menu]');
+        var trigger = root.querySelector('[data-lang-trigger]');
+        if (menu) menu.classList.add('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    function updateSwitcherUI(locale) {
+      document.querySelectorAll('[data-admin-lang-switcher]').forEach(function (root) {
+        var flagEl = root.querySelector('[data-lang-flag]');
+        var codeEl = root.querySelector('[data-lang-code]');
+        if (flagEl) flagEl.textContent = FLAGS[locale] || '🌐';
+        if (codeEl) codeEl.textContent = locale.toUpperCase();
+
+        root.querySelectorAll('[data-admin-lang-item]').forEach(function (item) {
+          var isMatch = item.getAttribute('data-admin-lang-item') === locale;
+          item.className = isMatch
+            ? 'w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer bg-[#1d1d1f] text-white font-semibold'
+            : 'w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer text-[#1d1d1f] hover:bg-[#f5f5f7]';
+          var badge = item.querySelector('[data-lang-badge]');
+          if (badge) {
+            badge.className = isMatch
+              ? 'font-mono text-[10px] uppercase text-white/80'
+              : 'font-mono text-[10px] uppercase text-[#86868b]';
+          }
+        });
+      });
+    }
+
+    function syncPageLocaleControls(locale) {
+      var selectors = [
+        '.btn-lang-toggle[data-lang="' + locale + '"]',
+        '.btn-lang[data-lang="' + locale + '"]'
+      ];
+      selectors.forEach(function (sel) {
+        var btn = document.querySelector(sel);
+        if (btn && !btn.__syncingFromHeader) {
+          btn.__syncingFromHeader = true;
+          try { btn.click(); } catch (e) {}
+          btn.__syncingFromHeader = false;
+        }
+      });
+    }
+
+    function setAdminLocale(locale, syncPage) {
+      if (!VALID_LANGS[locale]) locale = 'en';
+      window.__ADMIN_CONTENT_LOCALE__ = locale;
+      try { localStorage.setItem(STORAGE_KEY, locale); } catch (e) {}
+      updateSwitcherUI(locale);
+      if (syncPage !== false) {
+        syncPageLocaleControls(locale);
+      }
+      window.dispatchEvent(new CustomEvent('admin:locale-change', { detail: { locale: locale } }));
+    }
+
+    window.__setAdminContentLocale = setAdminLocale;
+    window.__getAdminContentLocale = function () {
+      return window.__ADMIN_CONTENT_LOCALE__ || getStoredLocale();
+    };
+
+    document.addEventListener('click', function (e) {
+      var target = e.target;
+      if (!target || !target.closest) return;
+
+      var trigger = target.closest('[data-lang-trigger]');
+      if (trigger) {
+        e.stopPropagation();
+        var root = trigger.closest('[data-admin-lang-switcher]');
+        var menu = root ? root.querySelector('[data-lang-menu]') : null;
+        if (!menu) return;
+        var isHidden = menu.classList.contains('hidden');
+        closeAllMenus();
+        if (isHidden) {
+          menu.classList.remove('hidden');
+          trigger.setAttribute('aria-expanded', 'true');
+        }
+        return;
+      }
+
+      var item = target.closest('[data-admin-lang-item]');
+      if (item) {
+        e.stopPropagation();
+        var lang = item.getAttribute('data-admin-lang-item') || 'en';
+        closeAllMenus();
+        setAdminLocale(lang, true);
+        if (window.__showToast) {
+          window.__showToast('Content locale switched to ' + lang.toUpperCase(), true);
+        }
+        return;
+      }
+
+      var pageLangBtn = target.closest('.btn-lang-toggle[data-lang], .btn-lang[data-lang]');
+      if (pageLangBtn && !pageLangBtn.__syncingFromHeader) {
+        var picked = pageLangBtn.getAttribute('data-lang');
+        if (picked && VALID_LANGS[picked] && picked !== window.__ADMIN_CONTENT_LOCALE__) {
+          setAdminLocale(picked, false);
+        }
+      }
+
+      if (!target.closest('[data-admin-lang-switcher]')) {
+        closeAllMenus();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeAllMenus();
+    });
+
+    function initOnLoad() {
+      var initial = getStoredLocale();
+      window.__ADMIN_CONTENT_LOCALE__ = initial;
+      updateSwitcherUI(initial);
+      if (initial !== 'en') {
+        setTimeout(function () { syncPageLocaleControls(initial); }, 60);
+      }
+    }
+
+    initOnLoad();
+    document.addEventListener('shell:page-load', function () {
+      closeAllMenus();
+      var current = window.__ADMIN_CONTENT_LOCALE__ || getStoredLocale();
+      updateSwitcherUI(current);
+      if (current !== 'en') {
+        setTimeout(function () { syncPageLocaleControls(current); }, 60);
+      }
+    });
+  })();
+</script>

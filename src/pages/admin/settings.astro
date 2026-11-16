@@ -148,9 +148,10 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
       <button id="discard-settings-btn-top" type="button" class="hidden adm-btn-secondary h-auto px-3 py-2 text-xs">
         Discard
       </button>
-      <button id="save-settings-btn-top" type="button" class="adm-btn-primary h-auto px-4 py-2">
+      <button id="save-settings-btn-top" type="button" class="adm-btn-primary h-auto px-4 py-2" title="Save Changes (⌘S / Ctrl+S)">
         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
         <span>Save Changes</span>
+        <kbd class="hidden sm:inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/15 text-white/90 border border-white/20 leading-none">⌘S</kbd>
       </button>
     </div>
   </AdminPageToolbar>
@@ -403,9 +404,10 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
         <button id="discard-settings-btn-bottom" type="button" class="hidden adm-btn-secondary h-auto px-3.5 py-2 text-xs">
           Discard
         </button>
-        <button id="save-settings-btn-bottom" type="button" class="adm-btn-primary h-auto px-5 py-2.5 shadow-xs">
+        <button id="save-settings-btn-bottom" type="button" class="adm-btn-primary h-auto px-5 py-2.5 shadow-xs" title="Save All Settings (⌘S / Ctrl+S)">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
           <span>Save All Settings</span>
+          <kbd class="hidden sm:inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/15 text-white/90 border border-white/20 leading-none">⌘S</kbd>
         </button>
       </div>
     </div>
@@ -583,6 +585,16 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
         if ((window as any).__adminHasUnsavedChanges === true) {
           e.preventDefault();
           e.returnValue = '';
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+          const saveBtn = document.getElementById('save-settings-btn-top') as HTMLButtonElement | null;
+          if (!saveBtn) return;
+          e.preventDefault();
+          if (e.repeat || saveBtn.disabled) return;
+          saveBtn.click();
         }
       });
     }

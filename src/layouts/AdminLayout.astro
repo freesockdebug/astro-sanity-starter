@@ -3,6 +3,7 @@
 // Fully Decoupled B2B Admin Shell: Zero-Sanity-Overhead, Grouped Vertical Sidebar, Mobile Bottom Bar, Dynamic RBAC
 import Layout from './Layout.astro';
 import AdminSidebar from '@components/admin/AdminSidebar.astro';
+import AdminLanguageSwitcher from '@components/admin/AdminLanguageSwitcher.astro';
 import { getTabTitle, getAllMenuItems, type AdminMenuItem } from '@config/adminNavigation';
 import { SiteConfigService } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
@@ -137,6 +138,8 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
                   </a>
                 )}
 
+                <AdminLanguageSwitcher />
+
                 <button
                   id="admin-account-trigger-mobile"
                   type="button"
@@ -176,6 +179,8 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
                   <span class="font-medium">Quick Jump / Search</span>
                   <kbd class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white border border-black/10 shadow-2xs text-[#86868b]">⌘K</kbd>
                 </button>
+
+                <AdminLanguageSwitcher />
 
                 <div class="h-4 w-px bg-black/10 shrink-0"></div>
 

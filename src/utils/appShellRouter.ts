@@ -712,7 +712,10 @@ export function initAppShellRouter(options: AppShellOptions): void {
     let discardedDirtyState = false;
     if ((window as any).__adminHasUnsavedChanges === true && targetUrl.href !== currentRenderedUrl) {
       const shouldLeave = await confirmDiscardUnsavedChanges();
-      if (!shouldLeave) return;
+      if (!shouldLeave) {
+        if (isPopState) window.history.pushState({ shell: true, url: currentRenderedUrl }, document.title, currentRenderedUrl);
+        return;
+      }
       (window as any).__adminHasUnsavedChanges = false;
       discardedDirtyState = true;
     }
