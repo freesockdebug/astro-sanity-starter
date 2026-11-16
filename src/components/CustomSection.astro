@@ -555,12 +555,12 @@ const sectionId = elementId || sectionAnchor || 'custom';
       (button as any).__bound = true;
       button.addEventListener('click', (e) => {
         e.preventDefault();
-        const sku = (button as HTMLElement).dataset.sku;
-        window.dispatchEvent(
-          new CustomEvent('open-quote-drawer', {
-            detail: { sku: sku || null },
-          })
-        );
+        const sku = (button as HTMLElement).dataset.sku?.trim();
+        if (sku && typeof (window as any).requestSwatchKit === 'function') {
+          (window as any).requestSwatchKit({ sku });
+        } else if (typeof (window as any).openQuoteDrawer === 'function') {
+          (window as any).openQuoteDrawer();
+        }
       });
     });
   }

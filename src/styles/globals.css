@@ -431,12 +431,27 @@ html.apple-snap-active {
 
   .adm-btn,
   .adm-btn-primary {
-    @apply h-8 px-3.5 rounded-xl text-xs font-semibold bg-apple-ink text-white hover:bg-black transition-all shadow-2xs inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50;
+    @apply relative h-8 px-3.5 rounded-xl text-xs font-semibold bg-apple-ink text-white hover:bg-black active:scale-[0.97] transition-all duration-150 shadow-2xs inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none;
   }
 
   .adm-btn-ghost,
   .adm-btn-secondary {
-    @apply h-8 px-3 rounded-xl text-xs font-semibold bg-apple-gray text-apple-ink hover:bg-black/10 border border-black/5 transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer;
+    @apply relative h-8 px-3 rounded-xl text-xs font-semibold bg-apple-gray text-apple-ink hover:bg-black/10 active:scale-[0.97] border border-black/5 transition-all duration-150 inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  /* Loading State: Inline Tailwind spinner via ::before + cursor wait */
+  :is(.adm-btn, .adm-btn-primary, .adm-btn-secondary, .adm-btn-ghost).is-loading {
+    @apply opacity-80 pointer-events-none cursor-wait pl-2.5 before:content-[''] before:w-3.5 before:h-3.5 before:rounded-full before:border-2 before:border-current before:border-t-transparent before:animate-spin before:shrink-0;
+  }
+
+  /* Success State: Emerald confirmation feedback */
+  :is(.adm-btn, .adm-btn-primary, .adm-btn-secondary, .adm-btn-ghost).is-success {
+    @apply !bg-emerald-600 !text-white !border-emerald-600 ring-2 ring-emerald-500/30 shadow-xs;
+  }
+
+  /* Error State: Rose alert feedback */
+  :is(.adm-btn, .adm-btn-primary, .adm-btn-secondary, .adm-btn-ghost).is-error {
+    @apply !bg-rose-600 !text-white !border-rose-600 ring-2 ring-rose-500/30;
   }
 
   .adm-icon-btn {

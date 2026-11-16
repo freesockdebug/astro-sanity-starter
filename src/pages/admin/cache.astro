@@ -63,7 +63,7 @@ const pageTitle = 'Edge & KV Cache Console';
             </div>
             <button
               type="button"
-              class="btn-purge w-full py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer shadow-2xs"
+              class="btn-purge adm-btn w-full h-auto py-2"
               data-scope="all"
               disabled={!canPurge}
             >
@@ -82,7 +82,7 @@ const pageTitle = 'Edge & KV Cache Console';
             </div>
             <button
               type="button"
-              class="btn-purge w-full py-2 rounded-xl text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] transition-all cursor-pointer shadow-2xs"
+              class="btn-purge adm-btn-secondary w-full h-auto py-2 bg-white border-black/10 hover:border-black hover:bg-white"
               data-scope="products"
               disabled={!canPurge}
             >
@@ -101,7 +101,7 @@ const pageTitle = 'Edge & KV Cache Console';
             </div>
             <button
               type="button"
-              class="btn-purge w-full py-2 rounded-xl text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] transition-all cursor-pointer shadow-2xs"
+              class="btn-purge adm-btn-secondary w-full h-auto py-2 bg-white border-black/10 hover:border-black hover:bg-white"
               data-scope="pages"
               disabled={!canPurge}
             >
@@ -120,7 +120,7 @@ const pageTitle = 'Edge & KV Cache Console';
             </div>
             <button
               type="button"
-              class="btn-purge w-full py-2 rounded-xl text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] transition-all cursor-pointer shadow-2xs"
+              class="btn-purge adm-btn-secondary w-full h-auto py-2 bg-white border-black/10 hover:border-black hover:bg-white"
               data-scope="dicts"
               disabled={!canPurge}
             >
@@ -147,7 +147,7 @@ const pageTitle = 'Edge & KV Cache Console';
           />
           <button
             type="submit"
-            class="px-4 py-2 rounded-xl bg-[#1d1d1f] text-white font-semibold hover:bg-black transition-all cursor-pointer shrink-0 shadow-2xs"
+            class="adm-btn h-auto px-4 py-2 shrink-0"
             disabled={!canPurge}
           >
             Purge Path

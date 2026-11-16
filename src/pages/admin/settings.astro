@@ -141,7 +141,7 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
     class="mb-5"
   >
     <div slot="actions" class="flex items-center gap-2.5">
-      <button id="save-settings-btn-top" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all cursor-pointer">
+      <button id="save-settings-btn-top" type="button" class="adm-btn-primary h-auto px-4 py-2">
         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
         <span>Save Changes</span>
       </button>
@@ -230,7 +230,7 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
           <label for="notification_webhook_url" class="block text-xs font-medium text-[#52525b] mb-1">Outbound Webhook HTTPS URL</label>
           <div class="flex flex-col sm:flex-row gap-2">
             <input type="url" id="notification_webhook_url" name="notification_webhook_url" value={settings.notification_webhook_url} placeholder="https://qyapi.weixin.qq.com/... or https://oapi.dingtalk.com/..." class="flex-1 px-3 py-2 text-xs rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all font-mono" />
-            <button id="test-webhook-btn" type="button" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-black/15 hover:border-black/30 text-[#1d1d1f] hover:bg-[#f5f5f7] shadow-2xs active:scale-95 transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5">
+            <button id="test-webhook-btn" type="button" class="adm-btn-secondary h-auto px-3.5 py-2 bg-white border-black/15 hover:border-black/30 hover:bg-[#f5f5f7] shadow-2xs whitespace-nowrap">
               <span>Test Connection</span>
             </button>
           </div>
@@ -386,7 +386,7 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
     <!-- Bottom Save Toolbar -->
     <div class="sticky bottom-4 z-20 flex items-center justify-between p-4 rounded-2xl bg-white/95 backdrop-blur-md border border-black/10 shadow-lg">
       <div class="text-xs text-[#86868b]">Changes take effect immediately across all edge nodes upon saving.</div>
-      <button id="save-settings-btn-bottom" type="button" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-xs active:scale-95 transition-all cursor-pointer">
+      <button id="save-settings-btn-bottom" type="button" class="adm-btn-primary h-auto px-5 py-2.5 shadow-xs">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
         <span>Save All Settings</span>
       </button>

@@ -474,6 +474,11 @@ async function reactivateScripts(targetDoc: Document): Promise<void> {
   );
 
   for (const oldScript of inlineScripts) {
+    if (oldScript.type === 'module') {
+      const sig = (oldScript.textContent || '').trim();
+      if (!sig || loadedModuleSrcs.has(sig)) continue;
+      loadedModuleSrcs.add(sig);
+    }
     const newScript = document.createElement('script');
     Array.from(oldScript.attributes).forEach((attr) => {
       newScript.setAttribute(attr.name, attr.value);
@@ -494,10 +499,72 @@ export function initAppShellRouter(options: AppShellOptions): void {
     const src = s.getAttribute('src');
     if (src) loadedModuleSrcs.add(src);
   });
+  document.querySelectorAll<HTMLScriptElement>('script[type="module"]:not([src])').forEach((s) => {
+    const sig = (s.textContent || '').trim();
+    if (sig) loadedModuleSrcs.add(sig);
+  });
+
+  // Track last clicked .adm-btn* element for automatic loading/success visual feedback
+  const ADM_BTN_SELECTOR = '.adm-btn, .adm-btn-primary, .adm-btn-secondary, .adm-btn-ghost';
+  let lastClickedAdmBtn: { el: HTMLElement; ts: number } | null = null;
+
+  function setAdmBtnState(btn: HTMLElement, state: 'loading' | 'success' | 'error' | 'idle') {
+    const prevTimer = (btn as any).__feedbackTimer;
+    if (prevTimer) clearTimeout(prevTimer);
+    btn.classList.remove('is-loading', 'is-success', 'is-error');
+
+    if (state === 'loading') {
+      btn.classList.add('is-loading');
+    } else if (state === 'success' || state === 'error') {
+      btn.classList.add(state === 'success' ? 'is-success' : 'is-error');
+      (btn as any).__feedbackTimer = setTimeout(() => {
+        btn.classList.remove('is-success', 'is-error');
+      }, 1200);
+    }
+  }
+
+  document.addEventListener(
+    'click',
+    (e) => {
+      const btn = (e.target as HTMLElement)?.closest?.(ADM_BTN_SELECTOR) as HTMLElement | null;
+      if (!btn || (btn as HTMLButtonElement).disabled) return;
+      lastClickedAdmBtn = { el: btn, ts: Date.now() };
+      setTimeout(() => {
+        if (lastClickedAdmBtn?.el === btn && !btn.classList.contains('is-loading')) {
+          btn.classList.add('ring-2', 'ring-black/15');
+          setTimeout(() => btn.classList.remove('ring-2', 'ring-black/15'), 180);
+        }
+      }, 100);
+    },
+    true
+  );
 
   // Intercept write-mutations and provide client-side GET API caching
   const origFetch = window.fetch;
   window.fetch = function (...args) {
+    const activeBtn =
+      lastClickedAdmBtn && Date.now() - lastClickedAdmBtn.ts < 150
+        ? lastClickedAdmBtn.el
+        : null;
+    if (activeBtn) {
+      lastClickedAdmBtn = null;
+      setAdmBtnState(activeBtn, 'loading');
+    }
+
+    const attachBtnFeedback = (p: Promise<Response>) => {
+      if (!activeBtn) return p;
+      return p.then(
+        (res) => {
+          setAdmBtnState(activeBtn, res.ok ? 'success' : 'error');
+          return res;
+        },
+        (err) => {
+          setAdmBtnState(activeBtn, 'error');
+          throw err;
+        }
+      );
+    };
+
     const req = args[0];
     const init = args[1];
     let method = 'GET';
@@ -512,7 +579,7 @@ export function initAppShellRouter(options: AppShellOptions): void {
       prefetchCache.clear();
       apiResponseCache.clear();
       snapshotCache.clear();
-      return origFetch.apply(this, args);
+      return attachBtnFeedback(origFetch.apply(this, args));
     }
 
     let urlStr = '';
@@ -537,36 +604,40 @@ export function initAppShellRouter(options: AppShellOptions): void {
       const now = Date.now();
       const cached = apiResponseCache.get(urlStr);
       if (cached && now - cached.ts < API_CACHE_TTL_MS) {
-        return Promise.resolve(
-          new Response(cached.body, {
-            status: cached.status,
-            statusText: cached.statusText,
-            headers: new Headers(cached.headers),
-          })
+        return attachBtnFeedback(
+          Promise.resolve(
+            new Response(cached.body, {
+              status: cached.status,
+              statusText: cached.statusText,
+              headers: new Headers(cached.headers),
+            })
+          )
         );
       }
 
-      return origFetch.apply(this, args).then(async (res) => {
-        if (res.ok) {
-          try {
-            const clone = res.clone();
-            const body = await clone.text();
-            const headers: [string, string][] = [];
-            clone.headers.forEach((v, k) => headers.push([k, v]));
-            apiResponseCache.set(urlStr, {
-              body,
-              status: clone.status,
-              statusText: clone.statusText,
-              headers,
-              ts: Date.now(),
-            });
-          } catch {}
-        }
-        return res;
-      });
+      return attachBtnFeedback(
+        origFetch.apply(this, args).then(async (res) => {
+          if (res.ok) {
+            try {
+              const clone = res.clone();
+              const body = await clone.text();
+              const headers: [string, string][] = [];
+              clone.headers.forEach((v, k) => headers.push([k, v]));
+              apiResponseCache.set(urlStr, {
+                body,
+                status: clone.status,
+                statusText: clone.statusText,
+                headers,
+                ts: Date.now(),
+              });
+            } catch {}
+          }
+          return res;
+        })
+      );
     }
 
-    return origFetch.apply(this, args);
+    return attachBtnFeedback(origFetch.apply(this, args));
   };
 
   // Instant.page: pointerdown / touchstart instant prefetch with Save-Data & 2G guard
