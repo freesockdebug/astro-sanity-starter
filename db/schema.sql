@@ -156,7 +156,9 @@ INSERT OR IGNORE INTO sys_dict_groups (code, name, description, meta_schema_json
   ('customer_tags', 'Customer CRM Tags', 'Standard tags for buyer profiling and account classification', '[]', 1),
   ('inquiry_types', 'Inquiry Types', 'B2B order RFQ category badges and classifications', '[]', 1),
   ('order_statuses', 'Order Statuses', 'Fulfillment lifecycle statuses and SLA thresholds', '[{"key":"sla_hours","label":"SLA Threshold (Hours)","type":"number"}]', 1),
-  ('audit_actions', 'Audit Actions', 'Security and operations audit action dictionary', '[{"key":"risk_level","label":"Risk Level","type":"select","options":["LOW","MEDIUM","HIGH"]}]', 1);
+  ('audit_actions', 'Audit Actions', 'Security and operations audit action dictionary', '[{"key":"risk_level","label":"Risk Level","type":"select","options":["LOW","MEDIUM","HIGH"]}]', 1),
+  ('currencies', 'Settlement Currencies', 'B2B pricing currencies and symbols for products & RFQ quotes', '[{"key":"symbol","label":"Currency Symbol","type":"text","placeholder":"$"}]', 1),
+  ('product_units', 'Product Packing Units', 'Minimum order and packaging units for B2B products', '[]', 1);
 INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_color, meta_json, sort_order) VALUES
   ('shipping_carriers', 'dhl', 'DHL Express', 'amber', '{"tracking_url":"https://www.dhl.com/global-en/home/tracking/tracking-express.html?submit=1&tracking-id={tracking}"}', 10),
   ('shipping_carriers', 'fedex', 'FedEx', 'purple', '{"tracking_url":"https://www.fedex.com/fedextrack/?trknbr={tracking}"}', 20),
@@ -217,7 +219,30 @@ INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_co
   ('audit_actions', 'UPSERT_DICT_ITEM', 'Update Dict Item', 'slate', '{"risk_level":"LOW"}', 170),
   ('audit_actions', 'DELETE_DICT_ITEM', 'Delete Dict Item', 'amber', '{"risk_level":"MEDIUM"}', 180),
   ('audit_actions', 'RESET_DICT_ITEMS', 'Reset Dict Group', 'rose', '{"risk_level":"HIGH"}', 190),
-  ('audit_actions', 'UPDATE_SYSTEM_SETTINGS', 'Save Settings', 'slate', '{"risk_level":"MEDIUM"}', 200);
+  ('audit_actions', 'UPDATE_SYSTEM_SETTINGS', 'Save Settings', 'slate', '{"risk_level":"MEDIUM"}', 200),
+  ('audit_actions', 'CMS_PRODUCT_CREATE', 'Create CMS Product', 'blue', '{"risk_level":"LOW"}', 210),
+  ('audit_actions', 'CMS_PRODUCT_UPDATE', 'Update CMS Product', 'blue', '{"risk_level":"LOW"}', 220),
+  ('audit_actions', 'CMS_PRODUCT_DELETE', 'Delete CMS Product', 'rose', '{"risk_level":"MEDIUM"}', 230),
+  ('audit_actions', 'CMS_CATEGORY_CREATE', 'Create CMS Category', 'blue', '{"risk_level":"LOW"}', 240),
+  ('audit_actions', 'CMS_CATEGORY_UPDATE', 'Update CMS Category', 'blue', '{"risk_level":"LOW"}', 250),
+  ('audit_actions', 'CMS_CATEGORY_DELETE', 'Delete CMS Category', 'rose', '{"risk_level":"MEDIUM"}', 260),
+  ('audit_actions', 'CMS_PAGE_CREATE', 'Create CMS Page', 'blue', '{"risk_level":"LOW"}', 270),
+  ('audit_actions', 'CMS_PAGE_UPDATE', 'Update CMS Page', 'blue', '{"risk_level":"LOW"}', 280),
+  ('audit_actions', 'CMS_PAGE_DELETE', 'Delete CMS Page', 'rose', '{"risk_level":"MEDIUM"}', 290),
+  ('audit_actions', 'CMS_CONFIG_UPDATE', 'Update CMS Config', 'indigo', '{"risk_level":"MEDIUM"}', 300),
+  ('audit_actions', 'CACHE_PURGE', 'Purge Edge/KV Cache', 'amber', '{"risk_level":"MEDIUM"}', 310),
+  ('audit_actions', 'DELETE_ADMIN_MEMBER', 'Delete Admin Member', 'rose', '{"risk_level":"HIGH"}', 320),
+  ('audit_actions', 'UPDATE_USER_META', 'Update Buyer CRM', 'slate', '{"risk_level":"LOW"}', 330),
+
+  ('currencies', 'USD', 'USD ($)', 'emerald', '{"symbol":"$"}', 10),
+  ('currencies', 'EUR', 'EUR (€)', 'blue', '{"symbol":"€"}', 20),
+  ('currencies', 'GBP', 'GBP (£)', 'purple', '{"symbol":"£"}', 30),
+  ('currencies', 'CNY', 'CNY (¥)', 'amber', '{"symbol":"¥"}', 40),
+
+  ('product_units', 'Pairs', 'Pairs (双)', 'slate', '{}', 10),
+  ('product_units', 'Pcs', 'Pieces (件/条)', 'slate', '{}', 20),
+  ('product_units', 'Sets', 'Sets (套/盒)', 'slate', '{}', 30),
+  ('product_units', 'Dozens', 'Dozens (打/12双)', 'slate', '{}', 40);
 CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no);
