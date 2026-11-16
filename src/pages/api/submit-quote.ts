@@ -14,6 +14,7 @@ import {
   formatTurnstilePassCookie,
 } from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
+import { getDictItems } from '@utils/dicts';
 import { kvGet, kvPut, kvDelete } from '@utils/cache';
 import { logger } from '@utils/logger';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -22,7 +23,7 @@ export const prerender = false; // Run dynamically as Cloudflare Worker endpoint
 
 // RFC 5322 compliant practical email pattern
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
-const ALLOWED_INQUIRY_TYPES = new Set(['quote_cart', 'quick_inquiry', 'sample_swatch', 'custom_inquiry']);
+const DEFAULT_INQUIRY_TYPES = ['quote_cart', 'swatch_request', 'custom_oem', 'quick_inquiry', 'sample_swatch', 'custom_inquiry'];
 
 interface ValidatedBuyerInfo {
   company: string;
@@ -57,7 +58,7 @@ interface ValidationResult {
 /**
  * Strict boundary validator for incoming RFQ payload
  */
-function validateQuotePayload(body: any): ValidationResult {
+function validateQuotePayload(body: any, allowedInquiryTypes: Set<string>): ValidationResult {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return { valid: false, error: 'Invalid request body format.' };
   }
@@ -132,7 +133,7 @@ function validateQuotePayload(body: any): ValidationResult {
     return { valid: false, error: 'No valid product items found in quote request.' };
   }
 
-  const sanitizedInquiryType = ALLOWED_INQUIRY_TYPES.has(inquiryType) ? inquiryType : 'quote_cart';
+  const sanitizedInquiryType = allowedInquiryTypes.has(inquiryType) ? inquiryType : 'quote_cart';
   const cleanTurnstileToken = typeof turnstileToken === 'string' ? turnstileToken.trim() : '';
 
   return {
@@ -160,8 +161,13 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       });
     }
 
-    // 1. Strict Boundary Input Validation
-    const validation = validateQuotePayload(rawBody);
+    // 1. Strict Boundary Input Validation (backed by inquiry_types dictionary)
+    const inquiryDictItems = await getDictItems(cfEnv, 'inquiry_types', true).catch(() => []);
+    const allowedInquiryTypes = new Set<string>([
+      ...DEFAULT_INQUIRY_TYPES,
+      ...inquiryDictItems.map((i: any) => String(i.item_key || '').trim()).filter(Boolean),
+    ]);
+    const validation = validateQuotePayload(rawBody, allowedInquiryTypes);
     if (!validation.valid || !validation.data) {
       return new Response(JSON.stringify({ error: validation.error }), {
         status: 400,

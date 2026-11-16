@@ -331,6 +331,11 @@ const i18nClient = Object.fromEntries(ORDER_I18N_KEYS.map((k) => [k, t(`orders.$
     const currentLang = appData.lang || 'en';
     const isAdmin = !!appData.isAdmin;
     const carrierDict = appData.carrierDict || {};
+    const customCarriers = Object.values(carrierDict).map((c: any) => ({
+      key: c.item_key,
+      name: c.item_label,
+      url: c.meta?.tracking_url || '',
+    }));
     const printSheetTitle = appData.printSheetTitle || 'OFFICIAL B2B PROCUREMENT REQUISITION';
     const printSheetFooter = appData.printSheetFooter || 'B2B Sample & Procurement Requisition Sheet';
     const VALID_ORDER_STATUSES = new Set(['ALL', 'PENDING_APPROVAL', 'APPROVED', 'SHIPPED', 'REJECTED']);
@@ -679,7 +684,7 @@ const i18nClient = Object.fromEntries(ORDER_I18N_KEYS.map((k) => [k, t(`orders.$
                 </div>
                 ${order.tracking_number ? `
                   <a
-                    href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number, carrierDict) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
+                    href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number, undefined, customCarriers) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline print:hidden"
@@ -720,7 +725,7 @@ const i18nClient = Object.fromEntries(ORDER_I18N_KEYS.map((k) => [k, t(`orders.$
             <div class="flex items-center gap-2 flex-wrap order-actions print:hidden shrink-0">
               ${isShipped && order.tracking_number ? `
                 <a
-                  href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number, carrierDict) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
+                  href="${escapeHtml(getTrackingUrl(order.carrier, order.tracking_number, undefined, customCarriers) || `https://t.17track.net/en#nums=${encodeURIComponent(order.tracking_number)}`)}"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all shadow-2xs"

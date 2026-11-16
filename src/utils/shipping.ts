@@ -58,7 +58,7 @@ export function getTrackingUrl(
   const cleanNo = encodeURIComponent(trackingNo.trim());
   const cleanName = (carrierName || '').trim().toLowerCase();
 
-  if (customTemplate && (customTemplate.includes('{tracking}') || customTemplate.includes('{tracking_no}'))) {
+  if (typeof customTemplate === 'string' && (customTemplate.includes('{tracking}') || customTemplate.includes('{tracking_no}'))) {
     return customTemplate.replace('{tracking_no}', cleanNo).replace('{tracking}', cleanNo);
   }
 

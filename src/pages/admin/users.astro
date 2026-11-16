@@ -367,6 +367,7 @@ const pageTitle = 'Customer & Access Management';
       </div>
     </aside>
   </Fragment>
+  <script type="application/json" id="users-tiers-json" set:html={JSON.stringify(customerTiers)}></script>
 </AdminLayout>
 
 <script>
@@ -374,7 +375,7 @@ const pageTitle = 'Customer & Access Management';
   import {
     escapeHtml, formatAdminTime, createPaginationController,
     createWorkbenchFetcher, bindSearchAndRefresh, exportToCsv,
-    $id, syncUrlParams, createSlideDrawer,
+    $id, syncUrlParams, createSlideDrawer, readJsonStore,
     renderTierBadgeHtml, renderOrderStatusBadge
   } from '@utils/adminWorkbench';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
@@ -386,6 +387,11 @@ const pageTitle = 'Customer & Access Management';
     pageAbort?.abort();
     pageAbort = new AbortController();
     const { signal } = pageAbort;
+
+    const clientTiers = readJsonStore<any[]>('users-tiers-json', []);
+    const tierDictMap: Record<string, any> = Object.fromEntries(
+      clientTiers.map((t: any) => [String(t.item_key || '').toUpperCase(), t])
+    );
 
     const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'profile', label: 'Customer Profile', defaultWidth: 240, minWidth: 160, visible: true, canHide: false },
@@ -574,7 +580,7 @@ const pageTitle = 'Customer & Access Management';
 
                 <div class="flex items-center gap-1">
                   ${u.assigned_to ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60">${escapeHtml(u.assigned_to.split('@')[0])}</span>` : `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">Pool</span>`}
-                  ${renderTierBadgeHtml(u.tier)}
+                  ${renderTierBadgeHtml(u.tier, tierDictMap)}
                   ${isBlocked ? `<span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>` : ''}
                 </div>
               </div>
@@ -674,7 +680,7 @@ const pageTitle = 'Customer & Access Management';
             return `
               <td style="width: ${col.defaultWidth}px;" class="${cellPad}">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  ${renderTierBadgeHtml(u.tier)}
+                  ${renderTierBadgeHtml(u.tier, tierDictMap)}
                   ${isBlocked
                     ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">BLOCKED</span>`
                     : `<span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">ACTIVE</span>`}

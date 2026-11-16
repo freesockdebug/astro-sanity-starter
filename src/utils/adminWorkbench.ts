@@ -560,8 +560,8 @@ export function createSlideDrawer(cfg: {
 /**
  * Renders Buyer Tier badge HTML from the Single Source of Truth (`@utils/tier`).
  */
-export function renderTierBadgeHtml(tier?: string | null): string {
-  const cfg = getTierConfig(tier);
+export function renderTierBadgeHtml(tier?: string | null, tierDict?: Record<string, any>): string {
+  const cfg = getTierConfig(tier, tierDict);
   return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.badgeBg}">${escapeHtml(cfg.shortLabel)}</span>`;
 }
 
@@ -572,20 +572,43 @@ const ORDER_STATUS_BADGE_MAP: Record<string, { cls: string; dot: string; label: 
   REJECTED: { cls: 'bg-zinc-100 text-zinc-700 border-zinc-200', dot: '', label: 'Rejected', shortLabel: 'Rejected' },
 };
 
+const DICT_COLOR_DOT: Record<string, string> = {
+  amber: 'bg-amber-500',
+  blue: 'bg-blue-500',
+  emerald: 'bg-emerald-500',
+  purple: 'bg-purple-500',
+  rose: 'bg-rose-500',
+  indigo: 'bg-indigo-500',
+};
+
 /**
  * Renders Order Status badge HTML uniformly across admin order tables and customer drawers.
  */
-export function renderOrderStatusBadge(status?: string | null, compact = false): string {
+export function renderOrderStatusBadge(
+  status?: string | null,
+  compact = false,
+  statusDict?: Record<string, any>
+): string {
   const key = String(status || '').toUpperCase();
-  const cfg = ORDER_STATUS_BADGE_MAP[key];
-  if (!cfg) {
+  const dictItem = statusDict?.[key] || (status ? statusDict?.[status] : undefined);
+  const fallback = ORDER_STATUS_BADGE_MAP[key];
+
+  if (!dictItem && !fallback) {
     return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">${escapeHtml(status)}</span>`;
   }
+
+  const cls = dictItem?.badge_color ? getBadgeColorClasses(dictItem.badge_color) : fallback.cls;
+  const dot = dictItem?.badge_color ? (DICT_COLOR_DOT[dictItem.badge_color] || '') : fallback.dot;
+  const label = dictItem?.item_label ? escapeHtml(dictItem.item_label) : fallback.label;
+  const shortLabel = dictItem?.item_label
+    ? escapeHtml(String(dictItem.item_label).split(/[\s/]+/)[0] || dictItem.item_label)
+    : fallback.shortLabel;
+
   if (compact) {
-    return `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium border ${cfg.cls}">${cfg.shortLabel}</span>`;
+    return `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium border ${cls}">${shortLabel}</span>`;
   }
-  const dotHtml = cfg.dot ? `<span class="w-1.5 h-1.5 rounded-full ${cfg.dot}"></span>` : '';
-  return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${cfg.cls}">${dotHtml}${cfg.label}</span>`;
+  const dotHtml = dot ? `<span class="w-1.5 h-1.5 rounded-full ${dot}"></span>` : '';
+  return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${cls}">${dotHtml}${label}</span>`;
 }
 
 const DICT_BADGE_COLOR_CLS: Record<string, string> = {

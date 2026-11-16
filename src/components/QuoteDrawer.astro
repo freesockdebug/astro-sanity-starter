@@ -694,6 +694,7 @@ if (reqCountryCode) {
       return;
     }
 
+    const hasSwatchItem = items.some((i: any) => String(i.id || '').startsWith('swatch-') || i.id === 'swatch-kit-sample');
     const payload = {
       buyerInfo: {
         company: formData.get('company'),
@@ -705,7 +706,7 @@ if (reqCountryCode) {
       },
       items,
       turnstileToken,
-      inquiryType: 'quote_cart',
+      inquiryType: hasSwatchItem ? 'swatch_request' : 'quote_cart',
       locale: document.documentElement.lang || 'en',
     };
 

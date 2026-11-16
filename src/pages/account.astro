@@ -4,6 +4,7 @@ import BuyerLayout from '@layouts/BuyerLayout.astro';
 import LocalTime from '@components/LocalTime.astro';
 import TierBadge from '@components/TierBadge.astro';
 import { getBuyerContext, getRuntimeEnv } from '@utils/auth';
+import { getDictMap } from '@utils/dicts';
 import { getUserLoginHistory } from '@utils/db';
 import { getLangFromUrl, useTranslations } from '@i18n';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -16,14 +17,18 @@ const t = useTranslations(currentLang);
 const { sessionUser, dbUser, systemSettings, redirectResponse } = await getBuyerContext(Astro, cfEnv, { requireLogin: true });
 if (redirectResponse) return redirectResponse;
 
-const loginHistory = await getUserLoginHistory(sessionUser!.id, 20);
+const tier = dbUser?.tier || 'STANDARD';
+const [loginHistory, tierDictMap] = await Promise.all([
+  getUserLoginHistory(sessionUser!.id, 20),
+  getDictMap(cfEnv, 'customer_tiers').catch(() => ({})),
+]);
+const activeTierMeta = tierDictMap[tier.toUpperCase()]?.meta || {};
 const logtoEndpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv);
 const whatsappNumber = systemSettings?.whatsapp_number || getRuntimeEnv('PUBLIC_WHATSAPP_NUMBER', cfEnv) || import.meta.env.PUBLIC_WHATSAPP_NUMBER || '';
 const contactEmail = systemSettings?.contact_email || getRuntimeEnv('PUBLIC_CONTACT_EMAIL', cfEnv) || import.meta.env.PUBLIC_CONTACT_EMAIL || '';
 const whatsappPrefillBase = systemSettings?.whatsapp_prefill || 'I would like to consult on custom manufacturing & wholesale orders.';
 const pageTitle = t('account.metaTitle');
 const pageDesc = t('account.metaDesc');
-const tier = dbUser?.tier || 'STANDARD';
 
 const PROFILE_FIELDS = [
   {
@@ -196,6 +201,17 @@ const TIER_PERKS = [
               <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b]">B2B Membership</span>
               <TierBadge tier={tier} />
             </div>
+
+            {(activeTierMeta.discount_label || activeTierMeta.description) && (
+              <div class="p-3 rounded-xl bg-[#f5f5f7] border border-black/5 space-y-0.5">
+                {activeTierMeta.discount_label && (
+                  <div class="text-xs font-bold text-[#1d1d1f]">{activeTierMeta.discount_label}</div>
+                )}
+                {activeTierMeta.description && (
+                  <p class="text-[11px] text-[#52525b] leading-snug">{activeTierMeta.description}</p>
+                )}
+              </div>
+            )}
 
             <div class="space-y-3 pt-1">
               {TIER_PERKS.map((perk) => (

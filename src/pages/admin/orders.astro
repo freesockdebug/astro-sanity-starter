@@ -457,6 +457,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
   ></div>
   <script type="application/json" id="orders-carriers-json" set:html={JSON.stringify(carrierOptions)}></script>
   <script type="application/json" id="orders-inquiry-types-json" set:html={JSON.stringify(inquiryTypeItems)}></script>
+  <script type="application/json" id="orders-statuses-json" set:html={JSON.stringify(orderStatusItems)}></script>
 
   <!-- Floating Batch Operations Action Bar -->
   <div
@@ -540,7 +541,11 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
 
   const clientCarriers = readJsonStore<any[]>('orders-carriers-json', []);
   const clientInquiryTypes = readJsonStore<any[]>('orders-inquiry-types-json', []);
+  const clientStatuses = readJsonStore<any[]>('orders-statuses-json', []);
   const inquiryTypeMap = new Map(clientInquiryTypes.map((i: any) => [String(i.item_key || '').toLowerCase(), i]));
+  const statusDictMap: Record<string, any> = Object.fromEntries(
+    clientStatuses.map((s: any) => [String(s.item_key || '').toUpperCase(), s])
+  );
 
   const resolveTrackingUrl = (carrier?: string, trackingNo?: string, customTemplate?: string): string =>
     getTrackingUrl(carrier, trackingNo, customTemplate, clientCarriers) || '';
@@ -889,7 +894,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
                 </div>
                 <div class="shrink-0 flex items-center gap-1.5 flex-wrap justify-end">
                   ${renderAssigneeWidget(order, safeId, true)}
-                  ${renderOrderStatusBadge(order.status)}
+                  ${renderOrderStatusBadge(order.status, false, statusDictMap)}
                 </div>
               </div>
 
@@ -1018,7 +1023,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
             `;
           case 'status':
             return `
-              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">${renderOrderStatusBadge(order.status)}</td>
+              <td style="width: ${col.defaultWidth}px;" class="${cellPad}">${renderOrderStatusBadge(order.status, false, statusDictMap)}</td>
             `;
           case 'action':
             return `

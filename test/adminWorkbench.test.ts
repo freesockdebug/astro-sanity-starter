@@ -110,6 +110,10 @@ test('getTrackingUrl resolves default, custom template, and dynamic carrier dict
     ]),
     'https://sf.example.com?no=SF123'
   );
+  assert.equal(
+    getTrackingUrl('DHL', '123456', { dhl: { item_key: 'dhl' } } as any),
+    'https://www.dhl.com/en/express/tracking.html?AWB=123456'
+  );
 });
 
 test('parsePaginationParams bounds page, limit, offset, and trims search', () => {
