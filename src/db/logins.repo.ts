@@ -1,7 +1,7 @@
 // src/db/logins.repo.ts
 // Login Audit Domain Repository: Recording, 90-day retention, History Query
 
-import { type DbClient } from './client';
+import { formatUtcCutoff, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import type { LoginRecord } from './types';
 import { getSystemSettings } from './settings.repo';
@@ -49,8 +49,8 @@ export async function recordUserLogin(
       if (Math.random() < 0.1) {
         const retentionDays = settings?.login_retention_days || 90;
         ops.push({
-          sql: `DELETE FROM user_logins WHERE created_at < datetime('now', ?)`,
-          params: [`-${retentionDays} days`],
+          sql: `DELETE FROM user_logins WHERE created_at < ?`,
+          params: [formatUtcCutoff(retentionDays * 86_400_000, db.dialect)],
         });
       }
 

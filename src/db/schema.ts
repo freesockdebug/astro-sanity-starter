@@ -145,17 +145,17 @@ export const DDL_STATEMENTS = [
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(group_code, item_key)
 )`,
-  `INSERT OR IGNORE INTO admin_roles (code, name, data_scope, menus_json, permissions_json, description, is_system) VALUES
+  `INSERT INTO admin_roles (code, name, data_scope, menus_json, permissions_json, description, is_system) VALUES
   ('super_admin', '超级管理员', 'ALL', '["dashboard","orders","users","products","pages","cms_config","cache","members","roles","dicts","logins","logs","settings"]', '["*"]', '全局最高权限，拥有全站所有操作及系统设置能力', 1),
   ('content_editor', '内容与美工运营', 'ALL', '["products","pages","cms_config","cache"]', '["cms:read","cms:write","cache:purge"]', '负责商品管理、分类维护、页面积木编排与边缘缓存刷新', 1),
   ('sales_manager', '销售主管', 'ALL', '["dashboard","orders","users","products","members","logins"]', '["dashboard:read","orders:read","orders:approve","orders:ship","orders:assign","orders:export","users:read","users:edit_tier","users:assign","members:manage","dicts:read","cms:read","cms:write","cache:purge"]', '负责团队管理、询盘指派调配、商品报价与客户等级管理', 1),
   ('sales_rep', '跟单业务员', 'SELF_AND_POOL', '["orders","users"]', '["orders:read","orders:claim","orders:approve","orders:ship","users:read"]', '负责跟单、询盘公海认领与常规发货审批', 1),
-  ('auditor', '运维审计员', 'ALL', '["dashboard","logins","logs"]', '["dashboard:read","logins:read","logs:read"]', '只读查看登录轨迹与系统诊断日志，保障系统安全', 1)`,
+  ('auditor', '运维审计员', 'ALL', '["dashboard","logins","logs"]', '["dashboard:read","logins:read","logs:read"]', '只读查看登录轨迹与系统诊断日志，保障系统安全', 1) ON CONFLICT DO NOTHING`,
   `UPDATE admin_roles SET menus_json = '["dashboard","orders","users","products","pages","cms_config","cache","members","roles","dicts","logins","logs","settings"]' WHERE code = 'super_admin' AND is_system = 1`,
   `UPDATE admin_roles SET menus_json = '["dashboard","orders","users","products","members","logins"]' WHERE code = 'sales_manager' AND is_system = 1`,
   `UPDATE admin_roles SET menus_json = '["dashboard","logins","logs"]' WHERE code = 'auditor' AND is_system = 1`,
-  `INSERT OR IGNORE INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init')`,
-  `INSERT OR IGNORE INTO sys_dict_groups (code, name, description, meta_schema_json, is_system) VALUES
+  `INSERT INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init') ON CONFLICT DO NOTHING`,
+  `INSERT INTO sys_dict_groups (code, name, description, meta_schema_json, is_system) VALUES
   ('shipping_carriers', 'Shipping Carriers', 'Logistics couriers & tracking URL templates', '[{"key":"tracking_url","label":"Tracking URL Template","type":"text","placeholder":"https://...{tracking}"}]', 1),
   ('quick_replies', 'Quick Reply Templates', 'B2B multi-scene reply chips for order reviews', '[{"key":"scene","label":"Scene","type":"select","options":["approval","shipping","rejection"]},{"key":"content","label":"Template Text","type":"textarea"}]', 1),
   ('customer_tiers', 'Customer Tiers', 'B2B buyer pricing tiers and visual badge styling', '[{"key":"discount_label","label":"Discount Notice","type":"text"},{"key":"description","label":"Benefits Description","type":"text"}]', 1),
@@ -164,8 +164,8 @@ export const DDL_STATEMENTS = [
   ('order_statuses', 'Order Statuses', 'Fulfillment lifecycle statuses and SLA thresholds', '[{"key":"sla_hours","label":"SLA Threshold (Hours)","type":"number"}]', 1),
   ('audit_actions', 'Audit Actions', 'Security and operations audit action dictionary', '[{"key":"risk_level","label":"Risk Level","type":"select","options":["LOW","MEDIUM","HIGH"]}]', 1),
   ('currencies', 'Settlement Currencies', 'B2B pricing currencies and symbols for products & RFQ quotes', '[{"key":"symbol","label":"Currency Symbol","type":"text","placeholder":"$"}]', 1),
-  ('product_units', 'Product Packing Units', 'Minimum order and packaging units for B2B products', '[]', 1)`,
-  `INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_color, meta_json, sort_order) VALUES
+  ('product_units', 'Product Packing Units', 'Minimum order and packaging units for B2B products', '[]', 1) ON CONFLICT DO NOTHING`,
+  `INSERT INTO sys_dict_items (group_code, item_key, item_label, badge_color, meta_json, sort_order) VALUES
   ('shipping_carriers', 'dhl', 'DHL Express', 'amber', '{"tracking_url":"https://www.dhl.com/global-en/home/tracking/tracking-express.html?submit=1&tracking-id={tracking}"}', 10),
   ('shipping_carriers', 'fedex', 'FedEx', 'purple', '{"tracking_url":"https://www.fedex.com/fedextrack/?trknbr={tracking}"}', 20),
   ('shipping_carriers', 'ups', 'UPS', 'amber', '{"tracking_url":"https://www.ups.com/track?tracknum={tracking}"}', 30),
@@ -203,8 +203,8 @@ export const DDL_STATEMENTS = [
   ('order_statuses', 'PENDING_APPROVAL', 'Pending Approval', 'amber', '{"sla_hours":24}', 10),
   ('order_statuses', 'APPROVED', 'Approved / Processing', 'blue', '{}', 20),
   ('order_statuses', 'SHIPPED', 'Dispatched / In Transit', 'emerald', '{}', 30),
-  ('order_statuses', 'REJECTED', 'Rejected', 'rose', '{}', 40)`,
-  `INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_color, meta_json, sort_order) VALUES
+  ('order_statuses', 'REJECTED', 'Rejected', 'rose', '{}', 40) ON CONFLICT DO NOTHING`,
+  `INSERT INTO sys_dict_items (group_code, item_key, item_label, badge_color, meta_json, sort_order) VALUES
 
   ('audit_actions', 'CREATE_ORDER', 'Create Requisition', 'blue', '{"risk_level":"LOW"}', 10),
   ('audit_actions', 'APPROVE_ORDER', 'Approve Order', 'emerald', '{"risk_level":"LOW"}', 20),
@@ -248,7 +248,7 @@ export const DDL_STATEMENTS = [
   ('product_units', 'Pairs', 'Pairs (双)', 'slate', '{}', 10),
   ('product_units', 'Pcs', 'Pieces (件/条)', 'slate', '{}', 20),
   ('product_units', 'Sets', 'Sets (套/盒)', 'slate', '{}', 30),
-  ('product_units', 'Dozens', 'Dozens (打/12双)', 'slate', '{}', 40)`,
+  ('product_units', 'Dozens', 'Dozens (打/12双)', 'slate', '{}', 40) ON CONFLICT DO NOTHING`,
   `CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no)`,
@@ -290,16 +290,28 @@ let isSchemaVerifiedInIsolate = false;
  */
 export async function ensureSchema(rawOrClient?: any, force = false): Promise<void> {
   if (!force && isSchemaVerifiedInIsolate) return;
-  let target = rawOrClient;
-  if (!target) {
-    const client = await getDb();
-    target = client.raw;
-  } else if (target.raw) {
-    target = target.raw;
+  let clientOrRaw = rawOrClient;
+  if (!clientOrRaw) {
+    clientOrRaw = await getDb();
   }
+
+  // If Postgres DbClient is passed (or resolved from getDb()), execute DDL via its adapter so toPostgresSql() runs
+  if (clientOrRaw?.dialect === 'postgres' && typeof clientOrRaw.execute === 'function') {
+    for (const sql of DDL_STATEMENTS) {
+      try {
+        await clientOrRaw.execute(sql);
+      } catch {
+        // Already exists
+      }
+    }
+    isSchemaVerifiedInIsolate = true;
+    return;
+  }
+
+  const target = clientOrRaw?.raw || clientOrRaw;
   if (!target) return;
 
-  // 1. Ensure core tables and indexes exist
+  // 1. Ensure core tables and indexes exist (D1 / SQLite)
   let batchOk = false;
   if (target.batch && target.prepare) {
     try {
@@ -310,7 +322,7 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
     }
   }
 
-  // 3. Sequential execution fallback for statements and indexes only if batch was unavailable or failed
+  // 2. Sequential execution fallback for statements and indexes only if batch was unavailable or failed
   if (!batchOk) {
     for (const sql of DDL_STATEMENTS) {
       try {
@@ -330,7 +342,7 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
 }
 
 /**
- * Lazy self-healing wrapper: only runs DDL if database throws "no such table"
+ * Lazy self-healing wrapper: only runs DDL if database throws "no such table" / "does not exist"
  */
 export async function executeWithAutoSchema<T>(
   fn: (db: DbClient) => Promise<T>
@@ -341,9 +353,14 @@ export async function executeWithAutoSchema<T>(
     return await fn(db);
   } catch (err: any) {
     const errMsg = (err?.message || String(err)).toLowerCase();
-    if (errMsg.includes('no such table') || errMsg.includes('no such column') || errMsg.includes('has no column named')) {
+    if (
+      errMsg.includes('no such table') ||
+      errMsg.includes('no such column') ||
+      errMsg.includes('has no column named') ||
+      errMsg.includes('does not exist')
+    ) {
       console.warn('[DB] Schema discrepancy detected; triggering lazy schema migration...');
-      await ensureSchema(db.raw, true);
+      await ensureSchema(db, true);
       return await fn(db);
     }
     throw err;

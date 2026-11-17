@@ -2,6 +2,8 @@
 // Runnable self-check for B2B Orders & Idempotent Claiming logic
 
 import 'dotenv/config';
+// Force local SQLite self-check isolation even when .env points DB_PROVIDER to Supabase
+process.env.DB_PROVIDER = 'd1';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-mock-session-secret-key-32chars';
 process.env.SANITY_PROJECT_ID = process.env.SANITY_PROJECT_ID || 'xvhhd8u0';
 process.env.SANITY_DATASET = process.env.SANITY_DATASET || 'production';

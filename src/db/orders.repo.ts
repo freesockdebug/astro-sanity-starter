@@ -1,7 +1,7 @@
 // src/db/orders.repo.ts
 // Order Domain Repository: CRUD, Status Management, Guest Claiming, Hydration
 
-import { getDb, generateOrderNo, generateUuid, type DbClient } from './client';
+import { getDb, generateOrderNo, generateUuid, formatUtcCutoff, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { invalidateUserStatusCache } from './users.repo';
 import type { DataScope } from './rbac.repo';
@@ -302,15 +302,15 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
       params.push(status);
     }
 
-    const windowMap: Record<string, string> = {
-      '24h': '-24 hours',
-      '7d': '-7 days',
-      '30d': '-30 days',
+    const windowMsMap: Record<string, number> = {
+      '24h': 24 * 3600_000,
+      '7d': 7 * 86_400_000,
+      '30d': 30 * 86_400_000,
     };
 
-    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
-      whereClauses.push(`created_at >= datetime('now', ?)`);
-      params.push(windowMap[timeWindow]);
+    if (timeWindow && timeWindow !== 'ALL' && windowMsMap[timeWindow]) {
+      whereClauses.push(`created_at >= ?`);
+      params.push(formatUtcCutoff(windowMsMap[timeWindow], db.dialect));
     }
 
     if (search && search.trim()) {
@@ -323,12 +323,12 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
       if (filter.dataScope === 'SELF_AND_POOL') {
         const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
         if (filter.assignedTo === 'UNASSIGNED') {
-          targetWhere.push('(assigned_to IS NULL OR assigned_to = "")');
+          targetWhere.push("(assigned_to IS NULL OR assigned_to = '')");
         } else if (filter.assignedTo) {
           targetWhere.push('assigned_to = ?');
           targetParams.push(email);
         } else {
-          targetWhere.push('(assigned_to = ? OR assigned_to IS NULL OR assigned_to = "")');
+          targetWhere.push("(assigned_to = ? OR assigned_to IS NULL OR assigned_to = '')");
           targetParams.push(email);
         }
       } else if (filter.dataScope === 'SELF_ONLY') {
@@ -337,7 +337,7 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
         targetParams.push(email);
       } else if (filter.assignedTo) {
         if (filter.assignedTo === 'UNASSIGNED') {
-          targetWhere.push('(assigned_to IS NULL OR assigned_to = "")');
+          targetWhere.push("(assigned_to IS NULL OR assigned_to = '')");
         } else {
           targetWhere.push('assigned_to = ?');
           targetParams.push(filter.assignedTo.trim().toLowerCase());
@@ -353,9 +353,9 @@ export async function listAdminOrders(filter: ListAdminOrdersFilter = {}): Promi
     const statsWhereClauses: string[] = [];
     const statsParams: any[] = [];
 
-    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
-      statsWhereClauses.push(`created_at >= datetime('now', ?)`);
-      statsParams.push(windowMap[timeWindow]);
+    if (timeWindow && timeWindow !== 'ALL' && windowMsMap[timeWindow]) {
+      statsWhereClauses.push(`created_at >= ?`);
+      statsParams.push(formatUtcCutoff(windowMsMap[timeWindow], db.dialect));
     }
 
     if (search && search.trim()) {
@@ -623,6 +623,22 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   }
 
   return executeWithAutoSchema(async (db: DbClient) => {
+    const slaRow = await db.first<{ meta_json: string | null }>(
+      `SELECT meta_json FROM sys_dict_items WHERE group_code = 'order_statuses' AND item_key = 'PENDING_APPROVAL' AND is_enabled = 1 LIMIT 1`
+    );
+    let slaHours = 24;
+    if (slaRow?.meta_json) {
+      try {
+        const parsed = JSON.parse(slaRow.meta_json);
+        const h = Number(parsed?.sla_hours);
+        if (Number.isFinite(h) && h > 0) slaHours = h;
+      } catch {
+        // Fallback to default 24h SLA on malformed JSON
+      }
+    }
+    const sevenDaysCutoff = formatUtcCutoff(7 * 86_400_000, db.dialect);
+    const slaCutoff = formatUtcCutoff(slaHours * 3600_000, db.dialect);
+
     const [
       totalsRow,
       statusRows,
@@ -633,11 +649,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       db.first<any>(`
         SELECT 
           COUNT(*) as total_orders,
-          SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) as orders_7d,
+          SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as orders_7d,
           SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as pending_review,
-          SUM(CASE WHEN status = 'PENDING_APPROVAL' AND created_at <= datetime('now', '-' || COALESCE((SELECT CAST(json_extract(meta_json, '$.sla_hours') AS INTEGER) FROM sys_dict_items WHERE group_code = 'order_statuses' AND item_key = 'PENDING_APPROVAL' AND is_enabled = 1 LIMIT 1), 24) || ' hours') THEN 1 ELSE 0 END) as overdue_sla
+          SUM(CASE WHEN status = 'PENDING_APPROVAL' AND created_at <= ? THEN 1 ELSE 0 END) as overdue_sla
         FROM orders
-      `),
+      `, [sevenDaysCutoff, slaCutoff]),
       db.query<any>(`SELECT status, COUNT(*) as count FROM orders GROUP BY status`),
       db.query<any>(`
         SELECT destination_country, COUNT(*) as count 
@@ -648,7 +664,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         LIMIT 5
       `),
       db.query<any>(`
-        SELECT title, sku, SUM(quantity) as total_qty, COUNT(id) as count
+        SELECT title, MAX(sku) as sku, SUM(quantity) as total_qty, COUNT(id) as count
         FROM order_items
         WHERE title IS NOT NULL AND title != ''
         GROUP BY title

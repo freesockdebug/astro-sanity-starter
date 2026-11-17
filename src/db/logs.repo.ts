@@ -1,7 +1,7 @@
 // src/db/logs.repo.ts
 // System Error & Diagnostics Domain Repository: D1 logging, probabilistic pruning, latency profiling & queries
 
-import { type DbClient } from './client';
+import { formatUtcCutoff, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getSystemSettings } from './settings.repo';
 
@@ -194,8 +194,8 @@ export async function recordErrorLog(
       if (Math.random() < 0.05) {
         const retentionDays = settings?.log_retention_days || 30;
         ops.push({
-          sql: `DELETE FROM system_error_logs WHERE created_at < datetime('now', ?)`,
-          params: [`-${retentionDays} days`],
+          sql: `DELETE FROM system_error_logs WHERE created_at < ?`,
+          params: [formatUtcCutoff(retentionDays * 86_400_000, db.dialect)],
         });
       }
 
@@ -314,8 +314,8 @@ export async function recordErrorLogsBatch(
       if (Math.random() < 0.05) {
         const retentionDays = settings?.log_retention_days || 30;
         validOps.push({
-          sql: `DELETE FROM system_error_logs WHERE created_at < datetime('now', ?)`,
-          params: [`-${retentionDays} days`],
+          sql: `DELETE FROM system_error_logs WHERE created_at < ?`,
+          params: [formatUtcCutoff(retentionDays * 86_400_000, db.dialect)],
         });
       }
 
@@ -403,14 +403,16 @@ export async function listErrorLogs(
 
       // Time window filtering
       if (options.timeWindow && options.timeWindow !== 'ALL') {
-        if (options.timeWindow === '1h') {
-          conditions.push(`created_at >= datetime('now', '-1 hour')`);
-        } else if (options.timeWindow === '24h') {
-          conditions.push(`created_at >= datetime('now', '-24 hours')`);
-        } else if (options.timeWindow === '7d') {
-          conditions.push(`created_at >= datetime('now', '-7 days')`);
-        } else if (options.timeWindow === '30d') {
-          conditions.push(`created_at >= datetime('now', '-30 days')`);
+        const windowMsMap: Record<string, number> = {
+          '1h': 3600_000,
+          '24h': 24 * 3600_000,
+          '7d': 7 * 86_400_000,
+          '30d': 30 * 86_400_000,
+        };
+        const ms = windowMsMap[options.timeWindow];
+        if (ms) {
+          conditions.push(`created_at >= ?`);
+          params.push(formatUtcCutoff(ms, db.dialect));
         }
       }
 
@@ -425,16 +427,24 @@ export async function listErrorLogs(
         ? 'ORDER BY latency_ms DESC NULLS LAST, id DESC'
         : 'ORDER BY id DESC';
 
-      const bottleneckTimeWindow = options.timeWindow === '1h'
-        ? `'-1 hour'`
+      const bottleneckWindowKey = options.timeWindow === '1h'
+        ? '1h'
         : options.timeWindow === '24h'
-        ? `'-24 hours'`
+        ? '24h'
         : options.timeWindow === '30d'
-        ? `'-30 days'`
-        : `'-7 days'`;
+        ? '30d'
+        : '7d';
+      const bottleneckMsMap: Record<string, number> = {
+        '1h': 3600_000,
+        '24h': 24 * 3600_000,
+        '7d': 7 * 86_400_000,
+        '30d': 30 * 86_400_000,
+      };
+      const thirtyDaysCutoff = formatUtcCutoff(30 * 86_400_000, db.dialect);
+      const bottleneckCutoff = formatUtcCutoff(bottleneckMsMap[bottleneckWindowKey], db.dialect);
 
       const now = Date.now();
-      const cachedOverview = logsOverviewCache.get(bottleneckTimeWindow);
+      const cachedOverview = logsOverviewCache.get(bottleneckWindowKey);
       const hasFreshOverview = Boolean(cachedOverview && cachedOverview.exp > now);
 
       const [logs, countRes, overview] = await Promise.all([
@@ -463,7 +473,8 @@ export async function listErrorLogs(
                    SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) as critical,
                    SUM(CASE WHEN (latency_ms >= 1000 AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%') THEN 1 ELSE 0 END) as slow
                  FROM system_error_logs
-                 WHERE created_at >= datetime('now', '-30 days')`
+                 WHERE created_at >= ?`,
+                [thirtyDaysCutoff]
               ),
               db.query<EndpointBottleneck>(
                 `SELECT
@@ -474,12 +485,13 @@ export async function listErrorLogs(
                    MAX(latency_ms) as max_latency,
                    SUM(CASE WHEN latency_ms >= 500 THEN 1 ELSE 0 END) as slow_count
                  FROM system_error_logs
-                 WHERE latency_ms IS NOT NULL AND latency_ms > 0 AND path IS NOT NULL AND path != '' AND created_at >= datetime('now', ${bottleneckTimeWindow})
+                 WHERE latency_ms IS NOT NULL AND latency_ms > 0 AND path IS NOT NULL AND path != '' AND created_at >= ?
                    AND (method IS NULL OR method != 'CLIENT')
                    AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))
                  GROUP BY path, method
                  ORDER BY avg_latency DESC, call_count DESC
-                 LIMIT 8`
+                 LIMIT 8`,
+                [bottleneckCutoff]
               ).catch(() => []),
             ]).then(([s, b]) => {
               const entry: LogsOverviewEntry = {
@@ -495,7 +507,7 @@ export async function listErrorLogs(
                 },
                 bottlenecks: b || [],
               };
-              logsOverviewCache.set(bottleneckTimeWindow, entry);
+              logsOverviewCache.set(bottleneckWindowKey, entry);
               return entry;
             }),
       ]);

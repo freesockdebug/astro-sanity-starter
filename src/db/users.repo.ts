@@ -1,7 +1,7 @@
 // src/db/users.repo.ts
 // User & CRM Domain Repository: Profile, Logto Sync, Tiering, Admin Notes
 
-import { getAdminEmailList, type DbClient } from './client';
+import { getAdminEmailList, formatUtcCutoff, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getOrdersByUserId } from './orders.repo';
 import { getUserLoginHistory } from './logins.repo';
@@ -183,15 +183,16 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       params.push(status);
     }
 
-    const windowMap: Record<string, string> = {
-      '24h': '-24 hours',
-      '7d': '-7 days',
-      '30d': '-30 days',
+    const windowMsMap: Record<string, number> = {
+      '24h': 24 * 3600_000,
+      '7d': 7 * 86_400_000,
+      '30d': 30 * 86_400_000,
     };
 
-    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
-      whereClauses.push(`(u.last_login_at >= datetime('now', ?) OR u.created_at >= datetime('now', ?))`);
-      params.push(windowMap[timeWindow], windowMap[timeWindow]);
+    if (timeWindow && timeWindow !== 'ALL' && windowMsMap[timeWindow]) {
+      const cutoff = formatUtcCutoff(windowMsMap[timeWindow], db.dialect);
+      whereClauses.push(`(u.last_login_at >= ? OR u.created_at >= ?)`);
+      params.push(cutoff, cutoff);
     }
 
     if (search && search.trim()) {
@@ -204,12 +205,12 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       if (filter.dataScope === 'SELF_AND_POOL') {
         const email = filter.currentAdminEmail?.trim().toLowerCase() || '';
         if (filter.assignedTo === 'UNASSIGNED') {
-          targetWhere.push(`(${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
+          targetWhere.push(`(${prefix}assigned_to IS NULL OR ${prefix}assigned_to = '')`);
         } else if (filter.assignedTo) {
           targetWhere.push(`${prefix}assigned_to = ?`);
           targetParams.push(email);
         } else {
-          targetWhere.push(`(${prefix}assigned_to = ? OR ${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
+          targetWhere.push(`(${prefix}assigned_to = ? OR ${prefix}assigned_to IS NULL OR ${prefix}assigned_to = '')`);
           targetParams.push(email);
         }
       } else if (filter.dataScope === 'SELF_ONLY') {
@@ -218,7 +219,7 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
         targetParams.push(email);
       } else if (filter.assignedTo) {
         if (filter.assignedTo === 'UNASSIGNED') {
-          targetWhere.push(`(${prefix}assigned_to IS NULL OR ${prefix}assigned_to = "")`);
+          targetWhere.push(`(${prefix}assigned_to IS NULL OR ${prefix}assigned_to = '')`);
         } else {
           targetWhere.push(`${prefix}assigned_to = ?`);
           targetParams.push(filter.assignedTo.trim().toLowerCase());
@@ -234,9 +235,10 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     const statsWhereClauses: string[] = [];
     const statsParams: any[] = [];
 
-    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
-      statsWhereClauses.push(`(last_login_at >= datetime('now', ?) OR created_at >= datetime('now', ?))`);
-      statsParams.push(windowMap[timeWindow], windowMap[timeWindow]);
+    if (timeWindow && timeWindow !== 'ALL' && windowMsMap[timeWindow]) {
+      const cutoff = formatUtcCutoff(windowMsMap[timeWindow], db.dialect);
+      statsWhereClauses.push(`(last_login_at >= ? OR created_at >= ?)`);
+      statsParams.push(cutoff, cutoff);
     }
 
     if (search && search.trim()) {
@@ -282,9 +284,9 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
 
     let unclaimedSql = `SELECT COUNT(*) as unclaimed FROM orders WHERE user_id IS NULL OR user_id = ''`;
     const unclaimedParams: any[] = [];
-    if (timeWindow && timeWindow !== 'ALL' && windowMap[timeWindow]) {
-      unclaimedSql += ` AND created_at >= datetime('now', ?)`;
-      unclaimedParams.push(windowMap[timeWindow]);
+    if (timeWindow && timeWindow !== 'ALL' && windowMsMap[timeWindow]) {
+      unclaimedSql += ` AND created_at >= ?`;
+      unclaimedParams.push(formatUtcCutoff(windowMsMap[timeWindow], db.dialect));
     }
 
     // Concurrently execute users query, count, tier distribution stats, and unclaimed orders count (1 RTT)
