@@ -519,7 +519,7 @@ const productStructuredData: Record<string, any> = {
                           </span>
                           {tier.unit && (
                             <span class="text-[10px] sm:text-[11px] font-normal text-stone-400 font-mono">
-                              /{unitPairLabel}
+                              /{String(tier.unit).toLowerCase() !== 'pairs' ? tier.unit : unitPairLabel}
                             </span>
                           )}
                         </div>
