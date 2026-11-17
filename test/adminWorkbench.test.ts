@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { escapeHtml, exportToCsv, readJsonStore, renderTierBadgeHtml, renderOrderStatusBadge } from '../src/utils/adminWorkbench.js';
 import { getTrackingUrl } from '../src/utils/shipping.js';
-import { parsePaginationParams } from '../src/utils/format.js';
+import { parsePaginationParams, toIsoUtcString, formatUtcFallback } from '../src/utils/format.js';
 import { getTierConfig, DICT_COLOR_TO_TIER_STYLE } from '../src/utils/tier.js';
 import { toText } from '../src/i18n/utils.js';
 import { toPostgresSql, formatUtcCutoff, sanitizePostgresConnectionString } from '../src/db/client.js';
@@ -193,7 +193,26 @@ test('toPostgresSql converts ? placeholders outside string literals, datetime(no
   assert.ok(pg.includes("note = 'why?'"));
   assert.ok(pg.includes('status = $2'));
   assert.ok(!pg.includes("datetime('now')"));
-  assert.ok(pg.includes('CURRENT_TIMESTAMP::text'));
+  assert.ok(pg.includes("to_char(timezone('utc', now()), 'YYYY-MM-DD HH24:MI:SS')"));
+});
+
+test('toIsoUtcString and formatUtcFallback normalize SQLite and Postgres timestamps cleanly', () => {
+  const cases: Array<[string, string, string]> = [
+    ['2026-11-02 02:18:09', '2026-11-02T02:18:09Z', '2026-11-02 02:18 UTC'],
+    ['2026-11-02 02:18', '2026-11-02T02:18:00Z', '2026-11-02 02:18 UTC'],
+    ['2026-11-17 15:52:30.123456+00', '2026-11-17T15:52:30.123456+00:00', '2026-11-17 15:52 UTC'],
+    ['2026-11-17 15:52:30+00', '2026-11-17T15:52:30+00:00', '2026-11-17 15:52 UTC'],
+    ['2026-11-17 15:52:30+00:00', '2026-11-17T15:52:30+00:00', '2026-11-17 15:52 UTC'],
+    ['2026-11-17 15:52:30.123456', '2026-11-17T15:52:30.123456Z', '2026-11-17 15:52 UTC'],
+    ['2026-11-17T15:52:30Z', '2026-11-17T15:52:30Z', '2026-11-17 15:52 UTC'],
+  ];
+
+  for (const [input, expectedIso, expectedFallback] of cases) {
+    const iso = toIsoUtcString(input);
+    assert.equal(iso, expectedIso);
+    assert.ok(!Number.isNaN(new Date(iso).getTime()), `Expected valid Date for ${iso}`);
+    assert.equal(formatUtcFallback(input), expectedFallback);
+  }
 });
 
 test('formatUtcCutoff formats UTC timestamps with space separator for both sqlite and postgres', () => {

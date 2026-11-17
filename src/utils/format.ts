@@ -14,13 +14,18 @@ export function toIsoUtcString(dateStr?: string | number | Date | null): string 
   const str = String(dateStr).trim();
   if (!str) return '';
 
-  // Already valid ISO format with Z or timezone offset
+  // Already valid ISO format with Z or timezone offset (normalize space separator if present)
   if (str.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(str)) {
-    return str;
+    return str.replace(' ', 'T');
   }
 
-  // SQLite format "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DDTHH:MM:SSZ"
-  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+  // Postgres TIMESTAMPTZ::text format e.g. "2026-11-17 15:52:30.123456+00" -> "...T...+00:00"
+  if (/[+-]\d{2}$/.test(str)) {
+    return `${str.replace(' ', 'T')}:00`;
+  }
+
+  // SQLite / Postgres UTC format "YYYY-MM-DD HH:MM:SS(.fff)" -> "YYYY-MM-DDTHH:MM:SS(.fff)Z"
+  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(str)) {
     const iso = str.replace(' ', 'T');
     return iso.length === 16 ? `${iso}:00Z` : `${iso}Z`;
   }
