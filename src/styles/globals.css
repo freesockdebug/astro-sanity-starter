@@ -383,7 +383,7 @@ html.apple-snap-active {
   position: relative;
 }
 
-:is(.apple-shimmer-wave, .apple-skeleton, .apple-skeleton-warm, .apple-skeleton-surface).is-shimmer-active:not(.apple-img-loaded),
+.apple-shimmer-wave.is-shimmer-active:not(.apple-img-loaded),
 :is(.apple-skeleton, .apple-skeleton-warm, .apple-skeleton-surface).is-shimmer-active:not(.apple-img-loaded)::after {
   will-change: transform;
   animation: apple-shimmer-wave 1.75s var(--apple-ease-in-out) infinite;
