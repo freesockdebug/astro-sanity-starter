@@ -242,23 +242,26 @@ export async function updateSystemSettings(
     }
 
     await executeWithAutoSchema(async (db: DbClient) => {
+      // Single multi-row upsert (1 RTT instead of N round-trips inside a transaction)
+      const valuesPlaceholders = entries.map(() => "(?, ?, ?, datetime('now'))").join(', ');
       const sql = `
         INSERT INTO system_settings (key, value, updated_by, updated_at)
-        VALUES (?, ?, ?, datetime('now'))
+        VALUES ${valuesPlaceholders}
         ON CONFLICT(key) DO UPDATE SET
           value = excluded.value,
           updated_by = excluded.updated_by,
           updated_at = excluded.updated_at
       `;
 
-      const operations = entries.map(([key, rawVal]) => {
+      const params: any[] = [];
+      for (const [key, rawVal] of entries) {
         const valStr = typeof rawVal === 'boolean' || typeof rawVal === 'number'
           ? String(rawVal)
           : String(rawVal || '').trim();
-        return { sql, params: [key, valStr, updatedBy] };
-      });
+        params.push(key, valStr, updatedBy);
+      }
 
-      await db.batch(operations);
+      await db.execute(sql, params);
     });
 
     // Invalidate local memory and force D1 read + KV overwrite in a single write
