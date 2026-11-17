@@ -153,6 +153,12 @@ test('getTierConfig resolves built-in configs and D1 tier dictionary overrides',
   assert.equal(ka.bg, DICT_COLOR_TO_TIER_STYLE.amber.bg);
   assert.equal(ka.badgeBg, DICT_COLOR_TO_TIER_STYLE.amber.badgeBg);
 
+  const wholesale = getTierConfig('WHOLESALE', {
+    WHOLESALE: { item_label: 'Wholesale Partner', badge_color: 'emerald' },
+  });
+  assert.equal(wholesale.label, 'Wholesale Partner');
+  assert.equal(wholesale.shortLabel, 'Wholesale Partner');
+
   const customVip = getTierConfig('VIP', dynamicDict);
   assert.equal(customVip.label, 'Custom VIP');
   assert.equal(customVip.shortLabel, 'Custom VIP');

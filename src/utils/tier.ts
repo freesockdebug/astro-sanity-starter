@@ -57,11 +57,12 @@ export function getTierConfig(tier?: string | null, tierDict?: Record<string, an
       badgeBg: 'bg-blue-50 text-blue-800 border-blue-200',
     };
     const meta = dictItem.meta && typeof dictItem.meta === 'object' ? dictItem.meta : {};
+    const resolvedLabel = dictItem.item_label || dictItem.label;
     return {
       bg: mappedStyle.bg,
       badgeBg: mappedStyle.badgeBg,
-      label: dictItem.label || TIER_CONFIGS[normalized]?.label || normalized,
-      shortLabel: meta.short_label || dictItem.label || TIER_CONFIGS[normalized]?.shortLabel || normalized,
+      label: resolvedLabel || TIER_CONFIGS[normalized]?.label || normalized,
+      shortLabel: meta.short_label || resolvedLabel || TIER_CONFIGS[normalized]?.shortLabel || normalized,
     };
   }
 

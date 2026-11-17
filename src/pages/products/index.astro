@@ -211,10 +211,10 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                   srcset={SanityImageService.srcSet(item.image, [240, 360, 480]) || undefined}
                   sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
                   alt={getLocalizedValue(item.title, currentLang)}
-                  class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
+                  class="catalog-card-img w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
                   loading={idx < 8 ? "eager" : "lazy"}
                   fetchpriority={idx === 0 ? "high" : "auto"}
-                  decoding="async"
+                  decoding={idx < 8 ? "sync" : "async"}
                   width="240"
                   height="240"
                   onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
@@ -288,7 +288,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                 src=""
                 sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
                 alt=""
-                class="catalog-card-img w-full h-full object-cover transform transition-all duration-500 group-hover:scale-105"
+                class="catalog-card-img w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
                 loading="lazy"
                 decoding="async"
                 width="240"
@@ -435,7 +435,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     const root = scope || document;
     const imgs = root.querySelectorAll('.catalog-card-img');
     imgs.forEach((img) => {
-      if (img.complete && img.parentElement) {
+      if (img.complete && img.naturalWidth > 0 && img.parentElement) {
         img.parentElement.classList.add('apple-img-loaded');
         img.parentElement.classList.remove('is-shimmer-active');
         if (typeof window !== 'undefined' && window.__unobserveAppleShimmer) {
@@ -489,20 +489,8 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     // Reset pagination
     displayedCount = 0;
     if (gridContainer) gridContainer.innerHTML = '';
-
-    if (withSkeletonTransition && filterSkeleton && gridContainer) {
-      clearTimeout(skeletonTimer);
-      gridContainer.classList.add('hidden');
-      if (emptyState) emptyState.classList.add('hidden');
-      filterSkeleton.classList.remove('hidden');
-      skeletonTimer = setTimeout(() => {
-        filterSkeleton.classList.add('hidden');
-        renderNextBatch();
-      }, 140);
-    } else {
-      if (filterSkeleton) filterSkeleton.classList.add('hidden');
-      renderNextBatch();
-    }
+    if (filterSkeleton) filterSkeleton.classList.add('hidden');
+    renderNextBatch();
   }
 
   // Create Product Card via template cloning (SSOT with SSR markup)
@@ -529,8 +517,9 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
     if (linkMain) linkMain.href = productUrl;
     if (img) {
-      img.src = item.image;
+      img.decoding = displayedCount < 8 ? 'sync' : 'async';
       if (item.srcset) img.srcset = item.srcset;
+      img.src = item.image;
       img.alt = item.title;
     }
     if (cat) cat.textContent = item.category ? item.category.toUpperCase() : 'OEM';

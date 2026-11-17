@@ -375,4 +375,13 @@ const sectionId = elementId || sectionAnchor || 'collections';
       }
     });
   });
+  document.querySelectorAll<HTMLImageElement>('.shelf-card-img').forEach((img) => {
+    if (img.complete && img.naturalWidth > 0 && img.parentElement) {
+      img.parentElement.classList.add('apple-img-loaded');
+      img.parentElement.classList.remove('is-shimmer-active');
+      if ((window as any).__unobserveAppleShimmer) {
+        (window as any).__unobserveAppleShimmer(img.parentElement);
+      }
+    }
+  });
 </script>

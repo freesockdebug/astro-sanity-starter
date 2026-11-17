@@ -394,7 +394,7 @@ const productStructuredData: Record<string, any> = {
                         draggable="false"
                         loading={idx === 0 ? 'eager' : 'lazy'}
                         fetchpriority={idx === 0 ? 'high' : 'auto'}
-                        decoding="async"
+                        decoding={idx === 0 ? 'sync' : 'async'}
                         onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
                       />
                     </div>
@@ -869,7 +869,7 @@ const productStructuredData: Record<string, any> = {
       const syncCompletedGalleryImages = () => {
         document.querySelectorAll('.pdp-gallery-img').forEach((img) => {
           const htmlImg = img as HTMLImageElement;
-          if (htmlImg.complete && htmlImg.parentElement) {
+          if (htmlImg.complete && htmlImg.naturalWidth > 0 && htmlImg.parentElement) {
             htmlImg.parentElement.classList.add('apple-img-loaded');
             htmlImg.parentElement.classList.remove('is-shimmer-active');
             galleryShimmer.unobserve(htmlImg.parentElement);
