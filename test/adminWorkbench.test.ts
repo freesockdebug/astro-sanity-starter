@@ -193,7 +193,7 @@ test('toPostgresSql converts ? placeholders outside string literals, datetime(no
   assert.ok(pg.includes("note = 'why?'"));
   assert.ok(pg.includes('status = $2'));
   assert.ok(!pg.includes("datetime('now')"));
-  assert.ok(pg.includes('CURRENT_TIMESTAMP'));
+  assert.ok(pg.includes('CURRENT_TIMESTAMP::text'));
 });
 
 test('formatUtcCutoff formats UTC timestamps with space for sqlite and T for postgres', () => {

@@ -456,10 +456,10 @@ export async function assignOrder(orderId: string, assignedTo: string | null): P
     const res = await db.execute(
       `UPDATE orders
        SET assigned_to = ?,
-           assigned_at = CASE WHEN ? IS NOT NULL THEN datetime('now') ELSE NULL END,
+           assigned_at = ${clean ? "datetime('now')" : 'NULL'},
            updated_at = datetime('now')
        WHERE id = ?`,
-      [clean, clean, orderId]
+      [clean, orderId]
     );
 
     // Auto-bind customer to the sales rep if customer is not yet assigned
@@ -499,10 +499,10 @@ export async function batchAssignOrders(orderIds: string[], assignedTo: string |
     const res = await db.execute(
       `UPDATE orders
        SET assigned_to = ?,
-           assigned_at = CASE WHEN ? IS NOT NULL THEN datetime('now') ELSE NULL END,
+           assigned_at = ${clean ? "datetime('now')" : 'NULL'},
            updated_at = datetime('now')
        WHERE id IN (${placeholders})`,
-      [clean, clean, ...orderIds]
+      [clean, ...orderIds]
     );
 
     if (clean && res.changes > 0) {
