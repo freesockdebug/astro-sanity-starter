@@ -815,8 +815,8 @@ const pageTitle = 'System Diagnostics & Performance';
       // Bind events
       tableBody.querySelectorAll('.view-detail-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const id = Number(btn.getAttribute('data-id'));
-          const log = logsList.find((l) => l.id === id);
+          const id = String(btn.getAttribute('data-id') || '');
+          const log = logsList.find((l) => String(l.id) === id);
           if (log) openDetailModal(log);
         });
       });
