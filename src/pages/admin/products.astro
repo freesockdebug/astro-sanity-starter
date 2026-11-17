@@ -631,7 +631,13 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
         btn.addEventListener('click', async () => {
           const id = btn.getAttribute('data-id');
           const title = btn.getAttribute('data-title') || 'this product';
-          if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) return;
+          const ok = await (window as any).__admConfirm?.({
+            title: 'Delete Product',
+            message: `Permanently delete "${title}" from the catalog? This action cannot be undone.`,
+            confirmText: 'Delete',
+            danger: true,
+          });
+          if (!ok) return;
           try {
             const res = await fetch(`/api/admin/cms/products?id=${encodeURIComponent(id || '')}`, { method: 'DELETE' });
             const data = await res.json();

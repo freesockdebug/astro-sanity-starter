@@ -3,7 +3,7 @@
 import type { APIRoute } from 'astro';
 import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { parsePaginationParams } from '@utils/format';
-import { listAuditLogs } from '@utils/db';
+import { listAuditLogs } from '@db';
 
 export const prerender = false;
 

@@ -9,7 +9,7 @@ import {
   SESSION_COOKIE_NAME,
   type AuthUser,
 } from '@utils/auth';
-import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin, getSystemSettings } from '@utils/db';
+import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin, getSystemSettings } from '@db';
 import { SecurityService } from '@utils/security';
 import { logger } from '@utils/logger';
 import { getActiveProfiler } from '@utils/profiler';

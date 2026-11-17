@@ -1,5 +1,5 @@
 ---
-// src/components/AppleFooter.astro
+// src/components/StoreFooter.astro
 import { fetchData } from '@data/siteConfig';
 import { fetchRfqSettings } from '@data/rfqSettings';
 import { cleanEnglishText, cleanBrandTitle } from '@utils/format';
@@ -246,7 +246,7 @@ const legalLinks = rawLegalLinks.map((l: any) => {
       </div>
     </div>
   </div>
-  <!-- Floating Back-to-Top Dock Button (Taobao & Apple Inspired) -->
+  <!-- Floating Back-to-Top Dock Button (Storefront Utility) -->
   <button
     id="btn-back-to-top"
     type="button"
@@ -268,7 +268,7 @@ const legalLinks = rawLegalLinks.map((l: any) => {
 </footer>
 
 <style>
-  /* Back-to-Top Dock Button - Perfectly aligned on the right flank with AppleStageNavigator */
+  /* Back-to-Top Dock Button - Perfectly aligned on the right flank with StageNavigator */
   .btn-back-to-top-dock {
     position: fixed;
     bottom: max(1.25rem, env(safe-area-inset-bottom));

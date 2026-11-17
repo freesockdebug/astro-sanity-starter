@@ -1,0 +1,226 @@
+---
+// src/components/admin/OrderModals.astro
+// Extracted action modals (Approve / Reject / Ship / Assign) for /admin/orders
+interface Props {
+  approveReplies: any[];
+  rejectReplies: any[];
+  shipReplies: any[];
+  carrierOptions: any[];
+  teamMembers: { email: string; name: string; roleName: string }[];
+}
+
+const {
+  approveReplies = [],
+  rejectReplies = [],
+  shipReplies = [],
+  carrierOptions = [],
+  teamMembers = [],
+} = Astro.props;
+---
+
+<!-- 1. Approve Confirmation Modal -->
+<dialog id="approve-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+  <div class="space-y-4 text-xs text-[#1d1d1f]">
+    <div class="flex items-center justify-between pb-1">
+      <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100/80">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <button id="close-approve-modal" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
+    </div>
+
+    <div>
+      <h3 class="text-base font-bold text-[#1d1d1f]">Approve B2B Order</h3>
+      <p class="text-xs text-[#86868b] mt-1 leading-relaxed">
+        Are you sure you want to approve order <strong id="approve-modal-order-no" class="font-mono text-[#1d1d1f]"></strong>? This transitions the order to <span class="text-blue-600 font-medium">Approved (To Ship)</span> status.
+      </p>
+    </div>
+
+    <input type="hidden" id="approve-order-id" />
+    <div>
+      <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Approval Note / Internal Remarks</label>
+      <textarea
+        id="approve-remark-input"
+        rows="2"
+        placeholder="e.g. Swatch approved, queued for sample cutting..."
+        class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
+      ></textarea>
+      {approveReplies.length > 0 && (
+        <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
+          <span class="text-[10px] text-[#86868b]">Quick:</span>
+          {approveReplies.map((r: any) => (
+            <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors cursor-pointer" data-target="approve-remark-input" data-text={r.meta?.content}>{r.item_label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+    <div id="approve-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-2.5 text-xs font-medium leading-relaxed"></div>
+
+    <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
+      <button type="button" id="cancel-approve-btn" class="adm-btn-secondary h-9 px-4">Cancel</button>
+      <button
+        type="button"
+        id="confirm-approve-btn"
+        class="h-9 px-5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs shadow-emerald-700/20 active:scale-95 transition-all cursor-pointer"
+      >
+        Confirm Approval
+      </button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 2. Reject Confirmation Modal -->
+<dialog id="reject-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-sm mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+  <div class="space-y-4 text-xs text-[#1d1d1f]">
+    <div class="flex items-center justify-between pb-1">
+      <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100/80">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </div>
+      <button id="close-reject-modal" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
+    </div>
+
+    <div>
+      <h3 class="text-base font-bold text-[#1d1d1f]">Reject Order</h3>
+      <p class="text-xs text-[#86868b] mt-1 leading-relaxed">
+        Decline order <strong id="reject-modal-order-no" class="font-mono text-[#1d1d1f]"></strong>. Please provide a clear remark explaining the rejection.
+      </p>
+    </div>
+
+    <input type="hidden" id="reject-order-id" />
+    <div>
+      <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Rejection Reason / Internal Note</label>
+      <textarea
+        id="reject-reason-input"
+        rows="3"
+        placeholder="e.g. MOQ requirements not met, out of stock yarn, duplicate order..."
+        class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
+      ></textarea>
+      <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
+        <span class="text-[10px] text-[#86868b]">Quick:</span>
+        {rejectReplies.map((r: any) => (
+          <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors cursor-pointer" data-target="reject-reason-input" data-text={r.meta?.content}>{r.item_label}</button>
+        ))}
+      </div>
+    </div>
+
+    <div id="reject-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-2.5 text-xs font-medium leading-relaxed"></div>
+
+    <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
+      <button type="button" id="cancel-reject-btn" class="adm-btn-secondary h-9 px-4">Cancel</button>
+      <button
+        type="button"
+        id="confirm-reject-btn"
+        class="adm-btn h-9 px-5 bg-rose-600 hover:bg-rose-500 shadow-rose-700/20"
+      >
+        Confirm Rejection
+      </button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 3. Fulfillment / Shipping Dispatch Modal -->
+<dialog id="ship-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-4 rounded-3xl w-[calc(100vw-32px)] max-w-md mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+  <div class="space-y-4 text-xs text-[#1d1d1f]">
+    <div class="flex items-center justify-between pb-1">
+      <div class="w-10 h-10 rounded-xl bg-[#1d1d1f] text-white flex items-center justify-center">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+        </svg>
+      </div>
+      <button id="close-ship-modal" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
+    </div>
+
+    <div>
+      <h3 class="text-base font-bold text-[#1d1d1f]">Dispatch Shipment</h3>
+      <p class="text-xs text-[#86868b] mt-1 leading-relaxed">
+        Record carrier logistics and tracking waybill for order <strong id="ship-modal-order-no" class="font-mono text-[#1d1d1f]"></strong>.
+      </p>
+    </div>
+
+    <form id="ship-form" class="space-y-3">
+      <input type="hidden" id="ship-order-id" name="order_id" />
+
+      <div>
+        <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Logistics Carrier / Freight Provider</label>
+        <select
+          id="ship-carrier-select"
+          name="carrier"
+          required
+          class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-semibold"
+        >
+          {carrierOptions.map((c: any) => (
+            <option value={c.name} data-url-template={c.url}>{c.name}</option>
+          ))}
+        </select>
+        <p id="carrier-tracking-preview" class="text-[10px] font-mono text-blue-600 truncate mt-1"></p>
+      </div>
+
+      <div>
+        <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Waybill / Tracking Number</label>
+        <input
+          type="text"
+          id="ship-tracking-number"
+          name="tracking_number"
+          required
+          placeholder="e.g. 78349281923"
+          class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black font-mono text-xs"
+        />
+      </div>
+
+      <div>
+        <label class="block font-medium mb-1 text-[11px] text-[#52525b]">Dispatch Notes / Admin Remarks (Optional)</label>
+        <textarea
+          id="ship-remark"
+          name="admin_remark"
+          rows="2"
+          placeholder="e.g. Packed in 2 export cartons, estimated arrival Nov 12."
+          class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black resize-none text-xs"
+        ></textarea>
+        {shipReplies.length > 0 && (
+          <div class="flex items-center gap-1.5 pt-1.5 flex-wrap">
+            <span class="text-[10px] text-[#86868b]">Quick:</span>
+            {shipReplies.map((r: any) => (
+              <button type="button" class="btn-quick-chip px-2 py-0.5 rounded text-[10px] bg-[#f5f5f7] hover:bg-black hover:text-white transition-colors cursor-pointer" data-target="ship-remark" data-text={r.meta?.content}>{r.item_label}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div id="ship-error" class="hidden text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 text-[11px] font-medium leading-relaxed"></div>
+
+      <div class="pt-2 flex items-center justify-end gap-2 border-t border-black/5">
+        <button type="button" id="cancel-ship-btn" class="adm-btn-secondary h-9 px-4">Cancel</button>
+        <button type="submit" id="confirm-ship-btn" class="adm-btn-primary h-9 px-5">Confirm Shipment</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- 4. Assign / Reassign Dialog Modal -->
+<dialog id="assign-dialog" class="rounded-2xl p-0 shadow-2xl border border-black/10 backdrop:bg-black/40 max-w-sm w-full mx-auto">
+  <div class="p-5 space-y-4 bg-white">
+    <div class="flex items-center justify-between">
+      <h3 id="assign-dialog-title" class="text-sm font-bold text-[#1d1d1f]">Assign Order</h3>
+      <button type="button" id="close-assign-dialog" class="text-zinc-400 hover:text-black cursor-pointer text-base">✕</button>
+    </div>
+    <div class="space-y-1.5 text-xs text-[#52525b]">
+      <p id="assign-dialog-desc">Select a sales representative to assign this order to:</p>
+      <select
+        id="assign-member-select"
+        class="w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-xs font-sans font-medium"
+      >
+        <option value="">-- Public Lead Pool (Unassigned) --</option>
+        {teamMembers.map((m) => (
+          <option value={m.email}>{m.name} ({m.email}) - {m.roleName}</option>
+        ))}
+      </select>
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-black/5">
+      <button type="button" id="cancel-assign-btn" class="adm-btn-secondary px-3">Cancel</button>
+      <button type="button" id="confirm-assign-btn" class="adm-btn-primary px-4">Confirm</button>
+    </div>
+  </div>
+</dialog>

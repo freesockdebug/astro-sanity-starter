@@ -357,7 +357,7 @@ export async function executeWithAutoSchema<T>(
       errMsg.includes('no such table') ||
       errMsg.includes('no such column') ||
       errMsg.includes('has no column named') ||
-      errMsg.includes('does not exist')
+      (errMsg.includes('relation') && errMsg.includes('does not exist'))
     ) {
       console.warn('[DB] Schema discrepancy detected; triggering lazy schema migration...');
       await ensureSchema(db, true);

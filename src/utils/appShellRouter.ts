@@ -311,16 +311,6 @@ function cleanupCurrentPageOverlays(): void {
   document.body.classList.remove('overflow-hidden');
 }
 
-interface ApiCacheEntry {
-  body: string;
-  status: number;
-  statusText: string;
-  headers: [string, string][];
-  ts: number;
-}
-
-const apiResponseCache = new Map<string, ApiCacheEntry>();
-const API_CACHE_TTL_MS = 25_000;
 const loadedModuleSrcs = new Set<string>();
 
 function syncShellClasses(targetDoc: Document): void {
@@ -434,8 +424,8 @@ async function reactivateScripts(targetDoc: Document): Promise<void> {
     'BuyerLayout.',
     'BuyerSidebar.',
     'AdminSidebar.',
-    'AppleNav.',
-    'AppleFooter.',
+    'StoreNav.',
+    'StoreFooter.',
     'QuoteDrawer.',
     'appShellRouter.',
   ];
@@ -577,64 +567,8 @@ export function initAppShellRouter(options: AppShellOptions): void {
     if (method !== 'GET' && method !== 'HEAD') {
       abortOtherInFlightRequests();
       prefetchCache.clear();
-      apiResponseCache.clear();
       snapshotCache.clear();
       return attachBtnFeedback(origFetch.apply(this, args));
-    }
-
-    let urlStr = '';
-    if (typeof req === 'string') {
-      urlStr = req;
-    } else if (req instanceof URL) {
-      urlStr = req.href;
-    } else if (req && 'url' in req && typeof req.url === 'string') {
-      urlStr = req.url;
-    }
-
-    const isCacheableApi =
-      urlStr &&
-      (urlStr.startsWith('/api/admin/') ||
-        urlStr.includes('/api/admin/') ||
-        urlStr.startsWith('/api/orders') ||
-        urlStr.includes('/api/orders')) &&
-      init?.cache !== 'no-store' &&
-      init?.cache !== 'reload';
-
-    if (isCacheableApi) {
-      const now = Date.now();
-      const cached = apiResponseCache.get(urlStr);
-      if (cached && now - cached.ts < API_CACHE_TTL_MS) {
-        return attachBtnFeedback(
-          Promise.resolve(
-            new Response(cached.body, {
-              status: cached.status,
-              statusText: cached.statusText,
-              headers: new Headers(cached.headers),
-            })
-          )
-        );
-      }
-
-      return attachBtnFeedback(
-        origFetch.apply(this, args).then(async (res) => {
-          if (res.ok) {
-            try {
-              const clone = res.clone();
-              const body = await clone.text();
-              const headers: [string, string][] = [];
-              clone.headers.forEach((v, k) => headers.push([k, v]));
-              apiResponseCache.set(urlStr, {
-                body,
-                status: clone.status,
-                statusText: clone.statusText,
-                headers,
-                ts: Date.now(),
-              });
-            } catch {}
-          }
-          return res;
-        })
-      );
     }
 
     return attachBtnFeedback(origFetch.apply(this, args));
@@ -784,7 +718,6 @@ export function initAppShellRouter(options: AppShellOptions): void {
       currentRenderedUrl = targetUrl.href;
       finishProgressBar();
       document.dispatchEvent(new CustomEvent('shell:page-load', { detail: { url: targetUrl.href } }));
-      window.dispatchEvent(new CustomEvent('app-shell:navigated', { detail: { url: targetUrl.href } }));
       if (snapshot.scrollY) {
         window.scrollTo({ top: snapshot.scrollY, behavior: 'instant' });
       }
@@ -879,7 +812,6 @@ export function initAppShellRouter(options: AppShellOptions): void {
       await reactivateScripts(doc);
       finishProgressBar();
       document.dispatchEvent(new CustomEvent('shell:page-load', { detail: { url: targetUrl.href } }));
-      window.dispatchEvent(new CustomEvent('app-shell:navigated', { detail: { url: targetUrl.href } }));
 
       const curRoot = document.getElementById('shell-root');
       if (!curRoot?.classList.contains('overflow-hidden')) {

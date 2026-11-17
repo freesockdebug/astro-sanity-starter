@@ -2,7 +2,7 @@
 // Role Deletion Endpoint
 import type { APIRoute } from 'astro';
 import { defineAdminApi, jsonNoCache } from '@utils/auth';
-import { deleteAdminRole, getAdminRole } from '@utils/db';
+import { deleteAdminRole, getAdminRole } from '@db';
 import { SYSTEM_ROLES } from '@db/rbac.repo';
 import { recordAdminAudit } from '@db/audit.repo';
 

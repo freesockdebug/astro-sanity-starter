@@ -23,7 +23,7 @@ import {
   recordUserLogin,
   getUserLoginHistory,
   listAllLoginHistory,
-} from '../src/utils/db';
+} from '../src/db';
 import {
   listDictGroups,
   listDictItems,

@@ -3,7 +3,7 @@
 import type { APIRoute } from 'astro';
 import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
-import { batchUpdateOrderStatus, batchAssignOrders } from '@utils/db';
+import { batchUpdateOrderStatus, batchAssignOrders } from '@db';
 import { recordAdminAudit } from '@db/audit.repo';
 import type { OrderStatus } from '@db/types';
 

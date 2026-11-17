@@ -10,7 +10,7 @@ import {
   getSystemSettings,
   type CustomerTier,
   type UserStatus,
-} from '@utils/db';
+} from '@db';
 import { recordAdminAudit } from '@db/audit.repo';
 import { getMergedAdminEmails } from '@utils/auth';
 import { getDictMap } from '@utils/dicts';

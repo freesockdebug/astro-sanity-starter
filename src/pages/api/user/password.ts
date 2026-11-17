@@ -1,7 +1,7 @@
 // src/pages/api/user/password.ts
 import type { APIRoute } from 'astro';
 import { defineBuyerApi, jsonNoCache, updateLogtoUserPassword } from '@utils/auth';
-import { recordUserLogin } from '@utils/db';
+import { recordUserLogin } from '@db';
 import { SecurityService } from '@utils/security';
 
 export const prerender = false;

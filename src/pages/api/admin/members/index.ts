@@ -3,7 +3,7 @@
 import type { APIRoute } from 'astro';
 import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { invalidateAdminRbacCache } from '@utils/rbac';
-import { listAdminMembers, listAdminRoles, upsertAdminMember, getAdminMember, listCandidateLogtoUsers } from '@utils/db';
+import { listAdminMembers, listAdminRoles, upsertAdminMember, getAdminMember, listCandidateLogtoUsers } from '@db';
 import { recordAdminAudit } from '@db/audit.repo';
 
 export const prerender = false;

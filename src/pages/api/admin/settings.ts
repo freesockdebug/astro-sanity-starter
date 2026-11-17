@@ -2,7 +2,7 @@
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, getRuntimeEnv, jsonNoCache } from '@utils/auth';
 import { hasMenu } from '@utils/rbac';
-import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, updateSystemSettings } from '@utils/db';
+import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, updateSystemSettings } from '@db';
 import { SecurityService, sanitizeAdminSettings, isMaskedSecret, SECRET_SETTING_KEYS } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -158,6 +158,15 @@ export const POST: APIRoute = async ({ request }) => {
         }
         updates[key] = val;
       }
+    }
+
+    // Validate Storefront Visual Theme
+    if (rawUpdates.storefront_theme !== undefined) {
+      const theme = String(rawUpdates.storefront_theme).trim().toLowerCase();
+      if (!['apple-minimal', 'warm-atelier', 'editorial-gallery'].includes(theme)) {
+        return jsonNoCache({ error: 'Storefront Theme must be one of: apple-minimal, warm-atelier, editorial-gallery.' }, 400);
+      }
+      updates.storefront_theme = theme;
     }
 
     // Validate Minimum Log Level

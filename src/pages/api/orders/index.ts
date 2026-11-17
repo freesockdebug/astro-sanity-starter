@@ -1,7 +1,7 @@
 // src/pages/api/orders/index.ts
 import type { APIRoute } from 'astro';
 import { defineBuyerApi, jsonNoCache } from '@utils/auth';
-import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders } from '@utils/db';
+import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders } from '@db';
 import { resolveOrderItemImage, getOrderItemProductUrl } from '@data/products';
 
 export const prerender = false;

@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 import { SESSION_COOKIE_NAME, getCookieValue, verifySessionToken, jsonNoCache } from '@utils/auth';
 import { SecurityService } from '@utils/security';
 import { logger } from '@utils/logger';
-import { getSystemSettings } from '@utils/db';
+import { getSystemSettings } from '@db';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

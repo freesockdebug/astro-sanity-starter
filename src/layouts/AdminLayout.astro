@@ -4,7 +4,7 @@
 import Layout from './Layout.astro';
 import AdminSidebar from '@components/admin/AdminSidebar.astro';
 import AdminLanguageSwitcher from '@components/admin/AdminLanguageSwitcher.astro';
-import { getTabTitle, getAllMenuItems, type AdminMenuItem } from '@config/adminNavigation';
+import { getTabTitle, getAllMenuItems, MENU_SVGS, type AdminMenuItem } from '@config/adminNavigation';
 import { SiteConfigService } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
 
@@ -257,7 +257,9 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
                     data-tab-title="System Settings"
                     class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors font-medium admin-popover-nav-item"
                   >
-                    <span>⚙️</span>
+                    <svg class="w-3.5 h-3.5 text-[#52525b]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+                      <path stroke-linecap="round" stroke-linejoin="round" d={MENU_SVGS.settings} />
+                    </svg>
                     <span>System Settings</span>
                   </a>
                 )}
@@ -357,7 +359,9 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
               currentTab === 'members' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
             ]}
           >
-            <span class="text-base">🧑‍💼</span>
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+              <path stroke-linecap="round" stroke-linejoin="round" d={MENU_SVGS.members} />
+            </svg>
             <span>Team</span>
           </a>
         )}
@@ -373,7 +377,9 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
               currentTab === 'logins' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
             ]}
           >
-            <span class="text-base">🛡️</span>
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+              <path stroke-linecap="round" stroke-linejoin="round" d={MENU_SVGS.logins} />
+            </svg>
             <span>Audit</span>
           </a>
         )}
@@ -389,7 +395,9 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
               currentTab === 'settings' ? 'text-[#1d1d1f] font-bold' : 'text-[#86868b] hover:text-black'
             ]}
           >
-            <span class="text-base">⚙️</span>
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+              <path stroke-linecap="round" stroke-linejoin="round" d={MENU_SVGS.settings} />
+            </svg>
             <span>Settings</span>
           </a>
         )}
@@ -407,6 +415,7 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
   <!-- Global Command Palette Modal (⌘K / Ctrl+K) -->
   {
     !isShellReq && (
+      <>
       <dialog
         id="cmd-palette-dialog"
         class="backdrop:bg-black/50 backdrop:backdrop-blur-xs rounded-2xl p-0 shadow-2xl border border-black/10 bg-white w-full max-w-xl m-auto overflow-hidden text-xs"
@@ -431,7 +440,13 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
           {getAllMenuItems().filter((item) => canShow(item.key)).map((item) => (
             <a href={item.href} data-shell-nav="admin" data-tab-key={item.key} data-tab-title={item.label} class="cmd-item flex items-center justify-between p-2 rounded-xl hover:bg-[#f5f5f7] transition-colors text-[#1d1d1f] group">
               <div class="flex items-center gap-2.5">
-                <span class="text-sm select-none">{item.icon}</span>
+                {MENU_SVGS[item.key] ? (
+                  <svg class="w-4 h-4 text-[#52525b] group-hover:text-black shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+                    <path stroke-linecap="round" stroke-linejoin="round" d={MENU_SVGS[item.key]} />
+                  </svg>
+                ) : (
+                  <span class="text-sm select-none">{item.icon}</span>
+                )}
                 <span class="font-semibold text-xs">{item.label}</span>
               </div>
               <span class="text-[10px] text-[#86868b] font-mono">{item.href}</span>
@@ -444,6 +459,34 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
           <span>Press <kbd class="font-mono bg-white px-1 py-0.5 rounded border border-black/10">↵</kbd> to select</span>
         </div>
       </dialog>
+
+      <!-- Global Confirm / Alert Dialog (Replaces native confirm() / alert()) -->
+      <dialog id="adm-confirm-dialog" class="adm-modal w-[calc(100vw-32px)] max-w-md p-5 space-y-4">
+        <div class="space-y-1.5">
+          <h3 id="adm-confirm-title" class="text-sm font-bold text-[#1d1d1f] tracking-tight">Confirm Action</h3>
+          <p id="adm-confirm-message" class="text-xs text-[#52525b] leading-relaxed"></p>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-black/5">
+          <button id="adm-confirm-cancel" type="button" class="adm-btn-secondary">Cancel</button>
+          <button id="adm-confirm-ok" type="button" class="adm-btn-primary">Confirm</button>
+        </div>
+      </dialog>
+
+      <!-- Global Prompt Dialog (Replaces native prompt()) -->
+      <dialog id="adm-prompt-dialog" class="adm-modal w-[calc(100vw-32px)] max-w-md p-5">
+        <form id="adm-prompt-form" class="space-y-4">
+          <div class="space-y-1">
+            <h3 id="adm-prompt-title" class="text-sm font-bold text-[#1d1d1f] tracking-tight">Input Required</h3>
+            <p id="adm-prompt-message" class="text-xs text-[#86868b] hidden"></p>
+          </div>
+          <div id="adm-prompt-fields" class="space-y-3"></div>
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-black/5">
+            <button id="adm-prompt-cancel" type="button" class="adm-btn-secondary">Cancel</button>
+            <button id="adm-prompt-ok" type="submit" class="adm-btn-primary">Confirm</button>
+          </div>
+        </form>
+      </dialog>
+    </>
     )
   }
 
@@ -710,6 +753,133 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
           if (sidebar && !sidebar.classList.contains('-translate-x-full')) closeSidebar();
         }
       });
+
+      // Global Styled Confirm / Alert / Prompt Modals (Replaces browser native dialogs)
+      window.__admConfirm = function(opts) {
+        var cfg = typeof opts === 'string' ? { message: opts } : (opts || {});
+        var dlg = document.getElementById('adm-confirm-dialog');
+        if (!dlg || typeof dlg.showModal !== 'function') {
+          return Promise.resolve(cfg.isAlert ? (window.alert(cfg.message || ''), true) : window.confirm(cfg.message || 'Confirm?'));
+        }
+        var titleEl = document.getElementById('adm-confirm-title');
+        var msgEl = document.getElementById('adm-confirm-message');
+        var cancelBtn = document.getElementById('adm-confirm-cancel');
+        var okBtn = document.getElementById('adm-confirm-ok');
+
+        if (titleEl) titleEl.textContent = cfg.title || (cfg.isAlert ? 'Notice' : 'Confirm Action');
+        if (msgEl) msgEl.textContent = cfg.message || '';
+        if (cancelBtn) {
+          cancelBtn.textContent = cfg.cancelText || 'Cancel';
+          cancelBtn.classList.toggle('hidden', Boolean(cfg.isAlert));
+        }
+        if (okBtn) {
+          okBtn.textContent = cfg.confirmText || (cfg.isAlert ? 'OK' : 'Confirm');
+          okBtn.className = cfg.danger
+            ? 'adm-btn h-8 px-3.5 rounded-xl text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700'
+            : 'adm-btn-primary';
+        }
+
+        return new Promise(function(resolve) {
+          var settled = false;
+          function done(val) {
+            if (settled) return;
+            settled = true;
+            cancelBtn && cancelBtn.removeEventListener('click', onCancel);
+            okBtn && okBtn.removeEventListener('click', onOk);
+            dlg.removeEventListener('cancel', onCancel);
+            if (dlg.open) dlg.close();
+            resolve(val);
+          }
+          function onCancel() { done(false); }
+          function onOk() { done(true); }
+          cancelBtn && cancelBtn.addEventListener('click', onCancel);
+          okBtn && okBtn.addEventListener('click', onOk);
+          dlg.addEventListener('cancel', onCancel);
+          dlg.showModal();
+        });
+      };
+
+      window.__admPrompt = function(opts) {
+        var cfg = opts || {};
+        var dlg = document.getElementById('adm-prompt-dialog');
+        var form = document.getElementById('adm-prompt-form');
+        var fieldsEl = document.getElementById('adm-prompt-fields');
+        var titleEl = document.getElementById('adm-prompt-title');
+        var msgEl = document.getElementById('adm-prompt-message');
+        var cancelBtn = document.getElementById('adm-prompt-cancel');
+        var okBtn = document.getElementById('adm-prompt-ok');
+
+        if (!dlg || !form || !fieldsEl || typeof dlg.showModal !== 'function') {
+          return Promise.resolve(null);
+        }
+
+        if (titleEl) titleEl.textContent = cfg.title || 'Input Required';
+        if (msgEl) {
+          msgEl.textContent = cfg.message || '';
+          msgEl.classList.toggle('hidden', !cfg.message);
+        }
+        if (okBtn) okBtn.textContent = cfg.confirmText || 'Create';
+
+        var fields = Array.isArray(cfg.fields) && cfg.fields.length > 0
+          ? cfg.fields
+          : [{ key: 'value', label: cfg.label || 'Value', defaultValue: cfg.defaultValue || '', placeholder: cfg.placeholder || '', required: true }];
+
+        fieldsEl.innerHTML = '';
+        var inputs = {};
+        fields.forEach(function(f, idx) {
+          var wrap = document.createElement('div');
+          var lbl = document.createElement('label');
+          lbl.className = 'adm-label';
+          lbl.textContent = f.label || f.key;
+          var inp = document.createElement('input');
+          inp.type = 'text';
+          inp.className = 'adm-input';
+          inp.value = f.defaultValue || '';
+          inp.placeholder = f.placeholder || '';
+          if (f.required !== false) inp.required = true;
+          wrap.appendChild(lbl);
+          wrap.appendChild(inp);
+          fieldsEl.appendChild(wrap);
+          inputs[f.key] = inp;
+          if (idx === 0) setTimeout(function() { inp.focus(); }, 30);
+        });
+
+        // Optional slug auto-derivation when second field is 'slug' and untouched
+        if (inputs.title && inputs.slug) {
+          var slugTouched = Boolean(inputs.slug.value);
+          inputs.slug.addEventListener('input', function() { slugTouched = true; });
+          inputs.title.addEventListener('input', function() {
+            if (!slugTouched) {
+              var s = inputs.title.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+              inputs.slug.value = s ? '/' + s : '';
+            }
+          });
+        }
+
+        return new Promise(function(resolve) {
+          var settled = false;
+          function done(val) {
+            if (settled) return;
+            settled = true;
+            cancelBtn && cancelBtn.removeEventListener('click', onCancel);
+            form.removeEventListener('submit', onSubmit);
+            dlg.removeEventListener('cancel', onCancel);
+            if (dlg.open) dlg.close();
+            resolve(val);
+          }
+          function onCancel() { done(null); }
+          function onSubmit(e) {
+            e.preventDefault();
+            var out = {};
+            Object.keys(inputs).forEach(function(k) { out[k] = inputs[k].value; });
+            done(out);
+          }
+          cancelBtn && cancelBtn.addEventListener('click', onCancel);
+          form.addEventListener('submit', onSubmit);
+          dlg.addEventListener('cancel', onCancel);
+          dlg.showModal();
+        });
+      };
     })();
         </script>
       </>

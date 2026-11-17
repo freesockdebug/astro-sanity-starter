@@ -6,7 +6,7 @@ import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { SecurityService } from '@utils/security';
-import { getSystemSettings } from '@utils/db';
+import { getSystemSettings } from '@db';
 import { getRuntimeEnv } from '@utils/auth';
 import { kvGet, kvPut } from '@utils/cache';
 import { runInBackground } from '@utils/cache';

@@ -4,7 +4,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
-import { listDictGroups } from '@utils/db';
+import { listDictGroups } from '@db';
 import { getAllCachedDictItems } from '@utils/dicts';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -54,7 +54,7 @@ const BADGE_COLORS: [string, string, string][] = [
     badge="Universal Engine"
     badgeColor="purple"
     subtitle="Manage shipping carriers, multi-scene quick replies, customer tiers, CRM tags, and SLA thresholds without code deployments"
-    icon="🏷️"
+    iconKey="dicts"
     class="mb-5"
   >
     <div slot="actions">
@@ -355,7 +355,13 @@ const BADGE_COLORS: [string, string, string][] = [
           btn.disabled = false;
         }
       } else if (action === 'delete') {
-        if (!confirm(`Are you sure you want to delete dictionary item "${k}"?`)) return;
+        const ok = await (window as any).__admConfirm?.({
+          title: 'Delete Dictionary Item',
+          message: `Are you sure you want to delete dictionary item "${k}"?`,
+          confirmText: 'Delete Item',
+          danger: true,
+        });
+        if (!ok) return;
         btn.disabled = true;
         try {
           const res = await fetch(`/api/admin/dicts/${encodeURIComponent(g)}?itemKey=${encodeURIComponent(k)}`, { method: 'DELETE' });

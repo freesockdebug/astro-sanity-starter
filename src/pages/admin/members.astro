@@ -4,7 +4,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
-import { listAdminMembers, listAdminRoles } from '@utils/db';
+import { listAdminMembers, listAdminRoles } from '@db';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -86,8 +86,8 @@ const [members, roles] = await Promise.all([
                 <td class="adm-td">
                   <span class="adm-badge bg-emerald-50 text-emerald-800 border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Logto Synced</span>
                 </td>
-                <td class="adm-td font-semibold text-amber-900">超级管理员 (Super Admin)</td>
-                <td class="adm-td text-[#52525b]"><span class="px-2 py-0.5 rounded-md text-[10px] bg-black/5 font-mono">ALL (全量)</span></td>
+                <td class="adm-td font-semibold text-amber-900">Super Admin (Root)</td>
+                <td class="adm-td text-[#52525b]"><span class="px-2 py-0.5 rounded-md text-[10px] bg-black/5 font-mono">ALL</span></td>
                 <td class="adm-td text-[#86868b] italic">Full Workspace Access</td>
                 <td class="adm-td text-[#86868b]">Root Security Principal</td>
                 <td class="adm-td"><span class="text-emerald-700 font-semibold">ACTIVE</span></td>
@@ -358,7 +358,14 @@ const [members, roles] = await Promise.all([
     document.querySelectorAll<HTMLButtonElement>('.btn-delete-member').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const email = btn.dataset.email;
-        if (!email || !confirm(`Are you sure you want to remove team member ${email}?`)) return;
+        if (!email) return;
+        const ok = await (window as any).__admConfirm?.({
+          title: 'Remove Team Member',
+          message: `Remove ${email} from admin console access?`,
+          confirmText: 'Remove',
+          danger: true,
+        });
+        if (!ok) return;
         try {
           const res = await fetch(`/api/admin/members/${encodeURIComponent(email)}`, { method: 'DELETE' });
           const data: any = await res.json();

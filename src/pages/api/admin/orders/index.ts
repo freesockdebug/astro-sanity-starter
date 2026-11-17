@@ -2,7 +2,7 @@
 import type { APIRoute } from 'astro';
 import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { parsePaginationParams } from '@utils/format';
-import { listAdminOrders } from '@utils/db';
+import { listAdminOrders } from '@db';
 import { resolveOrderItemImage, getOrderItemProductUrl } from '@data/products';
 
 export const prerender = false;

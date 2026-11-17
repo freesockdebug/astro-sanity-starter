@@ -5,7 +5,7 @@ import LocalTime from '@components/LocalTime.astro';
 import TierBadge from '@components/TierBadge.astro';
 import { getBuyerContext, getRuntimeEnv } from '@utils/auth';
 import { getDictMap } from '@utils/dicts';
-import { getUserLoginHistory } from '@utils/db';
+import { getUserLoginHistory } from '@db';
 import { getLangFromUrl, useTranslations } from '@i18n';
 import { env as cfEnv } from 'cloudflare:workers';
 

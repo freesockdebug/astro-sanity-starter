@@ -1,7 +1,7 @@
 // src/pages/api/orders/[id].ts
 import type { APIRoute } from 'astro';
 import { defineBuyerApi, jsonNoCache } from '@utils/auth';
-import { getOrderById, getOrderByNo } from '@utils/db';
+import { getOrderById, getOrderByNo } from '@db';
 
 export const prerender = false;
 

@@ -2,7 +2,7 @@
 // Contextual authentication guards for Buyer Workspace and Admin Portal
 import { env as cfEnv } from 'cloudflare:workers';
 import { getSessionFromRequest, checkIsAdmin, SESSION_COOKIE_NAME, type AuthUser } from './auth';
-import { getUserByIdOrEmail, getPendingOrdersCount, getSystemSettings, type UserRecord } from './db';
+import { getUserByIdOrEmail, getPendingOrdersCount, getSystemSettings, type UserRecord } from '../db';
 import { resolveAdminContext, hasPermission, hasMenu, type AdminContextInfo } from './rbac';
 
 export const NO_CACHE_HEADERS: Record<string, string> = {

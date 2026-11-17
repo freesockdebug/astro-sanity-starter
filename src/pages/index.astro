@@ -1,7 +1,7 @@
 ---
 // src/pages/index.astro
 import Layout from '@layouts/Layout.astro';
-import { componentMap, AppleStageNavigator, SectionBoundary } from '@components';
+import { componentMap, StageNavigator, SectionBoundary } from '@components';
 import { normalizeSections, extractHeroPreload } from '@data/blocks';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
@@ -88,5 +88,5 @@ const stages = sections
   })}
 
   <!-- Apple Presentation Stage Navigator (Floating Glassmorphism Capsule) -->
-  <AppleStageNavigator stages={stages.length > 0 ? stages : undefined} />
+  <StageNavigator stages={stages.length > 0 ? stages : undefined} />
 </Layout>

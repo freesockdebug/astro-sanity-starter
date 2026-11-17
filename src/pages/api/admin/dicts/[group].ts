@@ -3,7 +3,7 @@
 
 import type { APIRoute } from 'astro';
 import { defineAdminApi, jsonNoCache } from '@utils/auth';
-import { deleteDictItem } from '@utils/db';
+import { deleteDictItem } from '@db';
 import { invalidateDictCache } from '@utils/dicts';
 import { recordAdminAudit } from '@db/audit.repo';
 

@@ -2,7 +2,7 @@
 import type { APIRoute } from 'astro';
 import { verifyAdminAuth, jsonNoCache } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
-import { updateOrderStatus, getOrderById } from '@utils/db';
+import { updateOrderStatus, getOrderById } from '@db';
 import { recordAdminAudit } from '@db/audit.repo';
 import type { OrderStatus } from '@db/types';
 import { env as cfEnv } from 'cloudflare:workers';

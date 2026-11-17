@@ -507,3 +507,144 @@ html.apple-snap-active {
     @apply border-black/10 bg-apple-gray text-apple-muted;
   }
 }
+
+/* ==========================================================================
+   7. Storefront Visual Themes (Switchable via Admin Settings)
+   ========================================================================== */
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) {
+  --apple-bg-white: #fcfbf9;
+  --apple-bg-gray: #f6f3ee;
+  --apple-text-primary: #1c1917;
+  --apple-text-secondary: #6b665f;
+  --apple-border: rgba(28, 25, 23, 0.08);
+  --color-apple-white: #fcfbf9;
+  --color-apple-gray: #f6f3ee;
+  --color-apple-surface: #faf7f2;
+  --color-apple-ink: #1c1917;
+  --color-apple-muted: #6b665f;
+}
+
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) body {
+  background-color: var(--apple-bg-white);
+  color: var(--apple-text-primary);
+}
+
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) .apple-nav {
+  background: rgba(252, 251, 249, 0.88);
+  border-bottom-color: rgba(28, 25, 23, 0.08);
+}
+
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) .apple-skeleton-surface {
+  --skeleton-bg: #f6f3ee;
+}
+
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) :is(main, footer) .bg-white {
+  background-color: #fdfcfb;
+}
+
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) :is(main, footer, header.apple-nav) .bg-\[\#f5f5f7\] {
+  background-color: #f6f3ee;
+}
+
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) :is(main, footer, header.apple-nav) .text-\[\#1d1d1f\] {
+  color: #1c1917;
+}
+
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) :is(main, footer, header.apple-nav) .text-\[\#86868b\] {
+  color: #6b665f;
+}
+
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) :is(main, footer) .border-black\/5,
+html:is([data-storefront-theme="warm-atelier"], [data-storefront-theme="editorial-gallery"]) :is(main, footer) .border-black\/8 {
+  border-color: rgba(28, 25, 23, 0.09);
+}
+
+/* Warm Atelier: refined radii & restrained architectural shadows */
+html[data-storefront-theme="warm-atelier"] .hero-showcase-box {
+  border-radius: 1.125rem;
+  box-shadow: 0 12px 32px -18px rgba(28, 25, 23, 0.16);
+}
+
+html[data-storefront-theme="warm-atelier"] :is(.specs-section .rounded-3xl, #collections .rounded-3xl) {
+  border-radius: 1rem;
+}
+
+/* Editorial Gallery: Cormorant Garamond serif titles, borderless gallery cards, airy 4-col grid */
+html[data-storefront-theme="editorial-gallery"] {
+  --apple-bg-white: #faf8f4;
+  --apple-bg-gray: #f2ede4;
+  --apple-text-primary: #1a1816;
+  --apple-text-secondary: #6e685f;
+  --font-editorial: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+}
+
+html[data-storefront-theme="editorial-gallery"] :is(.fluid-hero-title, .fluid-section-title, .product-info-col h1, #collections h2, #specs h2, #manufacturing h2, #inquiry h2, header.apple-nav a > span.font-semibold) {
+  font-family: var(--font-editorial);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+html[data-storefront-theme="editorial-gallery"] .fluid-hero-title {
+  line-height: 1.02;
+}
+
+html[data-storefront-theme="editorial-gallery"] :is(.hero-showcase-box, .specs-section .rounded-3xl, .specs-section .rounded-2xl, #collections .rounded-3xl, #collections .rounded-2xl) {
+  border-radius: 0.5rem;
+  box-shadow: none;
+  border-color: rgba(26, 24, 22, 0.1);
+}
+
+html[data-storefront-theme="editorial-gallery"] #collections-shelf > div {
+  background-color: transparent;
+  border-color: transparent;
+  padding-inline: 0.25rem;
+}
+
+html[data-storefront-theme="editorial-gallery"] #collections-shelf > div:hover {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* Editorial Gallery /products: borderless lookbook cards & 4-col / 5-col breathing room */
+@media (min-width: 1024px) {
+  html[data-storefront-theme="editorial-gallery"] #products-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 1.75rem 1.25rem;
+  }
+}
+
+@media (min-width: 1760px) {
+  html[data-storefront-theme="editorial-gallery"] #products-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 2rem 1.5rem;
+  }
+}
+
+html[data-storefront-theme="editorial-gallery"] #products-grid > div {
+  background-color: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+html[data-storefront-theme="editorial-gallery"] #products-grid > div:hover {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+html[data-storefront-theme="editorial-gallery"] #products-grid a.apple-img-wrapper {
+  border-radius: 0.375rem;
+  background-color: #f2ede4;
+}
+
+html[data-storefront-theme="editorial-gallery"] #products-grid a.apple-img-wrapper > div.absolute {
+  display: none;
+}
+
+html[data-storefront-theme="editorial-gallery"] #products-grid h3 {
+  font-family: var(--font-editorial);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}

@@ -1,11 +1,11 @@
 ---
 import { type SiteConfig, type CustomImage, type Page } from 'types';
-import { AppleNav, AppleFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@components';
+import { StoreNav, StoreFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@components';
 import SectionBoundary from '@components/SectionBoundary.astro';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
 import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
-import { getSystemSettings } from '@utils/db';
+import { getSystemSettings } from '@db';
 import { env as cfEnv } from 'cloudflare:workers';
 
 import '../styles/globals.css';
@@ -70,10 +70,11 @@ if (!isShellReq && Astro.locals && !(Astro.locals as any).systemSettings) {
 }
 const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_errors) : true;
 const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'warn') : 'warn';
+const storefrontTheme = systemSettings?.storefront_theme || 'apple-minimal';
 ---
 
 <!doctype html>
-<html lang={currentLang} data-theme="light" class="scroll-smooth">
+<html lang={currentLang} data-theme="light" data-storefront-theme={storefrontTheme} class="scroll-smooth">
     <head>
         <!-- High Priority Global Metadata -->
         <meta charset="utf-8" />
@@ -127,21 +128,33 @@ const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'war
                 <link rel="icon" type="image/svg+xml" href={configData?.favicon?.src || "/favicon.svg"} />
                 <link rel="alternate icon" href="/favicon.ico" />
                 <link rel="sitemap" href="/sitemap-index.xml" />
+                {storefrontTheme === 'editorial-gallery' && (
+                    <>
+                        <link rel="preconnect" href="https://fonts.googleapis.com" />
+                        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+                        <link
+                            rel="stylesheet"
+                            href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
+                            media="print"
+                            onload="this.media='all'"
+                        />
+                    </>
+                )}
             </>
         )}
     </head>
     <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
         {!isShellReq && !bare && (
-            <SectionBoundary sectionName="AppleNav">
-                <AppleNav config={configData} />
+            <SectionBoundary sectionName="StoreNav">
+                <StoreNav config={configData} />
             </SectionBoundary>
         )}
         <main class={mainClass}>
             <slot />
         </main>
         {!isShellReq && !bare && (
-            <SectionBoundary sectionName="AppleFooter">
-                <AppleFooter config={configData} />
+            <SectionBoundary sectionName="StoreFooter">
+                <StoreFooter config={configData} />
             </SectionBoundary>
         )}
         {!isShellReq && !bare && (

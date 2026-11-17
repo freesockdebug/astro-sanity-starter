@@ -13,7 +13,7 @@ import {
   verifyTurnstilePassToken,
   formatTurnstilePassCookie,
 } from '@utils/auth';
-import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@utils/db';
+import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@db';
 import { getDictItems } from '@utils/dicts';
 import { kvGet, kvPut, kvDelete } from '@utils/cache';
 import { logger } from '@utils/logger';

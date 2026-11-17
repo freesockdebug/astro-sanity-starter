@@ -2,7 +2,7 @@
 import type { APIRoute } from 'astro';
 import { defineAdminApi, checkIsAdmin, jsonNoCache } from '@utils/auth';
 import { parsePaginationParams } from '@utils/format';
-import { listAdminUsers, getSystemSettings } from '@utils/db';
+import { listAdminUsers, getSystemSettings } from '@db';
 
 export const prerender = false;
 

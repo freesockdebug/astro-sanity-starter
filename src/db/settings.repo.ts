@@ -13,10 +13,12 @@ import {
 } from '../data/defaults';
 
 export type LogMinLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
+export type StorefrontTheme = 'apple-minimal' | 'warm-atelier' | 'editorial-gallery';
 
 export interface SystemSettings {
   // 1. Brand & Buyer Concierge
   brand_name: string;
+  storefront_theme: StorefrontTheme;
   app_url: string;
   contact_email: string;
   whatsapp_number: string;
@@ -60,6 +62,7 @@ export interface SystemSettings {
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   brand_name: DEFAULT_BRAND_TITLE,
+  storefront_theme: 'apple-minimal',
   app_url: DEFAULT_SITE_URL,
   contact_email: DEFAULT_CONTACT_EMAIL,
   whatsapp_number: '',
@@ -198,7 +201,7 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
     resend_to_emails: 'RESEND_TO_EMAIL',
     turnstile_site_key: 'PUBLIC_TURNSTILE_SITE_KEY',
   };
-  const NON_EMPTY_STRING_KEYS = new Set<keyof SystemSettings>(['brand_name', 'app_url', 'order_no_prefix']);
+  const NON_EMPTY_STRING_KEYS = new Set<keyof SystemSettings>(['brand_name', 'storefront_theme', 'app_url', 'order_no_prefix']);
 
   const settings = {} as SystemSettings;
   for (const [rawKey, defaultVal] of Object.entries(DEFAULT_SYSTEM_SETTINGS)) {

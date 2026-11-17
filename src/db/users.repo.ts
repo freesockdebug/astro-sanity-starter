@@ -282,7 +282,7 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       SUM(CASE WHEN (logto_roles LIKE '%admin%'${adminEmailsClause}) THEN 1 ELSE 0 END) as total_admins
     FROM users ${statsWhereSql}`;
 
-    let unclaimedSql = `SELECT COUNT(*) as unclaimed FROM orders WHERE user_id IS NULL OR user_id = ''`;
+    let unclaimedSql = `SELECT COUNT(*) as unclaimed FROM orders WHERE (user_id IS NULL OR user_id = '')`;
     const unclaimedParams: any[] = [];
     if (timeWindow && timeWindow !== 'ALL' && windowMsMap[timeWindow]) {
       unclaimedSql += ` AND created_at >= ?`;

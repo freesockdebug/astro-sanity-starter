@@ -12,7 +12,7 @@ import {
   invalidateRbacCache,
   invalidatePendingOrdersCountCache,
   invalidateDashboardStatsCache,
-} from '@utils/db';
+} from '@db';
 import { recordAdminAudit } from '@db/audit.repo';
 import { purgeEdgeHtmlCache } from '@utils/cmsSync';
 

@@ -1,7 +1,7 @@
 // src/pages/api/auth/me.ts
 import type { APIRoute } from 'astro';
 import { getSessionFromRequest, checkIsAdmin, jsonNoCache, SESSION_COOKIE_NAME } from '@utils/auth';
-import { getUserByIdOrEmail, getSystemSettings } from '@utils/db';
+import { getUserByIdOrEmail, getSystemSettings } from '@db';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;

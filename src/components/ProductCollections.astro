@@ -5,7 +5,7 @@ import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_COLLECTIONS, DEFAULT_HERO } from '@data/defaults';
 import { getLangFromUrl, getLocalizedPath, getLocalizedValue, toText, useTranslations } from '@i18n';
-import AppleProductGridSkeleton from './AppleProductGridSkeleton.astro';
+import ProductGridSkeleton from './ProductGridSkeleton.astro';
 
 interface Props {
   elementId?: string;
@@ -141,7 +141,7 @@ const sectionId = elementId || sectionAnchor || 'collections';
 
     <!-- Collection Shelf: Flex-1 Vertically Auto-Fitted Shelf (Never Overshoots Screen) -->
     {activeCollections.length === 0 ? (
-      <AppleProductGridSkeleton variant="shelf" count={4} id="collections-shelf-skeleton" />
+      <ProductGridSkeleton variant="shelf" count={4} id="collections-shelf-skeleton" />
     ) : (
       <div
         id="collections-shelf"

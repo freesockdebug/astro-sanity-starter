@@ -196,11 +196,11 @@ test('toPostgresSql converts ? placeholders outside string literals, datetime(no
   assert.ok(pg.includes('CURRENT_TIMESTAMP::text'));
 });
 
-test('formatUtcCutoff formats UTC timestamps with space for sqlite and T for postgres', () => {
+test('formatUtcCutoff formats UTC timestamps with space separator for both sqlite and postgres', () => {
   const sqliteCutoff = formatUtcCutoff(3600_000, 'sqlite');
   const pgCutoff = formatUtcCutoff(3600_000, 'postgres');
   assert.match(sqliteCutoff, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
-  assert.match(pgCutoff, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.match(pgCutoff, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
 });
 
 test('sanitizePostgresConnectionString strips pgbouncer/prisma params while preserving sslmode', () => {

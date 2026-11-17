@@ -1,0 +1,110 @@
+---
+// src/components/admin/LogModals.astro
+// Extracted modal dialogs for /admin/logs diagnostics console
+---
+
+<!-- Detail Dialog / Modal -->
+<dialog id="log-detail-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-5 rounded-3xl w-[calc(100vw-32px)] max-w-2xl mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
+  <div class="space-y-4 text-xs text-[#1d1d1f]">
+    <div class="flex items-center justify-between pb-2 border-b border-black/5">
+      <div class="flex items-center gap-2">
+        <span id="modal-level-badge"></span>
+        <span id="modal-event-code" class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-800 border border-black/5"></span>
+        <span id="modal-source" class="font-mono font-semibold text-xs text-[#1d1d1f]"></span>
+      </div>
+      <button id="close-modal-btn" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
+    </div>
+
+    <div class="space-y-1">
+      <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Message</span>
+      <div id="modal-message" class="font-mono text-xs bg-[#f5f5f7] p-3 rounded-xl break-all select-all max-h-40 overflow-y-auto"></div>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+      <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+        <span class="text-[10px] text-[#86868b] block">Timestamp</span>
+        <span id="modal-time" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+        <span class="text-[10px] text-[#86868b] block">Ray ID</span>
+        <span id="modal-ray" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+        <span class="text-[10px] text-[#86868b] block">Endpoint / Status</span>
+        <span id="modal-http" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+        <span class="text-[10px] text-[#86868b] block">Path</span>
+        <span id="modal-path" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+        <span class="text-[10px] text-[#86868b] block">Latency SLA</span>
+        <span id="modal-latency" class="font-mono text-xs font-bold text-[#1d1d1f]"></span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+        <span class="text-[10px] text-[#86868b] block">User / Actor</span>
+        <span id="modal-user" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
+        <span class="text-[10px] text-[#86868b] block">Client IP</span>
+        <span id="modal-ip" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5 col-span-2">
+        <span class="text-[10px] text-[#86868b] block">Geo Location</span>
+        <span id="modal-geo" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
+      </div>
+    </div>
+
+    <!-- Server Spans Breakdown -->
+    <div id="modal-spans-container" class="hidden space-y-1.5">
+      <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Sub-Step Latency Breakdown</span>
+      <div id="modal-spans-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs"></div>
+    </div>
+
+    <!-- Navigation Trail Breadcrumbs -->
+    <div id="modal-breadcrumbs-container" class="hidden space-y-1.5">
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] text-purple-700 uppercase tracking-wider font-semibold">Pre-Error Navigation Flow</span>
+        <span id="modal-breadcrumbs-count" class="text-[10px] font-mono text-purple-600"></span>
+      </div>
+      <div id="modal-breadcrumbs-list" class="space-y-1 max-h-48 overflow-y-auto font-mono text-xs bg-purple-50/50 p-2 rounded-xl border border-purple-100"></div>
+    </div>
+
+    <!-- Raw Context JSON -->
+    <div class="space-y-1">
+      <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Context JSON</span>
+      <pre id="modal-context" class="font-mono text-[11px] bg-[#1d1d1f] text-emerald-400 p-3 rounded-xl max-h-48 overflow-y-auto select-all whitespace-pre-wrap"></pre>
+    </div>
+
+    <div class="pt-2 flex justify-end">
+      <button id="close-modal-bottom-btn" type="button" class="adm-btn-primary px-4">
+        Done
+      </button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Clear Confirm Modal -->
+<dialog id="clear-confirm-modal" class="adm-modal p-6 w-[calc(100vw-32px)] max-w-md mx-auto my-auto">
+  <div class="space-y-4 text-xs text-[#1d1d1f]">
+    <div class="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+      </svg>
+    </div>
+    <div>
+      <h3 class="text-sm font-bold text-[#1d1d1f]">Clear All Diagnostic Logs?</h3>
+      <p class="text-xs text-[#86868b] mt-1">
+        This will purge all audit logs and latency metrics from database storage. This action cannot be undone.
+      </p>
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2">
+      <button id="cancel-clear-btn" type="button" class="adm-btn-secondary">
+        Cancel
+      </button>
+      <button id="confirm-clear-btn" type="button" class="adm-btn h-8 px-3.5 bg-rose-600 hover:bg-rose-700 text-white">
+        Delete All
+      </button>
+    </div>
+  </div>
+</dialog>

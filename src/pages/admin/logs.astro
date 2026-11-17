@@ -7,6 +7,7 @@ import AdminSearchInput from '@components/admin/AdminSearchInput.astro';
 import AdminWorkbenchTableShell from '@components/admin/AdminWorkbenchTableShell.astro';
 import TableColumnController from '@components/admin/TableColumnController.astro';
 import TableFilter from '@components/admin/TableFilter.astro';
+import LogModals from '@components/admin/LogModals.astro';
 import { requireAdminContext } from '@utils/auth';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -146,7 +147,9 @@ const pageTitle = 'System Diagnostics & Performance';
           class="adm-btn-secondary h-auto px-2.5 py-1 text-[11px] font-medium text-[#52525b] hover:text-[#1d1d1f] shrink-0 whitespace-nowrap"
           title="Export visible logs as CSV"
         >
-          <span>📥</span>
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
           <span class="hidden sm:inline">CSV</span>
         </button>
 
@@ -199,21 +202,21 @@ const pageTitle = 'System Diagnostics & Performance';
         <!-- Event Type -->
         <select
           id="filter-event-select"
-          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer"
+          class="adm-select h-7 px-2 rounded-lg text-[11px]"
         >
-          <option value="ALL">🌐 All Events</option>
-          <option value="SERVER_ALL">⚡ Server APIs</option>
-          <option value="WEB_VITALS">📊 Web Vitals</option>
-          <option value="CLIENT_ERRORS">💥 Client Errors</option>
-          <option value="CLIENT_NAVIGATION">🧭 Navigation</option>
-          <option value="SLOW_REQUEST">🐢 Slow Server Requests</option>
-          <option value="AUTH_FAILED">🛡️ Auth Failed</option>
+          <option value="ALL">All Events</option>
+          <option value="SERVER_ALL">Server APIs</option>
+          <option value="WEB_VITALS">Web Vitals</option>
+          <option value="CLIENT_ERRORS">Client Errors</option>
+          <option value="CLIENT_NAVIGATION">Navigation</option>
+          <option value="SLOW_REQUEST">Slow Requests</option>
+          <option value="AUTH_FAILED">Auth Failed</option>
         </select>
 
         <!-- Level Select -->
         <select
           id="filter-level-select"
-          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer"
+          class="adm-select h-7 px-2 rounded-lg text-[11px]"
         >
           <option value="ALL">All Levels</option>
           <option value="DEBUG">DEBUG</option>
@@ -226,10 +229,10 @@ const pageTitle = 'System Diagnostics & Performance';
         <!-- Health / Latency Filter -->
         <select
           id="filter-health-select"
-          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer"
+          class="adm-select h-7 px-2 rounded-lg text-[11px]"
         >
           <option value="ALL">SLA Health: All</option>
-          <option value="slow_only">🐢 Slow Only (&ge;1s / Poor)</option>
+          <option value="slow_only">Slow Only (&ge;1s / Poor)</option>
           <option value="500">&ge; 500ms</option>
           <option value="1000">&ge; 1000ms</option>
           <option value="2500">&ge; 2500ms</option>
@@ -259,10 +262,10 @@ const pageTitle = 'System Diagnostics & Performance';
         <!-- Sort Select -->
         <select
           id="logs-sort-select"
-          class="h-7 px-2 rounded-lg bg-[#f5f5f7] border border-black/5 focus:outline-none focus:border-black text-[11px] font-medium text-[#1d1d1f] cursor-pointer shrink-0"
+          class="adm-select h-7 px-2 rounded-lg text-[11px] shrink-0"
         >
-          <option value="newest" selected={initialSort === 'newest'}>⏱️ Newest</option>
-          <option value="slowest" selected={initialSort === 'slowest'}>🐢 Slowest</option>
+          <option value="newest" selected={initialSort === 'newest'}>Newest</option>
+          <option value="slowest" selected={initialSort === 'slowest'}>Slowest</option>
         </select>
       </div>
     </div>
@@ -297,109 +300,7 @@ const pageTitle = 'System Diagnostics & Performance';
     </AdminWorkbenchTableShell>
   </div>
 
-  <!-- Detail Dialog / Modal -->
-  <dialog id="log-detail-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-5 rounded-3xl w-[calc(100vw-32px)] max-w-2xl mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
-    <div class="space-y-4 text-xs text-[#1d1d1f]">
-      <div class="flex items-center justify-between pb-2 border-b border-black/5">
-        <div class="flex items-center gap-2">
-          <span id="modal-level-badge"></span>
-          <span id="modal-event-code" class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-100 text-zinc-800 border border-black/5"></span>
-          <span id="modal-source" class="font-mono font-semibold text-xs text-[#1d1d1f]"></span>
-        </div>
-        <button id="close-modal-btn" type="button" class="text-base text-[#86868b] hover:text-black cursor-pointer">✕</button>
-      </div>
-
-      <div class="space-y-1">
-        <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Message</span>
-        <div id="modal-message" class="font-mono text-xs bg-[#f5f5f7] p-3 rounded-xl break-all select-all max-h-40 overflow-y-auto"></div>
-      </div>
-
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
-          <span class="text-[10px] text-[#86868b] block">Timestamp</span>
-          <span id="modal-time" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
-        </div>
-        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
-          <span class="text-[10px] text-[#86868b] block">Ray ID</span>
-          <span id="modal-ray" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
-        </div>
-        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
-          <span class="text-[10px] text-[#86868b] block">Endpoint / Status</span>
-          <span id="modal-http" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
-        </div>
-        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
-          <span class="text-[10px] text-[#86868b] block">Path</span>
-          <span id="modal-path" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
-        </div>
-        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
-          <span class="text-[10px] text-[#86868b] block">Latency SLA</span>
-          <span id="modal-latency" class="font-mono text-xs font-bold text-[#1d1d1f]"></span>
-        </div>
-        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
-          <span class="text-[10px] text-[#86868b] block">User / Actor</span>
-          <span id="modal-user" class="font-mono text-xs font-medium text-[#1d1d1f] truncate block"></span>
-        </div>
-        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5">
-          <span class="text-[10px] text-[#86868b] block">Client IP</span>
-          <span id="modal-ip" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
-        </div>
-        <div class="p-2.5 rounded-xl bg-[#f5f5f7]/60 border border-black/5 col-span-2">
-          <span class="text-[10px] text-[#86868b] block">Geo Location</span>
-          <span id="modal-geo" class="font-mono text-xs font-medium text-[#1d1d1f]"></span>
-        </div>
-      </div>
-
-      <!-- Server Spans Breakdown -->
-      <div id="modal-spans-container" class="hidden space-y-1.5">
-        <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Sub-Step Latency Breakdown</span>
-        <div id="modal-spans-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs"></div>
-      </div>
-
-      <!-- Navigation Trail Breadcrumbs -->
-      <div id="modal-breadcrumbs-container" class="hidden space-y-1.5">
-        <div class="flex items-center justify-between">
-          <span class="text-[10px] text-purple-700 uppercase tracking-wider font-semibold">Pre-Error Navigation Flow</span>
-          <span id="modal-breadcrumbs-count" class="text-[10px] font-mono text-purple-600"></span>
-        </div>
-        <div id="modal-breadcrumbs-list" class="space-y-1 max-h-48 overflow-y-auto font-mono text-xs bg-purple-50/50 p-2 rounded-xl border border-purple-100"></div>
-      </div>
-
-      <!-- Raw Context JSON -->
-      <div class="space-y-1">
-        <span class="text-[10px] text-[#86868b] uppercase tracking-wider block font-semibold">Context JSON</span>
-        <pre id="modal-context" class="font-mono text-[11px] bg-[#1d1d1f] text-emerald-400 p-3 rounded-xl max-h-48 overflow-y-auto select-all whitespace-pre-wrap"></pre>
-      </div>
-
-      <div class="pt-2 flex justify-end">
-        <button id="close-modal-bottom-btn" type="button" class="px-4 py-2 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer">
-          Done
-        </button>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- Clear Confirm Modal -->
-  <dialog id="clear-confirm-modal" class="backdrop:bg-black/50 backdrop:backdrop-blur-sm p-6 rounded-3xl w-[calc(100vw-32px)] max-w-md mx-auto my-auto border border-black/10 shadow-2xl bg-white focus:outline-none">
-    <div class="space-y-4 text-xs text-[#1d1d1f]">
-      <div class="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center text-lg">
-        🗑️
-      </div>
-      <div>
-        <h3 class="text-sm font-bold text-[#1d1d1f]">Clear All Diagnostic Logs?</h3>
-        <p class="text-xs text-[#86868b] mt-1">
-          This will purge all audit logs and latency metrics from Cloudflare D1. This action cannot be undone.
-        </p>
-      </div>
-      <div class="flex items-center justify-end gap-2 pt-2">
-        <button id="cancel-clear-btn" type="button" class="px-3.5 py-1.5 rounded-xl border border-black/10 text-xs font-semibold text-[#52525b] hover:bg-[#f5f5f7] cursor-pointer">
-          Cancel
-        </button>
-        <button id="confirm-clear-btn" type="button" class="adm-btn h-auto px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700">
-          Delete All
-        </button>
-      </div>
-    </div>
-  </dialog>
+  <LogModals />
 </AdminLayout>
 
 <script>
@@ -711,18 +612,7 @@ const pageTitle = 'System Diagnostics & Performance';
         }).join('');
       }
 
-      // Bind quick filter
-      document.querySelectorAll('.quick-filter-bottleneck').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const path = btn.getAttribute('data-path');
-          if (!path || !searchInput) return;
-          searchInput.value = path;
-          currentSearch = path;
-          currentPage = 1;
-          if (clearSearchBtn) clearSearchBtn.classList.remove('hidden');
-          loadLogs();
-        });
-      });
+      // Click handling uses event delegation bound once on bottlenecksBar in initLogsPage()
     }
 
     function renderRows(logs: any[]) {
@@ -812,30 +702,7 @@ const pageTitle = 'System Diagnostics & Performance';
         return `<tr class="hover:bg-[#f5f5f7]/60 transition-colors">${rowCells}</tr>`;
       }).join('');
 
-      // Bind events
-      tableBody.querySelectorAll('.view-detail-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const id = String(btn.getAttribute('data-id') || '');
-          const log = logsList.find((l) => String(l.id) === id);
-          if (log) openDetailModal(log);
-        });
-      });
-
-      tableBody.querySelectorAll('.copy-ray-btn').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const text = btn.getAttribute('data-copy');
-          if (!text) return;
-          try {
-            await navigator.clipboard.writeText(text);
-            (window as any).__showToast?.('Copied Ray ID', 'success', 1500);
-            const icon = btn.querySelector('.copy-icon');
-            if (icon) {
-              icon.textContent = '✓';
-              setTimeout(() => { icon.textContent = '📋'; }, 1500);
-            }
-          } catch {}
-        });
-      });
+      // Table row clicks use event delegation bound once on tableBody in initLogsPage()
     }
 
     function openDetailModal(log: any) {
@@ -1054,6 +921,45 @@ const pageTitle = 'System Diagnostics & Performance';
     }
 
     if (pollToggleBtn) pollToggleBtn.addEventListener('click', toggleAutoPoll);
+
+    // Delegated click handlers (bound once per page init instead of per-render)
+    bottlenecksBar?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement)?.closest('.quick-filter-bottleneck');
+      if (!btn) return;
+      const path = btn.getAttribute('data-path');
+      if (!path || !searchInput) return;
+      searchInput.value = path;
+      currentSearch = path;
+      currentPage = 1;
+      clearSearchBtn?.classList.remove('hidden');
+      loadLogs();
+    }, { signal });
+
+    tableBody?.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement | null;
+      const detailBtn = target?.closest('.view-detail-btn');
+      if (detailBtn) {
+        const id = String(detailBtn.getAttribute('data-id') || '');
+        const log = logsList.find((l) => String(l.id) === id);
+        if (log) openDetailModal(log);
+        return;
+      }
+
+      const copyBtn = target?.closest('.copy-ray-btn');
+      if (copyBtn) {
+        const text = copyBtn.getAttribute('data-copy');
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          (window as any).__showToast?.('Copied Ray ID', 'success', 1500);
+          const icon = copyBtn.querySelector('.copy-icon');
+          if (icon) {
+            icon.textContent = '✓';
+            setTimeout(() => { icon.textContent = '📋'; }, 1500);
+          }
+        } catch {}
+      }
+    }, { signal });
 
     signal.addEventListener('abort', () => {
       if (autoPollTimer) {

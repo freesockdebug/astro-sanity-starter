@@ -353,7 +353,7 @@ export interface FieldSpec {
   key: string;
   label: string;
   type: 'text' | 'textarea' | 'number' | 'checkbox' | 'select' | 'localeString' | 'localeText' | 'csv';
-  col?: 1 | 2 | 3 | 4 | 6 | 12;
+  col?: 1 | 2 | 3 | 4 | 6 | 8 | 12;
   rows?: number;
   bold?: boolean;
   mono?: boolean;
@@ -367,6 +367,7 @@ export interface FieldSpec {
 export function renderSchemaFields(fields: FieldSpec[], doc: Record<string, any>, lang = 'en'): string {
   const colClassMap: Record<number, string> = {
     12: 'sm:col-span-12',
+    8: 'sm:col-span-8',
     6: 'sm:col-span-6',
     4: 'sm:col-span-4',
     3: 'sm:col-span-3',

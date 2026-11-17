@@ -1,7 +1,7 @@
 ---
 // src/pages/products/index.astro
 import Layout from '@layouts/Layout.astro';
-import { AppleProductGridSkeleton } from '@components/index';
+import { ProductGridSkeleton } from '@components/index';
 import { ProductService, fetchCatalogCategories } from '@data/products';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
@@ -201,7 +201,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
         {initialProducts.map((item: any, idx: number) => (
           <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-1.5 sm:p-2 flex flex-col justify-between" data-product-id={item.id}>
             <div class="flex-1 min-h-0 flex flex-col">
-              <!-- 1. Taobao Shelf Image Box: 1:1 Aspect Ratio on top with Apple Progressive Skeleton Shimmer -->
+              <!-- 1. Catalog Shelf Image Box: 1:1 Aspect Ratio on top with Apple Progressive Skeleton Shimmer -->
               <a
                 href={getLocalizedPath(`/products/${item.slug}`, currentLang)}
                 class="apple-img-wrapper block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] apple-skeleton-surface my-0 group-hover:opacity-95 transition-all shrink-0"
@@ -224,7 +224,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                 </div>
               </a>
 
-              <!-- 2. Taobao Colorway / Mini Swatch Row -->
+              <!-- 2. Colorway / Mini Swatch Row -->
               <div class="shrink-0 flex items-center justify-between pt-1.5 pb-0.5 px-0.5">
                 <div class="flex items-center gap-1">
                   {(item.colors || []).slice(0, 4).map((hex: string) => (
@@ -335,7 +335,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       </template>
 
       <!-- Apple Design Language Filter / Sort Transition Skeleton Grid -->
-      <AppleProductGridSkeleton id="catalog-filter-skeleton" count={12} class="hidden min-h-[50vh]" />
+      <ProductGridSkeleton id="catalog-filter-skeleton" count={12} class="hidden min-h-[50vh]" />
 
       <!-- Zero Results Empty State -->
       <div id="catalog-empty-state" class="hidden py-20 text-center space-y-3">
@@ -361,7 +361,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       <div id="catalog-load-trigger" class="w-full min-h-[56px] py-4 flex flex-col items-center justify-center">
         <!-- Apple Skeleton Row while fetching next infinite-scroll batch -->
         <div id="catalog-loading-spinner" class="hidden w-full flex-col items-center gap-3">
-          <AppleProductGridSkeleton count={6} class="w-full" />
+          <ProductGridSkeleton count={6} class="w-full" />
           <span class="text-[11px] text-[#86868b] font-medium tracking-tight">{t('catalog.loadingMore')}</span>
         </div>
 

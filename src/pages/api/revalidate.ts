@@ -4,7 +4,7 @@ import type { APIRoute } from 'astro';
 import { env as cfEnv } from 'cloudflare:workers';
 import { SecurityService } from '@utils/security';
 import { getRuntimeEnv } from '@utils/auth';
-import { getSystemSettings } from '@utils/db';
+import { getSystemSettings } from '@db';
 import { syncCmsMutation, verifySanitySignature } from '@utils/cmsSync';
 
 export const prerender = false;

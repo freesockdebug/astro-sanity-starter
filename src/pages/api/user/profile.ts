@@ -1,7 +1,7 @@
 // src/pages/api/user/profile.ts
 import type { APIRoute } from 'astro';
 import { defineBuyerApi, jsonNoCache } from '@utils/auth';
-import { getUserByIdOrEmail, getUserLoginHistory, updateUserProfile } from '@utils/db';
+import { getUserByIdOrEmail, getUserLoginHistory, updateUserProfile } from '@db';
 
 export const prerender = false;
 

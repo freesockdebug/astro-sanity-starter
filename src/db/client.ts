@@ -51,14 +51,11 @@ export interface DbClient {
 
 /**
  * Formats a UTC cutoff timestamp for `created_at >= ?` / `< ?` comparisons.
- * SQLite's CURRENT_TIMESTAMP stores 'YYYY-MM-DD HH:MM:SS' (space separator, ASCII 0x20),
- * whereas ISO strings use 'T' (0x54); matching each dialect ensures accurate same-day comparisons.
+ * Both SQLite CURRENT_TIMESTAMP and Postgres TEXT timestamps (CURRENT_TIMESTAMP::text)
+ * store 'YYYY-MM-DD HH:MM:SS...' with a space separator (ASCII 0x20 < 'T' 0x54).
  */
-export function formatUtcCutoff(offsetMs: number, dialect: DbDialect = 'sqlite'): string {
+export function formatUtcCutoff(offsetMs: number, _dialect: DbDialect = 'sqlite'): string {
   const date = new Date(Date.now() - offsetMs);
-  if (dialect === 'postgres') {
-    return date.toISOString();
-  }
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
@@ -405,6 +402,17 @@ function createPostgresAdapter(connStr: string, isWorkerRuntime: boolean): Postg
     idle_timeout: 5,
     connect_timeout: 10,
     transform: { undefined: null },
+    types: {
+      bigint: {
+        to: 20,
+        from: [20],
+        serialize: (x: number | bigint | string) => String(x),
+        parse: (x: string) => {
+          const n = Number(x);
+          return Number.isSafeInteger(n) ? n : x;
+        },
+      },
+    },
   });
   const adapter = new PostgresClientAdapter(client);
   if (!isWorkerRuntime) {

@@ -4,7 +4,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
-import { getDashboardStats } from '@utils/db';
+import { getDashboardStats } from '@db';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -55,13 +55,13 @@ const pageTitle = 'Business Overview';
     badge="Live D1 Edge Telemetry"
     badgeColor="emerald"
     subtitle="Executive operational cockpit: global buyer inquiries, conversion funnel, SLA backlogs & sales throughput"
-    icon="📊"
+    iconKey="dashboard"
     class="mb-5"
   >
     <div slot="actions">
       <a
         href="/admin/orders"
-        class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#1d1d1f] text-white hover:bg-black shadow-2xs active:scale-95 transition-all"
+        class="adm-btn-primary"
       >
         <span>View Orders Workbench</span>
         <span>→</span>
