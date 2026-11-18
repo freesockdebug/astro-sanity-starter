@@ -1,0 +1,180 @@
+---
+// src/components/admin/WafConditionBuilder.astro
+// Visual Logical Condition Builder Sub-Component for EdgeWafService
+import type { WafCustomConditionRule, WafConditionField, WafConditionOperator } from '@utils/waf';
+
+interface Props {
+  rules?: WafCustomConditionRule[];
+  canManage?: boolean;
+}
+
+const { rules = [], canManage = false } = Astro.props;
+
+const CONDITION_FIELD_OPTIONS: Array<{ value: WafConditionField; label: string; placeholder: string }> = [
+  { value: 'path_matches', label: 'If Path matches', placeholder: 'e.g. /wp-admin, /secret-api, .bak' },
+  { value: 'header_contains', label: 'If Request Header contains', placeholder: 'e.g. evil.com or x-forwarded-host: evil.com' },
+  { value: 'query_contains', label: 'If Query String contains', placeholder: 'e.g. base64_decode, cmd=, ../../' },
+  { value: 'ua_contains', label: 'If User-Agent contains', placeholder: 'e.g. HeadlessChrome, PhantomJS, PetalBot' },
+  { value: 'ip_matches', label: 'If Client IP / CIDR matches', placeholder: 'e.g. 185.220.101.0/24 or 45.155.*' },
+];
+
+const OPERATOR_OPTIONS: Array<{ value: WafConditionOperator; label: string }> = [
+  { value: 'contains', label: 'contains' },
+  { value: 'starts_with', label: 'starts with' },
+  { value: 'equals', label: 'equals' },
+];
+
+const ACTION_OPTIONS = [
+  { value: 'block_403', label: 'Block (403 Forbidden)' },
+  { value: 'rate_limit_429', label: 'Throttle (429 Too Many Requests)' },
+] as const;
+
+const FIELD_LABEL_MAP: Record<WafConditionField, string> = {
+  path_matches: 'If Path',
+  header_contains: 'If Request Header',
+  query_contains: 'If Query String',
+  ua_contains: 'If User-Agent',
+  ip_matches: 'If Client IP',
+};
+---
+
+<section id="waf-condition-builder" class="adm-card p-4 space-y-3">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <div class="flex items-center gap-2">
+        <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">Custom Logical Condition Rules</h2>
+        <span id="waf-custom-rules-count" class="adm-badge adm-badge-info">{rules.length} {rules.length === 1 ? 'Rule' : 'Rules'}</span>
+      </div>
+      <p class="text-[11px] text-[#86868b]">
+        Build dynamic edge interception rules using logical conditions (<code class="font-mono text-[10px] bg-[#f5f5f7] px-1 py-0.5 rounded">If Path matches</code>, <code class="font-mono text-[10px] bg-[#f5f5f7] px-1 py-0.5 rounded">If Request Header contains</code>, etc.).
+      </p>
+    </div>
+  </div>
+
+  <!-- 1. Condition Builder Input Bar -->
+  {canManage && (
+    <div class="rounded-2xl border border-black/8 bg-[#fafafc] p-3 grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
+      <label class="block space-y-1 md:col-span-3">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Logical Condition</span>
+        <select id="waf-builder-field" autocomplete="off" class="adm-input text-[11px] font-semibold py-1.5">
+          {CONDITION_FIELD_OPTIONS.map((opt) => (
+            <option value={opt.value} data-placeholder={opt.placeholder}>{opt.label}</option>
+          ))}
+        </select>
+      </label>
+
+      <label class="block space-y-1 md:col-span-2">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Operator</span>
+        <select id="waf-builder-operator" autocomplete="off" class="adm-input font-mono text-[11px] py-1.5">
+          {OPERATOR_OPTIONS.map((opt) => (
+            <option value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </label>
+
+      <label id="waf-builder-header-wrap" class="hidden space-y-1 md:col-span-2">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Header Name</span>
+        <input
+          id="waf-builder-header-name"
+          type="text"
+          autocomplete="off"
+          placeholder="e.g. referer, x-api-key"
+          class="adm-input font-mono text-[11px] py-1.5"
+        />
+      </label>
+
+      <label id="waf-builder-value-wrap" class="block space-y-1 md:col-span-4">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Match Pattern / Value</span>
+        <input
+          id="waf-builder-value"
+          type="text"
+          autocomplete="off"
+          placeholder="e.g. /wp-admin, /secret-api, .bak"
+          class="adm-input font-mono text-[11px] py-1.5"
+        />
+      </label>
+
+      <label class="block space-y-1 md:col-span-2">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Action</span>
+        <select id="waf-builder-action" autocomplete="off" class="adm-input text-[11px] font-medium py-1.5">
+          {ACTION_OPTIONS.map((opt) => (
+            <option value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </label>
+
+      <div class="md:col-span-1 flex justify-end">
+        <button
+          id="waf-builder-add-btn"
+          type="button"
+          class="adm-btn w-full justify-center py-1.5 text-[11px]"
+        >
+          + Add
+        </button>
+      </div>
+    </div>
+  )}
+
+  <!-- 2. Active Custom Condition Rules List -->
+  <div id="waf-custom-rules-list" class="space-y-2">
+    {rules.length === 0 ? (
+      <div class="rounded-xl border border-dashed border-black/10 bg-[#fafafc] px-3 py-4 text-center text-[11px] text-[#86868b]">
+        No custom logical rules configured yet. Use the builder above to create edge interception rules.
+      </div>
+    ) : (
+      rules.map((rule) => (
+        <div
+          data-custom-rule-id={rule.id}
+          class:list={[
+            'rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity',
+            !rule.enabled && 'opacity-55',
+          ]}
+        >
+          <div class="flex items-center gap-2.5 min-w-0 flex-1">
+            <input
+              id={`waf-cr-${rule.id}`}
+              type="checkbox"
+              autocomplete="off"
+              data-rule-id={rule.id}
+              checked={rule.enabled}
+              disabled={!canManage}
+              aria-label={`Toggle custom rule ${rule.id}`}
+              class="waf-custom-rule-toggle w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0"
+            />
+            <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
+              <span class="font-semibold text-[#1d1d1f]">
+                {FIELD_LABEL_MAP[rule.field]}
+                {rule.headerName && (
+                  <code class="ml-1 font-mono text-[10px] bg-white border border-black/10 px-1 py-0.5 rounded text-[#52525b]">[{rule.headerName}]</code>
+                )}
+              </span>
+              <span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1.5 py-0.5 rounded">
+                {rule.operator.replace('_', ' ')}
+              </span>
+              <code class="font-mono text-[10px] text-[#1d1d1f] bg-white border border-black/10 px-1.5 py-0.5 rounded break-all">
+                "{rule.value}"
+              </code>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 shrink-0">
+            <span class:list={['adm-badge', rule.action === 'rate_limit_429' ? 'adm-badge-warn' : 'adm-badge-err']}>
+              {rule.action === 'rate_limit_429' ? '429 Throttle' : '403 Block'}
+            </span>
+            {canManage && (
+              <button
+                type="button"
+                data-rule-id={rule.id}
+                aria-label="Delete rule"
+                title="Remove rule"
+                class="waf-custom-rule-delete w-6 h-6 rounded-lg text-xs font-bold text-[#86868b] hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</section>

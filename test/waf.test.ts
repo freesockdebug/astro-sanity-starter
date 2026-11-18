@@ -322,3 +322,48 @@ test('EdgeWafService honors fine-grained sub-rule toggles, custom limits, custom
     false
   );
 });
+
+test('EdgeWafService evaluates customRules across path, header, query, ua, ip, actions, and whitelist safety', () => {
+  EdgeWafService.clearAllStrikes();
+  const now = 1_700_000_000_000;
+
+  const cfg = normalizeWafRuleConfig({
+    rateLimit: { windowSeconds: 30, publicWriteLimit: 2 },
+    customRules: [
+      { id: 'r_path', enabled: true, field: 'path_matches', operator: 'starts_with', value: '/secret-admin', action: 'block_403' },
+      { id: 'r_hdr_named', enabled: true, field: 'header_contains', operator: 'contains', value: 'referer: evil-ref.com', action: 'block_403' },
+      { id: 'r_hdr_any', enabled: true, field: 'header_contains', operator: 'equals', value: 'forbidden-token', action: 'block_403' },
+      { id: 'r_query', enabled: true, field: 'query_contains', operator: 'contains', value: 'base64_decode', action: 'block_403' },
+      { id: 'r_ua', enabled: true, field: 'ua_contains', operator: 'contains', value: 'PetalBot', action: 'rate_limit_429' },
+      { id: 'r_ip', enabled: true, field: 'ip_matches', operator: 'equals', value: '203.0.113.0/24', action: 'block_403' },
+      { id: 'r_disabled', enabled: false, field: 'path_matches', operator: 'equals', value: '/allowed-path', action: 'block_403' },
+    ],
+  });
+  assert.equal(cfg.customRules.length, 7);
+  assert.equal(cfg.customRules[1].headerName, 'referer');
+  assert.equal(cfg.customRules[1].value, 'evil-ref.com');
+
+  const settings = { waf_active_modes: [], waf_allow_ips: '203.0.113.99', waf_rule_config: cfg };
+
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/allowed-path', headers: BROWSER_HEADERS, now }, settings).allowed, true);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/secret-admin/panel', headers: BROWSER_HEADERS, now }, settings).status, 403);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/products', headers: new Headers({ referer: 'https://evil-ref.com/x' }), now }, settings).status, 403);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/products', headers: new Headers({ 'x-api-key': 'forbidden-token' }), now }, settings).status, 403);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/products', search: '?payload=base64_decode(abc)', headers: BROWSER_HEADERS, now }, settings).status, 403);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.50', pathname: '/', headers: BROWSER_HEADERS, now }, settings).status, 403);
+
+  // Whitelisted IP still bypasses custom IP rule
+  assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.99', pathname: '/secret-admin', headers: BROWSER_HEADERS, now }, settings).allowed, true);
+
+  // rate_limit_429 on custom rule uses publicWriteLimit (2) and windowSeconds (30)
+  for (let i = 0; i < 2; i++) {
+    assert.equal(
+      EdgeWafService.evaluate({ clientIp: '198.51.100.2', pathname: '/', userAgent: 'Mozilla/5.0 PetalBot', now: now + i * 100 }, settings).allowed,
+      true
+    );
+  }
+  const throttled = EdgeWafService.evaluate({ clientIp: '198.51.100.2', pathname: '/', userAgent: 'Mozilla/5.0 PetalBot', now: now + 300 }, settings);
+  assert.equal(throttled.allowed, false);
+  assert.equal(throttled.status, 429);
+  assert.equal(throttled.retryAfter, 30);
+});

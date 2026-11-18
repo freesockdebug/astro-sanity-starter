@@ -30,6 +30,27 @@ export interface WafEvaluationResult {
   autoBanned?: boolean;
 }
 
+export type WafConditionField =
+  | 'path_matches'
+  | 'header_contains'
+  | 'query_contains'
+  | 'ua_contains'
+  | 'ip_matches';
+
+export type WafConditionOperator = 'contains' | 'starts_with' | 'equals';
+export type WafConditionAction = 'block_403' | 'rate_limit_429';
+
+export interface WafCustomConditionRule {
+  id: string;
+  enabled: boolean;
+  field: WafConditionField;
+  operator: WafConditionOperator;
+  headerName?: string;
+  value: string;
+  action: WafConditionAction;
+  note?: string;
+}
+
 export interface WafRuleConfig {
   malicious: {
     enableIpBlacklist: boolean;
@@ -57,6 +78,7 @@ export interface WafRuleConfig {
     enforceQuoteFingerprint: boolean;
     customBlockedUa: string;
   };
+  customRules: WafCustomConditionRule[];
 }
 
 export const DEFAULT_WAF_RULE_CONFIG: WafRuleConfig = {
@@ -86,6 +108,7 @@ export const DEFAULT_WAF_RULE_CONFIG: WafRuleConfig = {
     enforceQuoteFingerprint: true,
     customBlockedUa: '',
   },
+  customRules: [],
 };
 
 export const WAF_CONDITION_CATALOG = {
@@ -189,6 +212,69 @@ function toBool(val: unknown, fallback: boolean): boolean {
   return typeof val === 'boolean' ? val : fallback;
 }
 
+const VALID_CONDITION_FIELDS = new Set<WafConditionField>([
+  'path_matches',
+  'header_contains',
+  'query_contains',
+  'ua_contains',
+  'ip_matches',
+]);
+const VALID_CONDITION_OPERATORS = new Set<WafConditionOperator>(['contains', 'starts_with', 'equals']);
+const VALID_CONDITION_ACTIONS = new Set<WafConditionAction>(['block_403', 'rate_limit_429']);
+
+function sanitizeHeaderName(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const cleaned = raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 64);
+  return cleaned || undefined;
+}
+
+export function normalizeCustomRules(raw: unknown): WafCustomConditionRule[] {
+  if (!Array.isArray(raw)) return [];
+  const out: WafCustomConditionRule[] = [];
+  for (let i = 0; i < raw.length && out.length < 50; i++) {
+    const item = raw[i];
+    if (!item || typeof item !== 'object') continue;
+    const field = VALID_CONDITION_FIELDS.has(item.field) ? (item.field as WafConditionField) : null;
+    if (!field) continue;
+    const operator: WafConditionOperator = VALID_CONDITION_OPERATORS.has(item.operator)
+      ? item.operator
+      : 'contains';
+    const action: WafConditionAction = VALID_CONDITION_ACTIONS.has(item.action)
+      ? item.action
+      : 'block_403';
+
+    let headerName = field === 'header_contains' ? sanitizeHeaderName(item.headerName) : undefined;
+    let value = typeof item.value === 'string' ? item.value.trim().slice(0, 200) : '';
+    if (field === 'header_contains' && !headerName && value.includes(':')) {
+      const colonIdx = value.indexOf(':');
+      const prefix = sanitizeHeaderName(value.slice(0, colonIdx));
+      const rest = value.slice(colonIdx + 1).trim();
+      if (prefix && rest) {
+        headerName = prefix;
+        value = rest;
+      }
+    }
+    if (!value) continue;
+
+    const id = typeof item.id === 'string' && item.id.trim()
+      ? item.id.trim().slice(0, 64)
+      : `cr_${out.length + 1}`;
+    const note = typeof item.note === 'string' && item.note.trim() ? item.note.trim().slice(0, 120) : undefined;
+
+    out.push({
+      id,
+      enabled: typeof item.enabled === 'boolean' ? item.enabled : true,
+      field,
+      operator,
+      ...(headerName ? { headerName } : {}),
+      value,
+      action,
+      ...(note ? { note } : {}),
+    });
+  }
+  return out;
+}
+
 /**
  * Normalizes partial or JSON-serialized WAF rule configuration with safe bounds and defaults.
  */
@@ -233,6 +319,7 @@ export function normalizeWafRuleConfig(raw: unknown): WafRuleConfig {
       enforceQuoteFingerprint: toBool(b.enforceQuoteFingerprint, d.bot.enforceQuoteFingerprint),
       customBlockedUa: typeof b.customBlockedUa === 'string' ? b.customBlockedUa.trim().slice(0, 2000) : '',
     },
+    customRules: normalizeCustomRules(obj?.customRules),
   };
 }
 
@@ -453,6 +540,144 @@ export class EdgeWafService {
     rateLimitBuckets.clear();
   }
 
+  private static consumeRateLimitBucket(
+    key: string,
+    limit: number,
+    windowSeconds: number,
+    now: number
+  ): boolean {
+    const windowMs = (windowSeconds * 1000) || RATE_LIMIT_WINDOW_MS;
+    pruneMapIfNeeded(rateLimitBuckets);
+    const existing = rateLimitBuckets.get(key);
+    if (!existing || existing.resetAt <= now || existing.resetAt > now + windowMs) {
+      rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return false;
+    }
+    existing.count += 1;
+    return existing.count > limit;
+  }
+
+  private static decodeSafe(raw: string): string {
+    if (!raw) return '';
+    try {
+      return decodeURIComponent(raw.replace(/\+/g, ' '));
+    } catch {
+      return raw;
+    }
+  }
+
+  private static matchConditionValue(
+    haystackRaw: string,
+    needleRaw: string,
+    operator: WafConditionOperator
+  ): boolean {
+    const haystack = haystackRaw.toLowerCase();
+    const needle = needleRaw.toLowerCase();
+    if (!needle) return false;
+    if (operator === 'equals') return haystack === needle;
+    if (operator === 'starts_with') return haystack.startsWith(needle);
+    return haystack.includes(needle);
+  }
+
+  private static formatConditionSummary(rule: WafCustomConditionRule): string {
+    const fieldNames: Record<WafConditionField, string> = {
+      path_matches: 'Path',
+      header_contains: rule.headerName ? `Request Header [${rule.headerName}]` : 'Request Header',
+      query_contains: 'Query String',
+      ua_contains: 'User-Agent',
+      ip_matches: 'Client IP',
+    };
+    return `If ${fieldNames[rule.field]} ${rule.operator.replace('_', ' ')} "${rule.value}"`;
+  }
+
+  public static evaluateCustomRules(
+    input: WafEvaluationInput,
+    rules: WafCustomConditionRule[],
+    rateCfg: WafRuleConfig['rateLimit'] = DEFAULT_WAF_RULE_CONFIG.rateLimit,
+    now = input.now ?? Date.now()
+  ): WafEvaluationResult | null {
+    if (!Array.isArray(rules) || rules.length === 0) return null;
+
+    const pathname = this.decodeSafe(input.pathname || '/');
+    const search = this.decodeSafe(input.search || '');
+    const clientIp = (input.clientIp || '').trim();
+    const ua = (input.userAgent ?? input.headers?.get('user-agent') ?? '').trim();
+
+    for (const rule of rules) {
+      if (!rule?.enabled || !rule.value) continue;
+
+      let matched = false;
+      let sample = rule.value;
+
+      if (rule.field === 'path_matches') {
+        matched = this.matchConditionValue(pathname, rule.value, rule.operator);
+        if (matched) sample = pathname.slice(0, 120);
+      } else if (rule.field === 'query_contains') {
+        matched = this.matchConditionValue(search, rule.value, rule.operator);
+        if (matched) sample = search.slice(0, 120);
+      } else if (rule.field === 'ua_contains') {
+        matched = Boolean(ua) && this.matchConditionValue(ua, rule.value, rule.operator);
+        if (matched) sample = ua.slice(0, 120);
+      } else if (rule.field === 'ip_matches') {
+        if (rule.operator === 'equals' || rule.value.includes('*') || rule.value.includes('/')) {
+          matched = matchesIpRule(clientIp, [rule.value.toLowerCase()]);
+        } else {
+          matched = Boolean(clientIp) && this.matchConditionValue(clientIp, rule.value, rule.operator);
+        }
+        if (matched) sample = clientIp;
+      } else if (rule.field === 'header_contains') {
+        if (rule.headerName) {
+          const val = input.headers?.get(rule.headerName) ?? (rule.headerName === 'user-agent' ? ua : null);
+          if (val && this.matchConditionValue(val, rule.value, rule.operator)) {
+            matched = true;
+            sample = `${rule.headerName}: ${val}`.slice(0, 120);
+          }
+        } else if (input.headers) {
+          for (const [hdrKey, hdrVal] of input.headers.entries()) {
+            if (this.matchConditionValue(hdrVal, rule.value, rule.operator)) {
+              matched = true;
+              sample = `${hdrKey}: ${hdrVal}`.slice(0, 120);
+              break;
+            }
+          }
+        }
+      }
+
+      if (!matched) continue;
+
+      const summary = this.formatConditionSummary(rule);
+      if (rule.action === 'rate_limit_429') {
+        const limited = this.consumeRateLimitBucket(
+          `custom:${rule.id}:${clientIp || 'unknown'}`,
+          rateCfg.publicWriteLimit,
+          rateCfg.windowSeconds,
+          now
+        );
+        if (!limited) continue;
+        return {
+          allowed: false,
+          status: 429,
+          code: 'WAF_STRICT_RATE_LIMIT',
+          mode: 'strict_rate_limiting',
+          reason: `Custom Rule (${summary}) rate limit exceeded (${rateCfg.publicWriteLimit} req/${rateCfg.windowSeconds}s).`,
+          matchedSample: `${summary} → ${sample}`.slice(0, 160),
+          retryAfter: rateCfg.windowSeconds,
+        };
+      }
+
+      return {
+        allowed: false,
+        status: 403,
+        code: rule.field === 'ua_contains' ? 'WAF_BOT_CHALLENGE' : rule.field === 'ip_matches' ? 'WAF_MALICIOUS_IP' : 'WAF_MALICIOUS_PAYLOAD',
+        mode: rule.field === 'ua_contains' ? 'bot_challenge' : 'block_malicious_ips',
+        reason: `Blocked by Custom Rule: ${summary}.`,
+        matchedSample: `${summary} → ${sample}`.slice(0, 160),
+      };
+    }
+
+    return null;
+  }
+
   private static checkStrictRateLimit(
     ip: string,
     pathname: string,
@@ -470,20 +695,9 @@ export class EdgeWafService {
       : isApi
         ? rateCfg.apiLimit
         : rateCfg.pageLimit;
-    const windowMs = (rateCfg.windowSeconds * 1000) || RATE_LIMIT_WINDOW_MS;
 
-    const key = `${bucketType}:${ip || 'unknown'}`;
-    pruneMapIfNeeded(rateLimitBuckets);
-    const existing = rateLimitBuckets.get(key);
-    if (!existing || existing.resetAt <= now || existing.resetAt > now + windowMs) {
-      rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
-      return { limited: false, limit, bucket: bucketType };
-    }
-    existing.count += 1;
-    if (existing.count > limit) {
-      return { limited: true, limit, bucket: bucketType };
-    }
-    return { limited: false, limit, bucket: bucketType };
+    const limited = this.consumeRateLimitBucket(`${bucketType}:${ip || 'unknown'}`, limit, rateCfg.windowSeconds, now);
+    return { limited, limit, bucket: bucketType };
   }
 
   public static evaluate(input: WafEvaluationInput, settings?: WafSettingsSubset | null): WafEvaluationResult {
@@ -510,11 +724,17 @@ export class EdgeWafService {
     const activeModes = new Set<WafRuleMode>(
       Array.isArray(settings?.waf_active_modes) ? settings.waf_active_modes : []
     );
-    if (activeModes.size === 0) {
+    const cfg = normalizeWafRuleConfig(settings?.waf_rule_config);
+    const hasCustomRules = cfg.customRules.some((r) => r.enabled);
+    if (activeModes.size === 0 && !hasCustomRules) {
       return { allowed: true };
     }
 
-    const cfg = normalizeWafRuleConfig(settings?.waf_rule_config);
+    // 0. Custom Visual Logical Condition Rules
+    if (hasCustomRules) {
+      const customResult = this.evaluateCustomRules(input, cfg.customRules, cfg.rateLimit, now);
+      if (customResult) return customResult;
+    }
 
     // 1. Block Malicious IPs + OWASP Payloads + Configurable Strike Auto-Ban
     if (activeModes.has('block_malicious_ips')) {

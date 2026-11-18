@@ -3,10 +3,17 @@
 // Edge WAF Shield Console: Protection Modes, IP Blacklist/Whitelist, Auto-Ban Strikes & Live Intercept Telemetry
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
+import WafConditionBuilder from '@components/admin/WafConditionBuilder.astro';
 import { requireAdminContext } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { getSystemSettings, listErrorLogs, type WafRuleMode } from '@db';
-import { EdgeWafService, parseIpList, normalizeWafRuleConfig, DEFAULT_WAF_RULE_CONFIG, WAF_CONDITION_CATALOG } from '@utils/waf';
+import {
+  EdgeWafService,
+  parseIpList,
+  normalizeWafRuleConfig,
+  DEFAULT_WAF_RULE_CONFIG,
+  WAF_CONDITION_CATALOG,
+} from '@utils/waf';
 import { formatAdminTime } from '@utils/adminWorkbench';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -282,11 +289,13 @@ const initialPayload = JSON.stringify({
                         {isEnabled ? 'ENFORCING' : 'DISABLED'}
                       </span>
                       <input
+                        id={`waf-mode-${card.mode}`}
                         type="checkbox"
-                        name="waf_mode"
+                        name={`waf_mode_${card.mode}`}
                         value={card.mode}
                         checked={isEnabled}
                         disabled={!canManage}
+                        autocomplete="off"
                         class="waf-mode-checkbox w-4 h-4 accent-[#1d1d1f] rounded cursor-pointer"
                       />
                     </label>
@@ -334,11 +343,14 @@ const initialPayload = JSON.stringify({
                               </span>
                             ) : (
                               <input
+                                id={`waf-sub-${subGroup}-${cond.key}`}
                                 type="checkbox"
+                                name={`waf_sub_${subGroup}_${cond.key}`}
                                 data-waf-group={subGroup}
                                 data-waf-key={cond.key}
                                 checked={isSubChecked}
                                 disabled={!canManage}
+                                autocomplete="off"
                                 aria-label={cond.label}
                                 class="waf-sub-checkbox w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0"
                               />
@@ -471,6 +483,9 @@ const initialPayload = JSON.stringify({
           })}
         </div>
       </section>
+
+      <!-- 2.5 Custom Logical Condition Rules Builder -->
+      <WafConditionBuilder rules={ruleConfig.customRules} canManage={canManage} />
 
       <!-- 3. IP Blacklist & Whitelist -->
       <section class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -621,6 +636,10 @@ const initialPayload = JSON.stringify({
 
       const initial = readJsonStore<{
         canManage?: boolean;
+        activeModes?: string[];
+        blockedIps?: string;
+        allowIps?: string;
+        ruleConfig?: Record<string, any>;
         defaultRuleConfig?: Record<string, any>;
       }>('waf-initial-data', { canManage: false });
       const canManage = Boolean(initial.canManage);
@@ -645,6 +664,57 @@ const initialPayload = JSON.stringify({
 
       const getCheckbox = (group: string, key: string) =>
         document.querySelector<HTMLInputElement>(`.waf-sub-checkbox[data-waf-group="${group}"][data-waf-key="${key}"]`);
+
+      let customRules: any[] = [];
+
+      const CUSTOM_FIELD_LABELS: Record<string, string> = {
+        path_matches: 'If Path',
+        header_contains: 'If Request Header',
+        query_contains: 'If Query String',
+        ua_contains: 'If User-Agent',
+        ip_matches: 'If Client IP',
+      };
+
+      const renderCustomRules = () => {
+        const listEl = document.getElementById('waf-custom-rules-list');
+        const countEl = document.getElementById('waf-custom-rules-count');
+        if (countEl) countEl.textContent = `${customRules.length} ${customRules.length === 1 ? 'Rule' : 'Rules'}`;
+        if (!listEl) return;
+
+        if (!customRules.length) {
+          listEl.innerHTML = `<div class="rounded-xl border border-dashed border-black/10 bg-[#fafafc] px-3 py-4 text-center text-[11px] text-[#86868b]">No custom logical rules configured yet. Use the builder above to create edge interception rules.</div>`;
+          return;
+        }
+
+        listEl.innerHTML = customRules.map((rule) => {
+          const fieldLabel = CUSTOM_FIELD_LABELS[rule.field] || rule.field;
+          const headerChip = rule.headerName
+            ? `<code class="ml-1 font-mono text-[10px] bg-white border border-black/10 px-1 py-0.5 rounded text-[#52525b]">[${escapeHtml(rule.headerName)}]</code>`
+            : '';
+          const opLabel = escapeHtml(String(rule.operator || 'contains').replace('_', ' '));
+          const actionCls = rule.action === 'rate_limit_429' ? 'adm-badge-warn' : 'adm-badge-err';
+          const actionText = rule.action === 'rate_limit_429' ? '429 Throttle' : '403 Block';
+          const deleteBtn = canManage
+            ? `<button type="button" data-rule-id="${escapeHtml(rule.id)}" aria-label="Delete rule" title="Remove rule" class="waf-custom-rule-delete w-6 h-6 rounded-lg text-xs font-bold text-[#86868b] hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center">×</button>`
+            : '';
+          return `
+            <div data-custom-rule-id="${escapeHtml(rule.id)}" class="rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity ${rule.enabled ? '' : 'opacity-55'}">
+              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                <input id="waf-cr-${escapeHtml(rule.id)}" type="checkbox" autocomplete="off" data-rule-id="${escapeHtml(rule.id)}" ${rule.enabled ? 'checked' : ''} ${canManage ? '' : 'disabled'} aria-label="Toggle custom rule ${escapeHtml(rule.id)}" class="waf-custom-rule-toggle w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0" />
+                <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
+                  <span class="font-semibold text-[#1d1d1f]">${escapeHtml(fieldLabel)}${headerChip}</span>
+                  <span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1.5 py-0.5 rounded">${opLabel}</span>
+                  <code class="font-mono text-[10px] text-[#1d1d1f] bg-white border border-black/10 px-1.5 py-0.5 rounded break-all">"${escapeHtml(rule.value)}"</code>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="adm-badge ${actionCls}">${actionText}</span>
+                ${deleteBtn}
+              </div>
+            </div>
+          `;
+        }).join('');
+      };
 
       const collectRuleConfig = () => ({
         malicious: {
@@ -673,6 +743,7 @@ const initialPayload = JSON.stringify({
           enforceQuoteFingerprint: Boolean(getCheckbox('bot', 'enforceQuoteFingerprint')?.checked),
           customBlockedUa: ((document.getElementById('waf-bot-custom-ua') as HTMLTextAreaElement | null)?.value || '').trim(),
         },
+        customRules,
       });
 
       const applyRuleConfig = (cfg: any) => {
@@ -701,6 +772,33 @@ const initialPayload = JSON.stringify({
         }
         if (cfg.bot) {
           setVal('waf-bot-custom-ua', cfg.bot.customBlockedUa ?? '');
+        }
+        if (Array.isArray(cfg.customRules)) {
+          customRules = cfg.customRules.map((r: any) => ({ ...r }));
+          renderCustomRules();
+        }
+      };
+
+      const applyServerState = (state: {
+        activeModes?: string[];
+        blockedIps?: string;
+        allowIps?: string;
+        ruleConfig?: Record<string, any>;
+      }) => {
+        if (Array.isArray(state.activeModes)) {
+          const modeSet = new Set(state.activeModes);
+          document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox').forEach((cb) => {
+            cb.checked = modeSet.has(cb.value);
+          });
+        }
+        if (blockedTextarea && typeof state.blockedIps === 'string') {
+          blockedTextarea.value = state.blockedIps;
+        }
+        if (allowTextarea && typeof state.allowIps === 'string') {
+          allowTextarea.value = state.allowIps;
+        }
+        if (state.ruleConfig) {
+          applyRuleConfig(state.ruleConfig);
         }
       };
 
@@ -808,6 +906,116 @@ const initialPayload = JSON.stringify({
           scheduleAutoSave();
         }, { signal });
       });
+
+      // Custom Logical Condition Builder Events
+      const builderFieldEl = document.getElementById('waf-builder-field') as HTMLSelectElement | null;
+      const builderOperatorEl = document.getElementById('waf-builder-operator') as HTMLSelectElement | null;
+      const builderHeaderWrap = document.getElementById('waf-builder-header-wrap');
+      const builderHeaderInput = document.getElementById('waf-builder-header-name') as HTMLInputElement | null;
+      const builderValueWrap = document.getElementById('waf-builder-value-wrap');
+      const builderValueInput = document.getElementById('waf-builder-value') as HTMLInputElement | null;
+      const builderActionEl = document.getElementById('waf-builder-action') as HTMLSelectElement | null;
+      const builderAddBtn = document.getElementById('waf-builder-add-btn') as HTMLButtonElement | null;
+      const customRulesListEl = document.getElementById('waf-custom-rules-list');
+
+      const syncBuilderFieldUI = () => {
+        if (!builderFieldEl) return;
+        const field = builderFieldEl.value;
+        const isHeader = field === 'header_contains';
+        builderHeaderWrap?.classList.toggle('hidden', !isHeader);
+        builderHeaderWrap?.classList.toggle('block', isHeader);
+        if (builderValueWrap) {
+          builderValueWrap.classList.toggle('md:col-span-2', isHeader);
+          builderValueWrap.classList.toggle('md:col-span-4', !isHeader);
+        }
+        const selectedOpt = builderFieldEl.options[builderFieldEl.selectedIndex];
+        const ph = selectedOpt?.getAttribute('data-placeholder');
+        if (builderValueInput && ph) builderValueInput.placeholder = ph;
+      };
+      builderFieldEl?.addEventListener('change', syncBuilderFieldUI, { signal });
+      syncBuilderFieldUI();
+
+      const addCustomRuleFromBuilder = () => {
+        if (!canManage || !builderFieldEl || !builderOperatorEl || !builderValueInput || !builderActionEl) return;
+        if (customRules.length >= 50) {
+          showToast('Maximum 50 custom condition rules reached.', false);
+          return;
+        }
+        const field = builderFieldEl.value;
+        const operator = builderOperatorEl.value;
+        const action = builderActionEl.value;
+        let headerName = field === 'header_contains'
+          ? (builderHeaderInput?.value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
+          : '';
+        let value = builderValueInput.value.trim().slice(0, 200);
+
+        if (field === 'header_contains' && !headerName && value.includes(':')) {
+          const idx = value.indexOf(':');
+          const prefix = value.slice(0, idx).trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+          const rest = value.slice(idx + 1).trim();
+          if (prefix && rest) {
+            headerName = prefix;
+            value = rest;
+          }
+        }
+
+        if (!value) {
+          showToast('Please enter a pattern / value to match.', false);
+          builderValueInput.focus();
+          return;
+        }
+
+        customRules.push({
+          id: `cr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          enabled: true,
+          field,
+          operator,
+          ...(headerName ? { headerName } : {}),
+          value,
+          action,
+        });
+
+        builderValueInput.value = '';
+        if (builderHeaderInput) builderHeaderInput.value = '';
+        renderCustomRules();
+        setDirty(true);
+        scheduleAutoSave();
+      };
+
+      builderAddBtn?.addEventListener('click', addCustomRuleFromBuilder, { signal });
+      [builderValueInput, builderHeaderInput].forEach((inp) => {
+        inp?.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            addCustomRuleFromBuilder();
+          }
+        }, { signal });
+      });
+
+      customRulesListEl?.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement | null;
+        if (!target || !target.classList.contains('waf-custom-rule-toggle')) return;
+        const ruleId = target.dataset.ruleId;
+        const rule = customRules.find((r) => r.id === ruleId);
+        if (!rule) return;
+        rule.enabled = target.checked;
+        renderCustomRules();
+        setDirty(true);
+        scheduleAutoSave();
+      }, { signal });
+
+      customRulesListEl?.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement | null)?.closest?.('.waf-custom-rule-delete') as HTMLButtonElement | null;
+        if (!btn || !canManage) return;
+        const ruleId = btn.dataset.ruleId;
+        const prevLen = customRules.length;
+        customRules = customRules.filter((r) => r.id !== ruleId);
+        if (customRules.length !== prevLen) {
+          renderCustomRules();
+          setDirty(true);
+          scheduleAutoSave();
+        }
+      }, { signal });
 
       document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('.waf-param-input').forEach((el) => {
         el.addEventListener('input', () => {
@@ -933,6 +1141,15 @@ const initialPayload = JSON.stringify({
           if (blocked24hEl) blocked24hEl.textContent = String(data.blocked24hCount ?? 0);
           if (activeBansEl) activeBansEl.textContent = String(data.strikeStats?.activeBans ?? 0);
           if (trackedIpsEl) trackedIpsEl.textContent = String(data.strikeStats?.trackedIps ?? 0);
+          if (!hasUnsavedChanges) {
+            applyServerState({
+              activeModes: data.waf_active_modes,
+              blockedIps: data.waf_blocked_ips,
+              allowIps: data.waf_allow_ips,
+              ruleConfig: data.waf_rule_config,
+            });
+            syncModeCardsAndKpis();
+          }
           renderTelemetryRows(data.logs || []);
         } catch (err: any) {
           showToast(`Refresh failed: ${err.message}`, false);
@@ -1001,15 +1218,12 @@ const initialPayload = JSON.stringify({
           });
           const data = await res.json();
           if (res.ok && data.success) {
-            if (blockedTextarea && typeof data.settings?.waf_blocked_ips === 'string') {
-              blockedTextarea.value = data.settings.waf_blocked_ips;
-            }
-            if (allowTextarea && typeof data.settings?.waf_allow_ips === 'string') {
-              allowTextarea.value = data.settings.waf_allow_ips;
-            }
-            if (data.settings?.waf_rule_config) {
-              applyRuleConfig(data.settings.waf_rule_config);
-            }
+            applyServerState({
+              activeModes: data.settings?.waf_active_modes,
+              blockedIps: data.settings?.waf_blocked_ips,
+              allowIps: data.settings?.waf_allow_ips,
+              ruleConfig: data.settings?.waf_rule_config,
+            });
             syncModeCardsAndKpis();
             if (!pendingSave) {
               setDirty(false);
@@ -1038,6 +1252,17 @@ const initialPayload = JSON.stringify({
           if (!document.getElementById('waf-workbench-root')) return;
           e.preventDefault();
           if (!e.repeat) saveRules();
+        }
+      }, { signal });
+
+      // Reconcile DOM controls against SSR truth so browser form restoration never leaves stale checkmarks
+      applyServerState(initial);
+      syncModeCardsAndKpis();
+
+      window.addEventListener('pageshow', (e) => {
+        if (e.persisted && !hasUnsavedChanges) {
+          applyServerState(initial);
+          syncModeCardsAndKpis();
         }
       }, { signal });
 
