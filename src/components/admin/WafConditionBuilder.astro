@@ -1,14 +1,31 @@
 ---
 // src/components/admin/WafConditionBuilder.astro
-// Visual Logical Condition Builder Sub-Component for EdgeWafService
-import type { WafCustomConditionRule, WafConditionField, WafConditionOperator } from '@utils/waf';
+// Unified Logical Condition Rules & Visual Builder Sub-Component for EdgeWafService
+import {
+  DEFAULT_WAF_RULE_CONFIG,
+  WAF_CONDITION_CATALOG,
+  type WafCustomConditionRule,
+  type WafConditionField,
+  type WafConditionOperator,
+  type WafRuleConfig,
+} from '@utils/waf';
+import type { WafRuleMode } from '@db';
 
 interface Props {
   rules?: WafCustomConditionRule[];
+  ruleConfig?: WafRuleConfig;
+  activeModes?: WafRuleMode[];
   canManage?: boolean;
 }
 
-const { rules = [], canManage = false } = Astro.props;
+const {
+  rules = [],
+  ruleConfig = DEFAULT_WAF_RULE_CONFIG,
+  activeModes = [],
+  canManage = false,
+} = Astro.props;
+
+const activeModeSet = new Set<WafRuleMode>(activeModes);
 
 const CONDITION_FIELD_OPTIONS: Array<{ value: WafConditionField; label: string; placeholder: string }> = [
   { value: 'path_matches', label: 'If Path matches', placeholder: 'e.g. /wp-admin, /secret-api, .bak' },
@@ -36,22 +53,64 @@ const FIELD_LABEL_MAP: Record<WafConditionField, string> = {
   ua_contains: 'If User-Agent',
   ip_matches: 'If Client IP',
 };
+
+const PRESET_GROUPS: Array<{
+  mode: WafRuleMode;
+  modeTitle: string;
+  modeBadgeCls: string;
+  subGroup: 'malicious' | 'rateLimit' | 'bot';
+}> = [
+  { mode: 'block_malicious_ips', modeTitle: 'Malicious IP & OWASP', modeBadgeCls: 'bg-rose-50 text-rose-700 border-rose-200/80', subGroup: 'malicious' },
+  { mode: 'strict_rate_limiting', modeTitle: 'Strict Rate Limit', modeBadgeCls: 'bg-amber-50 text-amber-800 border-amber-200/80', subGroup: 'rateLimit' },
+  { mode: 'bot_challenge', modeTitle: 'Bot Challenge', modeBadgeCls: 'bg-indigo-50 text-indigo-700 border-indigo-200/80', subGroup: 'bot' },
+];
+
+const presetTotalCount = PRESET_GROUPS.reduce((sum, g) => sum + WAF_CONDITION_CATALOG[g.mode].length, 0);
+const totalRulesCount = presetTotalCount + rules.length;
+
+const formatPresetCondition = (key: string, fallback: string) => {
+  if (key === 'enableAutoBan') {
+    return `${ruleConfig.malicious.strikeLimit} strikes → auto-ban IP for ${ruleConfig.malicious.banDurationMinutes}m`;
+  }
+  return fallback;
+};
 ---
 
 <section id="waf-condition-builder" class="adm-card p-4 space-y-3">
-  <div class="flex flex-wrap items-center justify-between gap-2">
+  <div class="flex flex-wrap items-center justify-between gap-2.5">
     <div>
       <div class="flex items-center gap-2">
-        <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">Custom Logical Condition Rules</h2>
-        <span id="waf-custom-rules-count" class="adm-badge adm-badge-info">{rules.length} {rules.length === 1 ? 'Rule' : 'Rules'}</span>
+        <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">WAF Logical Condition Rules</h2>
+        <span id="waf-custom-rules-count" class="adm-badge adm-badge-info" data-preset-count={presetTotalCount}>
+          {totalRulesCount} Rules ({presetTotalCount} Preset · {rules.length} Custom)
+        </span>
       </div>
       <p class="text-[11px] text-[#86868b]">
-        Build dynamic edge interception rules using logical conditions (<code class="font-mono text-[10px] bg-[#f5f5f7] px-1 py-0.5 rounded">If Path matches</code>, <code class="font-mono text-[10px] bg-[#f5f5f7] px-1 py-0.5 rounded">If Request Header contains</code>, etc.).
+        Unified edge rule engine showing all built-in preset conditions and custom logical rules in one view. Toggle any rule or create custom rules below.
       </p>
+    </div>
+
+    <!-- Unified Scope Filter Tabs -->
+    <div id="waf-rule-filter-tabs" class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-[#f5f5f7] p-1 border border-black/5">
+      <button type="button" data-rule-filter="all" class="waf-filter-tab px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white text-[#1d1d1f] shadow-2xs cursor-pointer">
+        All ({totalRulesCount})
+      </button>
+      <button type="button" data-rule-filter="custom" class="waf-filter-tab px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer">
+        Custom ({rules.length})
+      </button>
+      <button type="button" data-rule-filter="block_malicious_ips" class="waf-filter-tab px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer">
+        Malicious IP ({WAF_CONDITION_CATALOG.block_malicious_ips.length})
+      </button>
+      <button type="button" data-rule-filter="strict_rate_limiting" class="waf-filter-tab px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer">
+        Rate Limit ({WAF_CONDITION_CATALOG.strict_rate_limiting.length})
+      </button>
+      <button type="button" data-rule-filter="bot_challenge" class="waf-filter-tab px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer">
+        Bot Challenge ({WAF_CONDITION_CATALOG.bot_challenge.length})
+      </button>
     </div>
   </div>
 
-  <!-- 1. Condition Builder Input Bar -->
+  <!-- 1. Custom Condition Builder Input Bar -->
   {canManage && (
     <div class="rounded-2xl border border-black/8 bg-[#fafafc] p-3 grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
       <label class="block space-y-1 md:col-span-3">
@@ -115,18 +174,15 @@ const FIELD_LABEL_MAP: Record<WafConditionField, string> = {
     </div>
   )}
 
-  <!-- 2. Active Custom Condition Rules List -->
-  <div id="waf-custom-rules-list" class="space-y-2">
-    {rules.length === 0 ? (
-      <div class="rounded-xl border border-dashed border-black/10 bg-[#fafafc] px-3 py-4 text-center text-[11px] text-[#86868b]">
-        No custom logical rules configured yet. Use the builder above to create edge interception rules.
-      </div>
-    ) : (
-      rules.map((rule) => (
+  <!-- 2. Unified Rules Table/List (Custom Rules + Preset Rules) -->
+  <div class="space-y-2">
+    <div id="waf-custom-rules-list" class="space-y-1.5">
+      {rules.map((rule) => (
         <div
           data-custom-rule-id={rule.id}
+          data-rule-scope="custom"
           class:list={[
-            'rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity',
+            'waf-unified-rule-row rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity',
             !rule.enabled && 'opacity-55',
           ]}
         >
@@ -141,6 +197,9 @@ const FIELD_LABEL_MAP: Record<WafConditionField, string> = {
               aria-label={`Toggle custom rule ${rule.id}`}
               class="waf-custom-rule-toggle w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0"
             />
+            <span class="px-1.5 py-0.5 rounded-md border text-[10px] font-semibold bg-sky-50 text-sky-700 border-sky-200/80 shrink-0">
+              Custom
+            </span>
             <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
               <span class="font-semibold text-[#1d1d1f]">
                 {FIELD_LABEL_MAP[rule.field]}
@@ -174,7 +233,101 @@ const FIELD_LABEL_MAP: Record<WafConditionField, string> = {
             )}
           </div>
         </div>
-      ))
-    )}
+      ))}
+    </div>
+
+    <div id="waf-preset-rules-list" class="space-y-1.5">
+      {PRESET_GROUPS.map((group) => {
+        const isModeOn = activeModeSet.has(group.mode);
+        const conditions = WAF_CONDITION_CATALOG[group.mode];
+        return conditions.map((cond) => {
+          const isRateMode = group.subGroup === 'rateLimit';
+          const isSubChecked = isRateMode
+            ? isModeOn
+            : Boolean((ruleConfig as any)[group.subGroup]?.[cond.key]);
+          const rateVal = isRateMode ? (ruleConfig.rateLimit as any)[cond.key] : null;
+          const badgeCls = cond.actionTone === 'warn' ? 'adm-badge-warn' : cond.actionTone === 'info' ? 'adm-badge-info' : 'adm-badge-err';
+          return (
+            <div
+              data-cond-row={`${group.mode}:${cond.key}`}
+              data-rule-scope={group.mode}
+              data-preset-mode={group.mode}
+              class:list={[
+                'waf-unified-rule-row rounded-xl border border-black/8 bg-white px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity',
+                !isRateMode && !isSubChecked && 'opacity-55',
+              ]}
+            >
+              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                {isRateMode ? (
+                  <input
+                    id={`waf-preset-rl-${cond.key}`}
+                    type="checkbox"
+                    autocomplete="off"
+                    data-rate-mode-sync={group.mode}
+                    checked={isModeOn}
+                    disabled
+                    aria-label={cond.label}
+                    title="Controlled by Strict Rate Limiting mode & thresholds"
+                    class="w-3.5 h-3.5 accent-[#1d1d1f] rounded shrink-0 opacity-75 cursor-not-allowed"
+                  />
+                ) : (
+                  <input
+                    id={`waf-sub-${group.subGroup}-${cond.key}`}
+                    type="checkbox"
+                    name={`waf_sub_${group.subGroup}_${cond.key}`}
+                    autocomplete="off"
+                    data-waf-group={group.subGroup}
+                    data-waf-key={cond.key}
+                    checked={isSubChecked}
+                    disabled={!canManage}
+                    aria-label={cond.label}
+                    class="waf-sub-checkbox w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0"
+                  />
+                )}
+                <span class:list={['px-1.5 py-0.5 rounded-md border text-[10px] font-semibold shrink-0', group.modeBadgeCls]}>
+                  {group.modeTitle}
+                </span>
+                <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
+                  <span class="font-semibold text-[#1d1d1f]">{cond.fieldExpr}</span>
+                  <span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1.5 py-0.5 rounded">
+                    {cond.operatorExpr}
+                  </span>
+                  <code
+                    data-preset-dynamic={cond.key === 'enableAutoBan' ? 'enableAutoBan' : undefined}
+                    class="font-mono text-[10px] text-[#1d1d1f] bg-[#fafafc] border border-black/8 px-1.5 py-0.5 rounded break-all"
+                  >
+                    {formatPresetCondition(cond.key, cond.condition)}
+                  </code>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span
+                  data-preset-mode-pill={group.mode}
+                  class:list={[
+                    'adm-badge',
+                    isModeOn ? 'hidden' : 'adm-badge-neutral',
+                  ]}
+                >
+                  Mode Off
+                </span>
+                {isRateMode ? (
+                  <span
+                    data-rate-badge={cond.key}
+                    class="adm-badge adm-badge-warn font-mono"
+                  >
+                    429 &gt; {rateVal} req/{ruleConfig.rateLimit.windowSeconds}s
+                  </span>
+                ) : (
+                  <span class:list={['adm-badge', badgeCls]}>
+                    {cond.actionLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        });
+      })}
+    </div>
   </div>
 </section>

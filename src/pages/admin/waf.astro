@@ -12,7 +12,6 @@ import {
   parseIpList,
   normalizeWafRuleConfig,
   DEFAULT_WAF_RULE_CONFIG,
-  WAF_CONDITION_CATALOG,
 } from '@utils/waf';
 import { formatAdminTime } from '@utils/adminWorkbench';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -262,12 +261,11 @@ const initialPayload = JSON.stringify({
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
           {WAF_MODE_CARDS.map((card) => {
             const isEnabled = activeModes.includes(card.mode);
-            const conditions = WAF_CONDITION_CATALOG[card.mode];
             return (
               <div
                 data-waf-card={card.mode}
                 class:list={[
-                  'waf-mode-card rounded-2xl border p-4 flex flex-col justify-between gap-3.5 transition-all',
+                  'waf-mode-card rounded-2xl border p-4 flex flex-col justify-between gap-3 transition-all',
                   isEnabled ? 'bg-white border-black/20 shadow-xs ring-1 ring-black/5' : 'bg-[#fafafc] border-black/8',
                 ]}
               >
@@ -311,61 +309,7 @@ const initialPayload = JSON.stringify({
                   </div>
                 </div>
 
-                <!-- Layer 2: Active Defense Conditions -->
-                <div class="pt-3 border-t border-black/5 space-y-2 flex-1">
-                  <div class="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
-                    Active Defense Conditions ({conditions.length})
-                  </div>
-                  <div class="space-y-1.5">
-                    {conditions.map((cond) => {
-                      const isRateMode = card.mode === 'strict_rate_limiting';
-                      const subGroup = card.mode === 'block_malicious_ips' ? 'malicious' : 'bot';
-                      const isSubChecked = isRateMode
-                        ? true
-                        : Boolean((ruleConfig as any)[subGroup]?.[cond.key]);
-                      const rateLimitVal = isRateMode ? (ruleConfig.rateLimit as any)[cond.key] : null;
-                      return (
-                        <div
-                          data-cond-row={`${card.mode}:${cond.key}`}
-                          class:list={[
-                            'rounded-xl border border-black/6 bg-[#fafafc] px-2.5 py-2 space-y-1 transition-opacity',
-                            !isSubChecked && 'opacity-55',
-                          ]}
-                        >
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-[11px] font-semibold text-[#1d1d1f]">{cond.label}</span>
-                            {isRateMode ? (
-                              <span
-                                data-rate-badge={cond.key}
-                                class="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200/80 shrink-0"
-                              >
-                                {rateLimitVal} req / {ruleConfig.rateLimit.windowSeconds}s
-                              </span>
-                            ) : (
-                              <input
-                                id={`waf-sub-${subGroup}-${cond.key}`}
-                                type="checkbox"
-                                name={`waf_sub_${subGroup}_${cond.key}`}
-                                data-waf-group={subGroup}
-                                data-waf-key={cond.key}
-                                checked={isSubChecked}
-                                disabled={!canManage}
-                                autocomplete="off"
-                                aria-label={cond.label}
-                                class="waf-sub-checkbox w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0"
-                              />
-                            )}
-                          </div>
-                          <code class="block font-mono text-[10px] leading-snug text-[#52525b] bg-white border border-black/5 rounded px-1.5 py-1 break-all">
-                            {cond.condition}
-                          </code>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <!-- Layer 3: Fine-Grained Parameters -->
+                <!-- Layer 2: Fine-Grained Parameters -->
                 <div class="pt-3 border-t border-black/5 space-y-2.5">
                   <div class="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
                     Fine-Grained Parameters
@@ -484,8 +428,13 @@ const initialPayload = JSON.stringify({
         </div>
       </section>
 
-      <!-- 2.5 Custom Logical Condition Rules Builder -->
-      <WafConditionBuilder rules={ruleConfig.customRules} canManage={canManage} />
+      <!-- 2.5 Unified Logical Condition Rules (Preset + Custom) -->
+      <WafConditionBuilder
+        rules={ruleConfig.customRules}
+        ruleConfig={ruleConfig}
+        activeModes={activeModes}
+        canManage={canManage}
+      />
 
       <!-- 3. IP Blacklist & Whitelist -->
       <section class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -666,6 +615,7 @@ const initialPayload = JSON.stringify({
         document.querySelector<HTMLInputElement>(`.waf-sub-checkbox[data-waf-group="${group}"][data-waf-key="${key}"]`);
 
       let customRules: any[] = [];
+      let activeRuleFilter = 'all';
 
       const CUSTOM_FIELD_LABELS: Record<string, string> = {
         path_matches: 'If Path',
@@ -675,14 +625,42 @@ const initialPayload = JSON.stringify({
         ip_matches: 'If Client IP',
       };
 
+      const applyRuleFilter = () => {
+        document.querySelectorAll<HTMLElement>('.waf-unified-rule-row').forEach((row) => {
+          const scope = row.dataset.ruleScope || 'custom';
+          const visible = activeRuleFilter === 'all' || activeRuleFilter === scope;
+          row.classList.toggle('hidden', !visible);
+        });
+        document.querySelectorAll<HTMLButtonElement>('.waf-filter-tab').forEach((tab) => {
+          const isActive = (tab.dataset.ruleFilter || 'all') === activeRuleFilter;
+          tab.classList.toggle('bg-white', isActive);
+          tab.classList.toggle('text-[#1d1d1f]', isActive);
+          tab.classList.toggle('font-semibold', isActive);
+          tab.classList.toggle('shadow-2xs', isActive);
+          tab.classList.toggle('text-[#52525b]', !isActive);
+          tab.classList.toggle('font-medium', !isActive);
+        });
+      };
+
       const renderCustomRules = () => {
         const listEl = document.getElementById('waf-custom-rules-list');
         const countEl = document.getElementById('waf-custom-rules-count');
-        if (countEl) countEl.textContent = `${customRules.length} ${customRules.length === 1 ? 'Rule' : 'Rules'}`;
+        const presetCount = Number(countEl?.dataset.presetCount || 15);
+        if (countEl) {
+          countEl.textContent = `${presetCount + customRules.length} Rules (${presetCount} Preset · ${customRules.length} Custom)`;
+        }
+        const allTab = document.querySelector<HTMLButtonElement>('.waf-filter-tab[data-rule-filter="all"]');
+        const customTab = document.querySelector<HTMLButtonElement>('.waf-filter-tab[data-rule-filter="custom"]');
+        if (allTab) allTab.textContent = `All (${presetCount + customRules.length})`;
+        if (customTab) customTab.textContent = `Custom (${customRules.length})`;
+
         if (!listEl) return;
 
         if (!customRules.length) {
-          listEl.innerHTML = `<div class="rounded-xl border border-dashed border-black/10 bg-[#fafafc] px-3 py-4 text-center text-[11px] text-[#86868b]">No custom logical rules configured yet. Use the builder above to create edge interception rules.</div>`;
+          listEl.innerHTML = activeRuleFilter === 'custom'
+            ? `<div class="rounded-xl border border-dashed border-black/10 bg-[#fafafc] px-3 py-4 text-center text-[11px] text-[#86868b]">No custom logical rules configured yet. Use the builder above to create edge interception rules.</div>`
+            : '';
+          applyRuleFilter();
           return;
         }
 
@@ -698,9 +676,10 @@ const initialPayload = JSON.stringify({
             ? `<button type="button" data-rule-id="${escapeHtml(rule.id)}" aria-label="Delete rule" title="Remove rule" class="waf-custom-rule-delete w-6 h-6 rounded-lg text-xs font-bold text-[#86868b] hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center">×</button>`
             : '';
           return `
-            <div data-custom-rule-id="${escapeHtml(rule.id)}" class="rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity ${rule.enabled ? '' : 'opacity-55'}">
+            <div data-custom-rule-id="${escapeHtml(rule.id)}" data-rule-scope="custom" class="waf-unified-rule-row rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity ${rule.enabled ? '' : 'opacity-55'}">
               <div class="flex items-center gap-2.5 min-w-0 flex-1">
                 <input id="waf-cr-${escapeHtml(rule.id)}" type="checkbox" autocomplete="off" data-rule-id="${escapeHtml(rule.id)}" ${rule.enabled ? 'checked' : ''} ${canManage ? '' : 'disabled'} aria-label="Toggle custom rule ${escapeHtml(rule.id)}" class="waf-custom-rule-toggle w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0" />
+                <span class="px-1.5 py-0.5 rounded-md border text-[10px] font-semibold bg-sky-50 text-sky-700 border-sky-200/80 shrink-0">Custom</span>
                 <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
                   <span class="font-semibold text-[#1d1d1f]">${escapeHtml(fieldLabel)}${headerChip}</span>
                   <span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1.5 py-0.5 rounded">${opLabel}</span>
@@ -714,6 +693,7 @@ const initialPayload = JSON.stringify({
             </div>
           `;
         }).join('');
+        applyRuleFilter();
       };
 
       const collectRuleConfig = () => ({
@@ -835,6 +815,16 @@ const initialPayload = JSON.stringify({
           }
         });
 
+        const modeCheckedSet = new Set(checkedModes);
+        document.querySelectorAll<HTMLElement>('[data-preset-mode-pill]').forEach((pill) => {
+          const mode = pill.dataset.presetModePill || '';
+          pill.classList.toggle('hidden', modeCheckedSet.has(mode));
+        });
+        document.querySelectorAll<HTMLInputElement>('[data-rate-mode-sync]').forEach((rlCb) => {
+          const mode = rlCb.dataset.rateModeSync || '';
+          rlCb.checked = modeCheckedSet.has(mode);
+        });
+
         document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox').forEach((cb) => {
           const group = cb.dataset.wafGroup;
           const key = cb.dataset.wafKey;
@@ -850,11 +840,15 @@ const initialPayload = JSON.stringify({
             ? `${cfg.malicious.strikeLimit} Strikes · ${cfg.malicious.banDurationMinutes}m`
             : 'Auto-Ban Off';
         }
+        const autoBanExprEl = document.querySelector<HTMLElement>('[data-preset-dynamic="enableAutoBan"]');
+        if (autoBanExprEl) {
+          autoBanExprEl.textContent = `${cfg.malicious.strikeLimit} strikes → auto-ban IP for ${cfg.malicious.banDurationMinutes}m`;
+        }
 
         (['publicWriteLimit', 'apiLimit', 'pageLimit'] as const).forEach((key) => {
           const badge = document.querySelector<HTMLElement>(`[data-rate-badge="${key}"]`);
           if (badge) {
-            badge.textContent = `${cfg.rateLimit[key]} req / ${cfg.rateLimit.windowSeconds}s`;
+            badge.textContent = `429 > ${cfg.rateLimit[key]} req/${cfg.rateLimit.windowSeconds}s`;
           }
         });
         const retryPill = document.querySelector<HTMLElement>('[data-rate-retry-pill]');
@@ -906,6 +900,14 @@ const initialPayload = JSON.stringify({
           scheduleAutoSave();
         }, { signal });
       });
+
+      // Unified Filter Tabs
+      document.getElementById('waf-rule-filter-tabs')?.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement | null)?.closest?.('.waf-filter-tab') as HTMLButtonElement | null;
+        if (!btn) return;
+        activeRuleFilter = btn.dataset.ruleFilter || 'all';
+        renderCustomRules();
+      }, { signal });
 
       // Custom Logical Condition Builder Events
       const builderFieldEl = document.getElementById('waf-builder-field') as HTMLSelectElement | null;
