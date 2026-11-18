@@ -43,5 +43,22 @@
 			"binding": "HYPERDRIVE",
 			"id": "7c5fefa7e904426681fe65d9276b3734"
 		}
-	]
+	],
+	"env": {
+		"local": {
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "b2b",
+					"database_id": "ee9bf95f-2f23-4df7-aea4-cb81346473dd"
+				}
+			],
+			"kv_namespaces": [
+				{
+					"binding": "CACHE_KV",
+					"id": "dfca59910c5b42658712e1df73884827"
+				}
+			]
+		}
+	}
 }

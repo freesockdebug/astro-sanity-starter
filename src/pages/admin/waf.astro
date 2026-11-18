@@ -126,7 +126,7 @@ const initialPayload = JSON.stringify({
       badgeColor={activeModes.length > 0 ? 'emerald' : 'amber'}
       iconKey="waf"
     >
-      <div class="flex items-center gap-2">
+      <div slot="actions" class="flex items-center gap-2">
         <button
           id="waf-refresh-btn"
           type="button"
@@ -500,6 +500,7 @@ const initialPayload = JSON.stringify({
         cb.addEventListener('change', () => {
           syncModeCardsAndKpis();
           setDirty(true);
+          saveRules();
         }, { signal });
       });
 

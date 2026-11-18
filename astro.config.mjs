@@ -7,6 +7,11 @@ import { visualizer } from 'rollup-plugin-visualizer';
 const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('build');
 const isAnalyze = process.env.ANALYZE === 'true';
 
+// In local dev, use Wrangler's `local` env (no Hyperdrive binding) so DB connects directly to Supabase via .env
+if (process.argv.includes('dev') && !process.env.CLOUDFLARE_ENV) {
+    process.env.CLOUDFLARE_ENV = 'local';
+}
+
 // https://astro.build/config
 export default defineConfig({
     output: 'server',
