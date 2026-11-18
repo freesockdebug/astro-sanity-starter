@@ -6,7 +6,7 @@ import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
 import { getSystemSettings, listErrorLogs, type WafRuleMode } from '@db';
-import { EdgeWafService, parseIpList } from '@utils/waf';
+import { EdgeWafService, parseIpList, normalizeWafRuleConfig, DEFAULT_WAF_RULE_CONFIG, WAF_CONDITION_CATALOG } from '@utils/waf';
 import { formatAdminTime } from '@utils/adminWorkbench';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -41,6 +41,7 @@ const [recentLogsRes, dayLogsRes] = await Promise.all([
 const activeModes: WafRuleMode[] = Array.isArray(settings?.waf_active_modes) ? settings.waf_active_modes : [];
 const blockedIpsStr = settings?.waf_blocked_ips || '';
 const allowIpsStr = settings?.waf_allow_ips || '';
+const ruleConfig = normalizeWafRuleConfig(settings?.waf_rule_config);
 const blockedCount = parseIpList(blockedIpsStr).length;
 const allowCount = parseIpList(allowIpsStr).length;
 const strikeStats = EdgeWafService.getStrikeStats();
@@ -59,7 +60,7 @@ const WAF_MODE_CARDS: Array<{
     mode: 'block_malicious_ips',
     icon: '🛡️',
     title: 'Block Malicious IPs',
-    desc: 'Blocks blacklisted IPs, OWASP SQLi / XSS / path traversal (../) payloads, and auto-bans probe IPs for 15 minutes after 3 strikes.',
+    desc: 'Blocks blacklisted IPs, probe paths, OWASP SQLi/XSS/LFI payloads & dynamically auto-bans repeat offenders.',
     responseCode: '403 Forbidden (WAF_MALICIOUS_IP / WAF_MALICIOUS_PAYLOAD)',
     tagClass: 'bg-rose-50 text-rose-700 border-rose-200/80',
   },
@@ -67,15 +68,15 @@ const WAF_MODE_CARDS: Array<{
     mode: 'strict_rate_limiting',
     icon: '⚡',
     title: 'Strict Rate Limiting',
-    desc: 'Enforces sliding-window limits at the edge: public write APIs (/api/submit-quote) 5 req/min, standard APIs 30 req/min, pages 90 req/min.',
-    responseCode: '429 Too Many Requests (WAF_STRICT_RATE_LIMIT) + Retry-After: 60',
+    desc: 'Enforces sliding-window request caps across public write endpoints, standard APIs & SSR pages.',
+    responseCode: `429 Too Many Requests (WAF_STRICT_RATE_LIMIT) + Retry-After: ${ruleConfig.rateLimit.windowSeconds}`,
     tagClass: 'bg-amber-50 text-amber-800 border-amber-200/80',
   },
   {
     mode: 'bot_challenge',
     icon: '🤖',
     title: 'Bot Challenge',
-    desc: 'Detects and blocks sqlmap, nuclei, nikto, python-requests, Scrapy & AI scrapers; challenges sensitive requests lacking browser fingerprints.',
+    desc: 'Granular filtering for scanners, CLI scripts, AI/SEO crawlers, custom UAs & RFQ browser fingerprints.',
     responseCode: '403 Forbidden (WAF_BOT_CHALLENGE)',
     tagClass: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
   },
@@ -102,6 +103,8 @@ const initialPayload = JSON.stringify({
   activeModes,
   blockedIps: blockedIpsStr,
   allowIps: allowIpsStr,
+  ruleConfig,
+  defaultRuleConfig: DEFAULT_WAF_RULE_CONFIG,
 }).replace(/</g, '\\u003c');
 ---
 
@@ -121,7 +124,7 @@ const initialPayload = JSON.stringify({
   <div id="waf-workbench-root" class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-3">
     <AdminPageToolbar
       title="Edge WAF Shield"
-      subtitle="Real-time edge protection modes, IP blacklists/whitelists, 3-strike auto-ban engine & live intercept telemetry"
+      subtitle="Transparent defense conditions, fine-grained rule thresholds, IP ACLs, auto-ban strike engine & live telemetry"
       badge={activeModes.length > 0 ? `${activeModes.length} / 3 Enforcing` : 'WAF Standby'}
       badgeColor={activeModes.length > 0 ? 'emerald' : 'amber'}
       iconKey="waf"
@@ -135,6 +138,16 @@ const initialPayload = JSON.stringify({
         >
           ↻ Refresh
         </button>
+        {canManage && (
+          <button
+            id="waf-reset-btn"
+            type="button"
+            class="adm-btn-secondary"
+            title="Restore recommended WAF sub-rules and thresholds"
+          >
+            Reset Defaults
+          </button>
+        )}
         {canManage && (
           <button
             id="waf-save-btn"
@@ -201,7 +214,11 @@ const initialPayload = JSON.stringify({
         <div class="adm-card p-3.5 flex flex-col justify-between gap-2">
           <div class="flex items-center justify-between gap-2">
             <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">Auto-Ban Strike Engine</span>
-            <span class="adm-badge adm-badge-warn">3 Strikes · 15m</span>
+            <span id="kpi-autoban-policy" class="adm-badge adm-badge-warn">
+              {ruleConfig.malicious.enableAutoBan
+                ? `${ruleConfig.malicious.strikeLimit} Strikes · ${ruleConfig.malicious.banDurationMinutes}m`
+                : 'Auto-Ban Off'}
+            </span>
           </div>
           <div class="flex items-center justify-between gap-2">
             <div class="text-[11px] text-[#1d1d1f]">
@@ -221,37 +238,40 @@ const initialPayload = JSON.stringify({
         </div>
       </section>
 
-      <!-- 2. Three Protection Mode Toggle Cards -->
+      <!-- 2. Three Protection Mode Cards (Condition Transparency + Fine-Grained Config) -->
       <section class="adm-card p-4 space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">EdgeWafService Protection Modes</h2>
-            <p class="text-[11px] text-[#86868b]">Click any card to toggle enforcement in <code class="font-mono text-[10px] bg-[#f5f5f7] px-1 py-0.5 rounded">waf_active_modes</code>. Changes apply immediately on save.</p>
+            <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">EdgeWafService Protection Modes & Fine-Grained Rules</h2>
+            <p class="text-[11px] text-[#86868b]">
+              Inspect exact matching patterns, toggle sub-conditions independently, or tune thresholds in <code class="font-mono text-[10px] bg-[#f5f5f7] px-1 py-0.5 rounded">waf_rule_config</code>.
+            </p>
           </div>
           {!canManage && (
             <span class="adm-badge adm-badge-neutral">Read-Only (waf:read)</span>
           )}
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
           {WAF_MODE_CARDS.map((card) => {
             const isEnabled = activeModes.includes(card.mode);
+            const conditions = WAF_CONDITION_CATALOG[card.mode];
             return (
-              <label
+              <div
                 data-waf-card={card.mode}
                 class:list={[
-                  'waf-mode-card rounded-2xl border p-4 flex flex-col justify-between gap-3 transition-all select-none',
-                  canManage ? 'cursor-pointer hover:border-black/25' : 'opacity-90 cursor-default',
+                  'waf-mode-card rounded-2xl border p-4 flex flex-col justify-between gap-3.5 transition-all',
                   isEnabled ? 'bg-white border-black/20 shadow-xs ring-1 ring-black/5' : 'bg-[#fafafc] border-black/8',
                 ]}
               >
+                <!-- Layer 1: Mode Header & Master Switch -->
                 <div class="space-y-2">
                   <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-2 min-w-0">
                       <span class="text-base shrink-0">{card.icon}</span>
                       <span class="font-bold text-xs text-[#1d1d1f] truncate">{card.title}</span>
                     </div>
-                    <div class="flex items-center gap-2 shrink-0">
+                    <label class:list={['flex items-center gap-2 shrink-0', canManage ? 'cursor-pointer' : 'cursor-default']}>
                       <span
                         data-mode-badge={card.mode}
                         class:list={[
@@ -269,17 +289,184 @@ const initialPayload = JSON.stringify({
                         disabled={!canManage}
                         class="waf-mode-checkbox w-4 h-4 accent-[#1d1d1f] rounded cursor-pointer"
                       />
-                    </div>
+                    </label>
                   </div>
                   <p class="text-[11px] text-[#52525b] leading-relaxed">{card.desc}</p>
+                  <div>
+                    <span
+                      data-rate-retry-pill={card.mode === 'strict_rate_limiting' ? 'true' : undefined}
+                      class:list={['inline-block px-2 py-0.5 rounded-md border font-mono text-[10px] leading-snug', card.tagClass]}
+                    >
+                      {card.responseCode}
+                    </span>
+                  </div>
                 </div>
 
-                <div class="pt-2 border-t border-black/5">
-                  <span class:list={['inline-block px-2 py-0.5 rounded-md border font-mono text-[10px] leading-snug', card.tagClass]}>
-                    {card.responseCode}
-                  </span>
+                <!-- Layer 2: Active Defense Conditions -->
+                <div class="pt-3 border-t border-black/5 space-y-2 flex-1">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+                    Active Defense Conditions ({conditions.length})
+                  </div>
+                  <div class="space-y-1.5">
+                    {conditions.map((cond) => {
+                      const isRateMode = card.mode === 'strict_rate_limiting';
+                      const subGroup = card.mode === 'block_malicious_ips' ? 'malicious' : 'bot';
+                      const isSubChecked = isRateMode
+                        ? true
+                        : Boolean((ruleConfig as any)[subGroup]?.[cond.key]);
+                      const rateLimitVal = isRateMode ? (ruleConfig.rateLimit as any)[cond.key] : null;
+                      return (
+                        <div
+                          data-cond-row={`${card.mode}:${cond.key}`}
+                          class:list={[
+                            'rounded-xl border border-black/6 bg-[#fafafc] px-2.5 py-2 space-y-1 transition-opacity',
+                            !isSubChecked && 'opacity-55',
+                          ]}
+                        >
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-semibold text-[#1d1d1f]">{cond.label}</span>
+                            {isRateMode ? (
+                              <span
+                                data-rate-badge={cond.key}
+                                class="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200/80 shrink-0"
+                              >
+                                {rateLimitVal} req / {ruleConfig.rateLimit.windowSeconds}s
+                              </span>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                data-waf-group={subGroup}
+                                data-waf-key={cond.key}
+                                checked={isSubChecked}
+                                disabled={!canManage}
+                                aria-label={cond.label}
+                                class="waf-sub-checkbox w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0"
+                              />
+                            )}
+                          </div>
+                          <code class="block font-mono text-[10px] leading-snug text-[#52525b] bg-white border border-black/5 rounded px-1.5 py-1 break-all">
+                            {cond.condition}
+                          </code>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </label>
+
+                <!-- Layer 3: Fine-Grained Parameters -->
+                <div class="pt-3 border-t border-black/5 space-y-2.5">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
+                    Fine-Grained Parameters
+                  </div>
+
+                  {card.mode === 'block_malicious_ips' && (
+                    <div class="space-y-2.5">
+                      <div class="grid grid-cols-2 gap-2">
+                        <label class="block space-y-1">
+                          <span class="text-[10px] font-semibold text-[#52525b]">Strike Threshold (1–50)</span>
+                          <input
+                            id="waf-mal-strike-limit"
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={ruleConfig.malicious.strikeLimit}
+                            disabled={!canManage}
+                            class="adm-input waf-param-input font-mono text-[11px] py-1.5"
+                          />
+                        </label>
+                        <label class="block space-y-1">
+                          <span class="text-[10px] font-semibold text-[#52525b]">Auto-Ban Duration (min)</span>
+                          <input
+                            id="waf-mal-ban-minutes"
+                            type="number"
+                            min="1"
+                            max="1440"
+                            value={ruleConfig.malicious.banDurationMinutes}
+                            disabled={!canManage}
+                            class="adm-input waf-param-input font-mono text-[11px] py-1.5"
+                          />
+                        </label>
+                      </div>
+                      <label class="block space-y-1">
+                        <span class="text-[10px] font-semibold text-[#52525b]">Custom Blocked Path Keywords (comma or newline)</span>
+                        <textarea
+                          id="waf-mal-custom-paths"
+                          rows="2"
+                          disabled={!canManage}
+                          placeholder="/admin.php, /backup, /private-dump"
+                          class="adm-input waf-param-input font-mono text-[11px] leading-relaxed resize-y"
+                        >{ruleConfig.malicious.customBlockedPaths}</textarea>
+                      </label>
+                    </div>
+                  )}
+
+                  {card.mode === 'strict_rate_limiting' && (
+                    <div class="grid grid-cols-2 gap-2">
+                      <label class="block space-y-1">
+                        <span class="text-[10px] font-semibold text-[#52525b]">Window Seconds (10–3600)</span>
+                        <input
+                          id="waf-rl-window"
+                          type="number"
+                          min="10"
+                          max="3600"
+                          value={ruleConfig.rateLimit.windowSeconds}
+                          disabled={!canManage}
+                          class="adm-input waf-param-input font-mono text-[11px] py-1.5"
+                        />
+                      </label>
+                      <label class="block space-y-1">
+                        <span class="text-[10px] font-semibold text-[#52525b]">Public Write Limit (1–500)</span>
+                        <input
+                          id="waf-rl-pub-write"
+                          type="number"
+                          min="1"
+                          max="500"
+                          value={ruleConfig.rateLimit.publicWriteLimit}
+                          disabled={!canManage}
+                          class="adm-input waf-param-input font-mono text-[11px] py-1.5"
+                        />
+                      </label>
+                      <label class="block space-y-1">
+                        <span class="text-[10px] font-semibold text-[#52525b]">Standard API Limit (1–1000)</span>
+                        <input
+                          id="waf-rl-api"
+                          type="number"
+                          min="1"
+                          max="1000"
+                          value={ruleConfig.rateLimit.apiLimit}
+                          disabled={!canManage}
+                          class="adm-input waf-param-input font-mono text-[11px] py-1.5"
+                        />
+                      </label>
+                      <label class="block space-y-1">
+                        <span class="text-[10px] font-semibold text-[#52525b]">SSR Page Limit (1–5000)</span>
+                        <input
+                          id="waf-rl-page"
+                          type="number"
+                          min="1"
+                          max="5000"
+                          value={ruleConfig.rateLimit.pageLimit}
+                          disabled={!canManage}
+                          class="adm-input waf-param-input font-mono text-[11px] py-1.5"
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {card.mode === 'bot_challenge' && (
+                    <label class="block space-y-1">
+                      <span class="text-[10px] font-semibold text-[#52525b]">Custom Blocked User-Agent Keywords (comma or newline)</span>
+                      <textarea
+                        id="waf-bot-custom-ua"
+                        rows="2"
+                        disabled={!canManage}
+                        placeholder="PhantomJS, HeadlessChrome, CustomScraper"
+                        class="adm-input waf-param-input font-mono text-[11px] leading-relaxed resize-y"
+                      >{ruleConfig.bot.customBlockedUa}</textarea>
+                    </label>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -432,7 +619,10 @@ const initialPayload = JSON.stringify({
       wafAbort = new AbortController();
       const { signal } = wafAbort;
 
-      const initial = readJsonStore<{ canManage?: boolean }>('waf-initial-data', { canManage: false });
+      const initial = readJsonStore<{
+        canManage?: boolean;
+        defaultRuleConfig?: Record<string, any>;
+      }>('waf-initial-data', { canManage: false });
       const canManage = Boolean(initial.canManage);
 
       const showToast = (msg: string, ok: boolean) => {
@@ -440,10 +630,79 @@ const initialPayload = JSON.stringify({
       };
 
       const saveBtn = document.getElementById('waf-save-btn') as HTMLButtonElement | null;
+      const resetBtn = document.getElementById('waf-reset-btn') as HTMLButtonElement | null;
       const refreshBtn = document.getElementById('waf-refresh-btn') as HTMLButtonElement | null;
       const clearStrikesBtn = document.getElementById('waf-clear-strikes-btn') as HTMLButtonElement | null;
       const blockedTextarea = document.getElementById('waf-blocked-ips') as HTMLTextAreaElement | null;
       const allowTextarea = document.getElementById('waf-allow-ips') as HTMLTextAreaElement | null;
+
+      const clampInput = (id: string, fallback: number, min: number, max: number) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const n = Number(el?.value);
+        if (!Number.isFinite(n)) return fallback;
+        return Math.min(max, Math.max(min, Math.round(n)));
+      };
+
+      const getCheckbox = (group: string, key: string) =>
+        document.querySelector<HTMLInputElement>(`.waf-sub-checkbox[data-waf-group="${group}"][data-waf-key="${key}"]`);
+
+      const collectRuleConfig = () => ({
+        malicious: {
+          enableIpBlacklist: Boolean(getCheckbox('malicious', 'enableIpBlacklist')?.checked),
+          enableAutoBan: Boolean(getCheckbox('malicious', 'enableAutoBan')?.checked),
+          strikeLimit: clampInput('waf-mal-strike-limit', 3, 1, 50),
+          banDurationMinutes: clampInput('waf-mal-ban-minutes', 15, 1, 1440),
+          enableProbePaths: Boolean(getCheckbox('malicious', 'enableProbePaths')?.checked),
+          enablePathTraversal: Boolean(getCheckbox('malicious', 'enablePathTraversal')?.checked),
+          enableXss: Boolean(getCheckbox('malicious', 'enableXss')?.checked),
+          enableSqli: Boolean(getCheckbox('malicious', 'enableSqli')?.checked),
+          customBlockedPaths: ((document.getElementById('waf-mal-custom-paths') as HTMLTextAreaElement | null)?.value || '').trim(),
+        },
+        rateLimit: {
+          windowSeconds: clampInput('waf-rl-window', 60, 10, 3600),
+          publicWriteLimit: clampInput('waf-rl-pub-write', 5, 1, 500),
+          apiLimit: clampInput('waf-rl-api', 30, 1, 1000),
+          pageLimit: clampInput('waf-rl-page', 90, 1, 5000),
+        },
+        bot: {
+          blockEmptyUa: Boolean(getCheckbox('bot', 'blockEmptyUa')?.checked),
+          blockScannerTools: Boolean(getCheckbox('bot', 'blockScannerTools')?.checked),
+          blockCliScrapers: Boolean(getCheckbox('bot', 'blockCliScrapers')?.checked),
+          blockAiCrawlers: Boolean(getCheckbox('bot', 'blockAiCrawlers')?.checked),
+          blockSeoBots: Boolean(getCheckbox('bot', 'blockSeoBots')?.checked),
+          enforceQuoteFingerprint: Boolean(getCheckbox('bot', 'enforceQuoteFingerprint')?.checked),
+          customBlockedUa: ((document.getElementById('waf-bot-custom-ua') as HTMLTextAreaElement | null)?.value || '').trim(),
+        },
+      });
+
+      const applyRuleConfig = (cfg: any) => {
+        if (!cfg || typeof cfg !== 'object') return;
+        const setVal = (id: string, v: unknown) => {
+          const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+          if (el && v !== undefined && v !== null) el.value = String(v);
+        };
+        document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox').forEach((cb) => {
+          const group = cb.dataset.wafGroup;
+          const key = cb.dataset.wafKey;
+          if (group && key && cfg[group] && typeof cfg[group][key] === 'boolean') {
+            cb.checked = cfg[group][key];
+          }
+        });
+        if (cfg.malicious) {
+          setVal('waf-mal-strike-limit', cfg.malicious.strikeLimit);
+          setVal('waf-mal-ban-minutes', cfg.malicious.banDurationMinutes);
+          setVal('waf-mal-custom-paths', cfg.malicious.customBlockedPaths ?? '');
+        }
+        if (cfg.rateLimit) {
+          setVal('waf-rl-window', cfg.rateLimit.windowSeconds);
+          setVal('waf-rl-pub-write', cfg.rateLimit.publicWriteLimit);
+          setVal('waf-rl-api', cfg.rateLimit.apiLimit);
+          setVal('waf-rl-page', cfg.rateLimit.pageLimit);
+        }
+        if (cfg.bot) {
+          setVal('waf-bot-custom-ua', cfg.bot.customBlockedUa ?? '');
+        }
+      };
 
       let hasUnsavedChanges = false;
       const setDirty = (dirty: boolean) => {
@@ -477,6 +736,33 @@ const initialPayload = JSON.stringify({
             badge.className = `adm-badge ${cb.checked ? 'adm-badge-ok' : 'adm-badge-neutral'}`;
           }
         });
+
+        document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox').forEach((cb) => {
+          const group = cb.dataset.wafGroup;
+          const key = cb.dataset.wafKey;
+          const mode = group === 'malicious' ? 'block_malicious_ips' : 'bot_challenge';
+          const row = document.querySelector<HTMLElement>(`[data-cond-row="${mode}:${key}"]`);
+          row?.classList.toggle('opacity-55', !cb.checked);
+        });
+
+        const cfg = collectRuleConfig();
+        const policyEl = document.getElementById('kpi-autoban-policy');
+        if (policyEl) {
+          policyEl.textContent = cfg.malicious.enableAutoBan
+            ? `${cfg.malicious.strikeLimit} Strikes · ${cfg.malicious.banDurationMinutes}m`
+            : 'Auto-Ban Off';
+        }
+
+        (['publicWriteLimit', 'apiLimit', 'pageLimit'] as const).forEach((key) => {
+          const badge = document.querySelector<HTMLElement>(`[data-rate-badge="${key}"]`);
+          if (badge) {
+            badge.textContent = `${cfg.rateLimit[key]} req / ${cfg.rateLimit.windowSeconds}s`;
+          }
+        });
+        const retryPill = document.querySelector<HTMLElement>('[data-rate-retry-pill]');
+        if (retryPill) {
+          retryPill.textContent = `429 Too Many Requests (WAF_STRICT_RATE_LIMIT) + Retry-After: ${cfg.rateLimit.windowSeconds}`;
+        }
 
         const modesCountEl = document.getElementById('kpi-modes-count');
         const modesBadgeEl = document.getElementById('kpi-modes-badge');
@@ -518,6 +804,28 @@ const initialPayload = JSON.stringify({
           }, 250);
         }, { signal });
       });
+
+      document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox').forEach((cb) => {
+        cb.addEventListener('change', () => {
+          syncModeCardsAndKpis();
+          setDirty(true);
+        }, { signal });
+      });
+
+      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('.waf-param-input').forEach((el) => {
+        el.addEventListener('input', () => {
+          syncModeCardsAndKpis();
+          setDirty(true);
+        }, { signal });
+      });
+
+      resetBtn?.addEventListener('click', () => {
+        if (!canManage || !initial.defaultRuleConfig) return;
+        applyRuleConfig(initial.defaultRuleConfig);
+        syncModeCardsAndKpis();
+        setDirty(true);
+        showToast('Restored recommended WAF defaults (click Save Rules to apply).', true);
+      }, { signal });
 
       blockedTextarea?.addEventListener('input', () => {
         syncModeCardsAndKpis();
@@ -677,6 +985,7 @@ const initialPayload = JSON.stringify({
               waf_active_modes: selectedModes,
               waf_blocked_ips: blockedTextarea?.value || '',
               waf_allow_ips: allowTextarea?.value || '',
+              waf_rule_config: collectRuleConfig(),
             }),
           });
           const data = await res.json();
@@ -686,6 +995,9 @@ const initialPayload = JSON.stringify({
             }
             if (allowTextarea && typeof data.settings?.waf_allow_ips === 'string') {
               allowTextarea.value = data.settings.waf_allow_ips;
+            }
+            if (data.settings?.waf_rule_config) {
+              applyRuleConfig(data.settings.waf_rule_config);
             }
             syncModeCardsAndKpis();
             if (!pendingSave) {

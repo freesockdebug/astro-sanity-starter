@@ -14,7 +14,7 @@ import {
   invalidateDashboardStatsCache,
 } from '@db';
 import { recordAdminAudit } from '@db/audit.repo';
-import { purgeEdgeHtmlCache } from '@utils/cmsSync';
+import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache } from '@utils/cmsSync';
 
 export const prerender = false;
 
@@ -91,7 +91,7 @@ export const POST: APIRoute = defineAdminApi(
     if (targetPath) {
       edgePaths.add(targetPath);
     }
-    if (scope === 'all' || scope === 'products' || scope === 'pages' || scope === 'config') {
+    if (scope === 'all' || scope === 'products' || scope === 'pages' || scope === 'config' || scope === 'settings') {
       edgePaths.add('/');
       edgePaths.add('/products');
       edgePaths.add('/about');
@@ -100,10 +100,16 @@ export const POST: APIRoute = defineAdminApi(
     }
 
     if (edgePaths.size > 0) {
+      const prevRevs = await getRouteRevisions(cfEnv).catch(() => ({}));
+      const bumpGlobalLayout = scope === 'all' || scope === 'config' || scope === 'settings';
+      await bumpRouteRevisions(edgePaths, bumpGlobalLayout, cfEnv).catch(() => {});
+
       const purgeRes = await purgeEdgeHtmlCache({
         targetPaths: edgePaths,
         origin: new URL(request.url).origin,
         cfEnv,
+        prevRevs,
+        purgeEverything: scope === 'all',
       }).catch(() => null);
       if (purgeRes?.edgeCachePurged) {
         purgedItems.push(`Worker Edge HTML Cache (${purgeRes.urlsToPurge.length} URL keys purged)`);

@@ -13,7 +13,12 @@ import {
 } from '../data/defaults';
 
 import type { StorefrontTheme } from '../config/storefrontThemes';
-export type { StorefrontTheme };
+import {
+  DEFAULT_WAF_RULE_CONFIG,
+  normalizeWafRuleConfig,
+  type WafRuleConfig,
+} from '../utils/waf';
+export type { StorefrontTheme, WafRuleConfig };
 
 export type LogMinLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
 
@@ -58,6 +63,7 @@ export interface SystemSettings {
   waf_active_modes: WafRuleMode[];
   waf_blocked_ips: string;
   waf_allow_ips: string;
+  waf_rule_config: WafRuleConfig;
 
   // 5. Diagnostics & Observability
   enable_error_logging: boolean;
@@ -99,6 +105,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   waf_active_modes: ['block_malicious_ips', 'bot_challenge'],
   waf_blocked_ips: '',
   waf_allow_ips: '',
+  waf_rule_config: DEFAULT_WAF_RULE_CONFIG,
   enable_error_logging: true,
   log_authenticated_users: true,
   log_client_errors: true,
@@ -138,6 +145,7 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
     try {
       const kvData = await kvGet<SystemSettings>(KV_SETTINGS_KEY, customEnv);
       if (kvData && typeof kvData === 'object' && kvData.brand_name) {
+        kvData.waf_rule_config = normalizeWafRuleConfig(kvData.waf_rule_config);
         cachedSettings = kvData;
         cacheExpiry = now + CACHE_TTL_MS;
         return kvData;
@@ -259,6 +267,9 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
       (settings as any)[key] = resolveNum(key, envKey, defaultVal);
     } else if (Array.isArray(defaultVal)) {
       (settings as any)[key] = resolveWafModes(key, envKey, defaultVal as WafRuleMode[]);
+    } else if (key === 'waf_rule_config') {
+      const rawJson = dbMap.has(key) ? dbMap.get(key) : getRuntimeEnv(envKey, customEnv);
+      (settings as any)[key] = normalizeWafRuleConfig(rawJson);
     } else {
       const val = resolveStr(key, envKey, String(defaultVal), !NON_EMPTY_STRING_KEYS.has(key));
       (settings as any)[key] = key === 'log_min_level' ? (val.toLowerCase() as LogMinLevel) : val;
@@ -306,7 +317,7 @@ export async function updateSystemSettings(
 
       const params: any[] = [];
       for (const [key, rawVal] of entries) {
-        const valStr = Array.isArray(rawVal)
+        const valStr = Array.isArray(rawVal) || (typeof rawVal === 'object' && rawVal !== null)
           ? JSON.stringify(rawVal)
           : typeof rawVal === 'boolean' || typeof rawVal === 'number'
             ? String(rawVal)

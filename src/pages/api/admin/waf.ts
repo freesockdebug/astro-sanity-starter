@@ -9,7 +9,7 @@ import {
   recordAdminAudit,
   type WafRuleMode,
 } from '@db';
-import { EdgeWafService, parseIpList, isValidIpRule } from '@utils/waf';
+import { EdgeWafService, parseIpList, isValidIpRule, normalizeWafRuleConfig } from '@utils/waf';
 
 export const prerender = false;
 
@@ -38,6 +38,7 @@ export const GET: APIRoute = defineAdminApi(
       waf_active_modes: settings.waf_active_modes,
       waf_blocked_ips: settings.waf_blocked_ips,
       waf_allow_ips: settings.waf_allow_ips,
+      waf_rule_config: normalizeWafRuleConfig(settings.waf_rule_config),
       strikeStats: EdgeWafService.getStrikeStats(),
       blocked24hCount: dayRes.total,
       logs: recentRes.logs,
@@ -50,6 +51,7 @@ export const POST: APIRoute = defineAdminApi<{
   waf_active_modes?: unknown;
   waf_blocked_ips?: unknown;
   waf_allow_ips?: unknown;
+  waf_rule_config?: unknown;
 }>(
   {
     permission: 'waf:manage',
@@ -100,15 +102,21 @@ export const POST: APIRoute = defineAdminApi<{
 
     const t0 = Date.now();
     const currentSettings = await getSystemSettings(cfEnv);
+    const normalizedRuleConfig = body?.waf_rule_config !== undefined
+      ? normalizeWafRuleConfig(body.waf_rule_config)
+      : normalizeWafRuleConfig(currentSettings.waf_rule_config);
+
     const before = {
       waf_active_modes: currentSettings.waf_active_modes,
       waf_blocked_ips: currentSettings.waf_blocked_ips,
       waf_allow_ips: currentSettings.waf_allow_ips,
+      waf_rule_config: normalizeWafRuleConfig(currentSettings.waf_rule_config),
     };
     const after = {
       waf_active_modes: normalizedModes,
       waf_blocked_ips: blockedParsed.value,
       waf_allow_ips: allowParsed.value,
+      waf_rule_config: normalizedRuleConfig,
     };
 
     const res = await updateSystemSettings(after, auth.user.email, cfEnv);

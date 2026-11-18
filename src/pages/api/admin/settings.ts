@@ -6,6 +6,7 @@ import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, updateSystemSettings } from
 import { SecurityService, sanitizeAdminSettings, isMaskedSecret, SECRET_SETTING_KEYS } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
 import { isValidStorefrontTheme, VALID_STOREFRONT_THEMES } from '@config/storefrontThemes';
+import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache } from '@utils/cmsSync';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -195,6 +196,20 @@ export const POST: APIRoute = async ({ request }) => {
     const saveResult = await updateSystemSettings(updates, admin.user.email, cfEnv);
     if (!saveResult.success) {
       return jsonNoCache({ error: saveResult.error || 'Failed to save settings.' }, 500);
+    }
+
+    const storefrontKeys = ['storefront_theme', 'brand_name', 'contact_email', 'whatsapp_number', 'whatsapp_prefill', 'turnstile_site_key', 'app_url'];
+    if (storefrontKeys.some((k) => k in updates)) {
+      const targetPaths = ['/', '/products', '/about', '/private-label', '/contact'];
+      const prevRevs = await getRouteRevisions(cfEnv).catch(() => ({}));
+      await bumpRouteRevisions(targetPaths, true, cfEnv).catch(() => {});
+      await purgeEdgeHtmlCache({
+        targetPaths,
+        origin: new URL(request.url).origin,
+        cfEnv,
+        prevRevs,
+        purgeEverything: 'storefront_theme' in updates,
+      }).catch(() => {});
     }
 
     const refreshedSettings = await getSystemSettings(cfEnv);

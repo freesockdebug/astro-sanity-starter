@@ -6,7 +6,7 @@ import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { SecurityService } from '@utils/security';
-import { getSystemSettings } from '@db';
+import { getSystemSettings, invalidateSettingsCache } from '@db';
 import { getRuntimeEnv } from '@utils/auth';
 import { kvGet, kvPut } from '@utils/cache';
 import { runInBackground } from '@utils/cache';
@@ -48,6 +48,7 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
       PageService.invalidateCache();
       SiteConfigService.invalidate();
       RfqSettingsService.invalidate();
+      invalidateSettingsCache(cfEnv).catch(() => {});
     }
   } else if (!localRouteRevs) {
     localRouteRevs = {};
@@ -260,22 +261,41 @@ export async function purgeEdgeHtmlCache(params: {
   origin: string;
   cfEnv?: any;
   isDebug?: boolean;
+  prevRevs?: Record<string, number>;
+  purgeEverything?: boolean;
 }): Promise<CmsPurgeResult> {
-  const { targetPaths, origin, cfEnv, isDebug } = params;
+  const { targetPaths, origin, cfEnv, isDebug, prevRevs, purgeEverything = false } = params;
 
   // 1. Expand paths across locales and trailing slashes
   const localizedPaths = expandLocalizedPaths(targetPaths);
+  const revs = prevRevs || await getRouteRevisions(cfEnv).catch(() => ({}));
   const targetOrigins = new Set<string>([origin]);
   const urlsToPurge: string[] = [];
+  const cdnFilesToPurge: string[] = [];
   const urlSet = new Set<string>();
+  const cdnSet = new Set<string>();
 
   for (const p of localizedPaths) {
+    const pathRev = resolvePathRevision(p, revs, NON_DEFAULT_LOCALES);
     for (const org of targetOrigins) {
       const expanded = expandCanonicalUrls(org, p);
       for (const u of expanded) {
         if (!urlSet.has(u)) {
           urlSet.add(u);
           urlsToPurge.push(u);
+        }
+        if (!cdnSet.has(u)) {
+          cdnSet.add(u);
+          cdnFilesToPurge.push(u);
+        }
+        if (pathRev > 0) {
+          const revUrl = new URL(u);
+          revUrl.searchParams.set('__rev', String(pathRev));
+          const revStr = revUrl.toString();
+          if (!urlSet.has(revStr)) {
+            urlSet.add(revStr);
+            urlsToPurge.push(revStr);
+          }
         }
       }
     }
@@ -312,7 +332,7 @@ export async function purgeEdgeHtmlCache(params: {
 
   const currentUrl = new URL(origin);
 
-  if (cfApiToken && urlsToPurge.length > 0) {
+  if (cfApiToken && (purgeEverything || cdnFilesToPurge.length > 0)) {
     try {
       // Diagnostic probe when isDebug is active
       if (isDebug) {
@@ -364,35 +384,54 @@ export async function purgeEdgeHtmlCache(params: {
       }
 
       if (cfZoneId) {
-        // Cloudflare purge_cache supports up to 30 files per request
-        const chunks: string[][] = [];
-        for (let i = 0; i < urlsToPurge.length; i += 30) {
-          chunks.push(urlsToPurge.slice(i, i + 30));
-        }
-
-        let allSuccessful = true;
-        for (const chunk of chunks) {
+        if (purgeEverything) {
           const cfRes = await fetch(`https://api.cloudflare.com/client/v4/zones/${cfZoneId}/purge_cache`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${cfApiToken}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ files: chunk }),
+            body: JSON.stringify({ purge_everything: true }),
             signal: AbortSignal.timeout(6000),
           });
-
           const cfData: any = await cfRes.json();
-          if (!cfData?.success) {
-            allSuccessful = false;
+          if (cfData?.success) {
+            cfPurged = true;
+            cfMessage = 'Successfully purged everything from Cloudflare Global CDN';
+          } else {
             cfMessage = JSON.stringify(cfData?.errors || 'Purge API error');
-            break;
           }
-        }
+        } else {
+          // Cloudflare purge_cache supports up to 30 files per request
+          const chunks: string[][] = [];
+          for (let i = 0; i < cdnFilesToPurge.length; i += 30) {
+            chunks.push(cdnFilesToPurge.slice(i, i + 30));
+          }
 
-        if (allSuccessful) {
-          cfPurged = true;
-          cfMessage = `Successfully purged ${urlsToPurge.length} URLs from Cloudflare Global CDN`;
+          let allSuccessful = true;
+          for (const chunk of chunks) {
+            const cfRes = await fetch(`https://api.cloudflare.com/client/v4/zones/${cfZoneId}/purge_cache`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${cfApiToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ files: chunk }),
+              signal: AbortSignal.timeout(6000),
+            });
+
+            const cfData: any = await cfRes.json();
+            if (!cfData?.success) {
+              allSuccessful = false;
+              cfMessage = JSON.stringify(cfData?.errors || 'Purge API error');
+              break;
+            }
+          }
+
+          if (allSuccessful) {
+            cfPurged = true;
+            cfMessage = `Successfully purged ${cdnFilesToPurge.length} URLs from Cloudflare Global CDN`;
+          }
         }
       } else {
         cfMessage = 'Cloudflare API Token found, but Zone ID could not be identified';
