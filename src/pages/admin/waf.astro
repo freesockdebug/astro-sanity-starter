@@ -6,7 +6,7 @@ import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import WafConditionBuilder from '@components/admin/WafConditionBuilder.astro';
 import { requireAdminContext } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
-import { getSystemSettings, listErrorLogs, type WafRuleMode } from '@db';
+import { getSystemSettings, listErrorLogs, getWaf24hSummary, type WafRuleMode } from '@db';
 import {
   EdgeWafService,
   parseIpList,
@@ -29,19 +29,14 @@ if (redirectResponse) return redirectResponse;
 const canManage = hasPermission(adminContext, 'waf:manage');
 const settings = systemSettings || (await getSystemSettings(cfEnv));
 
-const [recentLogsRes, dayLogsRes] = await Promise.all([
+const [recentLogsRes, daySummary] = await Promise.all([
   listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1 }, cfEnv).catch(() => ({
     logs: [],
     total: 0,
     stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0, slow: 0 },
     bottlenecks: [],
   })),
-  listErrorLogs({ source: 'EDGE_WAF', timeWindow: '24h', limit: 1, page: 1 }, cfEnv).catch(() => ({
-    logs: [],
-    total: 0,
-    stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0, slow: 0 },
-    bottlenecks: [],
-  })),
+  getWaf24hSummary(cfEnv).catch(() => ({ eventsCount: 0, totalHits: 0 })),
 ]);
 
 const activeModes: WafRuleMode[] = Array.isArray(settings?.waf_active_modes) ? settings.waf_active_modes : [];
@@ -51,7 +46,9 @@ const ruleConfig = normalizeWafRuleConfig(settings?.waf_rule_config);
 const blockedCount = parseIpList(blockedIpsStr).length;
 const allowCount = parseIpList(allowIpsStr).length;
 const strikeStats = EdgeWafService.getStrikeStats();
-const blocked24hCount = dayLogsRes.total || 0;
+const activeBans = EdgeWafService.getActiveBans();
+const blocked24hCount = daySummary.totalHits || 0;
+const blocked24hEvents = daySummary.eventsCount || 0;
 const logs = recentLogsRes.logs || [];
 
 const WAF_MODE_CARDS: Array<{
@@ -196,9 +193,14 @@ const initialPayload = JSON.stringify({
             <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">24h Blocked Attacks</span>
             <span class="adm-badge adm-badge-err">EDGE_WAF</span>
           </div>
-          <div class="flex items-baseline gap-1.5">
-            <span id="kpi-24h-blocked" class="text-xl font-bold text-[#1d1d1f] tabular-nums">{blocked24hCount}</span>
-            <span class="text-[11px] text-[#86868b]">Intercepted Requests</span>
+          <div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpi-24h-blocked" class="text-xl font-bold text-[#1d1d1f] tabular-nums">{blocked24hCount}</span>
+              <span class="text-[11px] text-[#86868b]">Intercepted Hits</span>
+            </div>
+            <div id="kpi-24h-events" class="text-[10px] text-[#86868b] mt-0.5">
+              across {blocked24hEvents} {blocked24hEvents === 1 ? 'attack event' : 'attack events'} in 24h
+            </div>
           </div>
         </div>
 
@@ -241,6 +243,36 @@ const initialPayload = JSON.stringify({
                 Clear Auto-Ban Strikes
               </button>
             )}
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Auto-Banned IP List (Single-IP Unban) -->
+      <section
+        id="waf-active-bans-bar"
+        class:list={[
+          'adm-card px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 bg-rose-50/40 border-rose-200/70',
+          activeBans.length === 0 && 'hidden',
+        ]}
+      >
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Active Auto-Banned IPs:</span>
+          <div id="waf-active-bans-chips" class="flex flex-wrap items-center gap-1.5">
+            {activeBans.map((ban) => (
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-mono text-[#1d1d1f]">
+                <span>{ban.ip}</span>
+                <span class="text-[10px] text-[#86868b]">({ban.strikes} strikes · {ban.remainingMinutes}m left)</span>
+                {canManage && (
+                  <button
+                    type="button"
+                    data-unban-ip={ban.ip}
+                    class="btn-unban-ip text-[10px] font-sans font-semibold text-rose-700 hover:text-rose-900 underline cursor-pointer ml-0.5"
+                  >
+                    Unban
+                  </button>
+                )}
+              </span>
+            ))}
           </div>
         </div>
       </section>
@@ -345,7 +377,7 @@ const initialPayload = JSON.stringify({
                         </label>
                       </div>
                       <label class="block space-y-1">
-                        <span class="text-[10px] font-semibold text-[#52525b]">Custom Blocked Path Keywords (comma or newline)</span>
+                        <span class="text-[10px] font-semibold text-[#52525b]">Quick Blocked Path Keywords (comma or newline)</span>
                         <textarea
                           id="waf-mal-custom-paths"
                           rows="2"
@@ -353,6 +385,7 @@ const initialPayload = JSON.stringify({
                           placeholder="/admin.php, /backup, /private-dump"
                           class="adm-input waf-param-input font-mono text-[11px] leading-relaxed resize-y"
                         >{ruleConfig.malicious.customBlockedPaths}</textarea>
+                        <span class="block text-[10px] text-[#86868b]">Tip: for operators (`not contains` / `starts with`) or 429 limits, use Logical Rules below.</span>
                       </label>
                     </div>
                   )}
@@ -412,7 +445,7 @@ const initialPayload = JSON.stringify({
 
                   {card.mode === 'bot_challenge' && (
                     <label class="block space-y-1">
-                      <span class="text-[10px] font-semibold text-[#52525b]">Custom Blocked User-Agent Keywords (comma or newline)</span>
+                      <span class="text-[10px] font-semibold text-[#52525b]">Quick Blocked User-Agent Keywords (comma or newline)</span>
                       <textarea
                         id="waf-bot-custom-ua"
                         rows="2"
@@ -420,6 +453,7 @@ const initialPayload = JSON.stringify({
                         placeholder="PhantomJS, HeadlessChrome, CustomScraper"
                         class="adm-input waf-param-input font-mono text-[11px] leading-relaxed resize-y"
                       >{ruleConfig.bot.customBlockedUa}</textarea>
+                      <span class="block text-[10px] text-[#86868b]">Tip: for granular Bot rules or 429 throttling, use Logical Rules below.</span>
                     </label>
                   )}
                 </div>
@@ -512,14 +546,17 @@ const initialPayload = JSON.stringify({
                   const ctx = parseLogContext(log.context_json);
                   const badge = modeBadgeLabel(ctx.mode);
                   const ipVal = (log.client_ip || '').trim();
-                  const count403 = Number(ctx.count403 || (log.status_code === 403 ? 1 : 0));
-                  const count429 = Number(ctx.count429 || (log.status_code === 429 ? 1 : 0));
+                  const hitCount = Math.max(1, Number(ctx.hitCount || 1));
+                  const statusCode = Number(log.status_code || ctx.statusCode || 403);
+                  const countCls = statusCode === 429
+                    ? 'bg-amber-50 text-amber-800 border-amber-200/80'
+                    : 'bg-rose-50 text-rose-700 border-rose-200/80';
                   const lastBlockedAt = ctx.lastBlockedAt ? formatAdminTime(ctx.lastBlockedAt, 'short') : '';
                   return (
                     <tr class="hover:bg-[#fafafc] transition-colors">
                       <td class="adm-td whitespace-nowrap font-mono text-[11px] text-[#52525b]">
                         <div>{formatAdminTime(log.created_at, 'short')}</div>
-                        {lastBlockedAt && (count403 + count429) > 1 && (
+                        {lastBlockedAt && hitCount > 1 && (
                           <div class="text-[10px] text-[#86868b]" title={`Last hit: ${lastBlockedAt}`}>Last: {lastBlockedAt}</div>
                         )}
                       </td>
@@ -532,16 +569,9 @@ const initialPayload = JSON.stringify({
                       <td class="adm-td whitespace-nowrap">
                         <div class="inline-flex flex-wrap items-center gap-1">
                           <span class:list={['adm-badge', badge.cls]}>{badge.text}</span>
-                          {count403 > 0 && (
-                            <span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold bg-rose-50 text-rose-700 border-rose-200/80">
-                              403 ×{count403}
-                            </span>
-                          )}
-                          {count429 > 0 && (
-                            <span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold bg-amber-50 text-amber-800 border-amber-200/80">
-                              429 ×{count429}
-                            </span>
-                          )}
+                          <span class:list={['px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold', countCls]}>
+                            {statusCode} ×{hitCount}
+                          </span>
                         </div>
                       </td>
                       <td class="adm-td font-mono text-[11px] text-[#1d1d1f] max-w-[220px] truncate" title={`${log.method || 'GET'} ${log.path || ''}`}>
@@ -642,6 +672,7 @@ const initialPayload = JSON.stringify({
         query_contains: 'If Query String',
         ua_contains: 'If User-Agent',
         ip_matches: 'If Client IP',
+        country_equals: 'If Country Code',
       };
 
       const applyRuleFilter = () => {
@@ -690,7 +721,9 @@ const initialPayload = JSON.stringify({
             : '';
           const opLabel = escapeHtml(String(rule.operator || 'contains').replace('_', ' '));
           const actionCls = rule.action === 'rate_limit_429' ? 'adm-badge-warn' : 'adm-badge-err';
-          const actionText = rule.action === 'rate_limit_429' ? '429 Throttle' : '403 Block';
+          const actionText = rule.action === 'rate_limit_429'
+            ? `429 Throttle${rule.limit ? ` (${rule.limit} req)` : ''}`
+            : '403 Block';
           const deleteBtn = canManage
             ? `<button type="button" data-rule-id="${escapeHtml(rule.id)}" aria-label="Delete rule" title="Remove rule" class="waf-custom-rule-delete w-6 h-6 rounded-lg text-xs font-bold text-[#86868b] hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center">×</button>`
             : '';
@@ -936,6 +969,8 @@ const initialPayload = JSON.stringify({
       const builderValueWrap = document.getElementById('waf-builder-value-wrap');
       const builderValueInput = document.getElementById('waf-builder-value') as HTMLInputElement | null;
       const builderActionEl = document.getElementById('waf-builder-action') as HTMLSelectElement | null;
+      const builderLimitWrap = document.getElementById('waf-builder-limit-wrap');
+      const builderLimitInput = document.getElementById('waf-builder-limit') as HTMLInputElement | null;
       const builderAddBtn = document.getElementById('waf-builder-add-btn') as HTMLButtonElement | null;
       const customRulesListEl = document.getElementById('waf-custom-rules-list');
 
@@ -943,17 +978,24 @@ const initialPayload = JSON.stringify({
         if (!builderFieldEl) return;
         const field = builderFieldEl.value;
         const isHeader = field === 'header_contains';
+        const isRate = builderActionEl?.value === 'rate_limit_429';
         builderHeaderWrap?.classList.toggle('hidden', !isHeader);
         builderHeaderWrap?.classList.toggle('block', isHeader);
+        builderLimitWrap?.classList.toggle('hidden', !isRate);
+        builderLimitWrap?.classList.toggle('block', isRate);
         if (builderValueWrap) {
-          builderValueWrap.classList.toggle('md:col-span-2', isHeader);
-          builderValueWrap.classList.toggle('md:col-span-4', !isHeader);
+          const cols = 4 - (isHeader ? 2 : 0) - (isRate ? 1 : 0);
+          builderValueWrap.classList.toggle('md:col-span-4', cols >= 4);
+          builderValueWrap.classList.toggle('md:col-span-3', cols === 3);
+          builderValueWrap.classList.toggle('md:col-span-2', cols === 2);
+          builderValueWrap.classList.toggle('md:col-span-1', cols <= 1);
         }
         const selectedOpt = builderFieldEl.options[builderFieldEl.selectedIndex];
         const ph = selectedOpt?.getAttribute('data-placeholder');
         if (builderValueInput && ph) builderValueInput.placeholder = ph;
       };
       builderFieldEl?.addEventListener('change', syncBuilderFieldUI, { signal });
+      builderActionEl?.addEventListener('change', syncBuilderFieldUI, { signal });
       syncBuilderFieldUI();
 
       const addCustomRuleFromBuilder = () => {
@@ -986,6 +1028,10 @@ const initialPayload = JSON.stringify({
           return;
         }
 
+        const parsedLimit = action === 'rate_limit_429'
+          ? Math.min(5000, Math.max(1, Math.round(Number(builderLimitInput?.value || 20))))
+          : undefined;
+
         customRules.push({
           id: `cr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
           enabled: true,
@@ -994,6 +1040,7 @@ const initialPayload = JSON.stringify({
           ...(headerName ? { headerName } : {}),
           value,
           action,
+          ...(parsedLimit !== undefined ? { limit: parsedLimit } : {}),
         });
 
         builderValueInput.value = '';
@@ -1002,6 +1049,70 @@ const initialPayload = JSON.stringify({
         setDirty(true);
         scheduleAutoSave();
       };
+
+      // Rule Simulator (Dry-Run)
+      const simToggleBtn = document.getElementById('waf-sim-toggle-btn');
+      const simPanel = document.getElementById('waf-sim-panel');
+      const simChevron = document.getElementById('waf-sim-chevron');
+      const simRunBtn = document.getElementById('waf-sim-run-btn') as HTMLButtonElement | null;
+      const simResultEl = document.getElementById('waf-sim-result');
+
+      simToggleBtn?.addEventListener('click', () => {
+        const isHidden = simPanel?.classList.toggle('hidden');
+        if (simChevron) simChevron.textContent = isHidden ? '▸' : '▾';
+      }, { signal });
+
+      simRunBtn?.addEventListener('click', async () => {
+        if (!simRunBtn || !simResultEl) return;
+        const selectedModes = Array.from(document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox'))
+          .filter((cb) => cb.checked)
+          .map((cb) => cb.value);
+
+        simRunBtn.disabled = true;
+        try {
+          const res = await fetch('/api/admin/waf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'simulate',
+              waf_active_modes: selectedModes,
+              waf_blocked_ips: blockedTextarea?.value || '',
+              waf_allow_ips: allowTextarea?.value || '',
+              waf_rule_config: collectRuleConfig(),
+              sim: {
+                method: (document.getElementById('waf-sim-method') as HTMLSelectElement | null)?.value || 'GET',
+                pathname: (document.getElementById('waf-sim-path') as HTMLInputElement | null)?.value || '/',
+                clientIp: (document.getElementById('waf-sim-ip') as HTMLInputElement | null)?.value || '',
+                country: (document.getElementById('waf-sim-country') as HTMLInputElement | null)?.value || '',
+                userAgent: (document.getElementById('waf-sim-ua') as HTMLInputElement | null)?.value || '',
+                headerRaw: (document.getElementById('waf-sim-header') as HTMLInputElement | null)?.value || '',
+              },
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            showToast(data.error || 'Simulation failed.', false);
+            return;
+          }
+          const r = data.result;
+          simResultEl.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-700', 'border-emerald-200', 'bg-rose-50', 'text-rose-700', 'border-rose-200', 'bg-amber-50', 'text-amber-800', 'border-amber-200');
+          if (r.allowed) {
+            simResultEl.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+            simResultEl.textContent = 'ALLOWED (200 OK)';
+          } else {
+            if (r.status === 429) {
+              simResultEl.classList.add('bg-amber-50', 'text-amber-800', 'border-amber-200');
+            } else {
+              simResultEl.classList.add('bg-rose-50', 'text-rose-700', 'border-rose-200');
+            }
+            simResultEl.textContent = `BLOCKED (${r.status}) · ${r.reason || r.code}`;
+          }
+        } catch (err: any) {
+          showToast(`Simulate error: ${err.message}`, false);
+        } finally {
+          simRunBtn.disabled = false;
+        }
+      }, { signal });
 
       builderAddBtn?.addEventListener('click', addCustomRuleFromBuilder, { signal });
       [builderValueInput, builderHeaderInput].forEach((inp) => {
@@ -1123,18 +1234,16 @@ const initialPayload = JSON.stringify({
           } catch {}
           const [modeText, modeCls] = badgeFor(ctx.mode);
           const ipVal = (log.client_ip || '').trim();
-          const count403 = Number(ctx.count403 || (log.status_code === 403 ? 1 : 0));
-          const count429 = Number(ctx.count429 || (log.status_code === 429 ? 1 : 0));
+          const hitCount = Math.max(1, Number(ctx.hitCount || 1));
+          const statusCode = Number(log.status_code || ctx.statusCode || 403);
+          const countCls = statusCode === 429
+            ? 'bg-amber-50 text-amber-800 border-amber-200/80'
+            : 'bg-rose-50 text-rose-700 border-rose-200/80';
           const lastAt = ctx.lastBlockedAt ? formatAdminTime(ctx.lastBlockedAt, 'short') : '';
-          const lastHtml = lastAt && (count403 + count429) > 1
+          const lastHtml = lastAt && hitCount > 1
             ? `<div class="text-[10px] text-[#86868b]" title="Last hit: ${escapeHtml(lastAt)}">Last: ${escapeHtml(lastAt)}</div>`
             : '';
-          const count403Badge = count403 > 0
-            ? `<span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold bg-rose-50 text-rose-700 border-rose-200/80">403 ×${count403}</span>`
-            : '';
-          const count429Badge = count429 > 0
-            ? `<span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold bg-amber-50 text-amber-800 border-amber-200/80">429 ×${count429}</span>`
-            : '';
+          const countBadge = `<span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold ${countCls}">${statusCode} ×${hitCount}</span>`;
           const geo = log.country ? `<div class="text-[10px] text-[#86868b]">${escapeHtml(log.country)}${log.city ? ` · ${escapeHtml(log.city)}` : ''}</div>` : '';
           const actionCell = canManage
             ? `<td class="adm-td text-right whitespace-nowrap">${
@@ -1150,7 +1259,7 @@ const initialPayload = JSON.stringify({
                 <div class="font-mono font-semibold text-[#1d1d1f]">${escapeHtml(ipVal || 'unknown')}</div>
                 ${geo}
               </td>
-              <td class="adm-td whitespace-nowrap"><div class="inline-flex flex-wrap items-center gap-1"><span class="adm-badge ${modeCls}">${escapeHtml(modeText)}</span>${count403Badge}${count429Badge}</div></td>
+              <td class="adm-td whitespace-nowrap"><div class="inline-flex flex-wrap items-center gap-1"><span class="adm-badge ${modeCls}">${escapeHtml(modeText)}</span>${countBadge}</div></td>
               <td class="adm-td font-mono text-[11px] text-[#1d1d1f] max-w-[220px] truncate"><span class="font-bold text-[#52525b] mr-1">${escapeHtml(log.method || 'GET')}</span>${escapeHtml(log.path || '/')}</td>
               <td class="adm-td font-mono text-[11px] text-rose-700 max-w-[260px] truncate">${escapeHtml(ctx.matchedSample || log.message || '')}</td>
               ${actionCell}
@@ -1172,11 +1281,17 @@ const initialPayload = JSON.stringify({
             return;
           }
           const blocked24hEl = document.getElementById('kpi-24h-blocked');
+          const blocked24hEventsEl = document.getElementById('kpi-24h-events');
           const activeBansEl = document.getElementById('kpi-active-bans');
           const trackedIpsEl = document.getElementById('kpi-tracked-ips');
           if (blocked24hEl) blocked24hEl.textContent = String(data.blocked24hCount ?? 0);
+          if (blocked24hEventsEl) {
+            const evCount = Number(data.blocked24hEvents ?? 0);
+            blocked24hEventsEl.textContent = `across ${evCount} ${evCount === 1 ? 'attack event' : 'attack events'} in 24h`;
+          }
           if (activeBansEl) activeBansEl.textContent = String(data.strikeStats?.activeBans ?? 0);
           if (trackedIpsEl) trackedIpsEl.textContent = String(data.strikeStats?.trackedIps ?? 0);
+          renderActiveBans(data.activeBans || []);
           if (!hasUnsavedChanges) {
             applyServerState({
               activeModes: data.waf_active_modes,
@@ -1194,6 +1309,59 @@ const initialPayload = JSON.stringify({
         }
       };
 
+      const renderActiveBans = (bans: any[]) => {
+        const bar = document.getElementById('waf-active-bans-bar');
+        const chips = document.getElementById('waf-active-bans-chips');
+        if (!bar || !chips) return;
+        bar.classList.toggle('hidden', !bans || bans.length === 0);
+        if (!bans || bans.length === 0) {
+          chips.innerHTML = '';
+          return;
+        }
+        chips.innerHTML = bans.map((ban) => {
+          const unbanBtn = canManage
+            ? `<button type="button" data-unban-ip="${escapeHtml(ban.ip)}" class="btn-unban-ip text-[10px] font-sans font-semibold text-rose-700 hover:text-rose-900 underline cursor-pointer ml-0.5">Unban</button>`
+            : '';
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-mono text-[#1d1d1f]">
+              <span>${escapeHtml(ban.ip)}</span>
+              <span class="text-[10px] text-[#86868b]">(${Number(ban.strikes || 0)} strikes · ${Number(ban.remainingMinutes || 1)}m left)</span>
+              ${unbanBtn}
+            </span>
+          `;
+        }).join('');
+      };
+
+      document.getElementById('waf-active-bans-chips')?.addEventListener('click', async (e) => {
+        const btn = (e.target as HTMLElement | null)?.closest?.('.btn-unban-ip') as HTMLButtonElement | null;
+        if (!btn || !canManage) return;
+        const ip = btn.dataset.unbanIp || '';
+        if (!ip) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch('/api/admin/waf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'unban_ip', ip }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            const activeBansEl = document.getElementById('kpi-active-bans');
+            const trackedIpsEl = document.getElementById('kpi-tracked-ips');
+            if (activeBansEl) activeBansEl.textContent = String(data.strikeStats?.activeBans ?? 0);
+            if (trackedIpsEl) trackedIpsEl.textContent = String(data.strikeStats?.trackedIps ?? 0);
+            renderActiveBans(data.activeBans || []);
+            showToast(`Unbanned ${ip}.`, true);
+          } else {
+            showToast(data.error || 'Failed to unban IP.', false);
+          }
+        } catch (err: any) {
+          showToast(`Unban failed: ${err.message}`, false);
+        } finally {
+          btn.disabled = false;
+        }
+      }, { signal });
+
       refreshBtn?.addEventListener('click', refreshTelemetry, { signal });
 
       clearStrikesBtn?.addEventListener('click', async () => {
@@ -1210,6 +1378,7 @@ const initialPayload = JSON.stringify({
             const trackedIpsEl = document.getElementById('kpi-tracked-ips');
             if (activeBansEl) activeBansEl.textContent = String(data.strikeStats?.activeBans ?? 0);
             if (trackedIpsEl) trackedIpsEl.textContent = String(data.strikeStats?.trackedIps ?? 0);
+            renderActiveBans(data.activeBans || []);
             showToast('Auto-ban strikes cleared on this edge isolate.', true);
           } else {
             showToast(data.error || 'Failed to clear strikes.', false);

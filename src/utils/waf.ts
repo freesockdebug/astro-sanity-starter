@@ -15,14 +15,15 @@ export interface WafEvaluationInput {
   search?: string;
   method?: string;
   userAgent?: string;
+  country?: string;
   headers?: Headers;
   now?: number;
+  isAuthenticatedAdmin?: boolean;
+  dryRun?: boolean;
 }
 
 export interface WafBlockStats {
   hitCount: number;
-  count403: number;
-  count429: number;
   lastHitAt: number;
 }
 
@@ -44,9 +45,10 @@ export type WafConditionField =
   | 'header_contains'
   | 'query_contains'
   | 'ua_contains'
-  | 'ip_matches';
+  | 'ip_matches'
+  | 'country_equals';
 
-export type WafConditionOperator = 'contains' | 'starts_with' | 'equals';
+export type WafConditionOperator = 'contains' | 'starts_with' | 'equals' | 'not_contains' | 'not_equals';
 export type WafConditionAction = 'block_403' | 'rate_limit_429';
 
 export interface WafCustomConditionRule {
@@ -57,6 +59,7 @@ export interface WafCustomConditionRule {
   headerName?: string;
   value: string;
   action: WafConditionAction;
+  limit?: number;
   note?: string;
 }
 
@@ -287,8 +290,15 @@ const VALID_CONDITION_FIELDS = new Set<WafConditionField>([
   'query_contains',
   'ua_contains',
   'ip_matches',
+  'country_equals',
 ]);
-const VALID_CONDITION_OPERATORS = new Set<WafConditionOperator>(['contains', 'starts_with', 'equals']);
+const VALID_CONDITION_OPERATORS = new Set<WafConditionOperator>([
+  'contains',
+  'starts_with',
+  'equals',
+  'not_contains',
+  'not_equals',
+]);
 const VALID_CONDITION_ACTIONS = new Set<WafConditionAction>(['block_403', 'rate_limit_429']);
 
 function sanitizeHeaderName(raw: unknown): string | undefined {
@@ -307,7 +317,9 @@ export function normalizeCustomRules(raw: unknown): WafCustomConditionRule[] {
     if (!field) continue;
     const operator: WafConditionOperator = VALID_CONDITION_OPERATORS.has(item.operator)
       ? item.operator
-      : 'contains';
+      : field === 'country_equals'
+        ? 'equals'
+        : 'contains';
     const action: WafConditionAction = VALID_CONDITION_ACTIONS.has(item.action)
       ? item.action
       : 'block_403';
@@ -329,6 +341,9 @@ export function normalizeCustomRules(raw: unknown): WafCustomConditionRule[] {
       ? item.id.trim().slice(0, 64)
       : `cr_${out.length + 1}`;
     const note = typeof item.note === 'string' && item.note.trim() ? item.note.trim().slice(0, 120) : undefined;
+    const parsedLimit = action === 'rate_limit_429' && item.limit !== undefined && item.limit !== null && item.limit !== ''
+      ? clampInt(item.limit, 20, 1, 5000)
+      : undefined;
 
     out.push({
       id,
@@ -338,6 +353,7 @@ export function normalizeCustomRules(raw: unknown): WafCustomConditionRule[] {
       ...(headerName ? { headerName } : {}),
       value,
       action,
+      ...(parsedLimit !== undefined ? { limit: parsedLimit } : {}),
       ...(note ? { note } : {}),
     });
   }
@@ -421,10 +437,19 @@ const strikeRecords = new Map<string, { strikes: number; bannedUntil: number; up
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 const blockLogSuppressions = new Map<
   string,
-  { ip: string; suppressedUntil: number; hitCount: number; count403: number; count429: number; lastHitAt: number }
+  { ip: string; suppressedUntil: number; hitCount: number; lastHitAt: number }
 >();
 
 const STATIC_ASSET_EXT = /\.(?:css|js|mjs|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|eot|map|txt|xml)$/i;
+const ALLOWED_WELL_KNOWN = /^\/\.well-known\/(?:acme-challenge\/|pki-validation\/|security\.txt$|assetlinks\.json$|apple-app-site-association$|apple-developer-merchantid-domain-association$)/i;
+const SAFE_AUTH_PATHS = new Set([
+  '/admin/waf',
+  '/api/admin/waf',
+  '/api/auth/login',
+  '/api/auth/callback',
+  '/api/auth/logout',
+  '/api/auth/session',
+]);
 
 const PROBE_PATH_EXT = /\.(?:php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do|key|pem|crt)$/i;
 const PROBE_PATH_PATTERN = /(?:^|\/)(?:wp-[a-z0-9_-]+|wordpress|phpmyadmin|pma|mysql|actuator|\.(?:env|git|npmrc|htpasswd|htaccess)|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest|(?:credentials|secrets|service-account|serviceAccountKey|firebase-adminsdk|config)\.json)(?:\/|$|\.)/i;
@@ -556,7 +581,14 @@ export class EdgeWafService {
   }
 
   public static isBlockedProbePath(pathname: string): boolean {
+    if (ALLOWED_WELL_KNOWN.test(pathname)) {
+      return false;
+    }
     return pathname.startsWith('/.well-known/') || PROBE_PATH_EXT.test(pathname) || PROBE_PATH_PATTERN.test(pathname);
+  }
+
+  public static isAntiLockoutPath(pathname: string): boolean {
+    return SAFE_AUTH_PATHS.has(pathname);
   }
 
   public static isAutoBanned(ip: string | undefined, now = Date.now()): boolean {
@@ -591,34 +623,60 @@ export class EdgeWafService {
   private static maybeRecordStrike(
     ip: string,
     now: number,
-    cfg: WafRuleConfig['malicious']
+    cfg: WafRuleConfig['malicious'],
+    dryRun = false
   ): { strikes: number; autoBanned: boolean } {
     if (!cfg.enableAutoBan) return { strikes: 0, autoBanned: false };
+    if (dryRun) {
+      const key = ip.trim().toLowerCase();
+      const prev = key ? strikeRecords.get(key) : undefined;
+      const strikes = (prev && prev.bannedUntil <= now ? prev.strikes : prev?.strikes || 0) + 1;
+      return { strikes, autoBanned: strikes >= cfg.strikeLimit };
+    }
     return this.recordStrike(ip, now, cfg.strikeLimit, cfg.banDurationMinutes * 60_000);
   }
 
-  public static getStrikeStats(now = Date.now()): { activeBans: number; trackedIps: number } {
-    let activeBans = 0;
+  public static getActiveBans(now = Date.now()): Array<{ ip: string; strikes: number; remainingMinutes: number; bannedUntil: number }> {
+    const bans: Array<{ ip: string; strikes: number; remainingMinutes: number; bannedUntil: number }> = [];
     for (const [ip, rec] of strikeRecords.entries()) {
       if (rec.bannedUntil > now) {
-        activeBans++;
+        bans.push({
+          ip,
+          strikes: rec.strikes,
+          remainingMinutes: Math.max(1, Math.ceil((rec.bannedUntil - now) / 60_000)),
+          bannedUntil: rec.bannedUntil,
+        });
       } else if (rec.bannedUntil > 0) {
         strikeRecords.delete(ip);
       }
     }
-    return { activeBans, trackedIps: strikeRecords.size };
+    return bans.sort((a, b) => b.bannedUntil - a.bannedUntil);
   }
 
-  public static clearLogSuppressions(ip?: string): void {
-    if (!ip) {
+  public static unbanIp(ip: string | undefined): boolean {
+    if (!ip || typeof ip !== 'string') return false;
+    const key = ip.trim().toLowerCase();
+    if (!key) return false;
+    const deleted = strikeRecords.delete(key);
+    this.clearLogSuppressions(key);
+    return deleted;
+  }
+
+  public static getStrikeStats(now = Date.now()): { activeBans: number; trackedIps: number } {
+    const bans = this.getActiveBans(now);
+    return { activeBans: bans.length, trackedIps: strikeRecords.size };
+  }
+
+  public static clearLogSuppressions(ip?: string, codeFilter?: WafBlockCode): void {
+    if (!ip && !codeFilter) {
       blockLogSuppressions.clear();
       return;
     }
-    const target = ip.trim().toLowerCase();
+    const targetIp = ip ? ip.trim().toLowerCase() : null;
     for (const [k, rec] of blockLogSuppressions.entries()) {
-      if (rec.ip === target) {
-        blockLogSuppressions.delete(k);
-      }
+      if (targetIp && rec.ip !== targetIp) continue;
+      if (codeFilter && !k.includes(`:${codeFilter}:`)) continue;
+      blockLogSuppressions.delete(k);
     }
   }
 
@@ -632,9 +690,17 @@ export class EdgeWafService {
     key: string,
     limit: number,
     windowSeconds: number,
-    now: number
+    now: number,
+    dryRun = false
   ): boolean {
     const windowMs = (windowSeconds * 1000) || RATE_LIMIT_WINDOW_MS;
+    if (dryRun) {
+      const existing = rateLimitBuckets.get(key);
+      if (!existing || existing.resetAt <= now || existing.resetAt > now + windowMs) {
+        return 1 > limit;
+      }
+      return (existing.count + 1) > limit;
+    }
     pruneMapIfNeeded(rateLimitBuckets);
     const existing = rateLimitBuckets.get(key);
     if (!existing || existing.resetAt <= now || existing.resetAt > now + windowMs) {
@@ -647,11 +713,18 @@ export class EdgeWafService {
 
   private static decodeSafe(raw: string): string {
     if (!raw) return '';
-    try {
-      return decodeURIComponent(raw.replace(/\+/g, ' '));
-    } catch {
-      return raw;
+    let current = raw;
+    for (let i = 0; i < 2; i++) {
+      try {
+        const next = decodeURIComponent(current.replace(/\+/g, ' '));
+        if (next === current) break;
+        current = next;
+        if (!/%[0-9a-f]{2}/i.test(current)) break;
+      } catch {
+        break;
+      }
     }
+    return current;
   }
 
   private static matchConditionValue(
@@ -663,7 +736,9 @@ export class EdgeWafService {
     const needle = needleRaw.toLowerCase();
     if (!needle) return false;
     if (operator === 'equals') return haystack === needle;
+    if (operator === 'not_equals') return haystack !== needle;
     if (operator === 'starts_with') return haystack.startsWith(needle);
+    if (operator === 'not_contains') return !haystack.includes(needle);
     return haystack.includes(needle);
   }
 
@@ -674,6 +749,7 @@ export class EdgeWafService {
       query_contains: 'Query String',
       ua_contains: 'User-Agent',
       ip_matches: 'Client IP',
+      country_equals: 'Country Code',
     };
     return `If ${fieldNames[rule.field]} ${rule.operator.replace('_', ' ')} "${rule.value}"`;
   }
@@ -690,42 +766,66 @@ export class EdgeWafService {
     const search = this.decodeSafe(input.search || '');
     const clientIp = (input.clientIp || '').trim();
     const ua = (input.userAgent ?? input.headers?.get('user-agent') ?? '').trim();
+    const country = (input.country ?? input.headers?.get('cf-ipcountry') ?? '').trim();
 
     for (const rule of rules) {
       if (!rule?.enabled || !rule.value) continue;
 
       let matched = false;
       let sample = rule.value;
+      const isNegated = rule.operator === 'not_contains' || rule.operator === 'not_equals';
 
       if (rule.field === 'path_matches') {
         matched = this.matchConditionValue(pathname, rule.value, rule.operator);
         if (matched) sample = pathname.slice(0, 120);
       } else if (rule.field === 'query_contains') {
         matched = this.matchConditionValue(search, rule.value, rule.operator);
-        if (matched) sample = search.slice(0, 120);
+        if (matched) sample = (search || '(empty)').slice(0, 120);
       } else if (rule.field === 'ua_contains') {
-        matched = Boolean(ua) && this.matchConditionValue(ua, rule.value, rule.operator);
-        if (matched) sample = ua.slice(0, 120);
+        matched = (Boolean(ua) || isNegated) && this.matchConditionValue(ua, rule.value, rule.operator);
+        if (matched) sample = (ua || '(empty)').slice(0, 120);
+      } else if (rule.field === 'country_equals') {
+        matched = (Boolean(country) || isNegated) && this.matchConditionValue(country, rule.value, rule.operator);
+        if (matched) sample = country || '(unknown)';
       } else if (rule.field === 'ip_matches') {
-        if (rule.operator === 'equals' || rule.value.includes('*') || rule.value.includes('/')) {
+        if (rule.operator === 'not_equals') {
+          matched = !matchesIpRule(clientIp, [rule.value.toLowerCase()]);
+        } else if (rule.operator === 'not_contains') {
+          matched = this.matchConditionValue(clientIp, rule.value, 'not_contains');
+        } else if (rule.operator === 'equals' || rule.value.includes('*') || rule.value.includes('/')) {
           matched = matchesIpRule(clientIp, [rule.value.toLowerCase()]);
         } else {
           matched = Boolean(clientIp) && this.matchConditionValue(clientIp, rule.value, rule.operator);
         }
-        if (matched) sample = clientIp;
+        if (matched) sample = clientIp || '(unknown)';
       } else if (rule.field === 'header_contains') {
         if (rule.headerName) {
-          const val = input.headers?.get(rule.headerName) ?? (rule.headerName === 'user-agent' ? ua : null);
-          if (val && this.matchConditionValue(val, rule.value, rule.operator)) {
+          const val = (input.headers?.get(rule.headerName) ?? (rule.headerName === 'user-agent' ? ua : '') ?? '').trim();
+          if ((Boolean(val) || isNegated) && this.matchConditionValue(val, rule.value, rule.operator)) {
             matched = true;
-            sample = `${rule.headerName}: ${val}`.slice(0, 120);
+            sample = `${rule.headerName}: ${val || '(missing)'}`.slice(0, 120);
           }
         } else if (input.headers) {
-          for (const [hdrKey, hdrVal] of input.headers.entries()) {
-            if (this.matchConditionValue(hdrVal, rule.value, rule.operator)) {
+          if (isNegated) {
+            const positiveOp = rule.operator === 'not_equals' ? 'equals' : 'contains';
+            let anyMatched = false;
+            for (const hdrVal of input.headers.values()) {
+              if (this.matchConditionValue(hdrVal, rule.value, positiveOp)) {
+                anyMatched = true;
+                break;
+              }
+            }
+            if (!anyMatched) {
               matched = true;
-              sample = `${hdrKey}: ${hdrVal}`.slice(0, 120);
-              break;
+              sample = `(no header matches "${rule.value}")`;
+            }
+          } else {
+            for (const [hdrKey, hdrVal] of input.headers.entries()) {
+              if (this.matchConditionValue(hdrVal, rule.value, rule.operator)) {
+                matched = true;
+                sample = `${hdrKey}: ${hdrVal}`.slice(0, 120);
+                break;
+              }
             }
           }
         }
@@ -735,11 +835,13 @@ export class EdgeWafService {
 
       const summary = this.formatConditionSummary(rule);
       if (rule.action === 'rate_limit_429') {
+        const ruleLimit = rule.limit ?? rateCfg.publicWriteLimit;
         const limited = this.consumeRateLimitBucket(
           `custom:${rule.id}:${clientIp || 'unknown'}`,
-          rateCfg.publicWriteLimit,
+          ruleLimit,
           rateCfg.windowSeconds,
-          now
+          now,
+          Boolean(input.dryRun)
         );
         if (!limited) continue;
         return {
@@ -747,7 +849,7 @@ export class EdgeWafService {
           status: 429,
           code: 'WAF_STRICT_RATE_LIMIT',
           mode: 'strict_rate_limiting',
-          reason: `Custom Rule (${summary}) rate limit exceeded (${rateCfg.publicWriteLimit} req/${rateCfg.windowSeconds}s).`,
+          reason: `Custom Rule (${summary}) rate limit exceeded (${ruleLimit} req/${rateCfg.windowSeconds}s).`,
           matchedSample: `${summary} → ${sample}`.slice(0, 160),
           retryAfter: rateCfg.windowSeconds,
         };
@@ -771,7 +873,8 @@ export class EdgeWafService {
     pathname: string,
     method: string,
     now: number,
-    rateCfg: WafRuleConfig['rateLimit'] = DEFAULT_WAF_RULE_CONFIG.rateLimit
+    rateCfg: WafRuleConfig['rateLimit'] = DEFAULT_WAF_RULE_CONFIG.rateLimit,
+    dryRun = false
   ): { limited: boolean; limit: number; bucket: string } {
     const isPublicWriteApi =
       method === 'POST' &&
@@ -784,7 +887,7 @@ export class EdgeWafService {
         ? rateCfg.apiLimit
         : rateCfg.pageLimit;
 
-    const limited = this.consumeRateLimitBucket(`${bucketType}:${ip || 'unknown'}`, limit, rateCfg.windowSeconds, now);
+    const limited = this.consumeRateLimitBucket(`${bucketType}:${ip || 'unknown'}`, limit, rateCfg.windowSeconds, now, dryRun);
     return { limited, limit, bucket: bucketType };
   }
 
@@ -792,32 +895,41 @@ export class EdgeWafService {
     const pathname = input.pathname || '/';
     const now = input.now ?? Date.now();
     const res = this.evaluateCore(input, settings, now);
+    if (input.dryRun) return res;
+
     const ipKey = (input.clientIp || '').trim().toLowerCase();
 
     if (res.allowed) {
-      if (ipKey && !this.isStaticAsset(pathname) && pathname !== '/admin/waf' && pathname !== '/api/admin/waf') {
-        this.clearLogSuppressions(ipKey);
+      if (ipKey && !this.isStaticAsset(pathname) && !this.isAntiLockoutPath(pathname)) {
+        const allowList = parseIpList(settings?.waf_allow_ips);
+        const cfg = normalizeWafRuleConfig(settings?.waf_rule_config);
+        const activeModes = Array.isArray(settings?.waf_active_modes) ? settings.waf_active_modes : [];
+        const isStandby = activeModes.length === 0 && !cfg.customRules.some((r) => r.enabled);
+
+        if (input.isAuthenticatedAdmin || isStandby || matchesIpRule(ipKey, allowList)) {
+          this.clearLogSuppressions(ipKey);
+        } else {
+          // Clear IP blacklist/auto-ban suppression only once IP is no longer blocked by IP rules
+          const blockedList = parseIpList(settings?.waf_blocked_ips);
+          if (!this.isAutoBanned(ipKey, now) && (!cfg.malicious.enableIpBlacklist || !matchesIpRule(ipKey, blockedList))) {
+            this.clearLogSuppressions(ipKey, 'WAF_MALICIOUS_IP');
+          }
+        }
       }
       return res;
     }
 
     const stage = res.autoBanned ? 'ban' : 'hit';
     const suppressKey = `${ipKey || 'unknown'}:${res.code || 'WAF'}:${stage}`;
-    const inc403 = res.status === 403 ? 1 : 0;
-    const inc429 = res.status === 429 ? 1 : 0;
     const existing = blockLogSuppressions.get(suppressKey);
     if (existing && existing.suppressedUntil > now) {
       existing.hitCount += 1;
-      existing.count403 += inc403;
-      existing.count429 += inc429;
       existing.lastHitAt = now;
       return {
         ...res,
         suppressLog: true,
         blockStats: {
           hitCount: existing.hitCount,
-          count403: existing.count403,
-          count429: existing.count429,
           lastHitAt: now,
         },
       };
@@ -834,8 +946,6 @@ export class EdgeWafService {
       ip: ipKey || 'unknown',
       suppressedUntil,
       hitCount: 1,
-      count403: inc403,
-      count429: inc429,
       lastHitAt: now,
     };
     blockLogSuppressions.set(suppressKey, entry);
@@ -843,8 +953,6 @@ export class EdgeWafService {
       ...res,
       blockStats: {
         hitCount: entry.hitCount,
-        count403: entry.count403,
-        count429: entry.count429,
         lastHitAt: entry.lastHitAt,
       },
     };
@@ -854,13 +962,14 @@ export class EdgeWafService {
     const pathname = input.pathname || '/';
     const method = (input.method || 'GET').toUpperCase();
     const clientIp = (input.clientIp || '').trim();
+    const dryRun = Boolean(input.dryRun);
 
     if (this.isStaticAsset(pathname)) {
       return { allowed: true };
     }
 
-    // Never lock out the WAF management route itself
-    if (pathname === '/admin/waf' || pathname === '/api/admin/waf') {
+    // Never lock out WAF management, OIDC auth callback/login/logout, or authenticated admins
+    if (this.isAntiLockoutPath(pathname) || input.isAuthenticatedAdmin) {
       return { allowed: true };
     }
 
@@ -914,7 +1023,7 @@ export class EdgeWafService {
       }
 
       if (cfg.malicious.enableProbePaths && this.isBlockedProbePath(pathname)) {
-        const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious);
+        const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun);
         return {
           allowed: false,
           status: 403,
@@ -926,15 +1035,10 @@ export class EdgeWafService {
         };
       }
 
-      let decodedPath = pathname;
-      try {
-        decodedPath = decodeURIComponent(pathname.replace(/\+/g, ' '));
-      } catch {
-        // Keep raw if malformed percent-encoding
-      }
+      const decodedPath = this.decodeSafe(pathname);
       const matchedCustomPath = matchCustomKeyword(decodedPath.toLowerCase(), cfg.malicious.customBlockedPaths);
       if (matchedCustomPath) {
-        const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious);
+        const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun);
         return {
           allowed: false,
           status: 403,
@@ -946,34 +1050,40 @@ export class EdgeWafService {
         };
       }
 
-      // Inspect path + query for SQLi / XSS / Path Traversal
-      let decodedTarget = `${pathname}${input.search || ''}`;
-      try {
-        decodedTarget = decodeURIComponent(decodedTarget.replace(/\+/g, ' '));
-      } catch {
-        // Keep raw if malformed percent-encoding
+      // Inspect multi-pass decoded URL target + high-risk headers for SQLi / XSS / Path Traversal
+      const decodedTarget = this.decodeSafe(`${pathname}${input.search || ''}`);
+      const headerTargets: string[] = [];
+      for (const hdr of ['referer', 'user-agent', 'x-forwarded-host']) {
+        const val = hdr === 'user-agent'
+          ? (input.userAgent ?? input.headers?.get('user-agent') ?? '')
+          : (input.headers?.get(hdr) || '');
+        if (val) headerTargets.push(this.decodeSafe(val));
       }
+      const inspectTargets = [decodedTarget, ...headerTargets];
+
       for (const rule of PAYLOAD_RULES) {
         if (!cfg.malicious[rule.flagKey]) continue;
-        const match = decodedTarget.match(rule.regex);
-        if (match) {
-          const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious);
-          return {
-            allowed: false,
-            status: 403,
-            code: 'WAF_MALICIOUS_PAYLOAD',
-            mode: 'block_malicious_ips',
-            reason: `Blocked malicious ${rule.label} payload.`,
-            matchedSample: match[0].slice(0, 120),
-            autoBanned: strike.autoBanned,
-          };
+        for (const target of inspectTargets) {
+          const match = target.match(rule.regex);
+          if (match) {
+            const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun);
+            return {
+              allowed: false,
+              status: 403,
+              code: 'WAF_MALICIOUS_PAYLOAD',
+              mode: 'block_malicious_ips',
+              reason: `Blocked malicious ${rule.label} payload.`,
+              matchedSample: match[0].slice(0, 120),
+              autoBanned: strike.autoBanned,
+            };
+          }
         }
       }
     }
 
     // 2. Strict Rate Limiting
     if (activeModes.has('strict_rate_limiting')) {
-      const rate = this.checkStrictRateLimit(clientIp || 'unknown', pathname, method, now, cfg.rateLimit);
+      const rate = this.checkStrictRateLimit(clientIp || 'unknown', pathname, method, now, cfg.rateLimit, dryRun);
       if (rate.limited) {
         return {
           allowed: false,

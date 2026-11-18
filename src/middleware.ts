@@ -4,12 +4,13 @@ import { env as cfEnv } from 'cloudflare:workers';
 import { SiteConfigService } from '@data/siteConfig';
 import { NON_DEFAULT_LOCALES } from '@i18n';
 import { getRouteRevisions, resolvePathRevision } from './utils/cmsSync';
-import { SESSION_COOKIE_NAME, getCookieValue, getRuntimeEnv, verifySessionToken } from './utils/auth';
+import { SESSION_COOKIE_NAME, checkIsAdmin, getCookieValue, getRuntimeEnv, verifySessionToken } from './utils/auth';
+import { resolveAdminContext } from './utils/rbac';
 import { SecurityService } from './utils/security';
 import { logger, syncWafBlockStats } from './utils/logger';
 import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
 import { getSystemSettings } from './db/settings.repo';
-import { EdgeWafService } from './utils/waf';
+import { EdgeWafService, normalizeWafRuleConfig } from './utils/waf';
 
 /**
  * Safely mutates headers on a Response, cloning into a new Response if headers are immutable
@@ -82,10 +83,38 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
     const runtimeCtx = (context.locals as any)?.cfContext;
 
+    const cookieHeader = request.headers.get('cookie') || '';
+    const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
+    let lazySessionUser: Promise<any> | null = null;
+    const getSessionUser = () => {
+      const explicitUser = (context.locals as any)?.sessionUser || (context.locals as any)?.user;
+      if (explicitUser) return Promise.resolve(explicitUser);
+      if (!sessionToken) return Promise.resolve(null);
+      if (!lazySessionUser) {
+        lazySessionUser = profiler.time('auth', () => verifySessionToken(sessionToken, cfEnv));
+      }
+      return lazySessionUser;
+    };
+
     if (!EdgeWafService.isStaticAsset(pathname)) {
       const wafSettings = await getSystemSettings(cfEnv).catch(() => null);
       if (wafSettings) {
         (context.locals as any).systemSettings = wafSettings;
+      }
+
+      let isAuthenticatedAdmin = false;
+      if (sessionToken || (context.locals as any)?.sessionUser || (context.locals as any)?.user) {
+        const sessionUser = await getSessionUser().catch(() => null);
+        if (sessionUser) {
+          isAuthenticatedAdmin = Boolean(
+            sessionUser.isAdmin ||
+            checkIsAdmin(sessionUser.email, sessionUser.roles || [], cfEnv, wafSettings?.co_admin_emails)
+          );
+          if (!isAuthenticatedAdmin && (pathname.startsWith('/admin') || pathname.startsWith('/api/admin'))) {
+            const adminCtx = await resolveAdminContext(sessionUser.email, cfEnv, wafSettings?.co_admin_emails).catch(() => null);
+            isAuthenticatedAdmin = Boolean(adminCtx);
+          }
+        }
       }
 
       const wafResult = EdgeWafService.evaluate(
@@ -94,7 +123,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
           pathname,
           search: url.search,
           method: request.method,
+          country: clientMeta.country,
           headers: request.headers,
+          isAuthenticatedAdmin,
         },
         wafSettings
       );
@@ -122,8 +153,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 userAgent: request.headers.get('user-agent') || '',
                 autoBanned: Boolean(wafResult.autoBanned),
                 hitCount: stats?.hitCount ?? 1,
-                count403: stats?.count403 ?? (blockStatus === 403 ? 1 : 0),
-                count429: stats?.count429 ?? (blockStatus === 429 ? 1 : 0),
                 lastBlockedAt,
               },
             },
@@ -135,8 +164,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
               clientIp: clientMeta.ip,
               errorCode: wafResult.code || 'WAF_BLOCK',
               hitCount: stats.hitCount,
-              count403: stats.count403,
-              count429: stats.count429,
               lastBlockedAt,
             },
             { cfEnv, ctx: runtimeCtx }
@@ -164,7 +191,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         );
       }
 
-      if (EdgeWafService.isBlockedProbePath(pathname)) {
+      const wafRuleCfg = normalizeWafRuleConfig(wafSettings?.waf_rule_config);
+      if (!isAuthenticatedAdmin && wafRuleCfg.malicious.enableProbePaths && EdgeWafService.isBlockedProbePath(pathname)) {
         return new Response('Not Found', {
           status: 404,
           statusText: 'Not Found',
@@ -176,19 +204,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
         });
       }
     }
-
-    const cookieHeader = request.headers.get('cookie') || '';
-    const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);
-    let lazySessionUser: Promise<any> | null = null;
-    const getSessionUser = () => {
-      const explicitUser = (context.locals as any)?.sessionUser || (context.locals as any)?.user;
-      if (explicitUser) return Promise.resolve(explicitUser);
-      if (!sessionToken) return Promise.resolve(null);
-      if (!lazySessionUser) {
-        lazySessionUser = profiler.time('auth', () => verifySessionToken(sessionToken, cfEnv));
-      }
-      return lazySessionUser;
-    };
 
     try {
       let response = await handleRequest(context, next, pathname, url, request);

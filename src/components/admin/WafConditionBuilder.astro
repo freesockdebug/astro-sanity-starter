@@ -29,21 +29,24 @@ const activeModeSet = new Set<WafRuleMode>(activeModes);
 
 const CONDITION_FIELD_OPTIONS: Array<{ value: WafConditionField; label: string; placeholder: string }> = [
   { value: 'path_matches', label: 'If Path matches', placeholder: 'e.g. /wp-admin, /secret-api, .bak' },
-  { value: 'header_contains', label: 'If Request Header contains', placeholder: 'e.g. evil.com or x-forwarded-host: evil.com' },
-  { value: 'query_contains', label: 'If Query String contains', placeholder: 'e.g. base64_decode, cmd=, ../../' },
-  { value: 'ua_contains', label: 'If User-Agent contains', placeholder: 'e.g. HeadlessChrome, PhantomJS, PetalBot' },
-  { value: 'ip_matches', label: 'If Client IP / CIDR matches', placeholder: 'e.g. 185.220.101.0/24 or 45.155.*' },
+  { value: 'header_contains', label: 'If Request Header', placeholder: 'e.g. evil.com or x-forwarded-host: evil.com' },
+  { value: 'query_contains', label: 'If Query String', placeholder: 'e.g. base64_decode, cmd=, ../../' },
+  { value: 'ua_contains', label: 'If User-Agent', placeholder: 'e.g. HeadlessChrome, PhantomJS, PetalBot' },
+  { value: 'ip_matches', label: 'If Client IP / CIDR', placeholder: 'e.g. 185.220.101.0/24 or 45.155.*' },
+  { value: 'country_equals', label: 'If Country Code (CF)', placeholder: 'e.g. XX, T1, US' },
 ];
 
 const OPERATOR_OPTIONS: Array<{ value: WafConditionOperator; label: string }> = [
   { value: 'contains', label: 'contains' },
+  { value: 'not_contains', label: 'not contains' },
   { value: 'starts_with', label: 'starts with' },
   { value: 'equals', label: 'equals' },
+  { value: 'not_equals', label: 'not equals' },
 ];
 
 const ACTION_OPTIONS = [
   { value: 'block_403', label: 'Block (403 Forbidden)' },
-  { value: 'rate_limit_429', label: 'Throttle (429 Too Many Requests)' },
+  { value: 'rate_limit_429', label: 'Throttle (429 Rate Limit)' },
 ] as const;
 
 const FIELD_LABEL_MAP: Record<WafConditionField, string> = {
@@ -52,6 +55,7 @@ const FIELD_LABEL_MAP: Record<WafConditionField, string> = {
   query_contains: 'If Query String',
   ua_contains: 'If User-Agent',
   ip_matches: 'If Client IP',
+  country_equals: 'If Country Code',
 };
 
 const PRESET_GROUPS: Array<{
@@ -112,64 +116,128 @@ const formatPresetCondition = (key: string, fallback: string) => {
 
   <!-- 1. Custom Condition Builder Input Bar -->
   {canManage && (
-    <div class="rounded-2xl border border-black/8 bg-[#fafafc] p-3 grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
-      <label class="block space-y-1 md:col-span-3">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Logical Condition</span>
-        <select id="waf-builder-field" autocomplete="off" class="adm-input text-[11px] font-semibold py-1.5">
-          {CONDITION_FIELD_OPTIONS.map((opt) => (
-            <option value={opt.value} data-placeholder={opt.placeholder}>{opt.label}</option>
-          ))}
-        </select>
-      </label>
+    <div class="rounded-2xl border border-black/8 bg-[#fafafc] p-3 space-y-2.5">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
+        <label class="block space-y-1 md:col-span-3">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Logical Condition</span>
+          <select id="waf-builder-field" autocomplete="off" class="adm-input text-[11px] font-semibold py-1.5">
+            {CONDITION_FIELD_OPTIONS.map((opt) => (
+              <option value={opt.value} data-placeholder={opt.placeholder}>{opt.label}</option>
+            ))}
+          </select>
+        </label>
 
-      <label class="block space-y-1 md:col-span-2">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Operator</span>
-        <select id="waf-builder-operator" autocomplete="off" class="adm-input font-mono text-[11px] py-1.5">
-          {OPERATOR_OPTIONS.map((opt) => (
-            <option value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-      </label>
+        <label class="block space-y-1 md:col-span-2">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Operator</span>
+          <select id="waf-builder-operator" autocomplete="off" class="adm-input font-mono text-[11px] py-1.5">
+            {OPERATOR_OPTIONS.map((opt) => (
+              <option value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </label>
 
-      <label id="waf-builder-header-wrap" class="hidden space-y-1 md:col-span-2">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Header Name</span>
-        <input
-          id="waf-builder-header-name"
-          type="text"
-          autocomplete="off"
-          placeholder="e.g. referer, x-api-key"
-          class="adm-input font-mono text-[11px] py-1.5"
-        />
-      </label>
+        <label id="waf-builder-header-wrap" class="hidden space-y-1 md:col-span-2">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Header Name</span>
+          <input
+            id="waf-builder-header-name"
+            type="text"
+            autocomplete="off"
+            placeholder="e.g. origin, referer"
+            class="adm-input font-mono text-[11px] py-1.5"
+          />
+        </label>
 
-      <label id="waf-builder-value-wrap" class="block space-y-1 md:col-span-4">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Match Pattern / Value</span>
-        <input
-          id="waf-builder-value"
-          type="text"
-          autocomplete="off"
-          placeholder="e.g. /wp-admin, /secret-api, .bak"
-          class="adm-input font-mono text-[11px] py-1.5"
-        />
-      </label>
+        <label id="waf-builder-value-wrap" class="block space-y-1 md:col-span-3">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Match Pattern / Value</span>
+          <input
+            id="waf-builder-value"
+            type="text"
+            autocomplete="off"
+            placeholder="e.g. /wp-admin, /secret-api, .bak"
+            class="adm-input font-mono text-[11px] py-1.5"
+          />
+        </label>
 
-      <label class="block space-y-1 md:col-span-2">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Action</span>
-        <select id="waf-builder-action" autocomplete="off" class="adm-input text-[11px] font-medium py-1.5">
-          {ACTION_OPTIONS.map((opt) => (
-            <option value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-      </label>
+        <label class="block space-y-1 md:col-span-2">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Action</span>
+          <select id="waf-builder-action" autocomplete="off" class="adm-input text-[11px] font-medium py-1.5">
+            {ACTION_OPTIONS.map((opt) => (
+              <option value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </label>
 
-      <div class="md:col-span-1 flex justify-end">
-        <button
-          id="waf-builder-add-btn"
-          type="button"
-          class="adm-btn w-full justify-center py-1.5 text-[11px]"
-        >
-          + Add
-        </button>
+        <label id="waf-builder-limit-wrap" class="hidden space-y-1 md:col-span-1">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Max Req</span>
+          <input
+            id="waf-builder-limit"
+            type="number"
+            min="1"
+            max="5000"
+            value="20"
+            autocomplete="off"
+            class="adm-input font-mono text-[11px] py-1.5"
+          />
+        </label>
+
+        <div class="md:col-span-1 flex justify-end">
+          <button
+            id="waf-builder-add-btn"
+            type="button"
+            class="adm-btn w-full justify-center py-1.5 text-[11px]"
+          >
+            + Add
+          </button>
+        </div>
+      </div>
+
+      <!-- Compact Rule Simulator Toggle & Bar -->
+      <div class="pt-2 border-t border-black/5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <button
+            id="waf-sim-toggle-btn"
+            type="button"
+            class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#52525b] hover:text-[#1d1d1f] cursor-pointer"
+          >
+            <span>🧪 Rule Simulator (Dry-Run against current draft rules)</span>
+            <span id="waf-sim-chevron" class="text-[10px]">▸</span>
+          </button>
+          <span id="waf-sim-result" class="hidden text-[11px] font-mono px-2 py-0.5 rounded-md border"></span>
+        </div>
+        <div id="waf-sim-panel" class="hidden mt-2.5 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+          <label class="block space-y-1 md:col-span-1">
+            <span class="text-[10px] font-semibold text-[#52525b]">Method</span>
+            <select id="waf-sim-method" autocomplete="off" class="adm-input font-mono text-[11px] py-1">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+            </select>
+          </label>
+          <label class="block space-y-1 md:col-span-3">
+            <span class="text-[10px] font-semibold text-[#52525b]">Test Path + Query</span>
+            <input id="waf-sim-path" type="text" autocomplete="off" value="/products?q=cashmere" class="adm-input font-mono text-[11px] py-1" />
+          </label>
+          <label class="block space-y-1 md:col-span-2">
+            <span class="text-[10px] font-semibold text-[#52525b]">Client IP</span>
+            <input id="waf-sim-ip" type="text" autocomplete="off" value="198.51.100.10" class="adm-input font-mono text-[11px] py-1" />
+          </label>
+          <label class="block space-y-1 md:col-span-1">
+            <span class="text-[10px] font-semibold text-[#52525b]">Country</span>
+            <input id="waf-sim-country" type="text" autocomplete="off" placeholder="US" maxlength="4" class="adm-input font-mono text-[11px] py-1 uppercase" />
+          </label>
+          <label class="block space-y-1 md:col-span-2">
+            <span class="text-[10px] font-semibold text-[#52525b]">User-Agent</span>
+            <input id="waf-sim-ua" type="text" autocomplete="off" value="Mozilla/5.0 Chrome/126.0" class="adm-input font-mono text-[11px] py-1" />
+          </label>
+          <label class="block space-y-1 md:col-span-2">
+            <span class="text-[10px] font-semibold text-[#52525b]">Extra Header</span>
+            <input id="waf-sim-header" type="text" autocomplete="off" placeholder="referer: https://..." class="adm-input font-mono text-[11px] py-1" />
+          </label>
+          <div class="md:col-span-1 flex justify-end">
+            <button id="waf-sim-run-btn" type="button" class="adm-btn-secondary w-full justify-center py-1 text-[11px]">
+              Simulate
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )}
@@ -218,7 +286,9 @@ const formatPresetCondition = (key: string, fallback: string) => {
 
           <div class="flex items-center gap-2 shrink-0">
             <span class:list={['adm-badge', rule.action === 'rate_limit_429' ? 'adm-badge-warn' : 'adm-badge-err']}>
-              {rule.action === 'rate_limit_429' ? '429 Throttle' : '403 Block'}
+              {rule.action === 'rate_limit_429'
+                ? `429 Throttle${rule.limit ? ` (${rule.limit} req)` : ''}`
+                : '403 Block'}
             </span>
             {canManage && (
               <button

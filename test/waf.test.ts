@@ -397,15 +397,13 @@ test('EdgeWafService suppresses duplicate block logs while blocked and resumes a
   assert.equal(strike3.autoBanned, true);
   assert.ok(!strike3.suppressLog);
 
-  // Repeated hits while auto-banned are suppressed and accumulate 403 counts
+  // Repeated hits while auto-banned are suppressed and accumulate hitCount
   for (let i = 1; i <= 3; i++) {
     const repeatBanHit = EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: `/spam-${i}`, headers: BROWSER_HEADERS, now: now + 3000 + i * 1000 }, malSettings);
     assert.equal(repeatBanHit.allowed, false);
     assert.equal(repeatBanHit.autoBanned, true);
     assert.equal(repeatBanHit.suppressLog, true);
     assert.equal(repeatBanHit.blockStats?.hitCount, i + 1);
-    assert.equal(repeatBanHit.blockStats?.count403, i + 1);
-    assert.equal(repeatBanHit.blockStats?.count429, 0);
   }
 
   // Admin unlocks via clearAllStrikes -> clean request passes, next violation logs normally again
@@ -424,15 +422,16 @@ test('EdgeWafService suppresses duplicate block logs while blocked and resumes a
   const blk2 = EdgeWafService.evaluate({ clientIp: ip, pathname: '/products', headers: BROWSER_HEADERS, now: now + 500 }, { waf_active_modes: ['block_malicious_ips'], waf_blocked_ips: ip });
   assert.equal(blk2.allowed, false);
   assert.equal(blk2.suppressLog, true);
+  assert.equal(blk2.blockStats?.hitCount, 2);
 
   // IP unblocked (passes clean request) -> suppression cleared; if blocked again later, logs once
   assert.equal(EdgeWafService.evaluate({ clientIp: ip, pathname: '/', headers: BROWSER_HEADERS, now: now + 1000 }, { waf_active_modes: ['block_malicious_ips'], waf_blocked_ips: '' }).allowed, true);
   const blkReblocked = EdgeWafService.evaluate({ clientIp: ip, pathname: '/', headers: BROWSER_HEADERS, now: now + 2000 }, { waf_active_modes: ['block_malicious_ips'], waf_blocked_ips: ip });
   assert.equal(blkReblocked.allowed, false);
   assert.ok(!blkReblocked.suppressLog);
-  assert.equal(blkReblocked.blockStats?.count403, 1);
+  assert.equal(blkReblocked.blockStats?.hitCount, 1);
 
-  // 3. Rate limit (429) accumulates count429 across suppressed repeats in same window
+  // 3. Rate limit (429) accumulates hitCount across suppressed repeats in same window
   const rlSettings = {
     waf_active_modes: ['strict_rate_limiting'] as ('strict_rate_limiting')[],
     waf_rule_config: normalizeWafRuleConfig({ rateLimit: { windowSeconds: 30, publicWriteLimit: 1 } }),
@@ -442,11 +441,101 @@ test('EdgeWafService suppresses duplicate block logs while blocked and resumes a
   const rl1 = EdgeWafService.evaluate({ clientIp: rlIp, pathname: '/api/submit-quote', method: 'POST', headers: BROWSER_HEADERS, now: now + 100 }, rlSettings);
   assert.equal(rl1.status, 429);
   assert.ok(!rl1.suppressLog);
-  assert.equal(rl1.blockStats?.count429, 1);
+  assert.equal(rl1.blockStats?.hitCount, 1);
 
   const rl2 = EdgeWafService.evaluate({ clientIp: rlIp, pathname: '/api/submit-quote', method: 'POST', headers: BROWSER_HEADERS, now: now + 200 }, rlSettings);
   assert.equal(rl2.status, 429);
   assert.equal(rl2.suppressLog, true);
-  assert.equal(rl2.blockStats?.count429, 2);
-  assert.equal(rl2.blockStats?.count403, 0);
+  assert.equal(rl2.blockStats?.hitCount, 2);
+
+  // Interleaving benign GET / must NOT reset 429 log suppression
+  assert.equal(EdgeWafService.evaluate({ clientIp: rlIp, pathname: '/', headers: BROWSER_HEADERS, now: now + 250 }, rlSettings).allowed, true);
+  const rl3 = EdgeWafService.evaluate({ clientIp: rlIp, pathname: '/api/submit-quote', method: 'POST', headers: BROWSER_HEADERS, now: now + 300 }, rlSettings);
+  assert.equal(rl3.status, 429);
+  assert.equal(rl3.suppressLog, true);
+  assert.equal(rl3.blockStats?.hitCount, 3);
+});
+
+test('EdgeWafService P0/P1/P2: anti-lockout, well-known, double-encoding, header scan, not_contains, country, unbanIp & dryRun', () => {
+  EdgeWafService.clearAllStrikes();
+  const now = 1_700_000_000_000;
+
+  // P0: Legitimate .well-known paths allowed; malicious .well-known/.env blocked
+  assert.equal(EdgeWafService.isBlockedProbePath('/.well-known/acme-challenge/token123'), false);
+  assert.equal(EdgeWafService.isBlockedProbePath('/.well-known/security.txt'), false);
+  assert.equal(EdgeWafService.isBlockedProbePath('/.well-known/unknown-probe'), true);
+
+  // P0: Auth login/callback & authenticated admins are never locked out even under aggressive custom rule
+  const lockCfg = normalizeWafRuleConfig({
+    customRules: [
+      { id: 'c_all', enabled: true, field: 'path_matches', operator: 'starts_with', value: '/', action: 'block_403' },
+    ],
+  });
+  const lockSettings = { waf_active_modes: ['block_malicious_ips'] as ('block_malicious_ips')[], waf_rule_config: lockCfg };
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/api/auth/login', headers: BROWSER_HEADERS, now }, lockSettings).allowed, true);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/api/auth/callback', headers: BROWSER_HEADERS, now }, lockSettings).allowed, true);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/admin/orders', headers: BROWSER_HEADERS, isAuthenticatedAdmin: true, now }, lockSettings).allowed, true);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/products', headers: BROWSER_HEADERS, now }, lockSettings).allowed, false);
+
+  // P1: Double-URL-encoded XSS & SQLi in Referer header blocked
+  const malSettings = { waf_active_modes: ['block_malicious_ips'] as ('block_malicious_ips')[] };
+  assert.equal(
+    EdgeWafService.evaluate({ clientIp: '198.51.100.40', pathname: '/products', search: '?q=%253Cscript%253Ealert(1)%253C%252Fscript%253E', headers: BROWSER_HEADERS, now }, malSettings).code,
+    'WAF_MALICIOUS_PAYLOAD'
+  );
+  assert.equal(
+    EdgeWafService.evaluate({ clientIp: '198.51.100.41', pathname: '/products', headers: new Headers({ referer: 'https://evil.com/?x=1 UNION SELECT password FROM users' }), now }, malSettings).code,
+    'WAF_MALICIOUS_PAYLOAD'
+  );
+
+  // P1: not_contains, country_equals, and per-rule custom 429 limit
+  const advSettings = {
+    waf_active_modes: [],
+    waf_rule_config: normalizeWafRuleConfig({
+      customRules: [
+        { id: 'c_origin', enabled: true, field: 'header_contains', headerName: 'origin', operator: 'not_contains', value: 'gwenvenni.com', action: 'block_403' },
+        { id: 'c_country', enabled: true, field: 'country_equals', operator: 'equals', value: 'XX', action: 'block_403' },
+        { id: 'c_ua_limit', enabled: true, field: 'ua_contains', operator: 'contains', value: 'TestBot', action: 'rate_limit_429', limit: 2 },
+      ],
+    }),
+  };
+  // Missing origin matches not_contains -> 403; matching origin -> passes first rule
+  assert.equal(
+    EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/api/x', headers: new Headers({}), country: 'US', now }, advSettings).status,
+    403
+  );
+  assert.equal(
+    EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/api/x', headers: new Headers({ origin: 'https://gwenvenni.com' }), country: 'XX', now }, advSettings).status,
+    403
+  );
+  for (let i = 0; i < 2; i++) {
+    assert.equal(
+      EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/products', headers: new Headers({ origin: 'https://gwenvenni.com' }), country: 'US', userAgent: 'TestBot/1.0', now: now + i * 10 }, advSettings).allowed,
+      true
+    );
+  }
+  assert.equal(
+    EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/products', headers: new Headers({ origin: 'https://gwenvenni.com' }), country: 'US', userAgent: 'TestBot/1.0', now: now + 30 }, advSettings).status,
+    429
+  );
+
+  // P2: dryRun does not mutate strikes, getActiveBans & unbanIp work on single IP
+  EdgeWafService.clearAllStrikes();
+  const dry = EdgeWafService.evaluate({ clientIp: '198.51.100.60', pathname: '/.env', headers: BROWSER_HEADERS, dryRun: true, now }, {
+    waf_active_modes: ['block_malicious_ips'],
+    waf_rule_config: normalizeWafRuleConfig({ malicious: { strikeLimit: 1 } }),
+  });
+  assert.equal(dry.allowed, false);
+  assert.equal(EdgeWafService.getActiveBans(now).length, 0);
+
+  // Real ban & single IP unban
+  EdgeWafService.evaluate({ clientIp: '198.51.100.61', pathname: '/.env', headers: BROWSER_HEADERS, now }, {
+    waf_active_modes: ['block_malicious_ips'],
+    waf_rule_config: normalizeWafRuleConfig({ malicious: { strikeLimit: 1, banDurationMinutes: 10 } }),
+  });
+  const bans = EdgeWafService.getActiveBans(now);
+  assert.equal(bans.length, 1);
+  assert.equal(bans[0].ip, '198.51.100.61');
+  assert.equal(EdgeWafService.unbanIp('198.51.100.61'), true);
+  assert.equal(EdgeWafService.getActiveBans(now).length, 0);
 });

@@ -6,6 +6,7 @@ import {
   getSystemSettings,
   updateSystemSettings,
   listErrorLogs,
+  getWaf24hSummary,
   recordAdminAudit,
   type WafRuleMode,
 } from '@db';
@@ -27,10 +28,10 @@ export const GET: APIRoute = defineAdminApi(
     menu: 'waf',
   },
   async ({ cfEnv }) => {
-    const [settings, recentRes, dayRes] = await Promise.all([
+    const [settings, recentRes, daySummary] = await Promise.all([
       getSystemSettings(cfEnv),
       listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1 }, cfEnv),
-      listErrorLogs({ source: 'EDGE_WAF', timeWindow: '24h', limit: 1, page: 1 }, cfEnv),
+      getWaf24hSummary(cfEnv),
     ]);
 
     return jsonNoCache({
@@ -40,7 +41,9 @@ export const GET: APIRoute = defineAdminApi(
       waf_allow_ips: settings.waf_allow_ips,
       waf_rule_config: normalizeWafRuleConfig(settings.waf_rule_config),
       strikeStats: EdgeWafService.getStrikeStats(),
-      blocked24hCount: dayRes.total,
+      activeBans: EdgeWafService.getActiveBans(),
+      blocked24hCount: daySummary.totalHits,
+      blocked24hEvents: daySummary.eventsCount,
       logs: recentRes.logs,
     });
   }
@@ -48,6 +51,8 @@ export const GET: APIRoute = defineAdminApi(
 
 export const POST: APIRoute = defineAdminApi<{
   action?: string;
+  ip?: string;
+  sim?: Record<string, any>;
   waf_active_modes?: unknown;
   waf_blocked_ips?: unknown;
   waf_allow_ips?: unknown;
@@ -66,7 +71,86 @@ export const POST: APIRoute = defineAdminApi<{
         success: true,
         message: 'Edge isolate auto-ban strikes cleared.',
         strikeStats: EdgeWafService.getStrikeStats(),
+        activeBans: EdgeWafService.getActiveBans(),
       });
+    }
+
+    if (action === 'unban_ip') {
+      const targetIp = typeof body?.ip === 'string' ? body.ip.trim() : '';
+      if (!targetIp) {
+        return jsonNoCache({ error: 'IP address is required.' }, 400);
+      }
+      EdgeWafService.unbanIp(targetIp);
+      recordAdminAudit(context, {
+        adminEmail: auth.user.email,
+        action: 'UNBAN_WAF_IP',
+        targetType: 'SETTINGS',
+        targetId: targetIp,
+        after: { unbannedIp: targetIp },
+        cfEnv,
+      });
+      return jsonNoCache({
+        success: true,
+        message: `Unbanned ${targetIp} from edge isolate strike cache.`,
+        strikeStats: EdgeWafService.getStrikeStats(),
+        activeBans: EdgeWafService.getActiveBans(),
+      });
+    }
+
+    if (action === 'simulate') {
+      const sim = body?.sim && typeof body.sim === 'object' ? body.sim : {};
+      const currentSettings = await getSystemSettings(cfEnv);
+      const validSet = new Set<string>(VALID_WAF_MODES);
+      const simModes = Array.isArray(body?.waf_active_modes)
+        ? (body.waf_active_modes.filter((m): m is WafRuleMode => typeof m === 'string' && validSet.has(m)))
+        : currentSettings.waf_active_modes;
+      const simRuleConfig = body?.waf_rule_config !== undefined
+        ? normalizeWafRuleConfig(body.waf_rule_config)
+        : normalizeWafRuleConfig(currentSettings.waf_rule_config);
+
+      const rawTarget = typeof sim.pathname === 'string' && sim.pathname.trim() ? sim.pathname.trim() : '/';
+      const qIdx = rawTarget.indexOf('?');
+      const pathname = qIdx >= 0 ? (rawTarget.slice(0, qIdx) || '/') : rawTarget;
+      const search = qIdx >= 0 ? rawTarget.slice(qIdx) : '';
+
+      const simHeaders = new Headers();
+      if (typeof sim.userAgent === 'string' && sim.userAgent.trim()) {
+        simHeaders.set('user-agent', sim.userAgent.trim());
+      }
+      if (typeof sim.country === 'string' && sim.country.trim()) {
+        simHeaders.set('cf-ipcountry', sim.country.trim().toUpperCase());
+      }
+      if (typeof sim.headerRaw === 'string' && sim.headerRaw.trim()) {
+        for (const line of sim.headerRaw.split(/[\r\n]+/)) {
+          const idx = line.indexOf(':');
+          if (idx > 0) {
+            const k = line.slice(0, idx).trim();
+            const v = line.slice(idx + 1).trim();
+            if (k) simHeaders.set(k, v);
+          }
+        }
+      }
+
+      const result = EdgeWafService.evaluate(
+        {
+          clientIp: typeof sim.clientIp === 'string' ? sim.clientIp.trim() : '198.51.100.10',
+          pathname: pathname.startsWith('/') ? pathname : `/${pathname}`,
+          search,
+          method: typeof sim.method === 'string' ? sim.method.toUpperCase() : 'GET',
+          userAgent: typeof sim.userAgent === 'string' ? sim.userAgent.trim() : undefined,
+          country: typeof sim.country === 'string' ? sim.country.trim().toUpperCase() : undefined,
+          headers: simHeaders,
+          dryRun: true,
+        },
+        {
+          waf_active_modes: simModes,
+          waf_blocked_ips: typeof body?.waf_blocked_ips === 'string' ? body.waf_blocked_ips : currentSettings.waf_blocked_ips,
+          waf_allow_ips: typeof body?.waf_allow_ips === 'string' ? body.waf_allow_ips : currentSettings.waf_allow_ips,
+          waf_rule_config: simRuleConfig,
+        }
+      );
+
+      return jsonNoCache({ success: true, result });
     }
 
     if (action !== 'save_rules') {

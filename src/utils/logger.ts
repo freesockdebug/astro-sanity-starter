@@ -82,8 +82,6 @@ interface WafStatsPendingItem {
   clientIp: string;
   errorCode: string;
   hitCount: number;
-  count403: number;
-  count429: number;
   lastBlockedAt: string;
   env: any;
 }
@@ -117,8 +115,6 @@ function flushWafStatsUpdates(ctx?: any): Promise<any> {
           clientIp: item.clientIp,
           errorCode: item.errorCode,
           hitCount: item.hitCount,
-          count403: item.count403,
-          count429: item.count429,
           lastBlockedAt: item.lastBlockedAt,
         },
         item.env
@@ -130,15 +126,13 @@ function flushWafStatsUpdates(ctx?: any): Promise<any> {
 }
 
 /**
- * Coalesces repeated WAF 403/429 counts onto either the in-flight log buffer or the latest persisted DB row.
+ * Coalesces repeated WAF hitCount updates onto either the in-flight log buffer or the latest persisted DB row.
  */
 export function syncWafBlockStats(
   params: {
     clientIp?: string | null;
     errorCode?: string | null;
     hitCount: number;
-    count403: number;
-    count429: number;
     lastBlockedAt: string;
   },
   options: { cfEnv?: any; ctx?: any } = {}
@@ -159,13 +153,9 @@ export function syncWafBlockStats(
     ) {
       const ctxObj = buffered.context as Record<string, any>;
       ctxObj.hitCount = params.hitCount;
-      ctxObj.count403 = params.count403;
-      ctxObj.count429 = params.count429;
       ctxObj.lastBlockedAt = params.lastBlockedAt;
       if (ctxObj.context && typeof ctxObj.context === 'object') {
         ctxObj.context.hitCount = params.hitCount;
-        ctxObj.context.count403 = params.count403;
-        ctxObj.context.count429 = params.count429;
         ctxObj.context.lastBlockedAt = params.lastBlockedAt;
       }
       return;
@@ -182,8 +172,6 @@ export function syncWafBlockStats(
     clientIp,
     errorCode,
     hitCount: params.hitCount,
-    count403: params.count403,
-    count429: params.count429,
     lastBlockedAt: params.lastBlockedAt,
     env,
   });

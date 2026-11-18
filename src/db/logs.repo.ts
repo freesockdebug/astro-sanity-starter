@@ -526,15 +526,47 @@ export async function listErrorLogs(
 }
 
 /**
- * Updates cumulative 403/429 send counters and lastBlockedAt on the latest matching EDGE_WAF log row.
+ * Aggregates 24h EDGE_WAF attack events (row count) and total intercepted hits (sum of hitCount).
+ */
+export async function getWaf24hSummary(
+  customEnv?: any
+): Promise<{ eventsCount: number; totalHits: number }> {
+  try {
+    return await executeWithAutoSchema(async (db: DbClient) => {
+      const cutoff = formatUtcCutoff(24 * 3600_000, db.dialect);
+      const rows = await db.query<{ context_json: string | null }>(
+        `SELECT context_json FROM system_error_logs WHERE source = 'EDGE_WAF' AND created_at >= ?`,
+        [cutoff]
+      );
+      let totalHits = 0;
+      for (const row of rows) {
+        let hits = 1;
+        if (row.context_json) {
+          try {
+            const parsed = JSON.parse(row.context_json);
+            const rawHits = Number(parsed?.hitCount ?? parsed?.context?.hitCount ?? 1);
+            if (Number.isFinite(rawHits) && rawHits > 1) {
+              hits = Math.round(rawHits);
+            }
+          } catch {}
+        }
+        totalHits += hits;
+      }
+      return { eventsCount: rows.length, totalHits };
+    });
+  } catch {
+    return { eventsCount: 0, totalHits: 0 };
+  }
+}
+
+/**
+ * Updates cumulative hitCount and lastBlockedAt on the latest matching EDGE_WAF log row.
  */
 export async function updateLatestWafLogStats(
   params: {
     clientIp?: string | null;
     errorCode?: string | null;
     hitCount: number;
-    count403: number;
-    count429: number;
     lastBlockedAt: string;
   },
   customEnv?: any
@@ -579,22 +611,16 @@ export async function updateLatestWafLogStats(
 
       const prevNested = ctxObj.context && typeof ctxObj.context === 'object' ? ctxObj.context : {};
       const nextHitCount = Math.max(Number(ctxObj.hitCount ?? prevNested.hitCount ?? 0), params.hitCount);
-      const nextCount403 = Math.max(Number(ctxObj.count403 ?? prevNested.count403 ?? 0), params.count403);
-      const nextCount429 = Math.max(Number(ctxObj.count429 ?? prevNested.count429 ?? 0), params.count429);
 
       const nextCtx: Record<string, any> = {
         ...ctxObj,
         hitCount: nextHitCount,
-        count403: nextCount403,
-        count429: nextCount429,
         lastBlockedAt: params.lastBlockedAt,
       };
       if (ctxObj.context && typeof ctxObj.context === 'object') {
         nextCtx.context = {
           ...prevNested,
           hitCount: nextHitCount,
-          count403: nextCount403,
-          count429: nextCount429,
           lastBlockedAt: params.lastBlockedAt,
         };
       }
