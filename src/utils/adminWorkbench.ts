@@ -53,6 +53,31 @@ export function formatAdminTime(
   return `${y}-${m}-${day} ${h}:${min}:${s}`;
 }
 
+/**
+ * Hydrates SSR-rendered <time data-admin-time="..."> elements into browser local timezone.
+ * Prevents SSR UTC vs client local timezone mismatch before manual refresh.
+ */
+export function hydrateAdminTimes(root: ParentNode = document): void {
+  if (typeof document === 'undefined') return;
+  root.querySelectorAll<HTMLElement>('time[data-admin-time]').forEach((el) => {
+    const raw = el.getAttribute('data-admin-time');
+    if (!raw) return;
+    const modeAttr = el.getAttribute('data-admin-time-mode');
+    const mode: 'short' | 'full' = modeAttr === 'short' ? 'short' : 'full';
+    let formatted = formatAdminTime(raw, mode, '');
+    if (!formatted) return;
+    if (modeAttr === 'date') {
+      formatted = formatted.slice(0, 10);
+    }
+    const prefix = el.getAttribute('data-admin-time-prefix') || '';
+    const titlePrefix = el.getAttribute('data-admin-time-title-prefix') || '';
+    el.textContent = `${prefix}${formatted}`;
+    if (titlePrefix) {
+      el.setAttribute('title', `${titlePrefix}${formatted}`);
+    }
+  });
+}
+
 export interface PaginationConfig {
   containerId: string;
   summaryId: string;

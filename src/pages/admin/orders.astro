@@ -276,6 +276,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
 <script>
   import { clientCache } from '@utils/clientCache';
   import { escapeHtml, formatAdminTime, createPaginationController, syncUrlParams, bindSearchAndRefresh, readJsonStore, renderOrderStatusBadge } from '@utils/adminWorkbench';
+  import { toIsoUtcString } from '@utils/format';
   import { getTrackingUrl } from '@utils/shipping';
   import { useTableSettings, type ColumnConfig } from '@hooks/useTableSettings';
   import type { AdminOrderListItem, AdminOrdersApiResponse } from '../../db/adminDtos';
@@ -646,7 +647,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
           const totalQty = Number(order.total_quantity || 0);
           const totalStyles = Number(order.total_styles || 0);
           const isMobileExpanded = expandedMobileIds.has(`detail-m-${safeId}`);
-          const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(order.created_at).getTime() > pendingSlaMs);
+          const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(toIsoUtcString(order.created_at) || order.created_at).getTime() > pendingSlaMs);
 
           return `
             <div class="p-3.5 space-y-2.5 bg-white">
@@ -745,7 +746,7 @@ const canAssign = Boolean(adminContext?.isRootAdmin || adminContext?.permissions
       const totalStyles = Number(order.total_styles || 0);
       const itemCount = order.items?.length || 0;
       const isDesktopExpanded = expandedDesktopIds.has(`detail-${safeId}`);
-      const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(order.created_at).getTime() > pendingSlaMs);
+      const isOverduePending = order.status === 'PENDING_APPROVAL' && (Date.now() - new Date(toIsoUtcString(order.created_at) || order.created_at).getTime() > pendingSlaMs);
 
       const cells = visibleCols.map((col) => {
         switch (col.id) {

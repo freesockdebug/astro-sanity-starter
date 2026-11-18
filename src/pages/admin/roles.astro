@@ -5,6 +5,7 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
 import { listAdminRoles, listAdminMembers } from '@db';
+import { toIsoUtcString, formatUtcFallback } from '@utils/format';
 import { ADMIN_MENU_GROUPS, ADMIN_PERMISSION_GROUPS } from '@config/adminNavigation';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -147,7 +148,16 @@ const pageTitle = 'Roles & Permissions Matrix';
               <!-- Action Buttons -->
               <div class="pt-3 border-t border-black/5 flex items-center justify-between">
                 <span class="text-[10px] text-[#86868b] font-mono">
-                  {r.updated_at ? `Updated: ${r.updated_at.slice(0, 10)}` : ''}
+                  {r.updated_at ? (
+                    <time
+                      data-admin-time={toIsoUtcString(r.updated_at)}
+                      data-admin-time-mode="date"
+                      data-admin-time-prefix="Updated: "
+                      title={formatUtcFallback(r.updated_at)}
+                    >
+                      Updated: {r.updated_at.slice(0, 10)}
+                    </time>
+                  ) : ''}
                 </span>
                 <div class="flex items-center gap-2">
                   {!r.is_system && (

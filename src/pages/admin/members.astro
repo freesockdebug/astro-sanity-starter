@@ -5,6 +5,7 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
 import { listAdminMembers, listAdminRoles } from '@db';
+import { toIsoUtcString, formatUtcFallback } from '@utils/format';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -135,7 +136,11 @@ const [members, roles] = await Promise.all([
                 <td class="adm-td text-[#86868b] text-[11px]">
                   {m.last_login_at ? (
                     <div>
-                      <span class="text-[#1d1d1f] block">{m.last_login_at.slice(0, 16)}</span>
+                      <span class="text-[#1d1d1f] block font-mono">
+                        <time data-admin-time={toIsoUtcString(m.last_login_at)} data-admin-time-mode="full" title={formatUtcFallback(m.last_login_at)}>
+                          {formatUtcFallback(m.last_login_at)}
+                        </time>
+                      </span>
                       {m.last_location && <span class="text-[10px]">📍 {m.last_location}</span>}
                     </div>
                   ) : (
@@ -213,7 +218,7 @@ const [members, roles] = await Promise.all([
 </AdminLayout>
 
 <script>
-  import { $id, $val, escapeHtml } from '@utils/adminWorkbench';
+  import { $id, $val, escapeHtml, formatAdminTime } from '@utils/adminWorkbench';
 
   function initMembersPage() {
     const addDialog = $id<HTMLDialogElement>('add-member-dialog');
@@ -262,7 +267,7 @@ const [members, roles] = await Promise.all([
               </div>
               <span class="text-[11px] font-mono text-[#86868b]">${safeEmail}</span>
             </div>
-            <span class="text-[10px] text-[#86868b]">${c.last_login_at ? escapeHtml(c.last_login_at.slice(0, 10)) : 'No login'}</span>
+            <span class="text-[10px] text-[#86868b] font-mono">${c.last_login_at ? escapeHtml(formatAdminTime(c.last_login_at, 'full').slice(0, 10)) : 'No login'}</span>
           </div>`;
         }).join('');
         candidatesList.classList.remove('hidden');

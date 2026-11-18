@@ -13,7 +13,7 @@ import {
   normalizeWafRuleConfig,
   DEFAULT_WAF_RULE_CONFIG,
 } from '@utils/waf';
-import { formatAdminTime } from '@utils/adminWorkbench';
+import { toIsoUtcString, formatUtcFallback } from '@utils/format';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -551,13 +551,30 @@ const initialPayload = JSON.stringify({
                   const countCls = statusCode === 429
                     ? 'bg-amber-50 text-amber-800 border-amber-200/80'
                     : 'bg-rose-50 text-rose-700 border-rose-200/80';
-                  const lastBlockedAt = ctx.lastBlockedAt ? formatAdminTime(ctx.lastBlockedAt, 'short') : '';
+                  const createdIso = toIsoUtcString(log.created_at);
+                  const createdFallback = formatUtcFallback(log.created_at);
+                  const lastIso = ctx.lastBlockedAt ? toIsoUtcString(ctx.lastBlockedAt) : '';
+                  const lastFallback = ctx.lastBlockedAt ? formatUtcFallback(ctx.lastBlockedAt) : '';
                   return (
                     <tr class="hover:bg-[#fafafc] transition-colors">
                       <td class="adm-td whitespace-nowrap font-mono text-[11px] text-[#52525b]">
-                        <div>{formatAdminTime(log.created_at, 'short')}</div>
-                        {lastBlockedAt && hitCount > 1 && (
-                          <div class="text-[10px] text-[#86868b]" title={`Last hit: ${lastBlockedAt}`}>Last: {lastBlockedAt}</div>
+                        <div>
+                          <time data-admin-time={createdIso} data-admin-time-mode="short" title={createdFallback}>
+                            {createdFallback}
+                          </time>
+                        </div>
+                        {lastIso && hitCount > 1 && (
+                          <div class="text-[10px] text-[#86868b]">
+                            <time
+                              data-admin-time={lastIso}
+                              data-admin-time-mode="short"
+                              data-admin-time-prefix="Last: "
+                              data-admin-time-title-prefix="Last hit: "
+                              title={`Last hit: ${lastFallback}`}
+                            >
+                              Last: {lastFallback}
+                            </time>
+                          </div>
                         )}
                       </td>
                       <td class="adm-td whitespace-nowrap">

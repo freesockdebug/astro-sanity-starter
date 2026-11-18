@@ -1136,7 +1136,7 @@ const pageTitle = 'Customer & Access Management';
     exportToCsv(
       `buyers_report_${new Date().toISOString().slice(0, 10)}.csv`,
       ['ID', 'Email', 'Name', 'Company', 'Tier', 'Status', 'Assigned Rep', 'Total Orders', 'CRM Notes', 'Created At'],
-      currentUsersList.map((u) => [u.id, u.email, u.name || '', u.company_name || '', u.tier || 'STANDARD', u.status || 'ACTIVE', u.assigned_to || '', u.total_orders || 0, (u.admin_notes || '').replace(/[\n\r]+/g, ' '), u.created_at || ''])
+      currentUsersList.map((u) => [u.id, u.email, u.name || '', u.company_name || '', u.tier || 'STANDARD', u.status || 'ACTIVE', u.assigned_to || '', u.total_orders || 0, (u.admin_notes || '').replace(/[\n\r]+/g, ' '), formatAdminTime(u.created_at, 'full', '')])
     );
     (window as any).__showToast?.(`Exported ${currentUsersList.length} buyers to CSV`, 'success');
   });

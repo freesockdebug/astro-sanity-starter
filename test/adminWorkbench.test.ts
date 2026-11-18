@@ -2,7 +2,7 @@
 // Unit tests for adminWorkbench pure utilities using Node 22 native test runner
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeHtml, exportToCsv, readJsonStore, renderTierBadgeHtml, renderOrderStatusBadge } from '../src/utils/adminWorkbench.js';
+import { escapeHtml, exportToCsv, readJsonStore, renderTierBadgeHtml, renderOrderStatusBadge, formatAdminTime, hydrateAdminTimes } from '../src/utils/adminWorkbench.js';
 import { getTrackingUrl } from '../src/utils/shipping.js';
 import { parsePaginationParams, toIsoUtcString, formatUtcFallback } from '../src/utils/format.js';
 import { getTierConfig, DICT_COLOR_TO_TIER_STYLE } from '../src/utils/tier.js';
@@ -250,4 +250,32 @@ test('resolveThemeContext and useStorefrontTheme resolve valid themes, fallbacks
     themeContext: luxury,
   };
   assert.equal(useStorefrontTheme(localsWithInjected).id, 'luxury-atelier');
+});
+
+test('hydrateAdminTimes converts SSR time[data-admin-time] elements to local formatted strings', () => {
+  const mkEl = (attrs: Record<string, string>) => {
+    const map = new Map(Object.entries(attrs));
+    return {
+      textContent: 'UTC fallback',
+      getAttribute: (k: string) => map.get(k) ?? null,
+      setAttribute: (k: string, v: string) => map.set(k, v),
+    };
+  };
+
+  const sampleTs = '2026-11-18T14:07:18Z';
+  const shortEl = mkEl({ 'data-admin-time': sampleTs, 'data-admin-time-mode': 'short', 'data-admin-time-prefix': 'Last: ', 'data-admin-time-title-prefix': 'Last hit: ' });
+  const fullEl = mkEl({ 'data-admin-time': sampleTs, 'data-admin-time-mode': 'full' });
+  const dateEl = mkEl({ 'data-admin-time': sampleTs, 'data-admin-time-mode': 'date', 'data-admin-time-prefix': 'Updated: ' });
+
+  const prevDoc = (globalThis as any).document;
+  (globalThis as any).document = {};
+  try {
+    hydrateAdminTimes({ querySelectorAll: () => [shortEl, fullEl, dateEl] } as any);
+    assert.equal(shortEl.textContent, `Last: ${formatAdminTime(sampleTs, 'short')}`);
+    assert.equal(shortEl.getAttribute('title'), `Last hit: ${formatAdminTime(sampleTs, 'short')}`);
+    assert.equal(fullEl.textContent, formatAdminTime(sampleTs, 'full'));
+    assert.equal(dateEl.textContent, `Updated: ${formatAdminTime(sampleTs, 'full').slice(0, 10)}`);
+  } finally {
+    (globalThis as any).document = prevDoc;
+  }
 });

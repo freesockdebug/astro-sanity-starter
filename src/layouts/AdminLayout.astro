@@ -888,6 +888,9 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
 
   <script>
     import { initAppShellRouter } from '@utils/appShellRouter';
+    import { hydrateAdminTimes } from '@utils/adminWorkbench';
     initAppShellRouter({ scope: 'admin' });
+    hydrateAdminTimes();
+    document.addEventListener('shell:page-load', () => hydrateAdminTimes());
   </script>
 </Layout>
