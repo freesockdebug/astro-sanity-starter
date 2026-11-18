@@ -67,6 +67,7 @@ export interface WafRuleConfig {
   malicious: {
     enableIpBlacklist: boolean;
     enableAutoBan: boolean;
+    autoBanOnRateAbuse: boolean;
     strikeLimit: number;
     banDurationMinutes: number;
     enableProbePaths: boolean;
@@ -87,6 +88,7 @@ export interface WafRuleConfig {
     blockCliScrapers: boolean;
     blockAiCrawlers: boolean;
     blockSeoBots: boolean;
+    blockUaRotation: boolean;
     enforceQuoteFingerprint: boolean;
     customBlockedUa: string;
   };
@@ -97,6 +99,7 @@ export const DEFAULT_WAF_RULE_CONFIG: WafRuleConfig = {
   malicious: {
     enableIpBlacklist: true,
     enableAutoBan: true,
+    autoBanOnRateAbuse: true,
     strikeLimit: 3,
     banDurationMinutes: 15,
     enableProbePaths: true,
@@ -117,6 +120,7 @@ export const DEFAULT_WAF_RULE_CONFIG: WafRuleConfig = {
     blockCliScrapers: true,
     blockAiCrawlers: true,
     blockSeoBots: true,
+    blockUaRotation: true,
     enforceQuoteFingerprint: true,
     customBlockedUa: '',
   },
@@ -176,6 +180,15 @@ export const WAF_CONDITION_CATALOG = {
       fieldExpr: 'If Strike Count',
       operatorExpr: '>= threshold',
       condition: '3 strikes → auto-ban IP for 15m',
+      actionLabel: '403 Auto-Ban',
+      actionTone: 'err',
+    },
+    {
+      key: 'autoBanOnRateAbuse',
+      label: 'Rate-Limit Flood Auto-Ban Escalation',
+      fieldExpr: 'If 429 Excess',
+      operatorExpr: '>= +10 hits',
+      condition: 'ignores 429 throttling repeatedly → +1 strike toward Auto-Ban',
       actionLabel: '403 Auto-Ban',
       actionTone: 'err',
     },
@@ -242,7 +255,7 @@ export const WAF_CONDITION_CATALOG = {
       label: 'AI Training & LLM Crawlers',
       fieldExpr: 'If User-Agent',
       operatorExpr: 'matches regex',
-      condition: 'GPTBot, ClaudeBot, anthropic-ai, Bytespider, CCBot',
+      condition: 'GPTBot, OAI-SearchBot, ClaudeBot, Bytespider, Qwenbot, ChatGLM-Spider, DeepSeekBot, Hunyuan, GrokBot, Meta-ExternalAgent, CCBot',
       actionLabel: '403 Block',
       actionTone: 'info',
     },
@@ -254,6 +267,15 @@ export const WAF_CONDITION_CATALOG = {
       condition: 'AhrefsBot, SemrushBot, DotBot, MJ12bot',
       actionLabel: '403 Block',
       actionTone: 'info',
+    },
+    {
+      key: 'blockUaRotation',
+      label: 'Spoofed Bot UA Rotation',
+      fieldExpr: 'If User-Agent',
+      operatorExpr: 'rotates >=3 bots',
+      condition: 'same IP impersonates >=3 crawler vendors in 10m (triggers Strike)',
+      actionLabel: '403 Auto-Ban',
+      actionTone: 'err',
     },
     {
       key: 'enforceQuoteFingerprint',
@@ -381,6 +403,7 @@ export function normalizeWafRuleConfig(raw: unknown): WafRuleConfig {
     malicious: {
       enableIpBlacklist: toBool(m.enableIpBlacklist, d.malicious.enableIpBlacklist),
       enableAutoBan: toBool(m.enableAutoBan, d.malicious.enableAutoBan),
+      autoBanOnRateAbuse: toBool(m.autoBanOnRateAbuse, d.malicious.autoBanOnRateAbuse),
       strikeLimit: clampInt(m.strikeLimit, d.malicious.strikeLimit, 1, 50),
       banDurationMinutes: clampInt(m.banDurationMinutes, d.malicious.banDurationMinutes, 1, 1440),
       enableProbePaths: toBool(m.enableProbePaths, d.malicious.enableProbePaths),
@@ -401,6 +424,7 @@ export function normalizeWafRuleConfig(raw: unknown): WafRuleConfig {
       blockCliScrapers: toBool(b.blockCliScrapers, d.bot.blockCliScrapers),
       blockAiCrawlers: toBool(b.blockAiCrawlers, d.bot.blockAiCrawlers),
       blockSeoBots: toBool(b.blockSeoBots, d.bot.blockSeoBots),
+      blockUaRotation: toBool(b.blockUaRotation, d.bot.blockUaRotation),
       enforceQuoteFingerprint: toBool(b.enforceQuoteFingerprint, d.bot.enforceQuoteFingerprint),
       customBlockedUa: typeof b.customBlockedUa === 'string' ? b.customBlockedUa.trim().slice(0, 2000) : '',
     },
@@ -430,11 +454,14 @@ function matchCustomKeyword(targetLower: string, rawKeywords: string): string | 
 const AUTO_BAN_STRIKE_LIMIT = DEFAULT_WAF_RULE_CONFIG.malicious.strikeLimit;
 const AUTO_BAN_DURATION_MS = DEFAULT_WAF_RULE_CONFIG.malicious.banDurationMinutes * 60_000;
 const RATE_LIMIT_WINDOW_MS = DEFAULT_WAF_RULE_CONFIG.rateLimit.windowSeconds * 1000;
+const UA_ROTATION_WINDOW_MS = 10 * 60_000;
+const UA_ROTATION_VENDOR_THRESHOLD = 3;
 const DEFAULT_LOG_SUPPRESS_MS = 60 * 60_000;
 const MAX_MAP_ENTRIES = 5000;
 
 const strikeRecords = new Map<string, { strikes: number; bannedUntil: number; updatedAt: number }>();
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+const uaRotationRecords = new Map<string, { vendors: Set<string>; resetAt: number }>();
 const blockLogSuppressions = new Map<
   string,
   { ip: string; suppressedUntil: number; hitCount: number; lastHitAt: number }
@@ -443,6 +470,7 @@ const blockLogSuppressions = new Map<
 const STATIC_ASSET_EXT = /\.(?:css|js|mjs|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|eot|map|txt|xml)$/i;
 const ALLOWED_WELL_KNOWN = /^\/\.well-known\/(?:acme-challenge\/|pki-validation\/|security\.txt$|assetlinks\.json$|apple-app-site-association$|apple-developer-merchantid-domain-association$)/i;
 const SAFE_AUTH_PATHS = new Set([
+  '/admin/login',
   '/admin/waf',
   '/api/admin/waf',
   '/api/auth/login',
@@ -476,7 +504,7 @@ const BOT_UA_GROUPS: Array<{ flagKey: BotFlagKey; label: string; regex: RegExp }
   {
     flagKey: 'blockAiCrawlers',
     label: 'AI crawler',
-    regex: /(?:gptbot|claudebot|anthropic-ai|bytespider|ccbot)/i,
+    regex: /(?:gptbot|oai-searchbot|chatgpt-user|claudebot|claude-searchbot|claude-user|anthropic-ai|bytespider|ccbot|qwenbot|chatglm-spider|deepseekbot|hunyuan|moonshotbot|kimi-searchbot|grokbot|cohere-ai|meta-external|meta-webindexer)/i,
   },
   {
     flagKey: 'blockSeoBots',
@@ -484,6 +512,41 @@ const BOT_UA_GROUPS: Array<{ flagKey: BotFlagKey; label: string; regex: RegExp }
     regex: /(?:ahrefsbot|semrushbot|dotbot|mj12bot)/i,
   },
 ];
+
+const BOT_VENDOR_MATCHERS: Array<[string, RegExp]> = [
+  ['google', /googlebot|google-inspectiontool/i],
+  ['bing', /bingbot|msnbot|adidxbot/i],
+  ['baidu', /baiduspider/i],
+  ['yandex', /yandexbot/i],
+  ['duckduckgo', /duckduckbot|duckassistbot/i],
+  ['apple', /applebot/i],
+  ['openai', /gptbot|chatgpt-user|oai-searchbot|oai-adsbot/i],
+  ['anthropic', /claudebot|claude-searchbot|claude-user|anthropic-ai/i],
+  ['meta', /meta-external|meta-webindexer|facebookexternalhit/i],
+  ['bytedance', /bytespider/i],
+  ['alibaba', /qwenbot/i],
+  ['zhipu', /chatglm-spider/i],
+  ['tencent', /hunyuan/i],
+  ['moonshot', /moonshotbot|kimibot|kimi-searchbot/i],
+  ['deepseek', /deepseekbot/i],
+  ['xai', /grokbot/i],
+  ['cohere', /cohere-ai/i],
+  ['amazon', /amazonbot/i],
+  ['perplexity', /perplexitybot|perplexity-user/i],
+  ['brave', /bravebot/i],
+  ['ccbot', /\bccbot\b/i],
+  ['ahrefs', /ahrefsbot/i],
+  ['semrush', /semrushbot/i],
+  ['dotbot', /dotbot/i],
+  ['mj12', /mj12bot/i],
+];
+
+function detectBotVendor(ua: string): string | null {
+  for (const [vendor, regex] of BOT_VENDOR_MATCHERS) {
+    if (regex.test(ua)) return vendor;
+  }
+  return null;
+}
 
 function ipv4ToInt(ip: string): number | null {
   const parts = ip.split('.');
@@ -658,6 +721,7 @@ export class EdgeWafService {
     const key = ip.trim().toLowerCase();
     if (!key) return false;
     const deleted = strikeRecords.delete(key);
+    uaRotationRecords.delete(key);
     this.clearLogSuppressions(key);
     return deleted;
   }
@@ -683,7 +747,38 @@ export class EdgeWafService {
   public static clearAllStrikes(): void {
     strikeRecords.clear();
     rateLimitBuckets.clear();
+    uaRotationRecords.clear();
     blockLogSuppressions.clear();
+  }
+
+  private static trackUaVendorRotation(
+    ip: string,
+    vendor: string,
+    now: number,
+    dryRun = false
+  ): { rotating: boolean; vendorList: string[] } {
+    const key = ip.trim().toLowerCase();
+    if (!key) return { rotating: false, vendorList: [] };
+    const existing = uaRotationRecords.get(key);
+    if (dryRun) {
+      const vendors = new Set<string>(existing && existing.resetAt > now ? existing.vendors : []);
+      vendors.add(vendor);
+      return {
+        rotating: vendors.size >= UA_ROTATION_VENDOR_THRESHOLD,
+        vendorList: Array.from(vendors),
+      };
+    }
+    pruneMapIfNeeded(uaRotationRecords);
+    let rec = existing;
+    if (!rec || rec.resetAt <= now) {
+      rec = { vendors: new Set<string>(), resetAt: now + UA_ROTATION_WINDOW_MS };
+      uaRotationRecords.set(key, rec);
+    }
+    rec.vendors.add(vendor);
+    return {
+      rotating: rec.vendors.size >= UA_ROTATION_VENDOR_THRESHOLD,
+      vendorList: Array.from(rec.vendors),
+    };
   }
 
   private static consumeRateLimitBucket(
@@ -692,23 +787,24 @@ export class EdgeWafService {
     windowSeconds: number,
     now: number,
     dryRun = false
-  ): boolean {
+  ): { limited: boolean; excess: number } {
     const windowMs = (windowSeconds * 1000) || RATE_LIMIT_WINDOW_MS;
     if (dryRun) {
       const existing = rateLimitBuckets.get(key);
       if (!existing || existing.resetAt <= now || existing.resetAt > now + windowMs) {
-        return 1 > limit;
+        return { limited: 1 > limit, excess: Math.max(0, 1 - limit) };
       }
-      return (existing.count + 1) > limit;
+      const next = existing.count + 1;
+      return { limited: next > limit, excess: Math.max(0, next - limit) };
     }
     pruneMapIfNeeded(rateLimitBuckets);
     const existing = rateLimitBuckets.get(key);
     if (!existing || existing.resetAt <= now || existing.resetAt > now + windowMs) {
       rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
-      return false;
+      return { limited: false, excess: 0 };
     }
     existing.count += 1;
-    return existing.count > limit;
+    return { limited: existing.count > limit, excess: Math.max(0, existing.count - limit) };
   }
 
   private static decodeSafe(raw: string): string {
@@ -836,7 +932,7 @@ export class EdgeWafService {
       const summary = this.formatConditionSummary(rule);
       if (rule.action === 'rate_limit_429') {
         const ruleLimit = rule.limit ?? rateCfg.publicWriteLimit;
-        const limited = this.consumeRateLimitBucket(
+        const { limited } = this.consumeRateLimitBucket(
           `custom:${rule.id}:${clientIp || 'unknown'}`,
           ruleLimit,
           rateCfg.windowSeconds,
@@ -875,7 +971,7 @@ export class EdgeWafService {
     now: number,
     rateCfg: WafRuleConfig['rateLimit'] = DEFAULT_WAF_RULE_CONFIG.rateLimit,
     dryRun = false
-  ): { limited: boolean; limit: number; bucket: string } {
+  ): { limited: boolean; excess: number; limit: number; bucket: string } {
     const isPublicWriteApi =
       method === 'POST' &&
       (pathname === '/api/submit-quote' || pathname === '/api/client-error' || pathname.startsWith('/api/auth/'));
@@ -887,8 +983,8 @@ export class EdgeWafService {
         ? rateCfg.apiLimit
         : rateCfg.pageLimit;
 
-    const limited = this.consumeRateLimitBucket(`${bucketType}:${ip || 'unknown'}`, limit, rateCfg.windowSeconds, now, dryRun);
-    return { limited, limit, bucket: bucketType };
+    const { limited, excess } = this.consumeRateLimitBucket(`${bucketType}:${ip || 'unknown'}`, limit, rateCfg.windowSeconds, now, dryRun);
+    return { limited, excess, limit, bucket: bucketType };
   }
 
   public static evaluate(input: WafEvaluationInput, settings?: WafSettingsSubset | null): WafEvaluationResult {
@@ -1081,10 +1177,30 @@ export class EdgeWafService {
       }
     }
 
-    // 2. Strict Rate Limiting
+    // 2. Strict Rate Limiting (+ persistent 429 abuse strike escalation)
     if (activeModes.has('strict_rate_limiting')) {
       const rate = this.checkStrictRateLimit(clientIp || 'unknown', pathname, method, now, cfg.rateLimit, dryRun);
       if (rate.limited) {
+        if (
+          activeModes.has('block_malicious_ips') &&
+          cfg.malicious.enableAutoBan &&
+          cfg.malicious.autoBanOnRateAbuse &&
+          rate.excess >= 10 &&
+          rate.excess % 10 === 0
+        ) {
+          const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun);
+          if (strike.autoBanned) {
+            return {
+              allowed: false,
+              status: 403,
+              code: 'WAF_MALICIOUS_IP',
+              mode: 'block_malicious_ips',
+              reason: `Auto-banned after ignoring ${rate.limit} req/${cfg.rateLimit.windowSeconds}s rate limit repeatedly.`,
+              matchedSample: `${method} ${pathname} (+${rate.excess} excess 429s)`,
+              autoBanned: true,
+            };
+          }
+        }
         return {
           allowed: false,
           status: 429,
@@ -1118,6 +1234,26 @@ export class EdgeWafService {
             };
           }
         } else {
+          if (cfg.bot.blockUaRotation && clientIp) {
+            const botVendor = detectBotVendor(ua);
+            if (botVendor) {
+              const rotation = this.trackUaVendorRotation(clientIp, botVendor, now, dryRun);
+              if (rotation.rotating) {
+                const strike = activeModes.has('block_malicious_ips')
+                  ? this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun)
+                  : { strikes: 0, autoBanned: false };
+                return {
+                  allowed: false,
+                  status: 403,
+                  code: strike.autoBanned ? 'WAF_MALICIOUS_IP' : 'WAF_BOT_CHALLENGE',
+                  mode: strike.autoBanned ? 'block_malicious_ips' : 'bot_challenge',
+                  reason: `Spoofed bot User-Agent rotation detected (${rotation.vendorList.slice(0, 5).join(', ')}).`,
+                  matchedSample: `${botVendor}: ${ua}`.slice(0, 120),
+                  autoBanned: strike.autoBanned,
+                };
+              }
+            }
+          }
           for (const group of BOT_UA_GROUPS) {
             if (!cfg.bot[group.flagKey]) continue;
             if (group.regex.test(ua)) {

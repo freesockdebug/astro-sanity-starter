@@ -218,13 +218,15 @@ test('normalizeWafRuleConfig clamps out-of-range thresholds and merges partial o
   assert.equal(normalized.rateLimit.publicWriteLimit, 500);
   assert.equal(normalized.rateLimit.apiLimit, 30);
 
+  assert.equal(normalized.malicious.autoBanOnRateAbuse, true);
   assert.equal(normalized.bot.blockSeoBots, false);
   assert.equal(normalized.bot.blockAiCrawlers, false);
   assert.equal(normalized.bot.blockScannerTools, true);
+  assert.equal(normalized.bot.blockUaRotation, true);
   assert.equal(normalized.bot.customBlockedUa, 'MyScraper');
-  assert.equal(WAF_CONDITION_CATALOG.block_malicious_ips.length, 6);
+  assert.equal(WAF_CONDITION_CATALOG.block_malicious_ips.length, 7);
   assert.equal(WAF_CONDITION_CATALOG.strict_rate_limiting.length, 3);
-  assert.equal(WAF_CONDITION_CATALOG.bot_challenge.length, 6);
+  assert.equal(WAF_CONDITION_CATALOG.bot_challenge.length, 7);
 });
 
 test('EdgeWafService honors fine-grained sub-rule toggles, custom limits, custom paths, and custom UAs', () => {
@@ -472,6 +474,7 @@ test('EdgeWafService P0/P1/P2: anti-lockout, well-known, double-encoding, header
     ],
   });
   const lockSettings = { waf_active_modes: ['block_malicious_ips'] as ('block_malicious_ips')[], waf_rule_config: lockCfg };
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/admin/login', headers: BROWSER_HEADERS, now }, lockSettings).allowed, true);
   assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/api/auth/login', headers: BROWSER_HEADERS, now }, lockSettings).allowed, true);
   assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/api/auth/callback', headers: BROWSER_HEADERS, now }, lockSettings).allowed, true);
   assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/admin/orders', headers: BROWSER_HEADERS, isAuthenticatedAdmin: true, now }, lockSettings).allowed, true);
@@ -538,4 +541,82 @@ test('EdgeWafService P0/P1/P2: anti-lockout, well-known, double-encoding, header
   assert.equal(bans[0].ip, '198.51.100.61');
   assert.equal(EdgeWafService.unbanIp('198.51.100.61'), true);
   assert.equal(EdgeWafService.getActiveBans(now).length, 0);
+});
+
+test('EdgeWafService auto-bans spoofed bot UA rotation and persistent 429 flood abuse without false positives', () => {
+  EdgeWafService.clearAllStrikes();
+  const now = 1_700_000_000_000;
+
+  // 1. Spoofed bot UA rotation (matches real prod settings where blockAiCrawlers=false)
+  const rotSettings = {
+    waf_active_modes: ['block_malicious_ips', 'bot_challenge'] as ('block_malicious_ips' | 'bot_challenge')[],
+    waf_rule_config: normalizeWafRuleConfig({
+      malicious: { enableAutoBan: true, strikeLimit: 3, banDurationMinutes: 20 },
+      bot: { blockAiCrawlers: false, blockSeoBots: true, blockUaRotation: true },
+    }),
+  };
+
+  // Same vendor multiple requests from legitimate crawler IP must NOT trigger rotation ban
+  const legitIp = '66.249.66.1';
+  for (let i = 0; i < 4; i++) {
+    assert.equal(
+      EdgeWafService.evaluate(
+        { clientIp: legitIp, pathname: '/products', userAgent: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', now: now + i * 50 },
+        rotSettings
+      ).allowed,
+      true
+    );
+  }
+  // Corporate NAT sharing Safari + Chrome + Edge browsers must NOT trigger bot rotation
+  const natIp = '198.51.100.70';
+  for (const ua of [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/126.0.0.0',
+  ]) {
+    assert.equal(EdgeWafService.evaluate({ clientIp: natIp, pathname: '/products', userAgent: ua, now }, rotSettings).allowed, true);
+  }
+
+  // Attacker IP rotating >= 3 bot vendor families gets blocked & escalated to Auto-Ban
+  const spoofIp = '35.198.52.23';
+  assert.equal(EdgeWafService.evaluate({ clientIp: spoofIp, pathname: '/', userAgent: 'Mozilla/5.0 (compatible; Baiduspider/2.0)', now }, rotSettings).allowed, true);
+  assert.equal(EdgeWafService.evaluate({ clientIp: spoofIp, pathname: '/', userAgent: 'Mozilla/5.0 (compatible; GPTBot/1.4)', now: now + 10 }, rotSettings).allowed, true);
+  // 3rd distinct bot vendor -> 403 strike #1
+  const r3 = EdgeWafService.evaluate({ clientIp: spoofIp, pathname: '/', userAgent: 'Mozilla/5.0 (compatible; Qwenbot/1.0)', now: now + 20 }, rotSettings);
+  assert.equal(r3.allowed, false);
+  assert.equal(r3.status, 403);
+  // 2 more rotating hits -> strike #3 -> Auto-Ban (WAF_MALICIOUS_IP)
+  EdgeWafService.evaluate({ clientIp: spoofIp, pathname: '/', userAgent: 'Mozilla/5.0 (compatible; Googlebot/2.1)', now: now + 30 }, rotSettings);
+  const r5 = EdgeWafService.evaluate({ clientIp: spoofIp, pathname: '/', userAgent: 'Mozilla/5.0 (compatible; Bytespider)', now: now + 40 }, rotSettings);
+  assert.equal(r5.status, 403);
+  assert.equal(r5.code, 'WAF_MALICIOUS_IP');
+  assert.equal(r5.autoBanned, true);
+  // Subsequent plain browser request from same IP is now fast-blocked for 20m
+  const followUp = EdgeWafService.evaluate({ clientIp: spoofIp, pathname: '/products', userAgent: 'Mozilla/5.0 Chrome/126.0', now: now + 50 }, rotSettings);
+  assert.equal(followUp.status, 403);
+  assert.equal(followUp.code, 'WAF_MALICIOUS_IP');
+
+  // 2. Persistent 429 flood abuse escalates to Auto-Ban after excess hits, while minor 429 does not
+  EdgeWafService.clearAllStrikes();
+  const abuseSettings = {
+    waf_active_modes: ['block_malicious_ips', 'strict_rate_limiting'] as ('block_malicious_ips' | 'strict_rate_limiting')[],
+    waf_rule_config: normalizeWafRuleConfig({
+      malicious: { enableAutoBan: true, autoBanOnRateAbuse: true, strikeLimit: 3, banDurationMinutes: 20 },
+      rateLimit: { windowSeconds: 60, pageLimit: 5 },
+    }),
+  };
+  const floodIp = '34.65.85.51';
+  for (let i = 0; i < 5; i++) {
+    assert.equal(EdgeWafService.evaluate({ clientIp: floodIp, pathname: '/', headers: BROWSER_HEADERS, now }, abuseSettings).allowed, true);
+  }
+  // Excess 1..29 returns 429 without banning yet
+  for (let ex = 1; ex < 30; ex++) {
+    const res = EdgeWafService.evaluate({ clientIp: floodIp, pathname: '/', headers: BROWSER_HEADERS, now: now + ex }, abuseSettings);
+    assert.equal(res.status, 429);
+  }
+  // Excess 30 triggers 3rd strike -> 403 Auto-Ban
+  const escalated = EdgeWafService.evaluate({ clientIp: floodIp, pathname: '/', headers: BROWSER_HEADERS, now: now + 40 }, abuseSettings);
+  assert.equal(escalated.status, 403);
+  assert.equal(escalated.code, 'WAF_MALICIOUS_IP');
+  assert.equal(escalated.autoBanned, true);
 });

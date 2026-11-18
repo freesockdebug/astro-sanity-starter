@@ -752,6 +752,7 @@ const initialPayload = JSON.stringify({
         malicious: {
           enableIpBlacklist: Boolean(getCheckbox('malicious', 'enableIpBlacklist')?.checked),
           enableAutoBan: Boolean(getCheckbox('malicious', 'enableAutoBan')?.checked),
+          autoBanOnRateAbuse: Boolean(getCheckbox('malicious', 'autoBanOnRateAbuse')?.checked),
           strikeLimit: clampInput('waf-mal-strike-limit', 3, 1, 50),
           banDurationMinutes: clampInput('waf-mal-ban-minutes', 15, 1, 1440),
           enableProbePaths: Boolean(getCheckbox('malicious', 'enableProbePaths')?.checked),
@@ -772,6 +773,7 @@ const initialPayload = JSON.stringify({
           blockCliScrapers: Boolean(getCheckbox('bot', 'blockCliScrapers')?.checked),
           blockAiCrawlers: Boolean(getCheckbox('bot', 'blockAiCrawlers')?.checked),
           blockSeoBots: Boolean(getCheckbox('bot', 'blockSeoBots')?.checked),
+          blockUaRotation: Boolean(getCheckbox('bot', 'blockUaRotation')?.checked),
           enforceQuoteFingerprint: Boolean(getCheckbox('bot', 'enforceQuoteFingerprint')?.checked),
           customBlockedUa: ((document.getElementById('waf-bot-custom-ua') as HTMLTextAreaElement | null)?.value || '').trim(),
         },
