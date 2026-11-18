@@ -1,6 +1,7 @@
 // src/db/rbac.repo.ts
 // Repository for RBAC Roles and Admin Members Management
 import { executeWithAutoSchema } from './schema';
+import { createTieredCache } from '../utils/cache';
 import type { DbClient } from './client';
 import { ALL_MENU_KEYS } from '../config/adminNavigation';
 
@@ -128,20 +129,129 @@ function parseRoleRow(row: any): AdminRole {
   };
 }
 
-let cachedAdminRoles: { data: AdminRole[]; exp: number } | null = null;
-let cachedAdminMembers: { data: AdminMemberWithRole[]; exp: number } | null = null;
-let cachedActiveMembersLite: { data: ActiveTeamMemberLite[]; exp: number } | null = null;
-
-export function invalidateRbacCache(): void {
-  cachedAdminRoles = null;
-  cachedAdminMembers = null;
-  cachedActiveMembersLite = null;
-}
-
 export interface ActiveTeamMemberLite {
   email: string;
   name: string;
   roleName: string;
+}
+
+const activeMembersLiteCache = createTieredCache<ActiveTeamMemberLite[]>({
+  name: 'rbac_active_members_lite',
+  ttlMs: 60_000,
+  fallbackRaw: [],
+  fetchRaw: () =>
+    executeWithAutoSchema(async (db: DbClient) => {
+      try {
+        const rows = await db.query<any>(
+          `SELECT m.email, m.name, COALESCE(r.name, m.role_code) as role_name
+           FROM admin_members m
+           LEFT JOIN admin_roles r ON m.role_code = r.code
+           WHERE m.status = 'ACTIVE'
+           ORDER BY m.created_at ASC`
+        );
+        return (rows || []).map((r) => ({
+          email: r.email.toLowerCase(),
+          name: r.name || r.email.split('@')[0],
+          roleName: r.role_name || '',
+        }));
+      } catch (e: any) {
+        const msg = (e?.message || String(e)).toLowerCase();
+        if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
+          throw e;
+        }
+        console.error('[RBAC] listActiveTeamMembersLite failed:', e);
+        return null;
+      }
+    }),
+});
+
+const adminRolesCache = createTieredCache<AdminRole[]>({
+  name: 'rbac_admin_roles',
+  ttlMs: 60_000,
+  fallbackRaw: Object.values(SYSTEM_ROLES),
+  fetchRaw: () =>
+    executeWithAutoSchema(async (db: DbClient) => {
+      try {
+        const res = await db.query<any>('SELECT * FROM admin_roles ORDER BY is_system DESC, code ASC');
+        if (res && res.length > 0) return res.map(parseRoleRow);
+      } catch (e: any) {
+        const msg = (e?.message || String(e)).toLowerCase();
+        if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
+          throw e;
+        }
+        console.warn('[RBAC] listAdminRoles failed, falling back to SYSTEM_ROLES:', e);
+      }
+      return null;
+    }),
+});
+
+const adminMembersCache = createTieredCache<AdminMemberWithRole[]>({
+  name: 'rbac_admin_members',
+  ttlMs: 60_000,
+  fallbackRaw: [],
+  fetchRaw: () =>
+    executeWithAutoSchema(async (db: DbClient) => {
+      try {
+        const rows = await db.query<any>(
+          `SELECT 
+             m.*,
+             r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system,
+             u.id as user_id, u.last_login_at,
+             (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email) as assigned_orders,
+             (SELECT COUNT(*) FROM users cu WHERE cu.assigned_to = m.email) as assigned_customers,
+             (SELECT ul.ip || '|' || COALESCE(ul.city, '') || '|' || COALESCE(ul.country, '')
+              FROM user_logins ul WHERE ul.email = m.email ORDER BY ul.created_at DESC LIMIT 1) as last_login_meta
+           FROM admin_members m
+           LEFT JOIN admin_roles r ON m.role_code = r.code
+           LEFT JOIN users u ON m.email = u.email
+           ORDER BY m.created_at ASC`
+        );
+
+        return (rows || []).map((row) => {
+          const [lastIp = '', lastCity = '', lastCountry = ''] = (row.last_login_meta || '').split('|');
+          const loc = [lastCity, lastCountry].filter(Boolean).join(', ') || '';
+          return {
+            email: row.email.toLowerCase(),
+            name: row.name || row.email.split('@')[0],
+            role_code: row.role_code,
+            status: (row.status as 'ACTIVE' | 'DISABLED') || 'ACTIVE',
+            created_by: row.created_by || '',
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            is_logto_synced: Boolean(row.user_id),
+            assigned_orders: Number(row.assigned_orders || 0),
+            assigned_customers: Number(row.assigned_customers || 0),
+            last_login_at: row.last_login_at || '',
+            last_ip: lastIp,
+            last_location: loc,
+            role: row.role_name
+              ? parseRoleRow({
+                  code: row.role_code,
+                  name: row.role_name,
+                  data_scope: row.data_scope,
+                  menus_json: row.menus_json,
+                  permissions_json: row.permissions_json,
+                  description: row.role_desc,
+                  is_system: row.is_system,
+                })
+              : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
+          };
+        });
+      } catch (e: any) {
+        const msg = (e?.message || String(e)).toLowerCase();
+        if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
+          throw e;
+        }
+        console.error('[RBAC] listAdminMembers failed:', e);
+        return null;
+      }
+    }),
+});
+
+export function invalidateRbacCache(): void {
+  adminRolesCache.invalidate();
+  adminMembersCache.invalidate();
+  activeMembersLiteCache.invalidate();
 }
 
 /**
@@ -149,61 +259,11 @@ export interface ActiveTeamMemberLite {
  * Cached in L1 memory for 60s; avoids running 5 correlated subqueries.
  */
 export async function listActiveTeamMembersLite(): Promise<ActiveTeamMemberLite[]> {
-  const now = Date.now();
-  if (cachedActiveMembersLite && cachedActiveMembersLite.exp > now) {
-    return cachedActiveMembersLite.data;
-  }
-
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
-      const rows = await db.query<any>(
-        `SELECT m.email, m.name, COALESCE(r.name, m.role_code) as role_name
-         FROM admin_members m
-         LEFT JOIN admin_roles r ON m.role_code = r.code
-         WHERE m.status = 'ACTIVE'
-         ORDER BY m.created_at ASC`
-      );
-      const list = (rows || []).map((r) => ({
-        email: r.email.toLowerCase(),
-        name: r.name || r.email.split('@')[0],
-        roleName: r.role_name || '',
-      }));
-      cachedActiveMembersLite = { data: list, exp: Date.now() + 60_000 };
-      return list;
-    } catch (e: any) {
-      const msg = (e?.message || String(e)).toLowerCase();
-      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
-        throw e;
-      }
-      console.error('[RBAC] listActiveTeamMembersLite failed:', e);
-      return [];
-    }
-  });
+  return activeMembersLiteCache.get();
 }
 
 export async function listAdminRoles(): Promise<AdminRole[]> {
-  const now = Date.now();
-  if (cachedAdminRoles && cachedAdminRoles.exp > now) {
-    return cachedAdminRoles.data;
-  }
-
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
-      const res = await db.query<any>('SELECT * FROM admin_roles ORDER BY is_system DESC, code ASC');
-      if (res && res.length > 0) {
-        const roles = res.map(parseRoleRow);
-        cachedAdminRoles = { data: roles, exp: Date.now() + 60_000 };
-        return roles;
-      }
-    } catch (e: any) {
-      const msg = (e?.message || String(e)).toLowerCase();
-      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
-        throw e;
-      }
-      console.warn('[RBAC] listAdminRoles failed, falling back to SYSTEM_ROLES:', e);
-    }
-    return Object.values(SYSTEM_ROLES);
-  });
+  return adminRolesCache.get();
 }
 
 export async function getAdminRole(code: string): Promise<AdminRole> {
@@ -222,70 +282,7 @@ export async function getAdminRole(code: string): Promise<AdminRole> {
 }
 
 export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
-  const now = Date.now();
-  if (cachedAdminMembers && cachedAdminMembers.exp > now) {
-    return cachedAdminMembers.data;
-  }
-
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
-      const rows = await db.query<any>(
-        `SELECT 
-           m.*,
-           r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system,
-           u.id as user_id, u.last_login_at,
-           (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email) as assigned_orders,
-           (SELECT COUNT(*) FROM users cu WHERE cu.assigned_to = m.email) as assigned_customers,
-           (SELECT ul.ip || '|' || COALESCE(ul.city, '') || '|' || COALESCE(ul.country, '')
-            FROM user_logins ul WHERE ul.email = m.email ORDER BY ul.created_at DESC LIMIT 1) as last_login_meta
-         FROM admin_members m
-         LEFT JOIN admin_roles r ON m.role_code = r.code
-         LEFT JOIN users u ON m.email = u.email
-         ORDER BY m.created_at ASC`
-      );
-
-      const list = (rows || []).map((row) => {
-        const [lastIp = '', lastCity = '', lastCountry = ''] = (row.last_login_meta || '').split('|');
-        const loc = [lastCity, lastCountry].filter(Boolean).join(', ') || '';
-        return {
-          email: row.email.toLowerCase(),
-          name: row.name || (row.email.split('@')[0]),
-          role_code: row.role_code,
-          status: (row.status as 'ACTIVE' | 'DISABLED') || 'ACTIVE',
-          created_by: row.created_by || '',
-          created_at: row.created_at,
-          updated_at: row.updated_at,
-          is_logto_synced: Boolean(row.user_id),
-          assigned_orders: Number(row.assigned_orders || 0),
-          assigned_customers: Number(row.assigned_customers || 0),
-          last_login_at: row.last_login_at || '',
-          last_ip: lastIp,
-          last_location: loc,
-          role: row.role_name
-            ? parseRoleRow({
-                code: row.role_code,
-                name: row.role_name,
-                data_scope: row.data_scope,
-                menus_json: row.menus_json,
-                permissions_json: row.permissions_json,
-                description: row.role_desc,
-                is_system: row.is_system,
-              })
-            : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
-        };
-      });
-
-      cachedAdminMembers = { data: list, exp: Date.now() + 60_000 };
-      return list;
-    } catch (e: any) {
-      const msg = (e?.message || String(e)).toLowerCase();
-      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
-        throw e;
-      }
-      console.error('[RBAC] listAdminMembers failed:', e);
-      return [];
-    }
-  });
+  return adminMembersCache.get();
 }
 
 export async function getAdminMember(email: string): Promise<AdminMemberWithRole | null> {

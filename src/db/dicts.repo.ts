@@ -3,6 +3,7 @@
 
 import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
+import { createTieredCache } from '../utils/cache';
 
 export type DictBadgeColor = 'slate' | 'blue' | 'emerald' | 'amber' | 'purple' | 'rose' | 'indigo';
 
@@ -40,54 +41,52 @@ function parseJsonSafe<T>(jsonStr: any, fallback: T): T {
   }
 }
 
-let cachedDictGroups: { data: SysDictGroup[]; exp: number } | null = null;
+const dictGroupsCache = createTieredCache<SysDictGroup[]>({
+  name: 'dict_groups',
+  ttlMs: 60_000,
+  fallbackRaw: [],
+  fetchRaw: () =>
+    executeWithAutoSchema(async (db: DbClient) => {
+      try {
+        const rows = await db.query<any>(
+          `SELECT g.*,
+                  COUNT(i.id) as items_count,
+                  SUM(CASE WHEN i.is_enabled = 1 THEN 1 ELSE 0 END) as enabled_count
+           FROM sys_dict_groups g
+           LEFT JOIN sys_dict_items i ON g.code = i.group_code
+           GROUP BY g.code
+           ORDER BY g.is_system DESC, g.code ASC`
+        );
+
+        return (rows || []).map((r) => ({
+          code: r.code,
+          name: r.name,
+          description: r.description || '',
+          meta_schema_json: r.meta_schema_json || '[]',
+          meta_schema: parseJsonSafe(r.meta_schema_json, []),
+          is_system: Boolean(r.is_system),
+          items_count: Number(r.items_count || 0),
+          enabled_count: Number(r.enabled_count || 0),
+          updated_at: r.updated_at,
+        }));
+      } catch (e: any) {
+        const msg = (e?.message || String(e)).toLowerCase();
+        if (msg.includes('no such table') || msg.includes('no such column')) throw e;
+        console.error('[DictsRepo] listDictGroups error:', e);
+        return null;
+      }
+    }),
+});
 
 export function invalidateDictGroupsCache(): void {
-  cachedDictGroups = null;
+  dictGroupsCache.invalidate();
 }
 
 /**
  * Lists all dictionary groups with item counts (L1 memory cached for 60s)
  */
 export async function listDictGroups(): Promise<SysDictGroup[]> {
-  const now = Date.now();
-  if (cachedDictGroups && cachedDictGroups.exp > now) {
-    return cachedDictGroups.data;
-  }
-
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
-      const rows = await db.query<any>(
-        `SELECT g.*,
-                COUNT(i.id) as items_count,
-                SUM(CASE WHEN i.is_enabled = 1 THEN 1 ELSE 0 END) as enabled_count
-         FROM sys_dict_groups g
-         LEFT JOIN sys_dict_items i ON g.code = i.group_code
-         GROUP BY g.code
-         ORDER BY g.is_system DESC, g.code ASC`
-      );
-
-      const result = (rows || []).map((r) => ({
-        code: r.code,
-        name: r.name,
-        description: r.description || '',
-        meta_schema_json: r.meta_schema_json || '[]',
-        meta_schema: parseJsonSafe(r.meta_schema_json, []),
-        is_system: Boolean(r.is_system),
-        items_count: Number(r.items_count || 0),
-        enabled_count: Number(r.enabled_count || 0),
-        updated_at: r.updated_at,
-      }));
-
-      cachedDictGroups = { data: result, exp: Date.now() + 60_000 };
-      return result;
-    } catch (e: any) {
-      const msg = (e?.message || String(e)).toLowerCase();
-      if (msg.includes('no such table') || msg.includes('no such column')) throw e;
-      console.error('[DictsRepo] listDictGroups error:', e);
-      return [];
-    }
-  });
+  return dictGroupsCache.get();
 }
 
 /**

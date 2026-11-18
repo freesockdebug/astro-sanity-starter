@@ -103,30 +103,35 @@ export interface TieredCacheFetchResult<TRaw> {
 
 export interface TieredCacheOptions<TRaw, TCompiled = TRaw> {
   name: string;
-  kvKey: string;
+  kvKey?: string;
   ttlMs?: number;
   kvTtlSeconds?: number;
   fallbackRaw: TRaw;
   compile?: (raw: TRaw) => TCompiled;
   deserializeKv?: (raw: any) => TRaw | null;
-  fetchRaw: (customEnv?: any) => Promise<TieredCacheFetchResult<TRaw> | TRaw | null>;
+  isValidRaw?: (raw: TRaw, forceRefresh: boolean) => boolean;
+  onUpdate?: (compiled: TCompiled) => void;
+  fetchRaw: (customEnv?: any, forceRefresh?: boolean) => Promise<TieredCacheFetchResult<TRaw> | TRaw | null>;
 }
 
 /**
- * Reusable L1 (Isolate Memory + Pre-Compiled Object) -> L2 (Edge KV) -> L3 (DB/Upstream) Cache Library.
- * - Compiles TRaw -> TCompiled once on L1 fill, eliminating repeated RegExp/CIDR parsing on hot paths.
+ * Reusable L1 (Isolate Memory + Pre-Compiled Object) -> Optional L2 (Edge KV) -> L3 (DB/Upstream) Cache Library.
+ * - Compiles TRaw -> TCompiled once on L1 fill, eliminating repeated RegExp/CIDR parsing or indexing on hot paths.
+ * - Omit kvKey to use as a pure Isolate L1 cache; provide kvKey for global Edge KV multi-node synchronization.
  * - Never caches cross-request Promises in module scope (Cloudflare Workers isolate safe).
  */
 export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
   private entry: { raw: TRaw; compiled: TCompiled; loadedAt: number } | null = null;
   private readonly name: string;
-  private readonly kvKey: string;
+  private readonly kvKey?: string;
   private readonly ttlMs: number;
   private readonly kvTtlSeconds?: number;
   private readonly fallbackRaw: TRaw;
   private readonly compileFn: (raw: TRaw) => TCompiled;
   private readonly deserializeKv?: (raw: any) => TRaw | null;
-  private readonly fetchRawFn: (customEnv?: any) => Promise<TieredCacheFetchResult<TRaw> | TRaw | null>;
+  private readonly isValidRawFn?: (raw: TRaw, forceRefresh: boolean) => boolean;
+  private readonly onUpdateFn?: (compiled: TCompiled) => void;
+  private readonly fetchRawFn: (customEnv?: any, forceRefresh?: boolean) => Promise<TieredCacheFetchResult<TRaw> | TRaw | null>;
 
   constructor(options: TieredCacheOptions<TRaw, TCompiled>) {
     this.name = options.name;
@@ -136,13 +141,21 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     this.fallbackRaw = options.fallbackRaw;
     this.compileFn = options.compile ?? ((raw: TRaw) => raw as unknown as TCompiled);
     this.deserializeKv = options.deserializeKv;
+    this.isValidRawFn = options.isValidRaw;
+    this.onUpdateFn = options.onUpdate;
     this.fetchRawFn = options.fetchRaw;
   }
 
   private storeL1(raw: TRaw): TCompiled {
     const compiled = this.compileFn(raw);
     this.entry = { raw, compiled, loadedAt: Date.now() };
+    if (this.onUpdateFn) this.onUpdateFn(compiled);
     return compiled;
+  }
+
+  public seed(val?: TRaw | null): void {
+    const raw = val !== undefined && val !== null ? val : this.fallbackRaw;
+    this.storeL1(raw);
   }
 
   public peek(): TCompiled | null {
@@ -159,7 +172,9 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
 
   public async evict(customEnv?: any): Promise<void> {
     this.entry = null;
-    await kvDelete(this.kvKey, customEnv).catch(() => {});
+    if (this.kvKey) {
+      await kvDelete(this.kvKey, customEnv).catch(() => {});
+    }
   }
 
   public async set(
@@ -168,11 +183,13 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     options?: { syncKv?: boolean }
   ): Promise<TCompiled> {
     const compiled = this.storeL1(raw);
-    const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
-    if (options?.syncKv !== false) {
-      await kvPut(this.kvKey, raw, kvOpts, customEnv).catch(() => {});
-    } else {
-      runInBackground(kvPut(this.kvKey, raw, kvOpts, customEnv));
+    if (this.kvKey) {
+      const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
+      if (options?.syncKv !== false) {
+        await kvPut(this.kvKey, raw, kvOpts, customEnv).catch(() => {});
+      } else {
+        runInBackground(kvPut(this.kvKey, raw, kvOpts, customEnv));
+      }
     }
     return compiled;
   }
@@ -189,8 +206,8 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
       return this.entry.compiled;
     }
 
-    // L2: Shared Cloudflare Edge KV
-    if (!forceRefresh) {
+    // L2: Shared Cloudflare Edge KV (when kvKey is configured)
+    if (!forceRefresh && this.kvKey) {
       try {
         const kvVal = await kvGet<any>(this.kvKey, customEnv);
         if (kvVal !== null && kvVal !== undefined) {
@@ -206,7 +223,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
 
     // L3: Upstream / Database
     try {
-      const res = await this.fetchRawFn(customEnv);
+      const res = await this.fetchRawFn(customEnv, forceRefresh);
       if (res !== null && res !== undefined) {
         const isWrapped =
           typeof res === 'object' &&
@@ -216,17 +233,20 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
           typeof (res as any).persistToKv === 'boolean';
         const raw = isWrapped ? (res as TieredCacheFetchResult<TRaw>).data : (res as TRaw);
         const persistToKv = isWrapped ? (res as TieredCacheFetchResult<TRaw>).persistToKv !== false : true;
-        const compiled = this.storeL1(raw);
+        const valid = this.isValidRawFn ? this.isValidRawFn(raw, forceRefresh) : true;
 
-        if (persistToKv) {
-          const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
-          if (forceRefresh || options?.syncKv) {
-            await kvPut(this.kvKey, raw, kvOpts, customEnv).catch(() => {});
-          } else {
-            runInBackground(kvPut(this.kvKey, raw, kvOpts, customEnv));
+        if (valid) {
+          const compiled = this.storeL1(raw);
+          if (persistToKv && this.kvKey) {
+            const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
+            if (forceRefresh || options?.syncKv) {
+              await kvPut(this.kvKey, raw, kvOpts, customEnv).catch(() => {});
+            } else {
+              runInBackground(kvPut(this.kvKey, raw, kvOpts, customEnv));
+            }
           }
+          return compiled;
         }
-        return compiled;
       }
     } catch (err) {
       console.error(`[TieredCache:${this.name}] L3 fetch failed:`, err);
@@ -265,94 +285,31 @@ export interface CmsCacheOptions<T> {
 }
 
 /**
- * Zero-polling multi-tier CMS cache (L1 Isolate Memory 5m -> L2 Permanent Edge KV -> L3 Sanity)
- * - L1 fresh window (default 5 min): 0ms in-memory return
- * - L1 expired: reads shared L2 KV (1~3ms) and refreshes L1 without calling Sanity
- * - Upstream Sanity fetcher only runs on explicit refresh (CMS save / Webhook) or KV cold miss
+ * Zero-polling multi-tier CMS cache backed directly by unified EdgeTieredCache.
  */
 export function createCmsCache<T>(
   fetcher: (forceRefresh?: boolean) => Promise<T>,
   fallback: T,
   options?: CmsCacheOptions<T>
 ): CmsCache<T> {
-  let value: T | null = null;
-  let timestamp = 0;
-  const kvKey = options?.kvKey;
-  const ttlMs = options?.ttlMs ?? 300_000;
-  const onUpdate = options?.onUpdate;
-
-  // Note: Do NOT store inflight Promises in module scope; Cloudflare Workers forbids cross-request Promise resolution.
-  const load = async (forceRefresh = false, customEnv?: any): Promise<T> => {
-    try {
-      // 1. L1 expired -> sync from shared L2 KV (never poll Sanity on timer!)
-      if (!forceRefresh && kvKey) {
-        const kvVal = await kvGet<T>(kvKey, customEnv).catch(() => null);
-        if (kvVal !== null && kvVal !== undefined) {
-          value = kvVal;
-          timestamp = Date.now();
-          if (onUpdate) onUpdate(value);
-          return value;
-        }
-      }
-
-      // 2. Upstream Sanity fetch (Write-Through on forceRefresh, or first-ever KV miss)
-      const res = await fetcher(forceRefresh);
-      const hasValidData =
-        res !== undefined &&
-        res !== null &&
-        (forceRefresh || !Array.isArray(res) || res.length > 0);
-
-      if (hasValidData) {
-        value = res;
-        timestamp = Date.now();
-        if (onUpdate) onUpdate(value);
-
-        if (kvKey) {
-          if (forceRefresh) {
-            await kvPut(kvKey, value, undefined, customEnv).catch(() => {});
-          } else {
-            runInBackground(kvPut(kvKey, value, undefined, customEnv));
-          }
-        }
-      } else if (value === null) {
-        value = fallback;
-      }
-      return (value ?? fallback) as T;
-    } catch (err) {
-      console.error('[createCmsCache] Fetch failed, falling back to cached value:', err);
-      return (value ?? fallback) as T;
-    }
-  };
+  const tiered = createTieredCache<T>({
+    name: options?.kvKey || 'cms_cache',
+    kvKey: options?.kvKey,
+    ttlMs: options?.ttlMs ?? 300_000,
+    fallbackRaw: fallback,
+    onUpdate: options?.onUpdate,
+    isValidRaw: (raw, forceRefresh) =>
+      raw !== undefined && raw !== null && (forceRefresh || !Array.isArray(raw) || raw.length > 0),
+    fetchRaw: async (_env, forceRefresh) => fetcher(forceRefresh),
+  });
 
   return {
-    seed(val?: T | null) {
-      value = val !== undefined && val !== null ? val : fallback;
-      timestamp = Date.now();
-      if (onUpdate && value) onUpdate(value);
-    },
-    invalidate() {
-      value = null;
-      timestamp = 0;
-    },
-    peek() {
-      return value;
-    },
-    async get(forceRefresh = false, customEnv?: any): Promise<T> {
-      if (!forceRefresh && value !== null && Date.now() - timestamp < ttlMs) {
-        return value;
-      }
-      return load(forceRefresh, customEnv);
-    },
-    async refresh(customEnv?: any): Promise<T> {
-      return load(true, customEnv);
-    },
-    async evict(customEnv?: any): Promise<void> {
-      value = null;
-      timestamp = 0;
-      if (kvKey) {
-        await kvDelete(kvKey, customEnv).catch(() => {});
-      }
-    },
+    seed: (val) => tiered.seed(val),
+    invalidate: () => tiered.invalidate(),
+    peek: () => tiered.peek(),
+    get: (forceRefresh = false, customEnv?: any) => tiered.get(customEnv, { forceRefresh }),
+    refresh: (customEnv?: any) => tiered.refresh(customEnv),
+    evict: (customEnv?: any) => tiered.evict(customEnv),
   };
 }
 

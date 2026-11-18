@@ -12,6 +12,7 @@ import {
   invalidateRbacCache,
   invalidatePendingOrdersCountCache,
   invalidateDashboardStatsCache,
+  refreshWafRuntimeCache,
 } from '@db';
 import { recordAdminAudit } from '@db/audit.repo';
 import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache } from '@utils/cmsSync';
@@ -61,6 +62,11 @@ export const POST: APIRoute = defineAdminApi(
     if (scope === 'all' || scope === 'settings') {
       await invalidateSettingsCache(cfEnv);
       purgedItems.push('System Settings (sys:settings:v1 & memory)');
+    }
+
+    if (scope === 'all' || scope === 'settings' || scope === 'waf') {
+      await refreshWafRuntimeCache(cfEnv);
+      purgedItems.push('WAF Rules & IP ACL (waf:compiled_ruleset:v1)');
     }
 
     if (scope === 'all' || scope === 'rbac') {

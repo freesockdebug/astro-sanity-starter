@@ -719,6 +719,31 @@ test('EdgeTieredCache provides unified L1 pre-compiled -> L2 KV -> L3 DB lifecyc
   await cache.evict(mockEnv);
   assert.equal(cache.peek(), null);
   assert.equal(kvStore.has('test:waf:v1'), false);
+
+  // 6. L1-only cache mode (no kvKey) with seed() & onUpdate() hook
+  let onUpdateCount = 0;
+  let l1FetchCount = 0;
+  const l1OnlyCache = createTieredCache<{ tag: string }>({
+    name: 'test_l1_only',
+    ttlMs: 5_000,
+    fallbackRaw: { tag: 'fallback' },
+    onUpdate: () => {
+      onUpdateCount += 1;
+    },
+    fetchRaw: async () => {
+      l1FetchCount += 1;
+      return { data: { tag: 'db' }, persistToKv: false };
+    },
+  });
+  l1OnlyCache.seed({ tag: 'seeded' });
+  assert.equal(l1OnlyCache.peek()?.tag, 'seeded');
+  assert.equal(onUpdateCount, 1);
+  assert.equal((await l1OnlyCache.get(mockEnv)).tag, 'seeded');
+  assert.equal(l1FetchCount, 0);
+  await l1OnlyCache.evict(mockEnv);
+  assert.equal((await l1OnlyCache.get(mockEnv)).tag, 'db');
+  assert.equal(l1FetchCount, 1);
+  assert.equal(onUpdateCount, 2);
 });
 
 test('Compiled DB WAF runtime enforces ReDoS protection, composite ALL/ANY rules, priority allow, shadow log_only, strike_weight & expires_at', () => {
@@ -822,7 +847,9 @@ test('Compiled DB WAF runtime enforces ReDoS protection, composite ALL/ANY rules
 
   // Pre-compiled DB BLACKLIST & timed AUTO_BAN enforce across nodes
   assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.77', pathname: '/', headers: BROWSER_HEADERS, now }, settings, runtime).status, 403);
-  assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.88', pathname: '/', headers: BROWSER_HEADERS, now }, settings, runtime).autoBanned, true);
+  const dbAutoBanEval = EdgeWafService.evaluate({ clientIp: '203.0.113.88', pathname: '/', headers: BROWSER_HEADERS, now }, settings, runtime);
+  assert.equal(dbAutoBanEval.autoBanned, true);
+  assert.equal(dbAutoBanEval.autoBanPersisted, true);
   // Expired AUTO_BAN (now + 120s) is allowed
   assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.88', pathname: '/', headers: BROWSER_HEADERS, now: now + 120_000 }, settings, runtime).allowed, true);
 

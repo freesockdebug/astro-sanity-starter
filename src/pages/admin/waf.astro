@@ -411,17 +411,9 @@ const initialPayload = JSON.stringify({
                           />
                         </label>
                       </div>
-                      <label class="block space-y-1">
-                        <span class="text-[10px] font-semibold text-[#52525b]">Quick Blocked Path Keywords (comma or newline)</span>
-                        <textarea
-                          id="waf-mal-custom-paths"
-                          rows="2"
-                          disabled={!canManage}
-                          placeholder="/admin.php, /backup, /private-dump"
-                          class="adm-input waf-param-input font-mono text-[11px] leading-relaxed resize-y"
-                        >{ruleConfig.malicious.customBlockedPaths}</textarea>
-                        <span class="block text-[10px] text-[#86868b]">Tip: for operators (`not contains` / `starts with`) or 429 limits, use Logical Rules below.</span>
-                      </label>
+                      <p class="text-[10px] text-[#86868b] leading-relaxed">
+                        Custom path patterns, regexes &amp; strike weights are managed incrementally in <span class="font-semibold text-[#52525b]">WAF Dynamic Rules</span> below.
+                      </p>
                     </div>
                   )}
 
@@ -479,17 +471,9 @@ const initialPayload = JSON.stringify({
                   )}
 
                   {card.mode === 'bot_challenge' && (
-                    <label class="block space-y-1">
-                      <span class="text-[10px] font-semibold text-[#52525b]">Quick Blocked User-Agent Keywords (comma or newline)</span>
-                      <textarea
-                        id="waf-bot-custom-ua"
-                        rows="2"
-                        disabled={!canManage}
-                        placeholder="PhantomJS, HeadlessChrome, CustomScraper"
-                        class="adm-input waf-param-input font-mono text-[11px] leading-relaxed resize-y"
-                      >{ruleConfig.bot.customBlockedUa}</textarea>
-                      <span class="block text-[10px] text-[#86868b]">Tip: for granular Bot rules or 429 throttling, use Logical Rules below.</span>
-                    </label>
+                    <p class="text-[11px] text-[#86868b] leading-relaxed">
+                      Granular Bot UA keywords, regex matchers &amp; strike weights are managed in the <span class="font-semibold text-[#52525b]">WAF Dynamic Rules Engine</span> below.
+                    </p>
                   )}
                 </div>
               </div>
@@ -730,7 +714,6 @@ const initialPayload = JSON.stringify({
       const getCheckbox = (group: string, key: string) =>
         document.querySelector<HTMLInputElement>(`.waf-sub-checkbox[data-waf-group="${group}"][data-waf-key="${key}"]`);
 
-      let customRules: any[] = [];
       let dbRulesState: any[] = Array.isArray(initial.dbRules) ? initial.dbRules.map((r) => ({ ...r })) : [];
       let activeRuleFilter = 'all';
 
@@ -884,7 +867,6 @@ const initialPayload = JSON.stringify({
           enablePathTraversal: Boolean(getCheckbox('malicious', 'enablePathTraversal')?.checked),
           enableXss: Boolean(getCheckbox('malicious', 'enableXss')?.checked),
           enableSqli: Boolean(getCheckbox('malicious', 'enableSqli')?.checked),
-          customBlockedPaths: ((document.getElementById('waf-mal-custom-paths') as HTMLTextAreaElement | null)?.value || '').trim(),
         },
         rateLimit: {
           windowSeconds: clampInput('waf-rl-window', 60, 10, 3600),
@@ -900,9 +882,7 @@ const initialPayload = JSON.stringify({
           blockSeoBots: Boolean(getCheckbox('bot', 'blockSeoBots')?.checked),
           blockUaRotation: Boolean(getCheckbox('bot', 'blockUaRotation')?.checked),
           enforceQuoteFingerprint: Boolean(getCheckbox('bot', 'enforceQuoteFingerprint')?.checked),
-          customBlockedUa: ((document.getElementById('waf-bot-custom-ua') as HTMLTextAreaElement | null)?.value || '').trim(),
         },
-        customRules,
       });
 
       const applyRuleConfig = (cfg: any) => {
@@ -911,30 +891,15 @@ const initialPayload = JSON.stringify({
           const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
           if (el && v !== undefined && v !== null) el.value = String(v);
         };
-        document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox').forEach((cb) => {
-          const group = cb.dataset.wafGroup;
-          const key = cb.dataset.wafKey;
-          if (group && key && cfg[group] && typeof cfg[group][key] === 'boolean') {
-            cb.checked = cfg[group][key];
-          }
-        });
         if (cfg.malicious) {
           setVal('waf-mal-strike-limit', cfg.malicious.strikeLimit);
           setVal('waf-mal-ban-minutes', cfg.malicious.banDurationMinutes);
-          setVal('waf-mal-custom-paths', cfg.malicious.customBlockedPaths ?? '');
         }
         if (cfg.rateLimit) {
           setVal('waf-rl-window', cfg.rateLimit.windowSeconds);
           setVal('waf-rl-pub-write', cfg.rateLimit.publicWriteLimit);
           setVal('waf-rl-api', cfg.rateLimit.apiLimit);
           setVal('waf-rl-page', cfg.rateLimit.pageLimit);
-        }
-        if (cfg.bot) {
-          setVal('waf-bot-custom-ua', cfg.bot.customBlockedUa ?? '');
-        }
-        if (Array.isArray(cfg.customRules)) {
-          customRules = cfg.customRules.map((r: any) => ({ ...r }));
-          renderCustomRules();
         }
       };
 
@@ -962,7 +927,8 @@ const initialPayload = JSON.stringify({
         }
         if (state.ruleConfig) {
           applyRuleConfig(state.ruleConfig);
-        } else if (Array.isArray(state.dbRules)) {
+        }
+        if (Array.isArray(state.dbRules)) {
           renderCustomRules();
         }
       };
@@ -1078,11 +1044,39 @@ const initialPayload = JSON.stringify({
         }, 250);
       };
 
-      document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox, .waf-sub-checkbox').forEach((cb) => {
+      document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox').forEach((cb) => {
         cb.addEventListener('change', () => {
           syncModeCardsAndKpis();
           setDirty(true);
           scheduleAutoSave();
+        }, { signal });
+      });
+
+      document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox').forEach((cb) => {
+        cb.addEventListener('change', async () => {
+          const ruleId = cb.dataset.sysRuleId;
+          if (!ruleId || !canManage) return;
+          const nextChecked = cb.checked;
+          cb.disabled = true;
+          try {
+            const { ok, data } = await postWafAction({ action: 'toggle_rule', ruleId, is_enabled: nextChecked });
+            if (ok && Array.isArray(data.dbRules)) {
+              dbRulesState = data.dbRules;
+              renderCustomRules();
+              syncModeCardsAndKpis();
+              showToast(`Preset rule ${nextChecked ? 'enabled' : 'disabled'} in D1 + KV.`, true);
+            } else {
+              cb.checked = !nextChecked;
+              syncModeCardsAndKpis();
+              showToast(data?.error || 'Failed to toggle preset rule.', false);
+            }
+          } catch (err: any) {
+            cb.checked = !nextChecked;
+            syncModeCardsAndKpis();
+            showToast(`Toggle error: ${err.message}`, false);
+          } finally {
+            cb.disabled = false;
+          }
         }, { signal });
       });
 

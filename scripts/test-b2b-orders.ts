@@ -48,12 +48,6 @@ import {
   checkIsAdmin,
 } from '../src/utils/auth';
 import { isScopeMatch, isNavigableLink } from '../src/utils/appShellRouter';
-import {
-  verifySanitySignature,
-  expandCanonicalUrls,
-  expandLocalizedPaths,
-  syncCmsMutation,
-} from '../src/utils/cmsSync';
 
 async function runSelfCheck() {
   console.log('🧪 Starting B2B Order & Claiming Self-Check...\n');
@@ -1092,6 +1086,12 @@ async function runSelfCheck() {
   console.log('✔ [PASS] App Shell Router Scope Matching & Navigable Link Filtering verified');
 
   // Test Sanity Webhook HMAC-SHA256 Signature Verification
+  const {
+    verifySanitySignature,
+    expandCanonicalUrls,
+    expandLocalizedPaths,
+    syncCmsMutation,
+  } = await import('../src/utils/cmsSync');
   const testSecret = 'whsec_test_secret_12345';
   const testBody = JSON.stringify({ _type: 'product', slug: { current: 'silk-scarf' }, operation: 'update' });
   const validTimestamp = Math.floor(Date.now() / 1000);
@@ -1219,7 +1219,32 @@ async function runSelfCheck() {
 
   await clearWafAutoBansInDb();
   await deleteWafIpAcl('198.51.100.222');
-  console.log('✔ [PASS] Database-backed WAF Rules, IP ACL & L1/L2/L3 pre-compiled runtime verified');
+
+  // Verify cross-isolate EDGE_WAF log coalescing (multiple recordErrorLog / batch / hitDelta updates collapse into 1 row)
+  const { recordErrorLogsBatch, updateLatestWafLogStats } = await import('../src/db/logs.repo');
+  const testWafIp = '198.51.100.244';
+  const wafLogSample = {
+    level: 'warn' as const,
+    source: 'EDGE_WAF',
+    errorCode: 'WAF_MALICIOUS_IP',
+    message: 'Blocked by Spoofed Bot UA Rotation.',
+    path: '/',
+    method: 'GET',
+    statusCode: 403,
+    clientIp: testWafIp,
+    country: 'CH',
+    city: 'Zürich',
+    context: { context: { mode: 'block_malicious_ips', ruleId: 'sys_ip_autoban', autoBanned: true, hitCount: 1, lastBlockedAt: '2026-11-18T16:40:00.000Z' } },
+  };
+  await recordErrorLog(wafLogSample);
+  await recordErrorLogsBatch([wafLogSample, { ...wafLogSample, context: { context: { hitCount: 2, lastBlockedAt: '2026-11-18T16:40:01.000Z' } } }]);
+  await updateLatestWafLogStats({ clientIp: testWafIp, errorCode: 'WAF_MALICIOUS_IP', hitCount: 1, hitDelta: 3, lastBlockedAt: '2026-11-18T16:40:05.000Z' });
+  const wafCoalesced = await listErrorLogs({ source: 'EDGE_WAF', search: testWafIp });
+  assert.strictEqual(wafCoalesced.total, 1, 'Cross-isolate EDGE_WAF 403 logs for same IP+code must coalesce into 1 DB row');
+  const parsedCoalescedCtx = JSON.parse(wafCoalesced.logs[0].context_json || '{}');
+  assert.strictEqual(parsedCoalescedCtx.hitCount, 7, 'Coalesced EDGE_WAF row must accumulate exact hitCount (1 + 1 + 2 + 3 = 7)');
+
+  console.log('✔ [PASS] Database-backed WAF Rules, IP ACL & cross-isolate log coalescing verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

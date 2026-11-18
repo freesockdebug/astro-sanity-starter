@@ -46,6 +46,7 @@ export interface WafEvaluationResult {
   matchedSample?: string;
   retryAfter?: number;
   autoBanned?: boolean;
+  autoBanPersisted?: boolean;
   suppressLog?: boolean;
   blockStats?: WafBlockStats;
   shadowMatch?: WafShadowMatch;
@@ -1909,6 +1910,7 @@ export class EdgeWafService {
             reason: dbBan.reason || 'IP temporarily auto-banned after repeated security violations.',
             matchedSample: clientIp,
             autoBanned: true,
+            autoBanPersisted: dbBan.matched,
           };
         }
         continue;

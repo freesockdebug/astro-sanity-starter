@@ -306,7 +306,8 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_orders_assigned_status ON orders(assigned_to, status)`,
   `CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_email ON admin_audit_logs(admin_email)`,
   `CREATE INDEX IF NOT EXISTS idx_waf_rules_enabled_priority ON waf_rules(is_enabled, priority, id)`,
-  `CREATE INDEX IF NOT EXISTS idx_waf_ip_acl_type ON waf_ip_acl(list_type, expires_at)`
+  `CREATE INDEX IF NOT EXISTS idx_waf_ip_acl_type ON waf_ip_acl(list_type, expires_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_waf_dedupe ON system_error_logs(source, client_ip, error_code, created_at)`
 ];
 
 let isSchemaVerifiedInIsolate = false;

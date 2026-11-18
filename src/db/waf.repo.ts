@@ -437,72 +437,22 @@ export async function syncWafSettingsToDbTables(
   customEnv?: any
 ): Promise<void> {
   const cfg = normalizeWafRuleConfig(params.ruleConfig);
-  const systemUpdates: Array<{ id: string; enabled: number; rateLimit?: any }> = [
-    { id: 'sys_ip_blacklist', enabled: cfg.malicious.enableIpBlacklist ? 1 : 0 },
-    { id: 'sys_ip_autoban', enabled: cfg.malicious.enableAutoBan ? 1 : 0 },
-    { id: 'sys_rate_abuse_ban', enabled: cfg.malicious.autoBanOnRateAbuse ? 1 : 0 },
-    { id: 'sys_probe_paths', enabled: cfg.malicious.enableProbePaths ? 1 : 0 },
-    { id: 'sys_owasp_sqli', enabled: cfg.malicious.enableSqli ? 1 : 0 },
-    { id: 'sys_owasp_xss', enabled: cfg.malicious.enableXss ? 1 : 0 },
-    { id: 'sys_path_traversal', enabled: cfg.malicious.enablePathTraversal ? 1 : 0 },
-    { id: 'sys_rl_public_write', enabled: 1, rateLimit: { limit: cfg.rateLimit.publicWriteLimit, window_s: cfg.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'pub_write' } },
-    { id: 'sys_rl_api', enabled: 1, rateLimit: { limit: cfg.rateLimit.apiLimit, window_s: cfg.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'api' } },
-    { id: 'sys_rl_page', enabled: 1, rateLimit: { limit: cfg.rateLimit.pageLimit, window_s: cfg.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'page' } },
-    { id: 'sys_bot_empty_ua', enabled: cfg.bot.blockEmptyUa ? 1 : 0 },
-    { id: 'sys_bot_ua_rotation', enabled: cfg.bot.blockUaRotation ? 1 : 0 },
-    { id: 'sys_bot_scanner', enabled: cfg.bot.blockScannerTools ? 1 : 0 },
-    { id: 'sys_bot_cli', enabled: cfg.bot.blockCliScrapers ? 1 : 0 },
-    { id: 'sys_bot_ai', enabled: cfg.bot.blockAiCrawlers ? 1 : 0 },
-    { id: 'sys_bot_seo', enabled: cfg.bot.blockSeoBots ? 1 : 0 },
-    { id: 'sys_bot_quote_fp', enabled: cfg.bot.enforceQuoteFingerprint ? 1 : 0 },
+  const rateLimitUpdates: Array<{ id: string; rateLimit: { limit: number; window_s: number; key_by: 'ip'; bucket_prefix: string } }> = [
+    { id: 'sys_rl_public_write', rateLimit: { limit: cfg.rateLimit.publicWriteLimit, window_s: cfg.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'pub_write' } },
+    { id: 'sys_rl_api', rateLimit: { limit: cfg.rateLimit.apiLimit, window_s: cfg.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'api' } },
+    { id: 'sys_rl_page', rateLimit: { limit: cfg.rateLimit.pageLimit, window_s: cfg.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'page' } },
   ];
 
   await executeWithAutoSchema(async (db: DbClient) => {
     await ensureWafSeededAndMigrated(db);
-    const ops: Array<{ sql: string; params?: any[] }> = [];
+    const ops: Array<{ sql: string; params?: any[] }> = rateLimitUpdates.map((u) => ({
+      sql: `UPDATE waf_rules SET rate_limit_json = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
+      params: [JSON.stringify(u.rateLimit), params.updatedBy, u.id],
+    }));
 
-    for (const u of systemUpdates) {
-      if (u.rateLimit) {
-        ops.push({
-          sql: `UPDATE waf_rules SET is_enabled = ?, rate_limit_json = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
-          params: [u.enabled, JSON.stringify(u.rateLimit), params.updatedBy, u.id],
-        });
-      } else {
-        ops.push({
-          sql: `UPDATE waf_rules SET is_enabled = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
-          params: [u.enabled, params.updatedBy, u.id],
-        });
-      }
-    }
-
-    const legacyPaths = parseCustomKeywords(cfg.malicious.customBlockedPaths);
-    if (legacyPaths.length > 0) {
-      ops.push({
-        sql: `INSERT INTO waf_rules (id, category, name, is_system, is_enabled, priority, conditions_json, match_mode, action, rate_limit_json, strike_weight, expires_at, updated_by, updated_at)
-              VALUES ('legacy_custom_paths', 'custom', 'Migrated Blocked Path Keywords', 0, 1, 40, ?, 'ANY', 'block_403', '{}', 1, NULL, ?, datetime('now'))
-              ON CONFLICT(id) DO UPDATE SET conditions_json = excluded.conditions_json, is_enabled = 1, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-        params: [JSON.stringify(legacyPaths.map((kw) => ({ field: 'path', op: 'contains', value: kw }))), params.updatedBy],
-      });
-    } else {
-      ops.push({ sql: "DELETE FROM waf_rules WHERE id = 'legacy_custom_paths'", params: [] });
-    }
-
-    const legacyUas = parseCustomKeywords(cfg.bot.customBlockedUa);
-    if (legacyUas.length > 0) {
-      ops.push({
-        sql: `INSERT INTO waf_rules (id, category, name, is_system, is_enabled, priority, conditions_json, match_mode, action, rate_limit_json, strike_weight, expires_at, updated_by, updated_at)
-              VALUES ('legacy_custom_ua', 'custom', 'Migrated Blocked User-Agent Keywords', 0, 1, 41, ?, 'ANY', 'block_403', '{}', 0, NULL, ?, datetime('now'))
-              ON CONFLICT(id) DO UPDATE SET conditions_json = excluded.conditions_json, is_enabled = 1, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-        params: [JSON.stringify(legacyUas.map((kw) => ({ field: 'ua', op: 'contains', value: kw }))), params.updatedBy],
-      });
-    } else {
-      ops.push({ sql: "DELETE FROM waf_rules WHERE id = 'legacy_custom_ua'", params: [] });
-    }
-
-    // Sync permanent WHITELIST / BLACKLIST entries (preserving AUTO_BAN rows!)
+    // Sync permanent WHITELIST / BLACKLIST entries (preserving AUTO_BAN & timed rows!)
     ops.push({ sql: "DELETE FROM waf_ip_acl WHERE list_type IN ('WHITELIST', 'BLACKLIST') AND expires_at IS NULL", params: [] });
-    const aclEntries = parseLegacyIpListToAcl(params.blockedIpsStr, params.allowIpsStr);
-    for (const a of aclEntries) {
+    for (const a of parseLegacyIpListToAcl(params.blockedIpsStr, params.allowIpsStr)) {
       ops.push({
         sql: `
           INSERT INTO waf_ip_acl (ip_cidr, list_type, reason, expires_at, created_by, created_at)

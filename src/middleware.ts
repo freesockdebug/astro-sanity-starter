@@ -141,7 +141,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         const blockStatus = wafResult.status || 403;
         const stats = wafResult.blockStats;
         const lastBlockedAt = new Date().toISOString();
-        if (wafResult.autoBanned && !wafResult.suppressLog && clientMeta.ip) {
+        if (wafResult.autoBanned && !wafResult.autoBanPersisted && !wafResult.suppressLog && clientMeta.ip) {
           const banPromise = upsertWafIpAcl(
             {
               ip_cidr: clientMeta.ip,
@@ -189,6 +189,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
               clientIp: clientMeta.ip,
               errorCode: wafResult.code || 'WAF_BLOCK',
               hitCount: stats.hitCount,
+              hitDelta: 1,
               lastBlockedAt,
             },
             { cfEnv, ctx: runtimeCtx }

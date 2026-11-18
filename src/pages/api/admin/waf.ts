@@ -8,7 +8,6 @@ import {
   listErrorLogs,
   getWaf24hSummary,
   recordAdminAudit,
-  getWafRuntime,
   listWafRules,
   listWafIpAcl,
   upsertWafRule,
@@ -22,7 +21,10 @@ import {
 } from '@db';
 import {
   EdgeWafService,
+  buildSystemWafRulesSeed,
+  compileWafRuntime,
   parseIpList,
+  parseLegacyIpListToAcl,
   isValidIpRule,
   normalizeWafRuleConfig,
   parseUtcTimestampMs,
@@ -276,9 +278,10 @@ export const POST: APIRoute = defineAdminApi<{
 
     if (action === 'simulate') {
       const sim = body?.sim && typeof body.sim === 'object' ? body.sim : {};
-      const [currentSettings, liveRuntime] = await Promise.all([
+      const [currentSettings, liveRules, liveAcl] = await Promise.all([
         getSystemSettings(cfEnv),
-        getWafRuntime(cfEnv).catch(() => null),
+        listWafRules(cfEnv).catch(() => buildSystemWafRulesSeed()),
+        listWafIpAcl(cfEnv).catch(() => [] as WafDbIpAcl[]),
       ]);
       const validSet = new Set<string>(VALID_WAF_MODES);
       const simModes = Array.isArray(body?.waf_active_modes)
@@ -311,7 +314,28 @@ export const POST: APIRoute = defineAdminApi<{
         }
       }
 
-      const useLiveDbRuntime = sim.useDraftOnly !== true && liveRuntime;
+      // Overlay unsaved UI drafts (IP black/whitelist textareas + rate-limit parameters) onto DB rules & timed bans
+      const simBlockedIps = typeof body?.waf_blocked_ips === 'string' ? body.waf_blocked_ips : currentSettings.waf_blocked_ips;
+      const simAllowIps = typeof body?.waf_allow_ips === 'string' ? body.waf_allow_ips : currentSettings.waf_allow_ips;
+      const timedDbAcl = sim.useDraftOnly === true
+        ? []
+        : liveAcl.filter((row) => row.list_type === 'AUTO_BAN' || Boolean(row.expires_at));
+      const draftPermanentAcl = parseLegacyIpListToAcl(simBlockedIps, simAllowIps);
+
+      const rlOverrides: Record<string, { limit: number; window_s: number; key_by: 'ip'; bucket_prefix: string }> = {
+        sys_rl_public_write: { limit: simRuleConfig.rateLimit.publicWriteLimit, window_s: simRuleConfig.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'pub_write' },
+        sys_rl_api: { limit: simRuleConfig.rateLimit.apiLimit, window_s: simRuleConfig.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'api' },
+        sys_rl_page: { limit: simRuleConfig.rateLimit.pageLimit, window_s: simRuleConfig.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'page' },
+      };
+      const baseRules = sim.useDraftOnly === true ? buildSystemWafRulesSeed(simRuleConfig) : liveRules;
+      const mergedRules = baseRules.map((r) =>
+        rlOverrides[r.id] ? { ...r, rate_limit_json: JSON.stringify(rlOverrides[r.id]) } : r
+      );
+      const simRuntime = compileWafRuntime({
+        rules: mergedRules,
+        ipAcl: [...timedDbAcl, ...draftPermanentAcl],
+      });
+
       const result = EdgeWafService.evaluate(
         {
           clientIp: typeof sim.clientIp === 'string' ? sim.clientIp.trim() : '198.51.100.10',
@@ -325,11 +349,11 @@ export const POST: APIRoute = defineAdminApi<{
         },
         {
           waf_active_modes: simModes,
-          waf_blocked_ips: typeof body?.waf_blocked_ips === 'string' ? body.waf_blocked_ips : currentSettings.waf_blocked_ips,
-          waf_allow_ips: typeof body?.waf_allow_ips === 'string' ? body.waf_allow_ips : currentSettings.waf_allow_ips,
+          waf_blocked_ips: simBlockedIps,
+          waf_allow_ips: simAllowIps,
           waf_rule_config: simRuleConfig,
         },
-        useLiveDbRuntime || null
+        simRuntime
       );
 
       return jsonNoCache({ success: true, result });

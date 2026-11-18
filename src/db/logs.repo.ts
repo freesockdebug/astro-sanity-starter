@@ -1,7 +1,7 @@
 // src/db/logs.repo.ts
 // System Error & Diagnostics Domain Repository: D1 logging, probabilistic pruning, latency profiling & queries
 
-import { formatUtcCutoff, type DbClient } from './client';
+import { formatUtcCutoff, toPostgresSql, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getSystemSettings } from './settings.repo';
 
@@ -71,257 +71,332 @@ interface LogsOverviewEntry {
 const LOGS_OVERVIEW_TTL_MS = 30_000;
 const logsOverviewCache = new Map<string, LogsOverviewEntry>();
 
-/**
- * Records a diagnostic / error log into D1.
- * Respects systemSettings:
- * 1. enable_error_logging: if false, completely skips D1 writes.
- * 2. log_authenticated_users: if false and userId is present, skips D1 write.
- * 3. log_min_level: only persists logs at or above configured weight (unless request is slow).
- * 4. log_retention_days: probabilistic prune (5% sampling) to prevent unbounded table growth.
- * 5. Loop prevention: rejects self-logging on /api/admin/logs and static asset hits.
- */
-export async function recordErrorLog(
-  input: RecordErrorLogInput,
-  customEnv?: any
-): Promise<boolean> {
-  if (!input.message || !input.source) return false;
+const INSERT_ERROR_LOG_SQL = `INSERT INTO system_error_logs (
+  level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
+
+const IGNORED_LOG_PATH_PREFIXES = ['/api/admin/logs', '/admin/logs', '/_astro/', '/favicon'];
+const IGNORED_LOG_PATH_EXTS = ['.css', '.js', '.png', '.jpg', '.svg', '.ico'];
+
+interface PreparedLogEntry {
+  level: DiagnosticLogLevel;
+  source: string;
+  errorCode: string | null;
+  message: string;
+  contextJson: string | null;
+  userId: string | null;
+  userEmail: string | null;
+  rayId: string | null;
+  path: string | null;
+  latencyMs: number | null;
+  method: string | null;
+  statusCode: number | null;
+  clientIp: string | null;
+  country: string | null;
+  city: string | null;
+  wafCoalesce?: {
+    key: string;
+    hitCount: number;
+    lastBlockedAt: string;
+    windowMs: number;
+  };
+}
+
+function buildMergedWafContextJson(
+  prevJson: string | null | undefined,
+  opts: { hitIncrement?: number; absHitCount?: number | null; lastBlockedAt: string }
+): string {
+  let ctxObj: Record<string, any> = {};
+  if (prevJson) {
+    try {
+      ctxObj = JSON.parse(prevJson) || {};
+    } catch {
+      ctxObj = {};
+    }
+  }
+  const prevNested = ctxObj.context && typeof ctxObj.context === 'object' ? ctxObj.context : {};
+  const prevHits = Math.max(0, Number(ctxObj.hitCount ?? prevNested.hitCount ?? 1));
+  const nextHitCount = opts.hitIncrement && opts.hitIncrement > 0
+    ? prevHits + opts.hitIncrement
+    : Math.max(prevHits, Number(opts.absHitCount ?? prevHits));
+
+  const nextCtx: Record<string, any> = {
+    ...ctxObj,
+    hitCount: nextHitCount,
+    lastBlockedAt: opts.lastBlockedAt,
+  };
+  if (ctxObj.context && typeof ctxObj.context === 'object') {
+    nextCtx.context = {
+      ...prevNested,
+      hitCount: nextHitCount,
+      lastBlockedAt: opts.lastBlockedAt,
+    };
+  }
+  return JSON.stringify(nextCtx).slice(0, 4000);
+}
+
+function prepareLogEntry(input: RecordErrorLogInput, settings: any): PreparedLogEntry | null {
+  if (!input?.message || !input?.source) return null;
 
   // Prevent infinite recursive logging loops on diagnostics workbench and static assets
   if (input.path) {
     const p = input.path.toLowerCase();
-    if (
-      p.startsWith('/api/admin/logs') ||
-      p.startsWith('/admin/logs') ||
-      p.startsWith('/_astro/') ||
-      p.startsWith('/favicon') ||
-      p.endsWith('.css') ||
-      p.endsWith('.js') ||
-      p.endsWith('.png') ||
-      p.endsWith('.jpg') ||
-      p.endsWith('.svg') ||
-      p.endsWith('.ico')
-    ) {
-      return false;
+    if (IGNORED_LOG_PATH_PREFIXES.some((pre) => p.startsWith(pre)) || IGNORED_LOG_PATH_EXTS.some((ext) => p.endsWith(ext))) {
+      return null;
     }
   }
 
+  // Privacy boundary for authenticated users
+  if ((input.userId || input.userEmail) && settings && !settings.log_authenticated_users) {
+    return null;
+  }
+
+  const level = (input.level?.toLowerCase() || 'error') as DiagnosticLogLevel;
+  const minWeight = LOG_LEVEL_WEIGHT[settings?.log_min_level || 'warn'] ?? LOG_LEVEL_WEIGHT.warn;
+  const currentWeight = LOG_LEVEL_WEIGHT[level] ?? LOG_LEVEL_WEIGHT.error;
+  const slowThreshold = settings?.slow_request_threshold_ms || 1000;
+  const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;
+
+  // Event-Aware SLA判定: 区分服务端请求、Web Vitals与客户端事件，杜绝前端普通LCP误当慢请求刷屏
+  let isSlow = false;
+  if (typeof input.latencyMs === 'number' && !isNaN(input.latencyMs)) {
+    if (errorCode === 'WEB_VITALS') {
+      const ctx = input.context && typeof input.context === 'object' ? (input.context as any) : null;
+      const isBackgrounded = Boolean(ctx?.wasHidden || ctx?.rating === 'backgrounded');
+      const rating = String(ctx?.rating || '');
+      isSlow = !isBackgrounded && (rating === 'poor' || input.latencyMs > 4000);
+    } else if (errorCode !== 'CLIENT_NAVIGATION') {
+      isSlow = input.latencyMs >= slowThreshold;
+    }
+  }
+
+  if (errorCode === 'CLIENT_NAVIGATION') return null;
+  if (errorCode === 'WEB_VITALS' && !isSlow) return null;
+  if (currentWeight < minWeight && !isSlow) return null;
+
+  const source = input.source.slice(0, 100);
+  const message = input.message.slice(0, 1000);
+  const userId = input.userId ? input.userId.slice(0, 100) : null;
+  const userEmail = input.userEmail ? input.userEmail.slice(0, 120).toLowerCase().trim() : null;
+  const rayId = input.rayId ? input.rayId.slice(0, 100) : null;
+  const path = input.path ? input.path.slice(0, 200) : null;
+  const latencyMs = typeof input.latencyMs === 'number' && !isNaN(input.latencyMs) ? Math.max(0, Math.round(input.latencyMs)) : null;
+  const method = input.method ? input.method.toUpperCase().slice(0, 10) : null;
+  const statusCode = typeof input.statusCode === 'number' && !isNaN(input.statusCode) ? input.statusCode : null;
+  const clientIp = input.clientIp ? input.clientIp.slice(0, 50) : null;
+  const country = input.country ? input.country.toUpperCase().slice(0, 10) : null;
+  const city = input.city ? input.city.slice(0, 50) : null;
+
+  let contextJson: string | null = null;
+  if (input.context !== undefined && input.context !== null) {
+    try {
+      contextJson = typeof input.context === 'string'
+        ? input.context.slice(0, 4000)
+        : JSON.stringify(input.context).slice(0, 4000);
+    } catch {
+      contextJson = String(input.context).slice(0, 1000);
+    }
+  }
+
+  let wafCoalesce: PreparedLogEntry['wafCoalesce'];
+  if (source === 'EDGE_WAF' && clientIp && errorCode) {
+    const rawCtx = input.context && typeof input.context === 'object' ? (input.context as any) : null;
+    const nested = rawCtx?.context && typeof rawCtx.context === 'object' ? rawCtx.context : rawCtx;
+    if (!nested?.shadow) {
+      wafCoalesce = {
+        key: `${clientIp}:${errorCode}`,
+        hitCount: Math.max(1, Number(nested?.hitCount ?? rawCtx?.hitCount ?? 1)),
+        lastBlockedAt: String(nested?.lastBlockedAt ?? rawCtx?.lastBlockedAt ?? rawCtx?.timestamp ?? new Date().toISOString()),
+        windowMs: errorCode === 'WAF_STRICT_RATE_LIMIT' ? 120_000 : 900_000,
+      };
+    }
+  }
+
+  return {
+    level,
+    source,
+    errorCode,
+    message,
+    contextJson,
+    userId,
+    userEmail,
+    rayId,
+    path,
+    latencyMs,
+    method,
+    statusCode,
+    clientIp,
+    country,
+    city,
+    wafCoalesce,
+  };
+}
+
+function toInsertParams(e: PreparedLogEntry): any[] {
+  return [
+    e.level, e.source, e.errorCode, e.message, e.contextJson, e.userId, e.userEmail,
+    e.rayId, e.path, e.latencyMs, e.method, e.statusCode, e.clientIp, e.country, e.city,
+  ];
+}
+
+function coalesceWafEntriesInBatch(entries: PreparedLogEntry[]): {
+  wafEntries: PreparedLogEntry[];
+  plainEntries: PreparedLogEntry[];
+} {
+  const wafMap = new Map<string, PreparedLogEntry>();
+  const plainEntries: PreparedLogEntry[] = [];
+
+  for (const entry of entries) {
+    if (!entry.wafCoalesce) {
+      plainEntries.push(entry);
+      continue;
+    }
+    const existing = wafMap.get(entry.wafCoalesce.key);
+    if (!existing || !existing.wafCoalesce) {
+      wafMap.set(entry.wafCoalesce.key, entry);
+    } else {
+      const nextHits = existing.wafCoalesce.hitCount + entry.wafCoalesce.hitCount;
+      const latestAt = entry.wafCoalesce.lastBlockedAt > existing.wafCoalesce.lastBlockedAt
+        ? entry.wafCoalesce.lastBlockedAt
+        : existing.wafCoalesce.lastBlockedAt;
+      existing.wafCoalesce.hitCount = nextHits;
+      existing.wafCoalesce.lastBlockedAt = latestAt;
+      existing.contextJson = buildMergedWafContextJson(existing.contextJson, {
+        absHitCount: nextHits,
+        lastBlockedAt: latestAt,
+      });
+    }
+  }
+
+  const wafEntries = Array.from(wafMap.values()).sort((a, b) =>
+    (a.wafCoalesce?.key || '').localeCompare(b.wafCoalesce?.key || '')
+  );
+  return { wafEntries, plainEntries };
+}
+
+async function persistPreparedLogEntries(entries: PreparedLogEntry[], settings: any): Promise<boolean> {
+  if (entries.length === 0) return true;
+  const { wafEntries, plainEntries } = coalesceWafEntriesInBatch(entries);
+  const retentionCutMs = (settings?.log_retention_days || 30) * 86_400_000;
+  const shouldPrune = Math.random() < 0.05;
+
   try {
-    const settings = await getSystemSettings(customEnv).catch(() => null);
-    if (settings && !settings.enable_error_logging) {
-      return false;
-    }
-
-    // Privacy boundary for authenticated users
-    const isAuthenticatedUser = Boolean(input.userId || input.userEmail);
-    if (isAuthenticatedUser && settings && !settings.log_authenticated_users) {
-      return false;
-    }
-
-    const level = (input.level || 'error').toLowerCase() as DiagnosticLogLevel;
-    const minLevel = settings?.log_min_level || 'warn';
-    const minWeight = LOG_LEVEL_WEIGHT[minLevel] ?? 30;
-    const currentWeight = LOG_LEVEL_WEIGHT[level] ?? 40;
-    const slowThreshold = settings?.slow_request_threshold_ms || 1000;
-    const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;
-
-    // Event-Aware SLA判定: 区分服务端请求、Web Vitals与客户端事件，杜绝前端普通LCP误当慢请求刷屏
-    let isSlow = false;
-    if (typeof input.latencyMs === 'number' && !isNaN(input.latencyMs)) {
-      if (errorCode === 'WEB_VITALS') {
-        let isBackgrounded = false;
-        let rating = '';
-        if (input.context && typeof input.context === 'object') {
-          isBackgrounded = Boolean((input.context as any).wasHidden || (input.context as any).rating === 'backgrounded');
-          rating = String((input.context as any).rating || '');
-        }
-        isSlow = !isBackgrounded && (rating === 'poor' || input.latencyMs > 4000);
-      } else if (errorCode === 'CLIENT_NAVIGATION') {
-        isSlow = false;
-      } else {
-        isSlow = input.latencyMs >= slowThreshold;
-      }
-    }
-
-    // 1. 普通前端路由切换不落库 D1（仅保留在 console.log 和错误面包屑中）
-    if (errorCode === 'CLIENT_NAVIGATION') {
-      return false;
-    }
-    // 2. 健康的 Web Vitals 指标（!isSlow）即使在 info/debug 模式下也不落库 D1
-    if (errorCode === 'WEB_VITALS' && !isSlow) {
-      return false;
-    }
-
-    // Filter out verbose messages below min level unless marked as a slow request
-    if (currentWeight < minWeight && !isSlow) {
-      return false;
-    }
-
-    const source = input.source.slice(0, 100);
-    const message = input.message.slice(0, 1000);
-    const userId = input.userId ? input.userId.slice(0, 100) : null;
-    const userEmail = input.userEmail ? input.userEmail.slice(0, 120).toLowerCase().trim() : null;
-    const rayId = input.rayId ? input.rayId.slice(0, 100) : null;
-    const path = input.path ? input.path.slice(0, 200) : null;
-    const latencyMs = typeof input.latencyMs === 'number' && !isNaN(input.latencyMs) ? Math.max(0, Math.round(input.latencyMs)) : null;
-    const method = input.method ? input.method.toUpperCase().slice(0, 10) : null;
-    const statusCode = typeof input.statusCode === 'number' && !isNaN(input.statusCode) ? input.statusCode : null;
-    const clientIp = input.clientIp ? input.clientIp.slice(0, 50) : null;
-    const country = input.country ? input.country.toUpperCase().slice(0, 10) : null;
-    const city = input.city ? input.city.slice(0, 50) : null;
-
-    let contextJson: string | null = null;
-    if (input.context !== undefined && input.context !== null) {
-      try {
-        contextJson = typeof input.context === 'string'
-          ? input.context.slice(0, 4000)
-          : JSON.stringify(input.context).slice(0, 4000);
-      } catch {
-        contextJson = String(input.context).slice(0, 1000);
-      }
-    }
-
     return await executeWithAutoSchema(async (db: DbClient) => {
-      const ops: { sql: string; params: any[] }[] = [
-        {
-          sql: `INSERT INTO system_error_logs (
-            level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-          params: [level, source, errorCode, message, contextJson, userId, userEmail, rayId, path, latencyMs, method, statusCode, clientIp, country, city],
-        },
-      ];
+      const findWafSql = `SELECT id, context_json FROM system_error_logs WHERE source = 'EDGE_WAF' AND client_ip = ? AND error_code = ? AND created_at >= ? ORDER BY id DESC LIMIT 1`;
+      const updateWafSql = `UPDATE system_error_logs SET context_json = ? WHERE id = ?`;
+      const deleteRetentionSql = `DELETE FROM system_error_logs WHERE created_at < ?`;
 
-      // Probabilistic retention cleanup (5% sampling) merged into same batch
-      if (Math.random() < 0.05) {
-        const retentionDays = settings?.log_retention_days || 30;
-        ops.push({
-          sql: `DELETE FROM system_error_logs WHERE created_at < ?`,
-          params: [formatUtcCutoff(retentionDays * 86_400_000, db.dialect)],
+      // Postgres / Hyperdrive: serialize per (client_ip, error_code) via transaction-scoped advisory lock
+      // so concurrent Worker Isolates never insert duplicate EDGE_WAF rows for the same active block window.
+      if (db.dialect === 'postgres' && typeof db.raw?.begin === 'function' && wafEntries.length > 0) {
+        await db.raw.begin(async (tx: any) => {
+          for (const entry of wafEntries) {
+            const meta = entry.wafCoalesce!;
+            await tx.unsafe('SELECT pg_advisory_xact_lock(hashtext($1))', [`waf_log:${meta.key}`]);
+            const rows = await tx.unsafe(toPostgresSql(findWafSql), [
+              entry.clientIp,
+              entry.errorCode,
+              formatUtcCutoff(meta.windowMs, 'postgres'),
+            ]);
+            const existingRow = rows?.[0];
+            if (existingRow?.id) {
+              const mergedJson = buildMergedWafContextJson(existingRow.context_json, {
+                hitIncrement: meta.hitCount,
+                lastBlockedAt: meta.lastBlockedAt,
+              });
+              await tx.unsafe(toPostgresSql(updateWafSql), [mergedJson, existingRow.id]);
+            } else {
+              await tx.unsafe(toPostgresSql(INSERT_ERROR_LOG_SQL), toInsertParams(entry));
+            }
+          }
+          for (const entry of plainEntries) {
+            await tx.unsafe(toPostgresSql(INSERT_ERROR_LOG_SQL), toInsertParams(entry));
+          }
+          if (shouldPrune) {
+            await tx.unsafe(toPostgresSql(deleteRetentionSql), [formatUtcCutoff(retentionCutMs, 'postgres')]);
+          }
         });
+        return true;
       }
 
-      if (ops.length > 1) {
-        await db.batch(ops);
-      } else {
+      const ops: { sql: string; params: any[] }[] = [];
+      for (const entry of wafEntries) {
+        const meta = entry.wafCoalesce!;
+        const existingRow = await db.first<{ id: number; context_json: string | null }>(findWafSql, [
+          entry.clientIp,
+          entry.errorCode,
+          formatUtcCutoff(meta.windowMs, db.dialect),
+        ]);
+        if (existingRow?.id) {
+          ops.push({
+            sql: updateWafSql,
+            params: [
+              buildMergedWafContextJson(existingRow.context_json, {
+                hitIncrement: meta.hitCount,
+                lastBlockedAt: meta.lastBlockedAt,
+              }),
+              existingRow.id,
+            ],
+          });
+        } else {
+          ops.push({ sql: INSERT_ERROR_LOG_SQL, params: toInsertParams(entry) });
+        }
+      }
+
+      for (const entry of plainEntries) {
+        ops.push({ sql: INSERT_ERROR_LOG_SQL, params: toInsertParams(entry) });
+      }
+
+      if (shouldPrune) {
+        ops.push({ sql: deleteRetentionSql, params: [formatUtcCutoff(retentionCutMs, db.dialect)] });
+      }
+
+      if (ops.length === 1) {
         await db.execute(ops[0].sql, ops[0].params);
+      } else if (ops.length > 1) {
+        await db.batch(ops);
       }
-
       return true;
     });
-  } catch (err) {
-    // Non-fatal fail-safe
+  } catch {
     return false;
   }
 }
 
 /**
- * Micro-batch log processor: writes multiple log entries in a single D1 transaction via db.batch()
+ * Records a single diagnostic / error log (coalescing active EDGE_WAF blocks per IP + code).
+ */
+export async function recordErrorLog(
+  input: RecordErrorLogInput,
+  customEnv?: any
+): Promise<boolean> {
+  try {
+    const settings = await getSystemSettings(customEnv).catch(() => null);
+    if (settings && !settings.enable_error_logging) return false;
+    const entry = prepareLogEntry(input, settings);
+    if (!entry) return false;
+    return await persistPreparedLogEntries([entry], settings);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Micro-batch log processor: coalesces EDGE_WAF bursts & writes log entries cleanly.
  */
 export async function recordErrorLogsBatch(
   inputs: RecordErrorLogInput[],
   customEnv?: any
 ): Promise<boolean> {
   if (!inputs || inputs.length === 0) return true;
-  if (inputs.length === 1) return recordErrorLog(inputs[0], customEnv);
-
-  const settings = await getSystemSettings(customEnv).catch(() => null);
-  if (settings && !settings.enable_error_logging) {
-    return false;
-  }
-
-  const minWeight = LOG_LEVEL_WEIGHT[settings?.log_min_level || 'warn'] ?? LOG_LEVEL_WEIGHT.warn;
-  const slowThreshold = settings?.slow_request_threshold_ms || 1000;
-
-  const validOps: { sql: string; params: any[] }[] = [];
-  const insertSql = `INSERT INTO system_error_logs (
-    level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
-
-  for (const input of inputs) {
-    // Privacy boundary for authenticated users
-    const isAuthenticatedUser = Boolean(input.userId || input.userEmail);
-    if (isAuthenticatedUser && settings && !settings.log_authenticated_users) {
-      continue;
-    }
-
-    const level = (input.level?.toLowerCase() || 'error') as DiagnosticLogLevel;
-    const currentWeight = LOG_LEVEL_WEIGHT[level] ?? LOG_LEVEL_WEIGHT.error;
-    const errorCode = input.errorCode ? input.errorCode.slice(0, 50) : null;
-
-    // Event-Aware SLA判定: 区分服务端请求、Web Vitals与客户端事件
-    let isSlow = false;
-    if (typeof input.latencyMs === 'number' && !isNaN(input.latencyMs)) {
-      if (errorCode === 'WEB_VITALS') {
-        let isBackgrounded = false;
-        let rating = '';
-        if (input.context && typeof input.context === 'object') {
-          isBackgrounded = Boolean((input.context as any).wasHidden || (input.context as any).rating === 'backgrounded');
-          rating = String((input.context as any).rating || '');
-        }
-        isSlow = !isBackgrounded && (rating === 'poor' || input.latencyMs > 4000);
-      } else if (errorCode === 'CLIENT_NAVIGATION') {
-        isSlow = false;
-      } else {
-        isSlow = input.latencyMs >= slowThreshold;
-      }
-    }
-
-    if (errorCode === 'CLIENT_NAVIGATION') {
-      continue;
-    }
-    if (errorCode === 'WEB_VITALS' && !isSlow) {
-      continue;
-    }
-
-    if (currentWeight < minWeight && !isSlow) {
-      continue;
-    }
-
-    const source = (input.source || 'system').slice(0, 100);
-    const message = (input.message || '').slice(0, 1000);
-    const userId = input.userId ? input.userId.slice(0, 100) : null;
-    const userEmail = input.userEmail ? input.userEmail.slice(0, 120).toLowerCase().trim() : null;
-    const rayId = input.rayId ? input.rayId.slice(0, 100) : null;
-    const path = input.path ? input.path.slice(0, 200) : null;
-    const latencyMs = typeof input.latencyMs === 'number' && !isNaN(input.latencyMs) ? Math.max(0, Math.round(input.latencyMs)) : null;
-    const method = input.method ? input.method.toUpperCase().slice(0, 10) : null;
-    const statusCode = typeof input.statusCode === 'number' && !isNaN(input.statusCode) ? input.statusCode : null;
-    const clientIp = input.clientIp ? input.clientIp.slice(0, 50) : null;
-    const country = input.country ? input.country.toUpperCase().slice(0, 10) : null;
-    const city = input.city ? input.city.slice(0, 50) : null;
-
-    let contextJson: string | null = null;
-    if (input.context !== undefined && input.context !== null) {
-      try {
-        contextJson = typeof input.context === 'string'
-          ? input.context.slice(0, 4000)
-          : JSON.stringify(input.context).slice(0, 4000);
-      } catch {
-        contextJson = String(input.context).slice(0, 1000);
-      }
-    }
-
-    validOps.push({
-      sql: insertSql,
-      params: [level, source, errorCode, message, contextJson, userId, userEmail, rayId, path, latencyMs, method, statusCode, clientIp, country, city],
-    });
-  }
-
-  if (validOps.length === 0) return true;
-
   try {
-    return await executeWithAutoSchema(async (db: DbClient) => {
-      // Probabilistic retention cleanup (5% sampling) appended to same batch
-      if (Math.random() < 0.05) {
-        const retentionDays = settings?.log_retention_days || 30;
-        validOps.push({
-          sql: `DELETE FROM system_error_logs WHERE created_at < ?`,
-          params: [formatUtcCutoff(retentionDays * 86_400_000, db.dialect)],
-        });
-      }
-
-      await db.batch(validOps);
-      return true;
-    });
+    const settings = await getSystemSettings(customEnv).catch(() => null);
+    if (settings && !settings.enable_error_logging) return false;
+    const entries = inputs
+      .map((item) => prepareLogEntry(item, settings))
+      .filter((e): e is PreparedLogEntry => Boolean(e));
+    if (entries.length === 0) return true;
+    return await persistPreparedLogEntries(entries, settings);
   } catch {
     return false;
   }
@@ -567,6 +642,7 @@ export async function updateLatestWafLogStats(
     clientIp?: string | null;
     errorCode?: string | null;
     hitCount: number;
+    hitDelta?: number;
     lastBlockedAt: string;
   },
   customEnv?: any
@@ -594,42 +670,33 @@ export async function updateLatestWafLogStats(
         qParams.push(errorCode);
       }
 
-      const row = await db.first<{ id: number; context_json: string | null }>(
-        `SELECT id, context_json FROM system_error_logs WHERE ${conds.join(' AND ')} ORDER BY id DESC LIMIT 1`,
-        qParams
-      );
-      if (!row?.id) return false;
-
-      let ctxObj: Record<string, any> = {};
-      if (row.context_json) {
-        try {
-          ctxObj = JSON.parse(row.context_json) || {};
-        } catch {
-          ctxObj = {};
-        }
-      }
-
-      const prevNested = ctxObj.context && typeof ctxObj.context === 'object' ? ctxObj.context : {};
-      const nextHitCount = Math.max(Number(ctxObj.hitCount ?? prevNested.hitCount ?? 0), params.hitCount);
-
-      const nextCtx: Record<string, any> = {
-        ...ctxObj,
-        hitCount: nextHitCount,
+      const selectSql = `SELECT id, context_json FROM system_error_logs WHERE ${conds.join(' AND ')} ORDER BY id DESC LIMIT 1`;
+      const updateSql = `UPDATE system_error_logs SET context_json = ? WHERE id = ?`;
+      const mergeOpts = {
+        hitIncrement: params.hitDelta && params.hitDelta > 0 ? params.hitDelta : undefined,
+        absHitCount: params.hitCount,
         lastBlockedAt: params.lastBlockedAt,
       };
-      if (ctxObj.context && typeof ctxObj.context === 'object') {
-        nextCtx.context = {
-          ...prevNested,
-          hitCount: nextHitCount,
-          lastBlockedAt: params.lastBlockedAt,
-        };
-      }
-      const nextJson = JSON.stringify(nextCtx).slice(0, 4000);
 
-      await db.execute(
-        `UPDATE system_error_logs SET context_json = ? WHERE id = ?`,
-        [nextJson, row.id]
-      );
+      if (db.dialect === 'postgres' && typeof db.raw?.begin === 'function' && clientIp && errorCode) {
+        let updated = false;
+        await db.raw.begin(async (tx: any) => {
+          await tx.unsafe('SELECT pg_advisory_xact_lock(hashtext($1))', [`waf_log:${clientIp}:${errorCode}`]);
+          const rows = await tx.unsafe(toPostgresSql(selectSql), qParams);
+          const row = rows?.[0];
+          if (!row?.id) return;
+          const nextJson = buildMergedWafContextJson(row.context_json, mergeOpts);
+          await tx.unsafe(toPostgresSql(updateSql), [nextJson, row.id]);
+          updated = true;
+        });
+        return updated;
+      }
+
+      const row = await db.first<{ id: number; context_json: string | null }>(selectSql, qParams);
+      if (!row?.id) return false;
+
+      const nextJson = buildMergedWafContextJson(row.context_json, mergeOpts);
+      await db.execute(updateSql, [nextJson, row.id]);
       return true;
     });
   } catch {

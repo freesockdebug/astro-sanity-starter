@@ -82,6 +82,7 @@ interface WafStatsPendingItem {
   clientIp: string;
   errorCode: string;
   hitCount: number;
+  hitDelta: number;
   lastBlockedAt: string;
   env: any;
 }
@@ -115,6 +116,7 @@ function flushWafStatsUpdates(ctx?: any): Promise<any> {
           clientIp: item.clientIp,
           errorCode: item.errorCode,
           hitCount: item.hitCount,
+          hitDelta: item.hitDelta,
           lastBlockedAt: item.lastBlockedAt,
         },
         item.env
@@ -133,12 +135,14 @@ export function syncWafBlockStats(
     clientIp?: string | null;
     errorCode?: string | null;
     hitCount: number;
+    hitDelta?: number;
     lastBlockedAt: string;
   },
   options: { cfEnv?: any; ctx?: any } = {}
 ) {
   const clientIp = (params.clientIp || '').trim();
   const errorCode = (params.errorCode || 'WAF_BLOCK').trim();
+  const delta = Math.max(0, Number(params.hitDelta ?? 0));
   const env = options.cfEnv || cfWorkerEnv || (typeof globalThis !== 'undefined' ? (globalThis as any).__CF_ENV__ : undefined);
 
   // Fast-path: if initial block log is still sitting in the 200ms micro-batch buffer, update it in memory
@@ -152,10 +156,12 @@ export function syncWafBlockStats(
       typeof buffered.context === 'object'
     ) {
       const ctxObj = buffered.context as Record<string, any>;
-      ctxObj.hitCount = params.hitCount;
+      const prevHits = Math.max(1, Number(ctxObj.hitCount ?? ctxObj.context?.hitCount ?? 1));
+      const nextHits = delta > 0 ? prevHits + delta : Math.max(prevHits, params.hitCount);
+      ctxObj.hitCount = nextHits;
       ctxObj.lastBlockedAt = params.lastBlockedAt;
       if (ctxObj.context && typeof ctxObj.context === 'object') {
-        ctxObj.context.hitCount = params.hitCount;
+        ctxObj.context.hitCount = nextHits;
         ctxObj.context.lastBlockedAt = params.lastBlockedAt;
       }
       return;
@@ -164,14 +170,17 @@ export function syncWafBlockStats(
 
   // Local Node test/CLI environment: update immediately without timer lag
   if (typeof (globalThis as any).caches === 'undefined' && !options.ctx?.waitUntil) {
-    updateLatestWafLogStats({ ...params, clientIp, errorCode }, env).catch(() => false);
+    updateLatestWafLogStats({ ...params, clientIp, errorCode, hitDelta: delta || undefined }, env).catch(() => false);
     return;
   }
 
-  wafStatsPending.set(`${clientIp}:${errorCode}`, {
+  const pendingKey = `${clientIp}:${errorCode}`;
+  const prevPending = wafStatsPending.get(pendingKey);
+  wafStatsPending.set(pendingKey, {
     clientIp,
     errorCode,
     hitCount: params.hitCount,
+    hitDelta: (prevPending?.hitDelta || 0) + (delta || 1),
     lastBlockedAt: params.lastBlockedAt,
     env,
   });
