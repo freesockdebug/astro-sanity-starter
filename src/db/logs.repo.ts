@@ -526,6 +526,92 @@ export async function listErrorLogs(
 }
 
 /**
+ * Updates cumulative 403/429 send counters and lastBlockedAt on the latest matching EDGE_WAF log row.
+ */
+export async function updateLatestWafLogStats(
+  params: {
+    clientIp?: string | null;
+    errorCode?: string | null;
+    hitCount: number;
+    count403: number;
+    count429: number;
+    lastBlockedAt: string;
+  },
+  customEnv?: any
+): Promise<boolean> {
+  try {
+    const settings = await getSystemSettings(customEnv).catch(() => null);
+    if (settings && !settings.enable_error_logging) {
+      return false;
+    }
+
+    const clientIp = params.clientIp ? params.clientIp.slice(0, 50) : null;
+    const errorCode = params.errorCode ? params.errorCode.slice(0, 50) : null;
+
+    return await executeWithAutoSchema(async (db: DbClient) => {
+      const conds = [`source = 'EDGE_WAF'`];
+      const qParams: any[] = [];
+      if (clientIp) {
+        conds.push('client_ip = ?');
+        qParams.push(clientIp);
+      } else {
+        conds.push(`(client_ip IS NULL OR client_ip = '')`);
+      }
+      if (errorCode) {
+        conds.push('error_code = ?');
+        qParams.push(errorCode);
+      }
+
+      const row = await db.first<{ id: number; context_json: string | null }>(
+        `SELECT id, context_json FROM system_error_logs WHERE ${conds.join(' AND ')} ORDER BY id DESC LIMIT 1`,
+        qParams
+      );
+      if (!row?.id) return false;
+
+      let ctxObj: Record<string, any> = {};
+      if (row.context_json) {
+        try {
+          ctxObj = JSON.parse(row.context_json) || {};
+        } catch {
+          ctxObj = {};
+        }
+      }
+
+      const prevNested = ctxObj.context && typeof ctxObj.context === 'object' ? ctxObj.context : {};
+      const nextHitCount = Math.max(Number(ctxObj.hitCount ?? prevNested.hitCount ?? 0), params.hitCount);
+      const nextCount403 = Math.max(Number(ctxObj.count403 ?? prevNested.count403 ?? 0), params.count403);
+      const nextCount429 = Math.max(Number(ctxObj.count429 ?? prevNested.count429 ?? 0), params.count429);
+
+      const nextCtx: Record<string, any> = {
+        ...ctxObj,
+        hitCount: nextHitCount,
+        count403: nextCount403,
+        count429: nextCount429,
+        lastBlockedAt: params.lastBlockedAt,
+      };
+      if (ctxObj.context && typeof ctxObj.context === 'object') {
+        nextCtx.context = {
+          ...prevNested,
+          hitCount: nextHitCount,
+          count403: nextCount403,
+          count429: nextCount429,
+          lastBlockedAt: params.lastBlockedAt,
+        };
+      }
+      const nextJson = JSON.stringify(nextCtx).slice(0, 4000);
+
+      await db.execute(
+        `UPDATE system_error_logs SET context_json = ? WHERE id = ?`,
+        [nextJson, row.id]
+      );
+      return true;
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Clears error logs table.
  */
 export async function clearErrorLogs(customEnv?: any): Promise<boolean> {

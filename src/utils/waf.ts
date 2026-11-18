@@ -19,6 +19,13 @@ export interface WafEvaluationInput {
   now?: number;
 }
 
+export interface WafBlockStats {
+  hitCount: number;
+  count403: number;
+  count429: number;
+  lastHitAt: number;
+}
+
 export interface WafEvaluationResult {
   allowed: boolean;
   status?: 403 | 429;
@@ -29,6 +36,7 @@ export interface WafEvaluationResult {
   retryAfter?: number;
   autoBanned?: boolean;
   suppressLog?: boolean;
+  blockStats?: WafBlockStats;
 }
 
 export type WafConditionField =
@@ -411,7 +419,10 @@ const MAX_MAP_ENTRIES = 5000;
 
 const strikeRecords = new Map<string, { strikes: number; bannedUntil: number; updatedAt: number }>();
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
-const blockLogSuppressions = new Map<string, { ip: string; suppressedUntil: number }>();
+const blockLogSuppressions = new Map<
+  string,
+  { ip: string; suppressedUntil: number; hitCount: number; count403: number; count429: number; lastHitAt: number }
+>();
 
 const STATIC_ASSET_EXT = /\.(?:css|js|mjs|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|eot|map|txt|xml)$/i;
 
@@ -792,9 +803,24 @@ export class EdgeWafService {
 
     const stage = res.autoBanned ? 'ban' : 'hit';
     const suppressKey = `${ipKey || 'unknown'}:${res.code || 'WAF'}:${stage}`;
+    const inc403 = res.status === 403 ? 1 : 0;
+    const inc429 = res.status === 429 ? 1 : 0;
     const existing = blockLogSuppressions.get(suppressKey);
     if (existing && existing.suppressedUntil > now) {
-      return { ...res, suppressLog: true };
+      existing.hitCount += 1;
+      existing.count403 += inc403;
+      existing.count429 += inc429;
+      existing.lastHitAt = now;
+      return {
+        ...res,
+        suppressLog: true,
+        blockStats: {
+          hitCount: existing.hitCount,
+          count403: existing.count403,
+          count429: existing.count429,
+          lastHitAt: now,
+        },
+      };
     }
 
     let suppressedUntil = now + DEFAULT_LOG_SUPPRESS_MS;
@@ -804,8 +830,24 @@ export class EdgeWafService {
       suppressedUntil = now + ((res.retryAfter || 60) * 1000);
     }
     pruneMapIfNeeded(blockLogSuppressions);
-    blockLogSuppressions.set(suppressKey, { ip: ipKey || 'unknown', suppressedUntil });
-    return res;
+    const entry = {
+      ip: ipKey || 'unknown',
+      suppressedUntil,
+      hitCount: 1,
+      count403: inc403,
+      count429: inc429,
+      lastHitAt: now,
+    };
+    blockLogSuppressions.set(suppressKey, entry);
+    return {
+      ...res,
+      blockStats: {
+        hitCount: entry.hitCount,
+        count403: entry.count403,
+        count429: entry.count429,
+        lastHitAt: entry.lastHitAt,
+      },
+    };
   }
 
   private static evaluateCore(input: WafEvaluationInput, settings: WafSettingsSubset | null | undefined, now: number): WafEvaluationResult {

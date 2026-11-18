@@ -91,7 +91,8 @@ const WAF_MODE_CARDS: Array<{
 const parseLogContext = (ctxJson?: string) => {
   if (!ctxJson) return {} as Record<string, any>;
   try {
-    return JSON.parse(ctxJson) || {};
+    const raw = JSON.parse(ctxJson) || {};
+    return raw.context && typeof raw.context === 'object' ? { ...raw.context, ...raw } : raw;
   } catch {
     return {};
   }
@@ -511,10 +512,16 @@ const initialPayload = JSON.stringify({
                   const ctx = parseLogContext(log.context_json);
                   const badge = modeBadgeLabel(ctx.mode);
                   const ipVal = (log.client_ip || '').trim();
+                  const count403 = Number(ctx.count403 || (log.status_code === 403 ? 1 : 0));
+                  const count429 = Number(ctx.count429 || (log.status_code === 429 ? 1 : 0));
+                  const lastBlockedAt = ctx.lastBlockedAt ? formatAdminTime(ctx.lastBlockedAt, 'short') : '';
                   return (
                     <tr class="hover:bg-[#fafafc] transition-colors">
                       <td class="adm-td whitespace-nowrap font-mono text-[11px] text-[#52525b]">
-                        {formatAdminTime(log.created_at, 'short')}
+                        <div>{formatAdminTime(log.created_at, 'short')}</div>
+                        {lastBlockedAt && (count403 + count429) > 1 && (
+                          <div class="text-[10px] text-[#86868b]" title={`Last hit: ${lastBlockedAt}`}>Last: {lastBlockedAt}</div>
+                        )}
                       </td>
                       <td class="adm-td whitespace-nowrap">
                         <div class="font-mono font-semibold text-[#1d1d1f]">{ipVal || 'unknown'}</div>
@@ -523,7 +530,19 @@ const initialPayload = JSON.stringify({
                         )}
                       </td>
                       <td class="adm-td whitespace-nowrap">
-                        <span class:list={['adm-badge', badge.cls]}>{badge.text}</span>
+                        <div class="inline-flex flex-wrap items-center gap-1">
+                          <span class:list={['adm-badge', badge.cls]}>{badge.text}</span>
+                          {count403 > 0 && (
+                            <span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold bg-rose-50 text-rose-700 border-rose-200/80">
+                              403 ×{count403}
+                            </span>
+                          )}
+                          {count429 > 0 && (
+                            <span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold bg-amber-50 text-amber-800 border-amber-200/80">
+                              429 ×{count429}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td class="adm-td font-mono text-[11px] text-[#1d1d1f] max-w-[220px] truncate" title={`${log.method || 'GET'} ${log.path || ''}`}>
                         <span class="font-bold text-[#52525b] mr-1">{log.method || 'GET'}</span>{log.path || '/'}
@@ -1098,9 +1117,24 @@ const initialPayload = JSON.stringify({
 
         tbody.innerHTML = logs.map((log) => {
           let ctx: Record<string, any> = {};
-          try { ctx = JSON.parse(log.context_json || '{}') || {}; } catch {}
+          try {
+            const raw = JSON.parse(log.context_json || '{}') || {};
+            ctx = raw.context && typeof raw.context === 'object' ? { ...raw.context, ...raw } : raw;
+          } catch {}
           const [modeText, modeCls] = badgeFor(ctx.mode);
           const ipVal = (log.client_ip || '').trim();
+          const count403 = Number(ctx.count403 || (log.status_code === 403 ? 1 : 0));
+          const count429 = Number(ctx.count429 || (log.status_code === 429 ? 1 : 0));
+          const lastAt = ctx.lastBlockedAt ? formatAdminTime(ctx.lastBlockedAt, 'short') : '';
+          const lastHtml = lastAt && (count403 + count429) > 1
+            ? `<div class="text-[10px] text-[#86868b]" title="Last hit: ${escapeHtml(lastAt)}">Last: ${escapeHtml(lastAt)}</div>`
+            : '';
+          const count403Badge = count403 > 0
+            ? `<span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold bg-rose-50 text-rose-700 border-rose-200/80">403 ×${count403}</span>`
+            : '';
+          const count429Badge = count429 > 0
+            ? `<span class="px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold bg-amber-50 text-amber-800 border-amber-200/80">429 ×${count429}</span>`
+            : '';
           const geo = log.country ? `<div class="text-[10px] text-[#86868b]">${escapeHtml(log.country)}${log.city ? ` · ${escapeHtml(log.city)}` : ''}</div>` : '';
           const actionCell = canManage
             ? `<td class="adm-td text-right whitespace-nowrap">${
@@ -1111,12 +1145,12 @@ const initialPayload = JSON.stringify({
             : '';
           return `
             <tr class="hover:bg-[#fafafc] transition-colors">
-              <td class="adm-td whitespace-nowrap font-mono text-[11px] text-[#52525b]">${escapeHtml(formatAdminTime(log.created_at, 'short'))}</td>
+              <td class="adm-td whitespace-nowrap font-mono text-[11px] text-[#52525b]"><div>${escapeHtml(formatAdminTime(log.created_at, 'short'))}</div>${lastHtml}</td>
               <td class="adm-td whitespace-nowrap">
                 <div class="font-mono font-semibold text-[#1d1d1f]">${escapeHtml(ipVal || 'unknown')}</div>
                 ${geo}
               </td>
-              <td class="adm-td whitespace-nowrap"><span class="adm-badge ${modeCls}">${escapeHtml(modeText)}</span></td>
+              <td class="adm-td whitespace-nowrap"><div class="inline-flex flex-wrap items-center gap-1"><span class="adm-badge ${modeCls}">${escapeHtml(modeText)}</span>${count403Badge}${count429Badge}</div></td>
               <td class="adm-td font-mono text-[11px] text-[#1d1d1f] max-w-[220px] truncate"><span class="font-bold text-[#52525b] mr-1">${escapeHtml(log.method || 'GET')}</span>${escapeHtml(log.path || '/')}</td>
               <td class="adm-td font-mono text-[11px] text-rose-700 max-w-[260px] truncate">${escapeHtml(ctx.matchedSample || log.message || '')}</td>
               ${actionCell}

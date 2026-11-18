@@ -6,7 +6,7 @@ import { NON_DEFAULT_LOCALES } from '@i18n';
 import { getRouteRevisions, resolvePathRevision } from './utils/cmsSync';
 import { SESSION_COOKIE_NAME, getCookieValue, getRuntimeEnv, verifySessionToken } from './utils/auth';
 import { SecurityService } from './utils/security';
-import { logger } from './utils/logger';
+import { logger, syncWafBlockStats } from './utils/logger';
 import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
 import { getSystemSettings } from './db/settings.repo';
 import { EdgeWafService } from './utils/waf';
@@ -101,6 +101,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
       if (!wafResult.allowed) {
         const blockStatus = wafResult.status || 403;
+        const stats = wafResult.blockStats;
+        const lastBlockedAt = new Date().toISOString();
         if (!wafResult.suppressLog) {
           logger.warn(
             {
@@ -119,7 +121,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 matchedSample: wafResult.matchedSample,
                 userAgent: request.headers.get('user-agent') || '',
                 autoBanned: Boolean(wafResult.autoBanned),
+                hitCount: stats?.hitCount ?? 1,
+                count403: stats?.count403 ?? (blockStatus === 403 ? 1 : 0),
+                count429: stats?.count429 ?? (blockStatus === 429 ? 1 : 0),
+                lastBlockedAt,
               },
+            },
+            { cfEnv, ctx: runtimeCtx }
+          );
+        } else if (stats) {
+          syncWafBlockStats(
+            {
+              clientIp: clientMeta.ip,
+              errorCode: wafResult.code || 'WAF_BLOCK',
+              hitCount: stats.hitCount,
+              count403: stats.count403,
+              count429: stats.count429,
+              lastBlockedAt,
             },
             { cfEnv, ctx: runtimeCtx }
           );

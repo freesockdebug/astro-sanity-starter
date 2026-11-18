@@ -397,12 +397,15 @@ test('EdgeWafService suppresses duplicate block logs while blocked and resumes a
   assert.equal(strike3.autoBanned, true);
   assert.ok(!strike3.suppressLog);
 
-  // Repeated hits while auto-banned are suppressed
+  // Repeated hits while auto-banned are suppressed and accumulate 403 counts
   for (let i = 1; i <= 3; i++) {
     const repeatBanHit = EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: `/spam-${i}`, headers: BROWSER_HEADERS, now: now + 3000 + i * 1000 }, malSettings);
     assert.equal(repeatBanHit.allowed, false);
     assert.equal(repeatBanHit.autoBanned, true);
     assert.equal(repeatBanHit.suppressLog, true);
+    assert.equal(repeatBanHit.blockStats?.hitCount, i + 1);
+    assert.equal(repeatBanHit.blockStats?.count403, i + 1);
+    assert.equal(repeatBanHit.blockStats?.count429, 0);
   }
 
   // Admin unlocks via clearAllStrikes -> clean request passes, next violation logs normally again
@@ -427,4 +430,23 @@ test('EdgeWafService suppresses duplicate block logs while blocked and resumes a
   const blkReblocked = EdgeWafService.evaluate({ clientIp: ip, pathname: '/', headers: BROWSER_HEADERS, now: now + 2000 }, { waf_active_modes: ['block_malicious_ips'], waf_blocked_ips: ip });
   assert.equal(blkReblocked.allowed, false);
   assert.ok(!blkReblocked.suppressLog);
+  assert.equal(blkReblocked.blockStats?.count403, 1);
+
+  // 3. Rate limit (429) accumulates count429 across suppressed repeats in same window
+  const rlSettings = {
+    waf_active_modes: ['strict_rate_limiting'] as ('strict_rate_limiting')[],
+    waf_rule_config: normalizeWafRuleConfig({ rateLimit: { windowSeconds: 30, publicWriteLimit: 1 } }),
+  };
+  const rlIp = '203.0.113.88';
+  assert.equal(EdgeWafService.evaluate({ clientIp: rlIp, pathname: '/api/submit-quote', method: 'POST', headers: BROWSER_HEADERS, now }, rlSettings).allowed, true);
+  const rl1 = EdgeWafService.evaluate({ clientIp: rlIp, pathname: '/api/submit-quote', method: 'POST', headers: BROWSER_HEADERS, now: now + 100 }, rlSettings);
+  assert.equal(rl1.status, 429);
+  assert.ok(!rl1.suppressLog);
+  assert.equal(rl1.blockStats?.count429, 1);
+
+  const rl2 = EdgeWafService.evaluate({ clientIp: rlIp, pathname: '/api/submit-quote', method: 'POST', headers: BROWSER_HEADERS, now: now + 200 }, rlSettings);
+  assert.equal(rl2.status, 429);
+  assert.equal(rl2.suppressLog, true);
+  assert.equal(rl2.blockStats?.count429, 2);
+  assert.equal(rl2.blockStats?.count403, 0);
 });

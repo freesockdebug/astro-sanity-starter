@@ -3,7 +3,7 @@
 
 import { waitUntil as cfWaitUntil, env as cfWorkerEnv } from 'cloudflare:workers';
 import type { APIRoute, APIContext } from 'astro';
-import { recordErrorLog, recordErrorLogsBatch, type RecordErrorLogInput } from '../db/logs.repo';
+import { recordErrorLog, recordErrorLogsBatch, updateLatestWafLogStats, type RecordErrorLogInput } from '../db/logs.repo';
 import { getActiveProfiler } from './profiler';
 import { SecurityService } from './security';
 
@@ -78,17 +78,125 @@ function sanitizeData(data: any, depth = 0): any {
 const isolateLogBuffer: RecordErrorLogInput[] = [];
 let isolateFlushTimer: any = null;
 
+interface WafStatsPendingItem {
+  clientIp: string;
+  errorCode: string;
+  hitCount: number;
+  count403: number;
+  count429: number;
+  lastBlockedAt: string;
+  env: any;
+}
+const wafStatsPending = new Map<string, WafStatsPendingItem>();
+let wafStatsFlushTimer: any = null;
+
+function runInWaitUntil(promise: Promise<any>, ctx?: any) {
+  if (typeof cfWaitUntil === 'function') {
+    try { cfWaitUntil(promise); } catch {}
+  } else if (ctx && typeof ctx.waitUntil === 'function') {
+    try { ctx.waitUntil(promise); } catch {}
+  }
+}
+
 function flushBufferedLogs(env: any, ctx?: any): Promise<any> {
   if (isolateLogBuffer.length === 0) return Promise.resolve(true);
   const batch = isolateLogBuffer.splice(0, isolateLogBuffer.length);
   const writePromise = recordErrorLogsBatch(batch, env).catch(() => false);
-
-  if (typeof cfWaitUntil === 'function') {
-    try { cfWaitUntil(writePromise); } catch {}
-  } else if (ctx && typeof ctx.waitUntil === 'function') {
-    try { ctx.waitUntil(writePromise); } catch {}
-  }
+  runInWaitUntil(writePromise, ctx);
   return writePromise;
+}
+
+function flushWafStatsUpdates(ctx?: any): Promise<any> {
+  if (wafStatsPending.size === 0) return Promise.resolve(true);
+  const items = Array.from(wafStatsPending.values());
+  wafStatsPending.clear();
+  const updatePromise = Promise.all(
+    items.map((item) =>
+      updateLatestWafLogStats(
+        {
+          clientIp: item.clientIp,
+          errorCode: item.errorCode,
+          hitCount: item.hitCount,
+          count403: item.count403,
+          count429: item.count429,
+          lastBlockedAt: item.lastBlockedAt,
+        },
+        item.env
+      ).catch(() => false)
+    )
+  );
+  runInWaitUntil(updatePromise, ctx);
+  return updatePromise;
+}
+
+/**
+ * Coalesces repeated WAF 403/429 counts onto either the in-flight log buffer or the latest persisted DB row.
+ */
+export function syncWafBlockStats(
+  params: {
+    clientIp?: string | null;
+    errorCode?: string | null;
+    hitCount: number;
+    count403: number;
+    count429: number;
+    lastBlockedAt: string;
+  },
+  options: { cfEnv?: any; ctx?: any } = {}
+) {
+  const clientIp = (params.clientIp || '').trim();
+  const errorCode = (params.errorCode || 'WAF_BLOCK').trim();
+  const env = options.cfEnv || cfWorkerEnv || (typeof globalThis !== 'undefined' ? (globalThis as any).__CF_ENV__ : undefined);
+
+  // Fast-path: if initial block log is still sitting in the 200ms micro-batch buffer, update it in memory
+  for (let i = isolateLogBuffer.length - 1; i >= 0; i--) {
+    const buffered = isolateLogBuffer[i];
+    if (
+      buffered.source === 'EDGE_WAF' &&
+      (buffered.clientIp || '') === clientIp &&
+      (buffered.errorCode || '') === errorCode &&
+      buffered.context &&
+      typeof buffered.context === 'object'
+    ) {
+      const ctxObj = buffered.context as Record<string, any>;
+      ctxObj.hitCount = params.hitCount;
+      ctxObj.count403 = params.count403;
+      ctxObj.count429 = params.count429;
+      ctxObj.lastBlockedAt = params.lastBlockedAt;
+      if (ctxObj.context && typeof ctxObj.context === 'object') {
+        ctxObj.context.hitCount = params.hitCount;
+        ctxObj.context.count403 = params.count403;
+        ctxObj.context.count429 = params.count429;
+        ctxObj.context.lastBlockedAt = params.lastBlockedAt;
+      }
+      return;
+    }
+  }
+
+  // Local Node test/CLI environment: update immediately without timer lag
+  if (typeof (globalThis as any).caches === 'undefined' && !options.ctx?.waitUntil) {
+    updateLatestWafLogStats({ ...params, clientIp, errorCode }, env).catch(() => false);
+    return;
+  }
+
+  wafStatsPending.set(`${clientIp}:${errorCode}`, {
+    clientIp,
+    errorCode,
+    hitCount: params.hitCount,
+    count403: params.count403,
+    count429: params.count429,
+    lastBlockedAt: params.lastBlockedAt,
+    env,
+  });
+
+  if (!wafStatsFlushTimer) {
+    const delayed = new Promise<void>((resolve) => {
+      wafStatsFlushTimer = setTimeout(() => {
+        wafStatsFlushTimer = null;
+        flushWafStatsUpdates(options.ctx).finally(() => resolve());
+      }, 1500);
+    });
+    runInWaitUntil(delayed, options.ctx);
+  }
 }
 
 /**
