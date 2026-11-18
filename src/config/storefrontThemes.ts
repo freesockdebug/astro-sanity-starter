@@ -51,10 +51,103 @@ export const VALID_STOREFRONT_THEMES: readonly StorefrontTheme[] = STOREFRONT_TH
 
 const THEME_MAP = new Map<string, StorefrontThemeOption>(STOREFRONT_THEMES.map((t) => [t.value, t]));
 
-export function isValidStorefrontTheme(value: string): value is StorefrontTheme {
-  return THEME_MAP.has(value);
+export function isValidStorefrontTheme(value: unknown): value is StorefrontTheme {
+  return typeof value === 'string' && THEME_MAP.has(value);
 }
 
 export function needsDisplaySerifFont(theme?: string): boolean {
   return Boolean(theme && THEME_MAP.get(theme)?.loadDisplaySerif);
+}
+
+export interface StorefrontThemeClasses {
+  pageCanvas: string;
+  sectionSurface: string;
+  cardContainer: string;
+  cardImageAspect: string;
+  headingFont: string;
+  primaryText: string;
+  mutedText: string;
+  primaryButton: string;
+}
+
+export interface StorefrontThemeContext {
+  id: StorefrontTheme;
+  variant: 'minimal' | 'warm' | 'editorial' | 'luxury';
+  isLuxury: boolean;
+  isEditorial: boolean;
+  isWarm: boolean;
+  classes: StorefrontThemeClasses;
+}
+
+const THEME_CLASS_MAP: Record<StorefrontTheme, StorefrontThemeClasses> = {
+  'apple-minimal': {
+    pageCanvas: 'bg-white text-[#1d1d1f]',
+    sectionSurface: 'bg-[#f5f5f7]',
+    cardContainer: 'rounded-2xl sm:rounded-3xl bg-[#f5f5f7] border border-black/5 hover:border-black/15 hover:shadow-xl p-4 sm:p-5',
+    cardImageAspect: 'aspect-square rounded-xl sm:rounded-2xl bg-white shadow-inner',
+    headingFont: 'font-sans font-semibold tracking-tight',
+    primaryText: 'text-[#1d1d1f]',
+    mutedText: 'text-[#86868b]',
+    primaryButton: 'bg-[#1d1d1f] hover:bg-black text-white rounded-full',
+  },
+  'warm-atelier': {
+    pageCanvas: 'bg-[#fcfbf9] text-[#1c1917]',
+    sectionSurface: 'bg-[#f6f3ee]',
+    cardContainer: 'rounded-2xl bg-[#f6f3ee] border border-[#1c1917]/8 hover:shadow-lg p-4 sm:p-5',
+    cardImageAspect: 'aspect-square rounded-xl bg-[#fcfbf9]',
+    headingFont: 'font-sans font-semibold tracking-tight',
+    primaryText: 'text-[#1c1917]',
+    mutedText: 'text-[#6b665f]',
+    primaryButton: 'bg-[#1c1917] hover:bg-[#3f3228] text-[#fcfbf9] rounded-full',
+  },
+  'editorial-gallery': {
+    pageCanvas: 'bg-[#faf8f4] text-[#1a1816]',
+    sectionSurface: 'bg-[#f2ede4]',
+    cardContainer: 'rounded-xl bg-[#fdfcfa] border border-[#1a1816]/10 hover:border-[#1a1816]/22 p-4 shadow-none',
+    cardImageAspect: 'aspect-square rounded-lg bg-[#f2ede4]',
+    headingFont: 'font-display font-medium tracking-[-0.015em]',
+    primaryText: 'text-[#1a1816]',
+    mutedText: 'text-[#6e685f]',
+    primaryButton: 'bg-[#1a1816] hover:bg-[#2c2520] text-[#faf8f4] rounded-md',
+  },
+  'luxury-atelier': {
+    pageCanvas: 'bg-[#fcfbf9] text-[#1c1917]',
+    sectionSurface: 'bg-[#f4f0ea]',
+    cardContainer: 'rounded-2xl bg-white border border-[#1c1917]/10 hover:border-[#1c1917]/22 p-4 shadow-none',
+    cardImageAspect: 'aspect-[4/5] rounded-xl bg-[#f4f0ea] shadow-none',
+    headingFont: 'font-display font-medium tracking-[-0.018em]',
+    primaryText: 'text-[#1c1917]',
+    mutedText: 'text-[#5f5a53]',
+    primaryButton: 'bg-[#1c1917] hover:bg-[#3f3228] text-[#fcfbf9] rounded-full',
+  },
+};
+
+export function resolveThemeContext(rawTheme?: unknown): StorefrontThemeContext {
+  const id: StorefrontTheme = isValidStorefrontTheme(rawTheme) ? rawTheme : 'apple-minimal';
+  const variantMap: Record<StorefrontTheme, StorefrontThemeContext['variant']> = {
+    'apple-minimal': 'minimal',
+    'warm-atelier': 'warm',
+    'editorial-gallery': 'editorial',
+    'luxury-atelier': 'luxury',
+  };
+  return {
+    id,
+    variant: variantMap[id],
+    isLuxury: id === 'luxury-atelier',
+    isEditorial: id === 'editorial-gallery',
+    isWarm: id === 'warm-atelier',
+    classes: THEME_CLASS_MAP[id],
+  };
+}
+
+/**
+ * Storefront Theme Hook for Astro SSR components.
+ * Reads request-scoped context injected by ThemeProvider / Layout, falling back to systemSettings.
+ */
+export function useStorefrontTheme(locals?: App.Locals | Record<string, any>): StorefrontThemeContext {
+  if (locals && (locals as any).themeContext) {
+    return (locals as any).themeContext as StorefrontThemeContext;
+  }
+  const raw = (locals as any)?.systemSettings?.storefront_theme;
+  return resolveThemeContext(raw);
 }

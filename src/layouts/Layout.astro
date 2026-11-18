@@ -2,11 +2,12 @@
 import { type SiteConfig, type CustomImage, type Page } from 'types';
 import { StoreNav, StoreFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@components';
 import SectionBoundary from '@components/SectionBoundary.astro';
+import ThemeProvider from '@components/ThemeProvider.astro';
 import { fetchData } from '@data/siteConfig';
 import { SanityImageService } from '@utils/image';
 import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
 import { getSystemSettings } from '@db';
-import { needsDisplaySerifFont } from '@config/storefrontThemes';
+import { needsDisplaySerifFont, resolveThemeContext } from '@config/storefrontThemes';
 import { env as cfEnv } from 'cloudflare:workers';
 
 import '../styles/globals.css';
@@ -72,6 +73,9 @@ if (!isShellReq && Astro.locals && !(Astro.locals as any).systemSettings) {
 const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_errors) : true;
 const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'warn') : 'warn';
 const storefrontTheme = systemSettings?.storefront_theme || 'apple-minimal';
+if (!bare && Astro.locals) {
+  (Astro.locals as any).themeContext = resolveThemeContext(storefrontTheme);
+}
 ---
 
 <!doctype html>
@@ -145,23 +149,31 @@ const storefrontTheme = systemSettings?.storefront_theme || 'apple-minimal';
         )}
     </head>
     <body class={bodyClass || "bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white"}>
-        {!isShellReq && !bare && (
-            <SectionBoundary sectionName="StoreNav">
-                <StoreNav config={configData} />
-            </SectionBoundary>
-        )}
-        <main class={mainClass}>
-            <slot />
-        </main>
-        {!isShellReq && !bare && (
-            <SectionBoundary sectionName="StoreFooter">
-                <StoreFooter config={configData} />
-            </SectionBoundary>
-        )}
-        {!isShellReq && !bare && (
-            <SectionBoundary sectionName="QuoteDrawer">
-                <QuoteDrawer />
-            </SectionBoundary>
+        {bare ? (
+            <main class={mainClass}>
+                <slot />
+            </main>
+        ) : (
+            <ThemeProvider theme={storefrontTheme}>
+                {!isShellReq && (
+                    <SectionBoundary sectionName="StoreNav">
+                        <StoreNav config={configData} />
+                    </SectionBoundary>
+                )}
+                <main class={mainClass}>
+                    <slot />
+                </main>
+                {!isShellReq && (
+                    <SectionBoundary sectionName="StoreFooter">
+                        <StoreFooter config={configData} />
+                    </SectionBoundary>
+                )}
+                {!isShellReq && (
+                    <SectionBoundary sectionName="QuoteDrawer">
+                        <QuoteDrawer />
+                    </SectionBoundary>
+                )}
+            </ThemeProvider>
         )}
 
         <!-- 1. WhatsApp Instant Live Chat Widget (Controlled from Sanity Studio) -->

@@ -1,0 +1,32 @@
+---
+// src/components/ThemeProvider.astro
+// Storefront Theme Provider: resolves theme context, injects Astro.locals.themeContext & outputs semantic wrapper
+import { resolveThemeContext, type StorefrontTheme } from '@config/storefrontThemes';
+
+interface Props {
+  theme?: StorefrontTheme | string;
+  class?: string;
+}
+
+const { theme, class: className = '' } = Astro.props;
+const resolvedTheme = theme || (Astro.locals as any)?.systemSettings?.storefront_theme || 'apple-minimal';
+const themeContext = resolveThemeContext(resolvedTheme);
+
+if (Astro.locals) {
+  (Astro.locals as any).themeContext = themeContext;
+}
+---
+
+<div
+  id="storefront-theme-provider"
+  data-storefront-theme={themeContext.id}
+  data-theme-variant={themeContext.variant}
+  class:list={[
+    'min-h-screen flex flex-col transition-colors duration-200',
+    `theme-${themeContext.variant}`,
+    themeContext.classes.pageCanvas,
+    className,
+  ]}
+>
+  <slot />
+</div>

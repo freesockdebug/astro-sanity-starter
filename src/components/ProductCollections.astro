@@ -5,6 +5,7 @@ import { fetchRfqSettings, RfqSettingsService } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { DEFAULT_COLLECTIONS, DEFAULT_HERO } from '@data/defaults';
 import { getLangFromUrl, getLocalizedPath, getLocalizedValue, toText, useTranslations } from '@i18n';
+import { useStorefrontTheme } from '@config/storefrontThemes';
 import ProductGridSkeleton from './ProductGridSkeleton.astro';
 
 interface Props {
@@ -82,6 +83,7 @@ const showCardQuoteButton = propShowCardQuote !== undefined
   : (rfqSettings?.showCardQuoteButton ?? true);
 
 const sectionId = elementId || sectionAnchor || 'collections';
+const { isLuxury } = useStorefrontTheme(Astro.locals);
 ---
 
 <section id={sectionId} class="bg-white text-[#1d1d1f] border-t border-black/5 py-6 sm:py-8 lg:py-4 lg:h-[calc(100svh-var(--apple-header-offset))] lg:max-h-[860px] lg:min-h-0 flex flex-col justify-between overflow-hidden">
@@ -195,7 +197,7 @@ const sectionId = elementId || sectionAnchor || 'collections';
                   ))}
                 </div>
                 <div class="flex items-center gap-1.5">
-                  {item.gauge && (
+                  {!isLuxury && item.gauge && (
                     <span class="hidden sm:inline-block text-[10px] font-mono text-[#86868b] bg-white px-2 py-0.5 rounded-md border border-black/5">
                       {item.gauge}
                     </span>

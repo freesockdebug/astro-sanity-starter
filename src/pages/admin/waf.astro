@@ -496,11 +496,26 @@ const initialPayload = JSON.stringify({
         }
       };
 
+      let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+      let isSaving = false;
+      let pendingSave = false;
+
+      signal.addEventListener('abort', () => {
+        if (autoSaveTimer) {
+          clearTimeout(autoSaveTimer);
+          autoSaveTimer = null;
+        }
+      });
+
       document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox').forEach((cb) => {
         cb.addEventListener('change', () => {
           syncModeCardsAndKpis();
           setDirty(true);
-          saveRules();
+          if (autoSaveTimer) clearTimeout(autoSaveTimer);
+          autoSaveTimer = setTimeout(() => {
+            autoSaveTimer = null;
+            void saveRules();
+          }, 250);
         }, { signal });
       });
 
@@ -635,7 +650,18 @@ const initialPayload = JSON.stringify({
       }, { signal });
 
       const saveRules = async () => {
-        if (!canManage || !saveBtn || saveBtn.disabled) return;
+        if (!canManage || !saveBtn) return;
+        if (isSaving) {
+          pendingSave = true;
+          return;
+        }
+        if (autoSaveTimer) {
+          clearTimeout(autoSaveTimer);
+          autoSaveTimer = null;
+        }
+        isSaving = true;
+        pendingSave = false;
+
         const selectedModes = Array.from(document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox'))
           .filter((cb) => cb.checked)
           .map((cb) => cb.value);
@@ -662,7 +688,9 @@ const initialPayload = JSON.stringify({
               allowTextarea.value = data.settings.waf_allow_ips;
             }
             syncModeCardsAndKpis();
-            setDirty(false);
+            if (!pendingSave) {
+              setDirty(false);
+            }
             showToast('Edge WAF rules saved and audit-logged.', true);
           } else {
             showToast(data.error || 'Failed to save WAF rules.', false);
@@ -670,8 +698,13 @@ const initialPayload = JSON.stringify({
         } catch (err: any) {
           showToast(`Save failed: ${err.message}`, false);
         } finally {
+          isSaving = false;
           saveBtn.disabled = false;
           saveBtn.classList.remove('is-loading');
+          if (pendingSave) {
+            pendingSave = false;
+            void saveRules();
+          }
         }
       };
 

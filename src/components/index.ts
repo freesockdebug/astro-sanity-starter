@@ -21,6 +21,7 @@ import Breadcrumbs from './Breadcrumbs.astro';
 import MarkdownRenderer from './MarkdownRenderer.astro';
 import LocalTime from './LocalTime.astro';
 import NotFoundView from './NotFoundView.astro';
+import ThemeProvider from './ThemeProvider.astro';
 
 export {
   SectionBoundary,
@@ -42,6 +43,7 @@ export {
   MarkdownRenderer,
   LocalTime,
   NotFoundView,
+  ThemeProvider,
 };
 
 /**

@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+@import './themes/warm-atelier.css';
+@import './themes/editorial-gallery.css';
+@import './themes/luxury-atelier.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -13,6 +16,7 @@
   --color-apple-muted: #86868b;
   --color-apple-blue: #0071e3;
   --color-apple-blue-hover: #0077ed;
+  --font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
 }
 
 /* ==========================================================================
@@ -507,10 +511,3 @@ html.apple-snap-active {
     @apply border-black/10 bg-apple-gray text-apple-muted;
   }
 }
-
-/* ==========================================================================
-   7. Storefront Visual Themes (Isolated per-theme stylesheets)
-   ========================================================================== */
-@import './themes/warm-atelier.css';
-@import './themes/editorial-gallery.css';
-@import './themes/luxury-atelier.css';

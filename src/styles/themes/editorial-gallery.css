@@ -68,41 +68,43 @@ html[data-storefront-theme="editorial-gallery"] :is(.hero-showcase-box, .specs-s
 }
 
 html[data-storefront-theme="editorial-gallery"] #collections-shelf > div {
-  background-color: transparent;
-  border-color: transparent;
-  padding-inline: 0.25rem;
+  background-color: #fdfcfa;
+  border: 1px solid rgba(26, 24, 22, 0.10);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: none;
 }
 
 html[data-storefront-theme="editorial-gallery"] #collections-shelf > div:hover {
-  box-shadow: none;
-  border-color: transparent;
+  box-shadow: 0 8px 24px -16px rgba(26, 24, 22, 0.16);
+  border-color: rgba(26, 24, 22, 0.22);
 }
 
 @media (min-width: 1024px) {
   html[data-storefront-theme="editorial-gallery"] #products-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 1.75rem 1.25rem;
+    gap: 1.5rem 1.25rem;
   }
 }
 
 @media (min-width: 1760px) {
   html[data-storefront-theme="editorial-gallery"] #products-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-    gap: 2rem 1.5rem;
+    gap: 1.75rem 1.5rem;
   }
 }
 
 html[data-storefront-theme="editorial-gallery"] #products-grid > div {
-  background-color: transparent;
-  border-color: transparent;
-  border-radius: 0;
-  padding: 0;
+  background-color: #fdfcfa;
+  border: 1px solid rgba(26, 24, 22, 0.10);
+  border-radius: 0.625rem;
+  padding: 0.75rem;
   box-shadow: none;
 }
 
 html[data-storefront-theme="editorial-gallery"] #products-grid > div:hover {
-  box-shadow: none;
-  border-color: transparent;
+  box-shadow: 0 8px 24px -16px rgba(26, 24, 22, 0.16);
+  border-color: rgba(26, 24, 22, 0.22);
 }
 
 html[data-storefront-theme="editorial-gallery"] #products-grid a.apple-img-wrapper {

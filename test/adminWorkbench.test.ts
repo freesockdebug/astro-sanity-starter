@@ -8,6 +8,7 @@ import { parsePaginationParams, toIsoUtcString, formatUtcFallback } from '../src
 import { getTierConfig, DICT_COLOR_TO_TIER_STYLE } from '../src/utils/tier.js';
 import { toText } from '../src/i18n/utils.js';
 import { toPostgresSql, formatUtcCutoff, sanitizePostgresConnectionString } from '../src/db/client.js';
+import { resolveThemeContext, useStorefrontTheme } from '../src/config/storefrontThemes.js';
 
 test('escapeHtml escapes dangerous HTML characters to prevent XSS', () => {
   assert.equal(escapeHtml('<script>alert("xss")</script>'), '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;');
@@ -225,4 +226,28 @@ test('formatUtcCutoff formats UTC timestamps with space separator for both sqlit
 test('sanitizePostgresConnectionString strips pgbouncer/prisma params while preserving sslmode', () => {
   const cleaned = sanitizePostgresConnectionString('postgresql://user:pass@aws-0-us-east-2.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require&connection_limit=5');
   assert.equal(cleaned, 'postgresql://user:pass@aws-0-us-east-2.pooler.supabase.com:6543/postgres?sslmode=require');
+});
+
+test('resolveThemeContext and useStorefrontTheme resolve valid themes, fallbacks, and Astro.locals caching', () => {
+  const fallback = resolveThemeContext('unknown-theme');
+  assert.equal(fallback.id, 'apple-minimal');
+  assert.equal(fallback.variant, 'minimal');
+  assert.equal(fallback.isLuxury, false);
+
+  const luxury = resolveThemeContext('luxury-atelier');
+  assert.equal(luxury.id, 'luxury-atelier');
+  assert.equal(luxury.variant, 'luxury');
+  assert.equal(luxury.isLuxury, true);
+  assert.match(luxury.classes.headingFont, /font-display/);
+
+  const localsWithSettings = { systemSettings: { storefront_theme: 'editorial-gallery' } };
+  const fromSettings = useStorefrontTheme(localsWithSettings);
+  assert.equal(fromSettings.id, 'editorial-gallery');
+  assert.equal(fromSettings.isEditorial, true);
+
+  const localsWithInjected = {
+    systemSettings: { storefront_theme: 'apple-minimal' },
+    themeContext: luxury,
+  };
+  assert.equal(useStorefrontTheme(localsWithInjected).id, 'luxury-atelier');
 });

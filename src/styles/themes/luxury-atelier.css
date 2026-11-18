@@ -192,28 +192,53 @@ html[data-storefront-theme="luxury-atelier"] #inquiry h2 {
   line-height: 1.12;
 }
 
-/* 4. Lookbook 4:5 Gallery Cards for Featured Collections & Catalog Grid */
-html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) > div {
-  background-color: transparent !important;
-  border-color: transparent !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
+/* 4. Framed 4:5 Architectural Gallery Cards for Featured Collections & Catalog Grid */
+html[data-storefront-theme="luxury-atelier"] #collections-shelf > div {
+  background-color: var(--gv-elevated) !important;
+  border: 1px solid rgba(28, 25, 23, 0.10) !important;
+  border-radius: var(--gv-radius) !important;
+  padding: 1rem !important;
+  box-shadow: none !important;
+  max-height: none !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #products-grid > div {
+  background-color: var(--gv-elevated) !important;
+  border: 1px solid rgba(28, 25, 23, 0.10) !important;
+  border-radius: calc(var(--gv-radius) - 0.125rem) !important;
+  padding: 0.75rem !important;
   box-shadow: none !important;
   max-height: none !important;
 }
 
 html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) > div:hover {
-  box-shadow: none !important;
-  border-color: transparent !important;
+  box-shadow: 0 10px 28px -18px rgba(28, 25, 23, 0.18) !important;
+  border-color: rgba(28, 25, 23, 0.22) !important;
 }
 
 html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) a.apple-img-wrapper {
   aspect-ratio: 4 / 5 !important;
   height: auto !important;
   flex: none !important;
-  border-radius: 0.75rem !important;
+  border-radius: 0.625rem !important;
   background-color: var(--gv-surface) !important;
   box-shadow: none !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #collections-shelf > div > div.flex-1 > a.apple-img-wrapper {
+  order: -1;
+  margin-top: 0 !important;
+  margin-bottom: 0.75rem !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #collections-shelf .btn-card-add-quote {
+  background-color: var(--gv-ink) !important;
+  color: var(--gv-canvas) !important;
+  border-color: transparent !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #collections-shelf .btn-card-add-quote:hover {
+  background-color: var(--gv-accent) !important;
 }
 
 html[data-storefront-theme="luxury-atelier"] #products-grid a.apple-img-wrapper > div.absolute {
@@ -246,7 +271,7 @@ html[data-storefront-theme="luxury-atelier"] #products-grid .btn-catalog-quote:h
 }
 
 html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) .border-t {
-  border-top-color: transparent !important;
+  border-top-color: rgba(28, 25, 23, 0.07) !important;
 }
 
 @media (min-width: 1024px) {
