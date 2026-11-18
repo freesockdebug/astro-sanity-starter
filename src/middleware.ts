@@ -9,6 +9,7 @@ import { SecurityService } from './utils/security';
 import { logger } from './utils/logger';
 import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
 import { getSystemSettings } from './db/settings.repo';
+import { EdgeWafService } from './utils/waf';
 
 /**
  * Safely mutates headers on a Response, cloning into a new Response if headers are immutable
@@ -56,34 +57,12 @@ function sanitizeQuery(search: string): string {
 // Single-Flight Request Coalescing (Collapses edge cache stampedes on isolate)
 const inFlightEdgeRenders = new Map<string, Promise<Response>>();
 
-// Fast 404 shield for vulnerability probes, scanner bots, and well-known paths
-// (Drops malicious probes at the worker edge in 0ms without DB queries, CMS trips, or telemetry loops)
-const SCANNER_EXTENSIONS = /\.(php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do|key|pem|crt)$/i;
-const SCANNER_PATTERN = /(?:^|\/)(?:wp-[a-z0-9_-]+|wordpress|phpmyadmin|pma|mysql|actuator|\.(?:env|git|npmrc|htpasswd|htaccess)|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest|(?:credentials|secrets|service-account|serviceAccountKey|firebase-adminsdk|config)\.json)(?:\/|$|\.)/i;
-
-function isBlockedProbe(pathname: string): boolean {
-  return pathname.startsWith('/.well-known/') || SCANNER_EXTENSIONS.test(pathname) || SCANNER_PATTERN.test(pathname);
-}
-
 /**
  * Cloudflare Edge Cache Middleware for HTML Pages with Observability & Slow-Request Diagnostics
  */
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const pathname = url.pathname;
-
-  // Intercept scanners and well-known probes before allocating profiler or hitting D1
-  if (isBlockedProbe(pathname)) {
-    return new Response('Not Found', {
-      status: 404,
-      statusText: 'Not Found',
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'public, max-age=300, s-maxage=300',
-        'X-Robots-Tag': 'noindex, nofollow',
-      },
-    });
-  }
 
   // Preload SiteConfig in L1 memory so SanityImageService.studioEnableProxy is accurate across cold starts
   SiteConfigService.getConfig().catch(() => {});
@@ -102,6 +81,81 @@ export const onRequest = defineMiddleware(async (context, next) => {
       (globalThis as any).__CF_ENV__ = cfEnv;
     }
     const runtimeCtx = (context.locals as any)?.cfContext;
+
+    if (!EdgeWafService.isStaticAsset(pathname)) {
+      const wafSettings = await getSystemSettings(cfEnv).catch(() => null);
+      if (wafSettings) {
+        (context.locals as any).systemSettings = wafSettings;
+      }
+
+      const wafResult = EdgeWafService.evaluate(
+        {
+          clientIp: clientMeta.ip,
+          pathname,
+          search: url.search,
+          method: request.method,
+          headers: request.headers,
+        },
+        wafSettings
+      );
+
+      if (!wafResult.allowed) {
+        const blockStatus = wafResult.status || 403;
+        logger.warn(
+          {
+            module: 'EDGE_WAF',
+            event: wafResult.code || 'WAF_BLOCK',
+            message: wafResult.reason || 'Request blocked by Edge WAF',
+            path: pathname,
+            method: request.method,
+            statusCode: blockStatus,
+            rayId,
+            clientIp: clientMeta.ip,
+            country: clientMeta.country,
+            city: clientMeta.city,
+            context: {
+              mode: wafResult.mode,
+              matchedSample: wafResult.matchedSample,
+              userAgent: request.headers.get('user-agent') || '',
+              autoBanned: Boolean(wafResult.autoBanned),
+            },
+          },
+          { cfEnv, ctx: runtimeCtx }
+        );
+
+        const blockHeaders: Record<string, string> = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'X-Request-Id': rayId,
+          'X-Edge-WAF': 'BLOCK',
+          'X-Robots-Tag': 'noindex, nofollow',
+        };
+        if (wafResult.retryAfter) {
+          blockHeaders['Retry-After'] = String(wafResult.retryAfter);
+        }
+
+        return new Response(
+          JSON.stringify({
+            error: wafResult.reason || 'Forbidden',
+            code: wafResult.code,
+            requestId: rayId,
+          }),
+          { status: blockStatus, headers: blockHeaders }
+        );
+      }
+
+      if (EdgeWafService.isBlockedProbePath(pathname)) {
+        return new Response('Not Found', {
+          status: 404,
+          statusText: 'Not Found',
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'public, max-age=300, s-maxage=300',
+            'X-Robots-Tag': 'noindex, nofollow',
+          },
+        });
+      }
+    }
 
     const cookieHeader = request.headers.get('cookie') || '';
     const sessionToken = getCookieValue(cookieHeader, SESSION_COOKIE_NAME);

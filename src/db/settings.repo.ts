@@ -15,6 +15,14 @@ import {
 export type LogMinLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
 export type StorefrontTheme = 'apple-minimal' | 'warm-atelier' | 'editorial-gallery';
 
+export const VALID_WAF_MODES = [
+  'block_malicious_ips',
+  'strict_rate_limiting',
+  'bot_challenge',
+] as const;
+
+export type WafRuleMode = (typeof VALID_WAF_MODES)[number];
+
 export interface SystemSettings {
   // 1. Brand & Buyer Concierge
   brand_name: string;
@@ -45,6 +53,9 @@ export interface SystemSettings {
   turnstile_secret_key: string;
   turnstile_hostnames: string;
   login_retention_days: number;
+  waf_active_modes: WafRuleMode[];
+  waf_blocked_ips: string;
+  waf_allow_ips: string;
 
   // 5. Diagnostics & Observability
   enable_error_logging: boolean;
@@ -83,6 +94,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   turnstile_secret_key: '',
   turnstile_hostnames: '',
   login_retention_days: 90,
+  waf_active_modes: ['block_malicious_ips', 'bot_challenge'],
+  waf_blocked_ips: '',
+  waf_allow_ips: '',
   enable_error_logging: true,
   log_authenticated_users: true,
   log_client_errors: true,
@@ -193,6 +207,36 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
     return fallback;
   };
 
+  const resolveWafModes = (key: keyof SystemSettings, envKey: string, fallback: WafRuleMode[]): WafRuleMode[] => {
+    const parseModes = (raw: string): WafRuleMode[] | null => {
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((m): m is WafRuleMode => VALID_WAF_MODES.includes(m as WafRuleMode));
+        }
+      } catch {
+        return trimmed
+          .split(',')
+          .map((s) => s.trim())
+          .filter((m): m is WafRuleMode => VALID_WAF_MODES.includes(m as WafRuleMode));
+      }
+      return null;
+    };
+
+    if (dbMap.has(key)) {
+      const parsed = parseModes(dbMap.get(key) ?? '');
+      if (parsed !== null) return parsed;
+    }
+    const valFromEnv = getRuntimeEnv(envKey, customEnv);
+    if (typeof valFromEnv === 'string' && valFromEnv.trim().length > 0) {
+      const parsed = parseModes(valFromEnv);
+      if (parsed !== null) return parsed;
+    }
+    return [...fallback];
+  };
+
   const ENV_KEY_OVERRIDES: Partial<Record<keyof SystemSettings, string>> = {
     brand_name: 'PUBLIC_BRAND_NAME',
     contact_email: 'PUBLIC_CONTACT_EMAIL',
@@ -211,6 +255,8 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
       (settings as any)[key] = resolveBool(key, envKey, defaultVal);
     } else if (typeof defaultVal === 'number') {
       (settings as any)[key] = resolveNum(key, envKey, defaultVal);
+    } else if (Array.isArray(defaultVal)) {
+      (settings as any)[key] = resolveWafModes(key, envKey, defaultVal as WafRuleMode[]);
     } else {
       const val = resolveStr(key, envKey, String(defaultVal), !NON_EMPTY_STRING_KEYS.has(key));
       (settings as any)[key] = key === 'log_min_level' ? (val.toLowerCase() as LogMinLevel) : val;
@@ -258,9 +304,11 @@ export async function updateSystemSettings(
 
       const params: any[] = [];
       for (const [key, rawVal] of entries) {
-        const valStr = typeof rawVal === 'boolean' || typeof rawVal === 'number'
-          ? String(rawVal)
-          : String(rawVal || '').trim();
+        const valStr = Array.isArray(rawVal)
+          ? JSON.stringify(rawVal)
+          : typeof rawVal === 'boolean' || typeof rawVal === 'number'
+            ? String(rawVal)
+            : String(rawVal || '').trim();
         params.push(key, valStr, updatedBy);
       }
 

@@ -147,35 +147,35 @@ const cleanDescription = toText(description).replace(/^\d+/, "").trim();
 const sectionId = elementId || sectionAnchor || 'specs';
 ---
 
-<section id={sectionId} class="specs-section bg-[#f5f5f7] border-t border-black/5 py-8 lg:py-0 lg:h-[calc(100svh-48px)] lg:max-h-[850px] lg:min-h-0 lg:flex lg:flex-col lg:justify-between lg:pt-6 lg:pb-4">
-  <div class="apple-rail-bento flex flex-col flex-1 min-h-0 justify-between gap-3 lg:gap-3">
-    <!-- Header: Apple Grand Typography on Narrow Rail (980px) - Centered -->
-    <div class="apple-rail-narrow text-center flex-shrink-0 pt-1 lg:pt-2 space-y-1 sm:space-y-1.5">
-      <span class="text-xs font-semibold uppercase tracking-wider text-[#86868b] block">
+<section id={sectionId} class="specs-section bg-surface border-t border-hairline">
+  <div class="apple-rail-bento flex flex-col">
+    <!-- Header: Editorial Serif Typography on Narrow Rail (980px) - Centered -->
+    <div class="apple-rail-narrow text-center mb-12 lg:mb-16 space-y-3">
+      <span class="text-xs font-medium uppercase tracking-[0.14em] text-muted block">
         {cleanBadge || "Technical Architecture"}
       </span>
-      <h2 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
+      <h2 class="fluid-section-title font-display font-medium text-ink">
         {cleanTitle || "Crafted to the micron."}
       </h2>
-      <p class="text-sm sm:text-base font-normal text-[#86868b] max-w-xl mx-auto leading-relaxed">
+      <p class="text-[15px] sm:text-[17px] font-normal text-muted max-w-2xl mx-auto leading-relaxed">
         {cleanDescription || "Every thread engineered for retail longevity & zero friction."}
       </p>
     </div>
 
-    <!-- Apple Bento Grid: Left Large Image + Right 4 Small Blocks on Desktop, Scroll Shelf on Mobile -->
-    <div class="flex-1 min-h-0 flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 pt-1 no-scrollbar lg:grid lg:grid-cols-12 lg:grid-rows-2 lg:gap-3.5 lg:overflow-visible lg:p-0 items-stretch">
-      <!-- Left: Large Image Card (Span 6 cols / 2 rows full height) -->
-      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-6 lg:row-span-2 lg:col-start-1 lg:row-start-1 bg-white rounded-2xl lg:rounded-3xl p-3.5 sm:p-4 xl:p-5 flex flex-col justify-between border border-black/5 shadow-xs group hover:shadow-md transition-all">
-        <div class="flex-shrink-0">
-          <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b] min-w-0 truncate block">{bento1Tag}</span>
-          <h3 class="mt-0.5 text-base sm:text-lg lg:text-xl font-semibold tracking-tight text-[#1d1d1f]">
+    <!-- Architectural Bento Grid: Left Large Image + Right 4 Spec Blocks on Desktop, Scroll Shelf on Mobile -->
+    <div class="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-3 pt-1 no-scrollbar lg:grid lg:grid-cols-12 lg:grid-rows-2 lg:gap-5 lg:overflow-visible lg:p-0 items-stretch">
+      <!-- Left: Large Image Card (Span 6 cols / 2 rows) -->
+      <div class="shrink-0 w-[84vw] max-w-[340px] snap-start min-h-[340px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-6 lg:row-span-2 lg:col-start-1 lg:row-start-1 bg-elevated rounded-[var(--gv-radius-card)] p-6 xl:p-7 flex flex-col justify-between border border-hairline group">
+        <div class="flex-shrink-0 space-y-1.5">
+          <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted min-w-0 truncate block">{bento1Tag}</span>
+          <h3 class="text-lg sm:text-xl font-medium tracking-tight text-ink">
             {bento1Title}
           </h3>
-          <p class="mt-0.5 text-xs text-[#86868b] max-w-xl font-normal leading-relaxed line-clamp-2">
+          <p class="text-[14px] sm:text-[15px] text-muted max-w-xl font-normal leading-relaxed">
             {bento1Description}
           </p>
         </div>
-        <div class="apple-skeleton-surface relative mt-2.5 rounded-xl lg:rounded-2xl overflow-hidden bg-[#f5f5f7] border border-black/5 flex-1 min-h-0 w-full">
+        <div class="apple-skeleton-surface relative mt-5 rounded-lg overflow-hidden bg-surface border border-hairline aspect-[16/10] lg:flex-1 lg:min-h-[220px] w-full">
           <img
             src={macroImage}
             srcset={macroSrcSet || undefined}
@@ -183,7 +183,7 @@ const sectionId = elementId || sectionAnchor || 'specs';
             width="600"
             height="400"
             alt="Macro ribbed textile texture"
-            class="absolute inset-0 w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
+            class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
             loading="lazy"
             decoding="async"
             onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
@@ -192,109 +192,109 @@ const sectionId = elementId || sectionAnchor || 'specs';
       </div>
 
       <!-- Right Top-Left: Block 1 - 0mm Seamless Toe -->
-      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-7 lg:row-start-1 bg-white rounded-2xl lg:rounded-3xl p-3.5 sm:p-4 xl:p-5 flex flex-col justify-between border border-black/5 shadow-xs hover:shadow-md transition-all">
+      <div class="shrink-0 w-[84vw] max-w-[340px] snap-start min-h-[240px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-7 lg:row-start-1 bg-elevated rounded-[var(--gv-radius-card)] p-6 xl:p-7 flex flex-col justify-between border border-hairline">
         <div>
-          <div class="flex items-center justify-between gap-1.5 min-w-0">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b] min-w-0 truncate">{bento2Tag}</span>
-            <span class="shrink-0 max-w-[55%] truncate px-2 py-0.5 rounded-full text-[9px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 inline-flex items-center">
+          <div class="flex items-center justify-between gap-2 min-w-0">
+            <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted min-w-0 truncate">{bento2Tag}</span>
+            <span class="shrink-0 max-w-[55%] truncate px-2.5 py-0.5 rounded text-xs font-mono bg-surface text-muted border border-hairline inline-flex items-center">
               {bento2BadgeStatus}
             </span>
           </div>
 
-          <div class="mt-1.5 sm:mt-2 xl:mt-2.5 flex items-baseline gap-1">
-            <span class="text-2xl sm:text-3xl xl:text-4xl font-semibold tracking-tight text-[#1d1d1f]">{bento2Stat}</span>
-            <span class="text-xs sm:text-sm xl:text-base font-medium text-[#86868b]">{bento2Unit}</span>
+          <div class="mt-3 flex items-baseline gap-1.5">
+            <span class="text-3xl xl:text-4xl font-semibold tracking-tight text-ink">{bento2Stat}</span>
+            <span class="text-sm xl:text-base font-medium text-muted">{bento2Unit}</span>
           </div>
 
-          <h3 class="mt-0.5 sm:mt-1 text-xs sm:text-sm xl:text-base font-semibold text-[#1d1d1f] truncate">{bento2Title}</h3>
-          <p class="mt-0.5 text-xs text-[#86868b] font-normal leading-relaxed line-clamp-2">
+          <h3 class="mt-2 text-base sm:text-[17px] font-medium text-ink truncate">{bento2Title}</h3>
+          <p class="mt-1.5 text-[14px] sm:text-[15px] text-muted font-normal leading-relaxed">
             {bento2Description}
           </p>
         </div>
 
-        <div class="mt-2 pt-2 border-t border-black/5 text-[11px] text-[#86868b] font-medium flex items-center justify-between gap-1 min-w-0">
+        <div class="mt-4 pt-3 border-t border-hairline text-xs text-muted font-medium flex items-center justify-between gap-2 min-w-0">
           <span class="min-w-0 truncate">{bento2BadgeText}</span>
-          <span class="text-zinc-400 font-mono text-[10px] shrink-0">0.0mm Flat</span>
+          <span class="font-mono text-xs shrink-0">0.0mm Flat</span>
         </div>
       </div>
 
       <!-- Right Top-Right: Block 2 - Gauge Precision (Lonati) -->
-      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-10 lg:row-start-1 bg-white rounded-2xl lg:rounded-3xl p-3.5 sm:p-4 xl:p-5 flex flex-col justify-between border border-black/5 shadow-xs hover:shadow-md transition-all">
+      <div class="shrink-0 w-[84vw] max-w-[340px] snap-start min-h-[240px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-10 lg:row-start-1 bg-elevated rounded-[var(--gv-radius-card)] p-6 xl:p-7 flex flex-col justify-between border border-hairline">
         <div>
-          <div class="flex items-center justify-between gap-1.5 min-w-0">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b] min-w-0 truncate">{bento3Tag}</span>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 shrink-0">Lonati</span>
+          <div class="flex items-center justify-between gap-2 min-w-0">
+            <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted min-w-0 truncate">{bento3Tag}</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface text-muted border border-hairline shrink-0">Lonati</span>
           </div>
-          <div class="mt-1.5 sm:mt-2 xl:mt-2.5 flex items-baseline gap-1">
-            <span class="text-2xl sm:text-3xl xl:text-4xl font-semibold tracking-tight text-[#1d1d1f]">{bento3Stat}</span>
-            <span class="text-xs sm:text-sm xl:text-base font-medium text-[#86868b]">{bento3Unit}</span>
+          <div class="mt-3 flex items-baseline gap-1.5">
+            <span class="text-3xl xl:text-4xl font-semibold tracking-tight text-ink">{bento3Stat}</span>
+            <span class="text-sm xl:text-base font-medium text-muted">{bento3Unit}</span>
           </div>
-          <h3 class="mt-0.5 sm:mt-1 text-xs sm:text-sm xl:text-base font-semibold text-[#1d1d1f] truncate">{bento3Title}</h3>
-          <p class="mt-0.5 text-xs text-[#86868b] font-normal leading-relaxed line-clamp-2">
+          <h3 class="mt-2 text-base sm:text-[17px] font-medium text-ink truncate">{bento3Title}</h3>
+          <p class="mt-1.5 text-[14px] sm:text-[15px] text-muted font-normal leading-relaxed">
             {bento3Description}
           </p>
         </div>
-        <div class="mt-2 pt-2 border-t border-black/5 text-[11px] text-[#86868b] min-w-0 truncate">
+        <div class="mt-4 pt-3 border-t border-hairline text-xs text-muted min-w-0 truncate">
           {bento3FooterNote}
         </div>
       </div>
 
       <!-- Right Bottom-Left: Block 3 - Elasticity & Welt (Lycra) -->
-      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-7 lg:row-start-2 bg-white rounded-2xl lg:rounded-3xl p-3.5 sm:p-4 xl:p-5 flex flex-col justify-between border border-black/5 shadow-xs hover:shadow-md transition-all">
+      <div class="shrink-0 w-[84vw] max-w-[340px] snap-start min-h-[240px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-7 lg:row-start-2 bg-elevated rounded-[var(--gv-radius-card)] p-6 xl:p-7 flex flex-col justify-between border border-hairline">
         <div>
-          <div class="flex items-center justify-between gap-1.5 min-w-0">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b] min-w-0 truncate">{bento4Tag}</span>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 shrink-0">Lycra®</span>
+          <div class="flex items-center justify-between gap-2 min-w-0">
+            <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted min-w-0 truncate">{bento4Tag}</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface text-muted border border-hairline shrink-0">Lycra®</span>
           </div>
-          <div class="mt-1.5 sm:mt-2 xl:mt-2.5 flex items-baseline gap-1">
-            <span class="text-2xl sm:text-3xl xl:text-4xl font-semibold tracking-tight text-[#1d1d1f]">{bento4Stat}</span>
-            <span class="text-xs sm:text-sm xl:text-base font-medium text-[#86868b]">{bento4Unit}</span>
+          <div class="mt-3 flex items-baseline gap-1.5">
+            <span class="text-3xl xl:text-4xl font-semibold tracking-tight text-ink">{bento4Stat}</span>
+            <span class="text-sm xl:text-base font-medium text-muted">{bento4Unit}</span>
           </div>
-          <h3 class="mt-0.5 sm:mt-1 text-xs sm:text-sm xl:text-base font-semibold text-[#1d1d1f] truncate">{bento4Title}</h3>
-          <p class="mt-0.5 text-xs text-[#86868b] font-normal leading-relaxed line-clamp-2">
+          <h3 class="mt-2 text-base sm:text-[17px] font-medium text-ink truncate">{bento4Title}</h3>
+          <p class="mt-1.5 text-[14px] sm:text-[15px] text-muted font-normal leading-relaxed">
             {bento4Description}
           </p>
         </div>
-        <div class="mt-2 pt-2 border-t border-black/5 text-[11px] text-[#86868b] min-w-0 truncate">
+        <div class="mt-4 pt-3 border-t border-hairline text-xs text-muted min-w-0 truncate">
           {bento4FooterNote}
         </div>
       </div>
 
       <!-- Right Bottom-Right: Block 4 - Rapid Dispatch (DHL Air) -->
-      <div class="shrink-0 w-[82vw] max-w-[320px] snap-start h-[290px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-10 lg:row-start-2 bg-white rounded-2xl lg:rounded-3xl p-3.5 sm:p-4 xl:p-5 flex flex-col justify-between border border-black/5 shadow-xs hover:shadow-md transition-all">
+      <div class="shrink-0 w-[84vw] max-w-[340px] snap-start min-h-[240px] lg:h-full lg:w-full lg:max-w-none lg:shrink lg:snap-align-none lg:col-span-3 lg:col-start-10 lg:row-start-2 bg-elevated rounded-[var(--gv-radius-card)] p-6 xl:p-7 flex flex-col justify-between border border-hairline">
         <div>
-          <div class="flex items-center justify-between gap-1.5 min-w-0">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#86868b] min-w-0 truncate">{bento5Tag}</span>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 shrink-0">DHL Air</span>
+          <div class="flex items-center justify-between gap-2 min-w-0">
+            <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted min-w-0 truncate">{bento5Tag}</span>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface text-muted border border-hairline shrink-0">DHL Air</span>
           </div>
-          <div class="mt-1.5 sm:mt-2 xl:mt-2.5 flex items-baseline gap-1">
-            <span class="text-2xl sm:text-3xl xl:text-4xl font-semibold tracking-tight text-[#1d1d1f]">{bento5Stat}</span>
-            <span class="text-xs sm:text-sm xl:text-base font-medium text-[#86868b]">{bento5Unit}</span>
+          <div class="mt-3 flex items-baseline gap-1.5">
+            <span class="text-3xl xl:text-4xl font-semibold tracking-tight text-ink">{bento5Stat}</span>
+            <span class="text-sm xl:text-base font-medium text-muted">{bento5Unit}</span>
           </div>
-          <h3 class="mt-0.5 sm:mt-1 text-xs sm:text-sm xl:text-base font-semibold text-[#1d1d1f] truncate">{bento5Title}</h3>
-          <p class="mt-0.5 text-xs text-[#86868b] font-normal leading-relaxed line-clamp-2">
+          <h3 class="mt-2 text-base sm:text-[17px] font-medium text-ink truncate">{bento5Title}</h3>
+          <p class="mt-1.5 text-[14px] sm:text-[15px] text-muted font-normal leading-relaxed">
             {bento5Description}
           </p>
         </div>
-        <div class="mt-2 pt-2 border-t border-black/5 text-[11px] text-[#86868b] min-w-0 truncate">
+        <div class="mt-4 pt-3 border-t border-hairline text-xs text-muted min-w-0 truncate">
           {bento5FooterNote}
         </div>
       </div>
     </div>
 
     <!-- Mobile Swipe Visual Hint -->
-    <div class="flex lg:hidden items-center justify-center gap-1.5 pt-0.5 text-[11px] font-medium text-[#86868b]">
+    <div class="flex lg:hidden items-center justify-center gap-1.5 pt-3 text-xs font-medium text-muted">
       <span>{t('specs.swipeHint')}</span>
       <span aria-hidden="true">→</span>
     </div>
 
-    <!-- Bottom Actions: Apple Clean Dual Pills on Narrow Rail -->
-    <div class="apple-rail-narrow flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-0.5 shrink-0">
+    <!-- Bottom Actions: Clean Dual Pills on Narrow Rail -->
+    <div class="apple-rail-narrow flex flex-col sm:flex-row items-center justify-center gap-3 pt-10 shrink-0">
       {showPrimaryButton && (
         <a
           href={getLocalizedPath(primaryButtonUrl, currentLang)}
           data-swatch-sku={swatchSku}
-          class="w-full sm:w-auto px-5 py-2 rounded-full bg-[#1d1d1f] text-white text-xs font-medium hover:bg-black transition-all shadow-sm text-center"
+          class="w-full sm:w-auto px-6 py-2.5 rounded-full bg-ink text-canvas text-sm font-medium hover:opacity-85 transition-opacity text-center"
         >
           {primaryButtonText}
         </a>
@@ -302,7 +302,7 @@ const sectionId = elementId || sectionAnchor || 'specs';
       {showSecondaryButton && (
         <a
           href={getLocalizedPath(secondaryButtonUrl, currentLang)}
-          class="w-full sm:w-auto px-4 py-2 rounded-full text-[#1d1d1f] text-xs font-medium hover:bg-white hover:shadow-sm border border-black/10 transition-all text-center"
+          class="w-full sm:w-auto px-6 py-2.5 rounded-full text-ink text-sm font-medium hover:bg-elevated border border-hairline transition-colors text-center"
         >
           {resolvedSecondaryText}
         </a>

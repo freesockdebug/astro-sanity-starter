@@ -1,0 +1,698 @@
+---
+// src/pages/admin/waf.astro
+// Edge WAF Shield Console: Protection Modes, IP Blacklist/Whitelist, Auto-Ban Strikes & Live Intercept Telemetry
+import AdminLayout from '@layouts/AdminLayout.astro';
+import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
+import { requireAdminContext } from '@utils/auth';
+import { hasPermission } from '@utils/rbac';
+import { getSystemSettings, listErrorLogs, type WafRuleMode } from '@db';
+import { EdgeWafService, parseIpList } from '@utils/waf';
+import { formatAdminTime } from '@utils/adminWorkbench';
+import { env as cfEnv } from 'cloudflare:workers';
+
+export const prerender = false;
+
+const { sessionUser, adminContext, pendingOrdersCount, systemSettings, redirectResponse } = await requireAdminContext(
+  Astro,
+  cfEnv,
+  '/admin/waf',
+  { requiredMenu: 'waf' }
+);
+if (redirectResponse) return redirectResponse;
+
+const canManage = hasPermission(adminContext, 'waf:manage');
+const settings = systemSettings || (await getSystemSettings(cfEnv));
+
+const [recentLogsRes, dayLogsRes] = await Promise.all([
+  listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1 }, cfEnv).catch(() => ({
+    logs: [],
+    total: 0,
+    stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0, slow: 0 },
+    bottlenecks: [],
+  })),
+  listErrorLogs({ source: 'EDGE_WAF', timeWindow: '24h', limit: 1, page: 1 }, cfEnv).catch(() => ({
+    logs: [],
+    total: 0,
+    stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0, slow: 0 },
+    bottlenecks: [],
+  })),
+]);
+
+const activeModes: WafRuleMode[] = Array.isArray(settings?.waf_active_modes) ? settings.waf_active_modes : [];
+const blockedIpsStr = settings?.waf_blocked_ips || '';
+const allowIpsStr = settings?.waf_allow_ips || '';
+const blockedCount = parseIpList(blockedIpsStr).length;
+const allowCount = parseIpList(allowIpsStr).length;
+const strikeStats = EdgeWafService.getStrikeStats();
+const blocked24hCount = dayLogsRes.total || 0;
+const logs = recentLogsRes.logs || [];
+
+const WAF_MODE_CARDS: Array<{
+  mode: WafRuleMode;
+  icon: string;
+  title: string;
+  desc: string;
+  responseCode: string;
+  tagClass: string;
+}> = [
+  {
+    mode: 'block_malicious_ips',
+    icon: '🛡️',
+    title: 'Block Malicious IPs',
+    desc: 'Blocks blacklisted IPs, OWASP SQLi / XSS / path traversal (../) payloads, and auto-bans probe IPs for 15 minutes after 3 strikes.',
+    responseCode: '403 Forbidden (WAF_MALICIOUS_IP / WAF_MALICIOUS_PAYLOAD)',
+    tagClass: 'bg-rose-50 text-rose-700 border-rose-200/80',
+  },
+  {
+    mode: 'strict_rate_limiting',
+    icon: '⚡',
+    title: 'Strict Rate Limiting',
+    desc: 'Enforces sliding-window limits at the edge: public write APIs (/api/submit-quote) 5 req/min, standard APIs 30 req/min, pages 90 req/min.',
+    responseCode: '429 Too Many Requests (WAF_STRICT_RATE_LIMIT) + Retry-After: 60',
+    tagClass: 'bg-amber-50 text-amber-800 border-amber-200/80',
+  },
+  {
+    mode: 'bot_challenge',
+    icon: '🤖',
+    title: 'Bot Challenge',
+    desc: 'Detects and blocks sqlmap, nuclei, nikto, python-requests, Scrapy & AI scrapers; challenges sensitive requests lacking browser fingerprints.',
+    responseCode: '403 Forbidden (WAF_BOT_CHALLENGE)',
+    tagClass: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
+  },
+];
+
+const parseLogContext = (ctxJson?: string) => {
+  if (!ctxJson) return {} as Record<string, any>;
+  try {
+    return JSON.parse(ctxJson) || {};
+  } catch {
+    return {};
+  }
+};
+
+const modeBadgeLabel = (mode?: string) => {
+  if (mode === 'block_malicious_ips') return { text: 'Block Malicious IPs', cls: 'adm-badge-err' };
+  if (mode === 'strict_rate_limiting') return { text: 'Strict Rate Limiting', cls: 'adm-badge-warn' };
+  if (mode === 'bot_challenge') return { text: 'Bot Challenge', cls: 'adm-badge-info' };
+  return { text: 'Edge WAF', cls: 'adm-badge-neutral' };
+};
+
+const initialPayload = JSON.stringify({
+  canManage,
+  activeModes,
+  blockedIps: blockedIpsStr,
+  allowIps: allowIpsStr,
+}).replace(/</g, '\\u003c');
+---
+
+<AdminLayout
+  title="Edge WAF Shield"
+  currentTab="waf"
+  sessionEmail={sessionUser?.email || ''}
+  adminName={adminContext?.name}
+  roleName={adminContext?.role?.name}
+  roleCode={adminContext?.role?.code}
+  menus={adminContext?.menus}
+  permissions={adminContext?.permissions}
+  dataScope={adminContext?.dataScope}
+  pendingOrdersCount={pendingOrdersCount}
+  fullscreenWorkbench={true}
+>
+  <div id="waf-workbench-root" class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-3">
+    <AdminPageToolbar
+      title="Edge WAF Shield"
+      subtitle="Real-time edge protection modes, IP blacklists/whitelists, 3-strike auto-ban engine & live intercept telemetry"
+      badge={activeModes.length > 0 ? `${activeModes.length} / 3 Enforcing` : 'WAF Standby'}
+      badgeColor={activeModes.length > 0 ? 'emerald' : 'amber'}
+      iconKey="waf"
+    >
+      <div class="flex items-center gap-2">
+        <button
+          id="waf-refresh-btn"
+          type="button"
+          class="adm-btn-secondary"
+          title="Refresh telemetry"
+        >
+          ↻ Refresh
+        </button>
+        {canManage && (
+          <button
+            id="waf-save-btn"
+            type="button"
+            class="adm-btn"
+            title="Save WAF Rules (⌘S)"
+          >
+            <span>Save Rules</span>
+            <kbd class="hidden sm:inline-block px-1 py-0.5 text-[9px] font-mono bg-white/15 rounded">⌘S</kbd>
+          </button>
+        )}
+      </div>
+    </AdminPageToolbar>
+
+    <div class="flex-1 min-h-0 overflow-y-auto space-y-4 pr-0.5 text-xs">
+      <!-- 1. Top KPI Summary Bar -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div class="adm-card p-3.5 flex flex-col justify-between gap-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">Active Protection Modes</span>
+            <span
+              id="kpi-modes-badge"
+              class:list={[
+                'adm-badge',
+                activeModes.length > 0 ? 'adm-badge-ok' : 'adm-badge-warn',
+              ]}
+            >
+              {activeModes.length > 0 ? 'ACTIVE' : 'WAF Standby'}
+            </span>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <span id="kpi-modes-count" class="text-xl font-bold text-[#1d1d1f] tabular-nums">{activeModes.length} / 3</span>
+            <span class="text-[11px] text-[#86868b]">Modes Active</span>
+          </div>
+        </div>
+
+        <div class="adm-card p-3.5 flex flex-col justify-between gap-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">24h Blocked Attacks</span>
+            <span class="adm-badge adm-badge-err">EDGE_WAF</span>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <span id="kpi-24h-blocked" class="text-xl font-bold text-[#1d1d1f] tabular-nums">{blocked24hCount}</span>
+            <span class="text-[11px] text-[#86868b]">Intercepted Requests</span>
+          </div>
+        </div>
+
+        <div class="adm-card p-3.5 flex flex-col justify-between gap-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">Custom Blacklisted IPs</span>
+            <span class="adm-badge adm-badge-neutral">ACL</span>
+          </div>
+          <div class="flex items-baseline justify-between gap-2">
+            <div>
+              <span id="kpi-blocked-ips" class="text-xl font-bold text-[#1d1d1f] tabular-nums">{blockedCount}</span>
+              <span class="text-[11px] text-[#86868b] ml-1">Blocked</span>
+            </div>
+            <span id="kpi-allow-ips" class="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200/70 px-2 py-0.5 rounded-full">
+              +{allowCount} Whitelisted
+            </span>
+          </div>
+        </div>
+
+        <div class="adm-card p-3.5 flex flex-col justify-between gap-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">Auto-Ban Strike Engine</span>
+            <span class="adm-badge adm-badge-warn">3 Strikes · 15m</span>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-[11px] text-[#1d1d1f]">
+              <strong id="kpi-active-bans" class="text-lg font-bold tabular-nums">{strikeStats.activeBans}</strong>
+              <span class="text-[#86868b] ml-1">banned · <span id="kpi-tracked-ips">{strikeStats.trackedIps}</span> tracked</span>
+            </div>
+            {canManage && (
+              <button
+                id="waf-clear-strikes-btn"
+                type="button"
+                class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#f5f5f7] hover:bg-black/10 text-[#1d1d1f] border border-black/10 transition-colors cursor-pointer shrink-0"
+              >
+                Clear Auto-Ban Strikes
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Three Protection Mode Toggle Cards -->
+      <section class="adm-card p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">EdgeWafService Protection Modes</h2>
+            <p class="text-[11px] text-[#86868b]">Click any card to toggle enforcement in <code class="font-mono text-[10px] bg-[#f5f5f7] px-1 py-0.5 rounded">waf_active_modes</code>. Changes apply immediately on save.</p>
+          </div>
+          {!canManage && (
+            <span class="adm-badge adm-badge-neutral">Read-Only (waf:read)</span>
+          )}
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {WAF_MODE_CARDS.map((card) => {
+            const isEnabled = activeModes.includes(card.mode);
+            return (
+              <label
+                data-waf-card={card.mode}
+                class:list={[
+                  'waf-mode-card rounded-2xl border p-4 flex flex-col justify-between gap-3 transition-all select-none',
+                  canManage ? 'cursor-pointer hover:border-black/25' : 'opacity-90 cursor-default',
+                  isEnabled ? 'bg-white border-black/20 shadow-xs ring-1 ring-black/5' : 'bg-[#fafafc] border-black/8',
+                ]}
+              >
+                <div class="space-y-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-base shrink-0">{card.icon}</span>
+                      <span class="font-bold text-xs text-[#1d1d1f] truncate">{card.title}</span>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <span
+                        data-mode-badge={card.mode}
+                        class:list={[
+                          'adm-badge',
+                          isEnabled ? 'adm-badge-ok' : 'adm-badge-neutral',
+                        ]}
+                      >
+                        {isEnabled ? 'ENFORCING' : 'DISABLED'}
+                      </span>
+                      <input
+                        type="checkbox"
+                        name="waf_mode"
+                        value={card.mode}
+                        checked={isEnabled}
+                        disabled={!canManage}
+                        class="waf-mode-checkbox w-4 h-4 accent-[#1d1d1f] rounded cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  <p class="text-[11px] text-[#52525b] leading-relaxed">{card.desc}</p>
+                </div>
+
+                <div class="pt-2 border-t border-black/5">
+                  <span class:list={['inline-block px-2 py-0.5 rounded-md border font-mono text-[10px] leading-snug', card.tagClass]}>
+                    {card.responseCode}
+                  </span>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+
+      <!-- 3. IP Blacklist & Whitelist -->
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div class="adm-card p-4 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <label for="waf-blocked-ips" class="font-bold text-xs text-[#1d1d1f]">
+              Blocked Malicious IPs / CIDR Prefixes
+            </label>
+            <span class="text-[10px] font-mono text-[#86868b]">waf_blocked_ips</span>
+          </div>
+          <p class="text-[11px] text-[#86868b]">
+            Comma or newline separated. Supports exact IPs, wildcards (<code class="font-mono">185.220.101.*</code>), and IPv4 CIDR (<code class="font-mono">45.155.205.0/24</code>).
+          </p>
+          <textarea
+            id="waf-blocked-ips"
+            rows="5"
+            disabled={!canManage}
+            placeholder="185.220.101.1&#10;45.155.205.*"
+            class="adm-input font-mono text-[11px] leading-relaxed resize-y"
+          >{blockedIpsStr}</textarea>
+        </div>
+
+        <div class="adm-card p-4 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <label for="waf-allow-ips" class="font-bold text-xs text-[#1d1d1f]">
+              Trusted Whitelist IPs (Bypass All WAF Rules)
+            </label>
+            <span class="text-[10px] font-mono text-[#86868b]">waf_allow_ips</span>
+          </div>
+          <p class="text-[11px] text-[#86868b]">
+            Highest priority allowlist. Office static IPs or load-test nodes listed here skip all WAF checks and rate limits.
+          </p>
+          <textarea
+            id="waf-allow-ips"
+            rows="5"
+            disabled={!canManage}
+            placeholder="203.0.113.10&#10;198.51.100.*"
+            class="adm-input font-mono text-[11px] leading-relaxed resize-y"
+          >{allowIpsStr}</textarea>
+        </div>
+      </section>
+
+      <!-- 4. Live Intercept Telemetry Table -->
+      <section class="adm-card overflow-hidden">
+        <div class="px-4 py-3 border-b border-black/5 flex flex-wrap items-center justify-between gap-2 bg-[#fafafc]">
+          <div>
+            <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">Live Intercept Telemetry</h2>
+            <p class="text-[11px] text-[#86868b]">Latest 30 blocked requests logged under <code class="font-mono text-[10px]">source = 'EDGE_WAF'</code>.</p>
+          </div>
+          <span class="text-[11px] font-mono text-[#86868b]" id="waf-logs-count">{logs.length} records</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead class="adm-thead">
+              <tr>
+                <th class="adm-th">Time</th>
+                <th class="adm-th">Attacker IP & Geo</th>
+                <th class="adm-th">Matched Mode</th>
+                <th class="adm-th">Request Path</th>
+                <th class="adm-th">Matched Sample</th>
+                {canManage && <th class="adm-th text-right">Action</th>}
+              </tr>
+            </thead>
+            <tbody id="waf-logs-tbody" class="divide-y divide-black/5">
+              {logs.length === 0 ? (
+                <tr>
+                  <td colspan={canManage ? 6 : 5} class="px-4 py-8 text-center text-[#86868b]">
+                    No intercepted attacks recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                logs.map((log) => {
+                  const ctx = parseLogContext(log.context_json);
+                  const badge = modeBadgeLabel(ctx.mode);
+                  const ipVal = (log.client_ip || '').trim();
+                  return (
+                    <tr class="hover:bg-[#fafafc] transition-colors">
+                      <td class="adm-td whitespace-nowrap font-mono text-[11px] text-[#52525b]">
+                        {formatAdminTime(log.created_at, 'short')}
+                      </td>
+                      <td class="adm-td whitespace-nowrap">
+                        <div class="font-mono font-semibold text-[#1d1d1f]">{ipVal || 'unknown'}</div>
+                        {log.country && (
+                          <div class="text-[10px] text-[#86868b]">{log.country}{log.city ? ` · ${log.city}` : ''}</div>
+                        )}
+                      </td>
+                      <td class="adm-td whitespace-nowrap">
+                        <span class:list={['adm-badge', badge.cls]}>{badge.text}</span>
+                      </td>
+                      <td class="adm-td font-mono text-[11px] text-[#1d1d1f] max-w-[220px] truncate" title={`${log.method || 'GET'} ${log.path || ''}`}>
+                        <span class="font-bold text-[#52525b] mr-1">{log.method || 'GET'}</span>{log.path || '/'}
+                      </td>
+                      <td class="adm-td font-mono text-[11px] text-rose-700 max-w-[260px] truncate" title={ctx.matchedSample || log.message}>
+                        {ctx.matchedSample || log.message}
+                      </td>
+                      {canManage && (
+                        <td class="adm-td text-right whitespace-nowrap">
+                          {ipVal ? (
+                            <button
+                              type="button"
+                              class="btn-quick-block-ip px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/80 transition-colors cursor-pointer"
+                              data-block-ip={ipVal}
+                            >
+                              + Block IP
+                            </button>
+                          ) : (
+                            <span class="text-[10px] text-[#86868b]">—</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script type="application/json" id="waf-initial-data" set:html={initialPayload} />
+
+  <script>
+    import { escapeHtml, formatAdminTime, readJsonStore } from '@utils/adminWorkbench';
+
+    let wafAbort: AbortController | null = null;
+
+    function parseIpsClient(raw: string): string[] {
+      return Array.from(
+        new Set(
+          (raw || '')
+            .split(/[\s,;]+/)
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean)
+        )
+      );
+    }
+
+    function initWafPage() {
+      const root = document.getElementById('waf-workbench-root');
+      if (!root) return;
+
+      wafAbort?.abort();
+      wafAbort = new AbortController();
+      const { signal } = wafAbort;
+
+      const initial = readJsonStore<{ canManage?: boolean }>('waf-initial-data', { canManage: false });
+      const canManage = Boolean(initial.canManage);
+
+      const showToast = (msg: string, ok: boolean) => {
+        (window as any).__showToast?.(msg, ok);
+      };
+
+      const saveBtn = document.getElementById('waf-save-btn') as HTMLButtonElement | null;
+      const refreshBtn = document.getElementById('waf-refresh-btn') as HTMLButtonElement | null;
+      const clearStrikesBtn = document.getElementById('waf-clear-strikes-btn') as HTMLButtonElement | null;
+      const blockedTextarea = document.getElementById('waf-blocked-ips') as HTMLTextAreaElement | null;
+      const allowTextarea = document.getElementById('waf-allow-ips') as HTMLTextAreaElement | null;
+
+      let hasUnsavedChanges = false;
+      const setDirty = (dirty: boolean) => {
+        hasUnsavedChanges = dirty;
+        (window as any).__adminHasUnsavedChanges = dirty;
+        if (saveBtn) {
+          saveBtn.classList.toggle('ring-2', dirty);
+          saveBtn.classList.toggle('ring-amber-400', dirty);
+        }
+      };
+
+      const syncModeCardsAndKpis = () => {
+        const checkedModes: string[] = [];
+        document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox').forEach((cb) => {
+          const mode = cb.value;
+          const card = document.querySelector<HTMLElement>(`[data-waf-card="${mode}"]`);
+          const badge = document.querySelector<HTMLElement>(`[data-mode-badge="${mode}"]`);
+          if (cb.checked) checkedModes.push(mode);
+
+          if (card) {
+            card.classList.toggle('bg-white', cb.checked);
+            card.classList.toggle('border-black/20', cb.checked);
+            card.classList.toggle('shadow-xs', cb.checked);
+            card.classList.toggle('ring-1', cb.checked);
+            card.classList.toggle('ring-black/5', cb.checked);
+            card.classList.toggle('bg-[#fafafc]', !cb.checked);
+            card.classList.toggle('border-black/8', !cb.checked);
+          }
+          if (badge) {
+            badge.textContent = cb.checked ? 'ENFORCING' : 'DISABLED';
+            badge.className = `adm-badge ${cb.checked ? 'adm-badge-ok' : 'adm-badge-neutral'}`;
+          }
+        });
+
+        const modesCountEl = document.getElementById('kpi-modes-count');
+        const modesBadgeEl = document.getElementById('kpi-modes-badge');
+        if (modesCountEl) modesCountEl.textContent = `${checkedModes.length} / 3`;
+        if (modesBadgeEl) {
+          modesBadgeEl.textContent = checkedModes.length > 0 ? 'ACTIVE' : 'WAF Standby';
+          modesBadgeEl.className = `adm-badge ${checkedModes.length > 0 ? 'adm-badge-ok' : 'adm-badge-warn'}`;
+        }
+
+        const blockedEl = document.getElementById('kpi-blocked-ips');
+        const allowEl = document.getElementById('kpi-allow-ips');
+        if (blockedEl && blockedTextarea) {
+          blockedEl.textContent = String(parseIpsClient(blockedTextarea.value).length);
+        }
+        if (allowEl && allowTextarea) {
+          allowEl.textContent = `+${parseIpsClient(allowTextarea.value).length} Whitelisted`;
+        }
+      };
+
+      document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox').forEach((cb) => {
+        cb.addEventListener('change', () => {
+          syncModeCardsAndKpis();
+          setDirty(true);
+        }, { signal });
+      });
+
+      blockedTextarea?.addEventListener('input', () => {
+        syncModeCardsAndKpis();
+        setDirty(true);
+      }, { signal });
+
+      allowTextarea?.addEventListener('input', () => {
+        syncModeCardsAndKpis();
+        setDirty(true);
+      }, { signal });
+
+      const bindQuickBlockButtons = () => {
+        document.querySelectorAll<HTMLButtonElement>('.btn-quick-block-ip').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const ip = (btn.dataset.blockIp || '').trim();
+            if (!ip || !blockedTextarea) return;
+            const current = parseIpsClient(blockedTextarea.value);
+            if (!current.includes(ip.toLowerCase())) {
+              current.push(ip.toLowerCase());
+              blockedTextarea.value = current.join('\n');
+              syncModeCardsAndKpis();
+              setDirty(true);
+              showToast(`Added ${ip} to blacklist (pending save).`, true);
+            } else {
+              showToast(`${ip} is already in blacklist.`, true);
+            }
+          }, { signal });
+        });
+      };
+      bindQuickBlockButtons();
+
+      const renderTelemetryRows = (logs: any[]) => {
+        const tbody = document.getElementById('waf-logs-tbody');
+        const countEl = document.getElementById('waf-logs-count');
+        if (countEl) countEl.textContent = `${logs.length} records`;
+        if (!tbody) return;
+
+        if (!logs || logs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="${canManage ? 6 : 5}" class="px-4 py-8 text-center text-[#86868b]">No intercepted attacks recorded yet.</td></tr>`;
+          return;
+        }
+
+        const badgeFor = (mode?: string) => {
+          if (mode === 'block_malicious_ips') return ['Block Malicious IPs', 'adm-badge-err'];
+          if (mode === 'strict_rate_limiting') return ['Strict Rate Limiting', 'adm-badge-warn'];
+          if (mode === 'bot_challenge') return ['Bot Challenge', 'adm-badge-info'];
+          return ['Edge WAF', 'adm-badge-neutral'];
+        };
+
+        tbody.innerHTML = logs.map((log) => {
+          let ctx: Record<string, any> = {};
+          try { ctx = JSON.parse(log.context_json || '{}') || {}; } catch {}
+          const [modeText, modeCls] = badgeFor(ctx.mode);
+          const ipVal = (log.client_ip || '').trim();
+          const geo = log.country ? `<div class="text-[10px] text-[#86868b]">${escapeHtml(log.country)}${log.city ? ` · ${escapeHtml(log.city)}` : ''}</div>` : '';
+          const actionCell = canManage
+            ? `<td class="adm-td text-right whitespace-nowrap">${
+                ipVal
+                  ? `<button type="button" class="btn-quick-block-ip px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/80 transition-colors cursor-pointer" data-block-ip="${escapeHtml(ipVal)}">+ Block IP</button>`
+                  : `<span class="text-[10px] text-[#86868b]">—</span>`
+              }</td>`
+            : '';
+          return `
+            <tr class="hover:bg-[#fafafc] transition-colors">
+              <td class="adm-td whitespace-nowrap font-mono text-[11px] text-[#52525b]">${escapeHtml(formatAdminTime(log.created_at, 'short'))}</td>
+              <td class="adm-td whitespace-nowrap">
+                <div class="font-mono font-semibold text-[#1d1d1f]">${escapeHtml(ipVal || 'unknown')}</div>
+                ${geo}
+              </td>
+              <td class="adm-td whitespace-nowrap"><span class="adm-badge ${modeCls}">${escapeHtml(modeText)}</span></td>
+              <td class="adm-td font-mono text-[11px] text-[#1d1d1f] max-w-[220px] truncate"><span class="font-bold text-[#52525b] mr-1">${escapeHtml(log.method || 'GET')}</span>${escapeHtml(log.path || '/')}</td>
+              <td class="adm-td font-mono text-[11px] text-rose-700 max-w-[260px] truncate">${escapeHtml(ctx.matchedSample || log.message || '')}</td>
+              ${actionCell}
+            </tr>
+          `;
+        }).join('');
+
+        bindQuickBlockButtons();
+      };
+
+      const refreshTelemetry = async () => {
+        if (!refreshBtn) return;
+        refreshBtn.classList.add('is-loading');
+        try {
+          const res = await fetch('/api/admin/waf');
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            showToast(data.error || 'Failed to refresh WAF telemetry.', false);
+            return;
+          }
+          const blocked24hEl = document.getElementById('kpi-24h-blocked');
+          const activeBansEl = document.getElementById('kpi-active-bans');
+          const trackedIpsEl = document.getElementById('kpi-tracked-ips');
+          if (blocked24hEl) blocked24hEl.textContent = String(data.blocked24hCount ?? 0);
+          if (activeBansEl) activeBansEl.textContent = String(data.strikeStats?.activeBans ?? 0);
+          if (trackedIpsEl) trackedIpsEl.textContent = String(data.strikeStats?.trackedIps ?? 0);
+          renderTelemetryRows(data.logs || []);
+        } catch (err: any) {
+          showToast(`Refresh failed: ${err.message}`, false);
+        } finally {
+          refreshBtn.classList.remove('is-loading');
+        }
+      };
+
+      refreshBtn?.addEventListener('click', refreshTelemetry, { signal });
+
+      clearStrikesBtn?.addEventListener('click', async () => {
+        clearStrikesBtn.disabled = true;
+        try {
+          const res = await fetch('/api/admin/waf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'clear_strikes' }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            const activeBansEl = document.getElementById('kpi-active-bans');
+            const trackedIpsEl = document.getElementById('kpi-tracked-ips');
+            if (activeBansEl) activeBansEl.textContent = String(data.strikeStats?.activeBans ?? 0);
+            if (trackedIpsEl) trackedIpsEl.textContent = String(data.strikeStats?.trackedIps ?? 0);
+            showToast('Auto-ban strikes cleared on this edge isolate.', true);
+          } else {
+            showToast(data.error || 'Failed to clear strikes.', false);
+          }
+        } catch (err: any) {
+          showToast(`Clear strikes failed: ${err.message}`, false);
+        } finally {
+          clearStrikesBtn.disabled = false;
+        }
+      }, { signal });
+
+      const saveRules = async () => {
+        if (!canManage || !saveBtn || saveBtn.disabled) return;
+        const selectedModes = Array.from(document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox'))
+          .filter((cb) => cb.checked)
+          .map((cb) => cb.value);
+
+        saveBtn.disabled = true;
+        saveBtn.classList.add('is-loading');
+        try {
+          const res = await fetch('/api/admin/waf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'save_rules',
+              waf_active_modes: selectedModes,
+              waf_blocked_ips: blockedTextarea?.value || '',
+              waf_allow_ips: allowTextarea?.value || '',
+            }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            if (blockedTextarea && typeof data.settings?.waf_blocked_ips === 'string') {
+              blockedTextarea.value = data.settings.waf_blocked_ips;
+            }
+            if (allowTextarea && typeof data.settings?.waf_allow_ips === 'string') {
+              allowTextarea.value = data.settings.waf_allow_ips;
+            }
+            syncModeCardsAndKpis();
+            setDirty(false);
+            showToast('Edge WAF rules saved and audit-logged.', true);
+          } else {
+            showToast(data.error || 'Failed to save WAF rules.', false);
+          }
+        } catch (err: any) {
+          showToast(`Save failed: ${err.message}`, false);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.classList.remove('is-loading');
+        }
+      };
+
+      saveBtn?.addEventListener('click', saveRules, { signal });
+
+      window.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+          if (!document.getElementById('waf-workbench-root')) return;
+          e.preventDefault();
+          if (!e.repeat) saveRules();
+        }
+      }, { signal });
+
+      window.addEventListener('beforeunload', (e) => {
+        if (hasUnsavedChanges) {
+          e.preventDefault();
+          e.returnValue = '';
+        }
+      }, { signal });
+    }
+
+    initWafPage();
+    document.addEventListener('shell:page-load', initWafPage);
+  </script>
+</AdminLayout>
