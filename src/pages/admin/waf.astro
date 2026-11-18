@@ -793,22 +793,19 @@ const initialPayload = JSON.stringify({
         }
       });
 
-      document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox').forEach((cb) => {
-        cb.addEventListener('change', () => {
-          syncModeCardsAndKpis();
-          setDirty(true);
-          if (autoSaveTimer) clearTimeout(autoSaveTimer);
-          autoSaveTimer = setTimeout(() => {
-            autoSaveTimer = null;
-            void saveRules();
-          }, 250);
-        }, { signal });
-      });
+      const scheduleAutoSave = () => {
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(() => {
+          autoSaveTimer = null;
+          void saveRules();
+        }, 250);
+      };
 
-      document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox').forEach((cb) => {
+      document.querySelectorAll<HTMLInputElement>('.waf-mode-checkbox, .waf-sub-checkbox').forEach((cb) => {
         cb.addEventListener('change', () => {
           syncModeCardsAndKpis();
           setDirty(true);
+          scheduleAutoSave();
         }, { signal });
       });
 
@@ -843,12 +840,26 @@ const initialPayload = JSON.stringify({
             const ip = (btn.dataset.blockIp || '').trim();
             if (!ip || !blockedTextarea) return;
             const current = parseIpsClient(blockedTextarea.value);
+            const ipBlacklistCb = getCheckbox('malicious', 'enableIpBlacklist');
+            const enabledBlacklistNow = Boolean(ipBlacklistCb && !ipBlacklistCb.checked);
+            if (ipBlacklistCb && !ipBlacklistCb.checked) {
+              ipBlacklistCb.checked = true;
+            }
             if (!current.includes(ip.toLowerCase())) {
               current.push(ip.toLowerCase());
               blockedTextarea.value = current.join('\n');
               syncModeCardsAndKpis();
               setDirty(true);
-              showToast(`Added ${ip} to blacklist (pending save).`, true);
+              showToast(
+                enabledBlacklistNow
+                  ? `Added ${ip} to blacklist & enabled IP Blacklist rule (pending save).`
+                  : `Added ${ip} to blacklist (pending save).`,
+                true
+              );
+            } else if (enabledBlacklistNow) {
+              syncModeCardsAndKpis();
+              setDirty(true);
+              showToast(`${ip} is already in blacklist; enabled IP Blacklist rule (pending save).`, true);
             } else {
               showToast(`${ip} is already in blacklist.`, true);
             }
