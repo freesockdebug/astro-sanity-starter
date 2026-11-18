@@ -123,6 +123,7 @@ export const POST: APIRoute = defineAdminApi<{
     if (!res.success) {
       return jsonNoCache({ error: res.error || 'Failed to save WAF rules.' }, 500);
     }
+    EdgeWafService.clearLogSuppressions();
 
     recordAdminAudit(context, {
       adminEmail: auth.user.email,

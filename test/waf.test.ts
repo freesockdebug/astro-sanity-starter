@@ -367,3 +367,64 @@ test('EdgeWafService evaluates customRules across path, header, query, ua, ip, a
   assert.equal(throttled.status, 429);
   assert.equal(throttled.retryAfter, 30);
 });
+
+test('EdgeWafService suppresses duplicate block logs while blocked and resumes after unlock', () => {
+  EdgeWafService.clearAllStrikes();
+  const now = 1_700_000_000_000;
+
+  // 1. Auto-ban scenario: initial violation logs, repeats suppress, ban trigger logs once, subsequent banned hits suppress, post-unlock resumes
+  const malSettings = {
+    waf_active_modes: ['block_malicious_ips'] as ('block_malicious_ips')[],
+    waf_rule_config: normalizeWafRuleConfig({
+      malicious: { strikeLimit: 3, banDurationMinutes: 5 },
+    }),
+  };
+
+  const strike1 = EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: '/wp-login.php', headers: BROWSER_HEADERS, now }, malSettings);
+  assert.equal(strike1.allowed, false);
+  assert.ok(!strike1.suppressLog);
+
+  const strike2 = EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: '/.env', headers: BROWSER_HEADERS, now: now + 1000 }, malSettings);
+  assert.equal(strike2.allowed, false);
+  assert.equal(strike2.suppressLog, true);
+
+  // Static asset should NOT clear suppression
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: '/favicon.ico', headers: BROWSER_HEADERS, now: now + 1500 }, malSettings).allowed, true);
+
+  // Strike 3 triggers auto-ban (logs ban event once)
+  const strike3 = EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: '/phpmyadmin', headers: BROWSER_HEADERS, now: now + 2000 }, malSettings);
+  assert.equal(strike3.allowed, false);
+  assert.equal(strike3.autoBanned, true);
+  assert.ok(!strike3.suppressLog);
+
+  // Repeated hits while auto-banned are suppressed
+  for (let i = 1; i <= 3; i++) {
+    const repeatBanHit = EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: `/spam-${i}`, headers: BROWSER_HEADERS, now: now + 3000 + i * 1000 }, malSettings);
+    assert.equal(repeatBanHit.allowed, false);
+    assert.equal(repeatBanHit.autoBanned, true);
+    assert.equal(repeatBanHit.suppressLog, true);
+  }
+
+  // Admin unlocks via clearAllStrikes -> clean request passes, next violation logs normally again
+  EdgeWafService.clearAllStrikes();
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: '/', headers: BROWSER_HEADERS, now: now + 10_000 }, malSettings).allowed, true);
+  const postUnlockHit = EdgeWafService.evaluate({ clientIp: '198.51.100.88', pathname: '/wp-login.php', headers: BROWSER_HEADERS, now: now + 11_000 }, malSettings);
+  assert.equal(postUnlockHit.allowed, false);
+  assert.ok(!postUnlockHit.suppressLog);
+
+  // 2. Manual blacklist + unblocking via allowed request (e.g. IP removed from blacklist or whitelisted)
+  const ip = '203.0.113.77';
+  const blk1 = EdgeWafService.evaluate({ clientIp: ip, pathname: '/', headers: BROWSER_HEADERS, now }, { waf_active_modes: ['block_malicious_ips'], waf_blocked_ips: ip });
+  assert.equal(blk1.allowed, false);
+  assert.ok(!blk1.suppressLog);
+
+  const blk2 = EdgeWafService.evaluate({ clientIp: ip, pathname: '/products', headers: BROWSER_HEADERS, now: now + 500 }, { waf_active_modes: ['block_malicious_ips'], waf_blocked_ips: ip });
+  assert.equal(blk2.allowed, false);
+  assert.equal(blk2.suppressLog, true);
+
+  // IP unblocked (passes clean request) -> suppression cleared; if blocked again later, logs once
+  assert.equal(EdgeWafService.evaluate({ clientIp: ip, pathname: '/', headers: BROWSER_HEADERS, now: now + 1000 }, { waf_active_modes: ['block_malicious_ips'], waf_blocked_ips: '' }).allowed, true);
+  const blkReblocked = EdgeWafService.evaluate({ clientIp: ip, pathname: '/', headers: BROWSER_HEADERS, now: now + 2000 }, { waf_active_modes: ['block_malicious_ips'], waf_blocked_ips: ip });
+  assert.equal(blkReblocked.allowed, false);
+  assert.ok(!blkReblocked.suppressLog);
+});

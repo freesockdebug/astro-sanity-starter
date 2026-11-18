@@ -28,6 +28,7 @@ export interface WafEvaluationResult {
   matchedSample?: string;
   retryAfter?: number;
   autoBanned?: boolean;
+  suppressLog?: boolean;
 }
 
 export type WafConditionField =
@@ -405,10 +406,12 @@ function matchCustomKeyword(targetLower: string, rawKeywords: string): string | 
 const AUTO_BAN_STRIKE_LIMIT = DEFAULT_WAF_RULE_CONFIG.malicious.strikeLimit;
 const AUTO_BAN_DURATION_MS = DEFAULT_WAF_RULE_CONFIG.malicious.banDurationMinutes * 60_000;
 const RATE_LIMIT_WINDOW_MS = DEFAULT_WAF_RULE_CONFIG.rateLimit.windowSeconds * 1000;
+const DEFAULT_LOG_SUPPRESS_MS = 60 * 60_000;
 const MAX_MAP_ENTRIES = 5000;
 
 const strikeRecords = new Map<string, { strikes: number; bannedUntil: number; updatedAt: number }>();
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+const blockLogSuppressions = new Map<string, { ip: string; suppressedUntil: number }>();
 
 const STATIC_ASSET_EXT = /\.(?:css|js|mjs|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|eot|map|txt|xml)$/i;
 
@@ -595,9 +598,23 @@ export class EdgeWafService {
     return { activeBans, trackedIps: strikeRecords.size };
   }
 
+  public static clearLogSuppressions(ip?: string): void {
+    if (!ip) {
+      blockLogSuppressions.clear();
+      return;
+    }
+    const target = ip.trim().toLowerCase();
+    for (const [k, rec] of blockLogSuppressions.entries()) {
+      if (rec.ip === target) {
+        blockLogSuppressions.delete(k);
+      }
+    }
+  }
+
   public static clearAllStrikes(): void {
     strikeRecords.clear();
     rateLimitBuckets.clear();
+    blockLogSuppressions.clear();
   }
 
   private static consumeRateLimitBucket(
@@ -762,8 +779,38 @@ export class EdgeWafService {
 
   public static evaluate(input: WafEvaluationInput, settings?: WafSettingsSubset | null): WafEvaluationResult {
     const pathname = input.pathname || '/';
-    const method = (input.method || 'GET').toUpperCase();
     const now = input.now ?? Date.now();
+    const res = this.evaluateCore(input, settings, now);
+    const ipKey = (input.clientIp || '').trim().toLowerCase();
+
+    if (res.allowed) {
+      if (ipKey && !this.isStaticAsset(pathname) && pathname !== '/admin/waf' && pathname !== '/api/admin/waf') {
+        this.clearLogSuppressions(ipKey);
+      }
+      return res;
+    }
+
+    const stage = res.autoBanned ? 'ban' : 'hit';
+    const suppressKey = `${ipKey || 'unknown'}:${res.code || 'WAF'}:${stage}`;
+    const existing = blockLogSuppressions.get(suppressKey);
+    if (existing && existing.suppressedUntil > now) {
+      return { ...res, suppressLog: true };
+    }
+
+    let suppressedUntil = now + DEFAULT_LOG_SUPPRESS_MS;
+    if (res.autoBanned && ipKey) {
+      suppressedUntil = strikeRecords.get(ipKey)?.bannedUntil || (now + AUTO_BAN_DURATION_MS);
+    } else if (res.code === 'WAF_STRICT_RATE_LIMIT') {
+      suppressedUntil = now + ((res.retryAfter || 60) * 1000);
+    }
+    pruneMapIfNeeded(blockLogSuppressions);
+    blockLogSuppressions.set(suppressKey, { ip: ipKey || 'unknown', suppressedUntil });
+    return res;
+  }
+
+  private static evaluateCore(input: WafEvaluationInput, settings: WafSettingsSubset | null | undefined, now: number): WafEvaluationResult {
+    const pathname = input.pathname || '/';
+    const method = (input.method || 'GET').toUpperCase();
     const clientIp = (input.clientIp || '').trim();
 
     if (this.isStaticAsset(pathname)) {

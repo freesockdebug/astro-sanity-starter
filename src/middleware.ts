@@ -101,27 +101,29 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
       if (!wafResult.allowed) {
         const blockStatus = wafResult.status || 403;
-        logger.warn(
-          {
-            module: 'EDGE_WAF',
-            event: wafResult.code || 'WAF_BLOCK',
-            message: wafResult.reason || 'Request blocked by Edge WAF',
-            path: pathname,
-            method: request.method,
-            statusCode: blockStatus,
-            rayId,
-            clientIp: clientMeta.ip,
-            country: clientMeta.country,
-            city: clientMeta.city,
-            context: {
-              mode: wafResult.mode,
-              matchedSample: wafResult.matchedSample,
-              userAgent: request.headers.get('user-agent') || '',
-              autoBanned: Boolean(wafResult.autoBanned),
+        if (!wafResult.suppressLog) {
+          logger.warn(
+            {
+              module: 'EDGE_WAF',
+              event: wafResult.code || 'WAF_BLOCK',
+              message: wafResult.reason || 'Request blocked by Edge WAF',
+              path: pathname,
+              method: request.method,
+              statusCode: blockStatus,
+              rayId,
+              clientIp: clientMeta.ip,
+              country: clientMeta.country,
+              city: clientMeta.city,
+              context: {
+                mode: wafResult.mode,
+                matchedSample: wafResult.matchedSample,
+                userAgent: request.headers.get('user-agent') || '',
+                autoBanned: Boolean(wafResult.autoBanned),
+              },
             },
-          },
-          { cfEnv, ctx: runtimeCtx }
-        );
+            { cfEnv, ctx: runtimeCtx }
+          );
+        }
 
         const blockHeaders: Record<string, string> = {
           'Content-Type': 'application/json; charset=utf-8',
