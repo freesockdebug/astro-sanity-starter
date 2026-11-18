@@ -1,0 +1,60 @@
+/* ==========================================================================
+   Theme: Warm Atelier (html[data-storefront-theme="warm-atelier"])
+   Self-contained palette, radii & subtle architectural shadows.
+   ========================================================================== */
+html[data-storefront-theme="warm-atelier"] {
+  --apple-bg-white: #fcfbf9;
+  --apple-bg-gray: #f6f3ee;
+  --apple-text-primary: #1c1917;
+  --apple-text-secondary: #6b665f;
+  --apple-border: rgba(28, 25, 23, 0.08);
+  --color-apple-white: #fcfbf9;
+  --color-apple-gray: #f6f3ee;
+  --color-apple-surface: #faf7f2;
+  --color-apple-ink: #1c1917;
+  --color-apple-muted: #6b665f;
+}
+
+html[data-storefront-theme="warm-atelier"] body {
+  background-color: var(--apple-bg-white);
+  color: var(--apple-text-primary);
+}
+
+html[data-storefront-theme="warm-atelier"] .apple-nav {
+  background: rgba(252, 251, 249, 0.88);
+  border-bottom-color: rgba(28, 25, 23, 0.08);
+}
+
+html[data-storefront-theme="warm-atelier"] .apple-skeleton-surface {
+  --skeleton-bg: #f6f3ee;
+}
+
+html[data-storefront-theme="warm-atelier"] :is(main, footer) .bg-white {
+  background-color: #fdfcfb;
+}
+
+html[data-storefront-theme="warm-atelier"] :is(main, footer, header.apple-nav) .bg-\[\#f5f5f7\] {
+  background-color: #f6f3ee;
+}
+
+html[data-storefront-theme="warm-atelier"] :is(main, footer, header.apple-nav) .text-\[\#1d1d1f\] {
+  color: #1c1917;
+}
+
+html[data-storefront-theme="warm-atelier"] :is(main, footer, header.apple-nav) .text-\[\#86868b\] {
+  color: #6b665f;
+}
+
+html[data-storefront-theme="warm-atelier"] :is(main, footer) .border-black\/5,
+html[data-storefront-theme="warm-atelier"] :is(main, footer) .border-black\/8 {
+  border-color: rgba(28, 25, 23, 0.09);
+}
+
+html[data-storefront-theme="warm-atelier"] .hero-showcase-box {
+  border-radius: 1.125rem;
+  box-shadow: 0 12px 32px -18px rgba(28, 25, 23, 0.16);
+}
+
+html[data-storefront-theme="warm-atelier"] :is(.specs-section .rounded-3xl, #collections .rounded-3xl) {
+  border-radius: 1rem;
+}

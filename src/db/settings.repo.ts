@@ -12,8 +12,10 @@ import {
   DEFAULT_CONTACT_EMAIL,
 } from '../data/defaults';
 
+import type { StorefrontTheme } from '../config/storefrontThemes';
+export type { StorefrontTheme };
+
 export type LogMinLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
-export type StorefrontTheme = 'apple-minimal' | 'warm-atelier' | 'editorial-gallery';
 
 export const VALID_WAF_MODES = [
   'block_malicious_ips',

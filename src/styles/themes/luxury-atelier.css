@@ -1,0 +1,264 @@
+/* ==========================================================================
+   GWENVENNI Luxury Atelier Storefront Theme
+   Scoped strictly to html[data-storefront-theme="luxury-atelier"]
+   Preserves original Apple Minimal, Warm Atelier & Editorial Gallery untouched.
+   ========================================================================== */
+
+html[data-storefront-theme="luxury-atelier"] {
+  --gv-canvas: #fcfbf9;
+  --gv-surface: #f4f0ea;
+  --gv-elevated: #ffffff;
+  --gv-ink: #1c1917;
+  --gv-muted: #5f5a53;
+  --gv-border: rgba(28, 25, 23, 0.09);
+  --gv-accent: #3f3228;
+  --gv-radius: 1rem;
+  --gv-font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+
+  /* Override runtime palette tokens */
+  --apple-bg-white: var(--gv-canvas);
+  --apple-bg-gray: var(--gv-surface);
+  --apple-text-primary: var(--gv-ink);
+  --apple-text-secondary: var(--gv-muted);
+  --apple-border: var(--gv-border);
+  --color-apple-white: var(--gv-canvas);
+  --color-apple-gray: var(--gv-surface);
+  --color-apple-surface: #faf7f2;
+  --color-apple-ink: var(--gv-ink);
+  --color-apple-muted: var(--gv-muted);
+
+  /* Architectural Vertical Rhythm (80px mobile -> 96px~144px desktop) */
+  --space-hero-pt: clamp(6rem, 9vw, 9.5rem);
+  --space-hero-pb: clamp(4.5rem, 7vw, 7.5rem);
+  --space-section-pt: clamp(5.5rem, 8vw, 8.5rem);
+  --space-section-pb: clamp(5.5rem, 8vw, 8.5rem);
+  --space-bento-gap: clamp(1rem, 1.6vw, 1.5rem);
+}
+
+/* Cancel rigid Scroll-Snap for effortless magazine flow */
+html[data-storefront-theme="luxury-atelier"].apple-snap-active {
+  scroll-snap-type: none !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] body {
+  background-color: var(--gv-canvas);
+  color: var(--gv-ink);
+}
+
+html[data-storefront-theme="luxury-atelier"] .apple-nav {
+  background: rgba(252, 251, 249, 0.9);
+  border-bottom-color: var(--gv-border);
+}
+
+html[data-storefront-theme="luxury-atelier"] .apple-skeleton-surface {
+  --skeleton-bg: var(--gv-surface);
+}
+
+/* Semantic Color Swaps within Storefront Sections & Chrome */
+html[data-storefront-theme="luxury-atelier"] :is(main, footer) .bg-white {
+  background-color: var(--gv-elevated);
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(main, footer, header.apple-nav) .bg-\[\#f5f5f7\] {
+  background-color: var(--gv-surface);
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(main, footer, header.apple-nav) .bg-\[\#1d1d1f\] {
+  background-color: var(--gv-ink);
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(main, footer, header.apple-nav) .text-\[\#1d1d1f\] {
+  color: var(--gv-ink);
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(main, footer, header.apple-nav) :is(.text-\[\#86868b\], .text-\[\#52525b\], .text-\[\#6e6e73\], .text-\[\#424245\], .text-zinc-400) {
+  color: var(--gv-muted);
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(main, footer) :is(.border-black\/5, .border-black\/8, .border-black\/10) {
+  border-color: var(--gv-border);
+}
+
+/* 1. Brand Display Serif & 5-Level Typography Scale (>= 12px floor) */
+html[data-storefront-theme="luxury-atelier"] :is(
+  .fluid-hero-title,
+  .fluid-section-title,
+  .product-info-col h1,
+  #collections h2,
+  #specs h2,
+  #manufacturing h2,
+  #inquiry h2,
+  header.apple-nav a > span.font-semibold
+) {
+  font-family: var(--gv-font-display);
+  font-weight: 500;
+  letter-spacing: -0.018em;
+}
+
+html[data-storefront-theme="luxury-atelier"] .fluid-hero-title {
+  font-size: clamp(2.5rem, 4.5vw + 0.5rem, 4.75rem);
+  line-height: 1.04;
+}
+
+html[data-storefront-theme="luxury-atelier"] .fluid-section-title,
+html[data-storefront-theme="luxury-atelier"] #collections h2 {
+  font-size: clamp(2rem, 3.2vw + 0.4rem, 3.25rem);
+  line-height: 1.08;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(.hero-section, .specs-section, #collections, #manufacturing, #inquiry, .catalog-hero-header) .apple-rail-narrow > p,
+html[data-storefront-theme="luxury-atelier"] #inquiry h2 + p {
+  font-size: clamp(0.9375rem, 0.9rem + 0.2vw, 1.0625rem);
+  line-height: 1.65;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(.hero-section, .specs-section, #collections, #manufacturing, #inquiry, #products-grid) :is(.text-\[9px\], .text-\[10px\], .text-\[11px\]) {
+  font-size: 0.75rem;
+}
+
+/* 2. Unlock 100svh Height Constraints & Amplify Architectural Whitespace */
+html[data-storefront-theme="luxury-atelier"] :is(.hero-section, .specs-section, #collections) {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] .hero-section {
+  display: block !important;
+  padding-top: var(--space-hero-pt) !important;
+  padding-bottom: var(--space-hero-pb) !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(.specs-section, #collections, #manufacturing, #inquiry) {
+  padding-top: var(--space-section-pt) !important;
+  padding-bottom: var(--space-section-pb) !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(.specs-section, #collections, #manufacturing) .apple-rail-narrow {
+  margin-bottom: clamp(2.5rem, 4vw, 3.75rem) !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] .hero-showcase-box {
+  flex: none !important;
+  margin-top: clamp(2.25rem, 4vw, 3.5rem) !important;
+  aspect-ratio: 16 / 9;
+  max-height: 680px !important;
+  border-radius: var(--gv-radius) !important;
+  box-shadow: none !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] .hero-showcase-img {
+  height: 100% !important;
+}
+
+/* 3. Unify Radii, Remove Heavy Shadows & Eliminate Emerald / #ff5000 Accents */
+html[data-storefront-theme="luxury-atelier"] :is(.specs-section, #inquiry, #manufacturing) .rounded-3xl,
+html[data-storefront-theme="luxury-atelier"] .specs-section .rounded-2xl {
+  border-radius: var(--gv-radius) !important;
+  box-shadow: none !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] .specs-section .h-\[290px\] {
+  height: auto !important;
+  min-height: 240px;
+  padding: 1.5rem !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] .specs-section .apple-skeleton-surface {
+  border-radius: 0.5rem !important;
+  min-height: 220px;
+}
+
+html[data-storefront-theme="luxury-atelier"] .specs-section p,
+html[data-storefront-theme="luxury-atelier"] #manufacturing p {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  -webkit-line-clamp: unset !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(.specs-section, #inquiry) .bg-emerald-50 {
+  background-color: var(--gv-surface) !important;
+  color: var(--gv-muted) !important;
+  border-color: var(--gv-border) !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #inquiry .md\:col-span-7 {
+  padding: clamp(1.75rem, 3vw, 3rem) !important;
+  gap: 1.25rem;
+}
+
+html[data-storefront-theme="luxury-atelier"] #inquiry h2 {
+  font-size: clamp(1.625rem, 2.4vw, 2.125rem);
+  line-height: 1.12;
+}
+
+/* 4. Lookbook 4:5 Gallery Cards for Featured Collections & Catalog Grid */
+html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) > div {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  max-height: none !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) > div:hover {
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) a.apple-img-wrapper {
+  aspect-ratio: 4 / 5 !important;
+  height: auto !important;
+  flex: none !important;
+  border-radius: 0.75rem !important;
+  background-color: var(--gv-surface) !important;
+  box-shadow: none !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #products-grid a.apple-img-wrapper > div.absolute {
+  display: none !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #products-grid .card-lead,
+html[data-storefront-theme="luxury-atelier"] #products-grid .shrink-0.flex.items-center.justify-between > span.font-mono {
+  display: none;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) h3 {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--gv-ink);
+}
+
+html[data-storefront-theme="luxury-atelier"] #products-grid .group:hover h3 {
+  color: var(--gv-muted) !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #products-grid .btn-catalog-quote {
+  background-color: var(--gv-ink) !important;
+  color: var(--gv-canvas) !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] #products-grid .btn-catalog-quote:hover {
+  background-color: var(--gv-accent) !important;
+}
+
+html[data-storefront-theme="luxury-atelier"] :is(#collections-shelf, #products-grid) .border-t {
+  border-top-color: transparent !important;
+}
+
+@media (min-width: 1024px) {
+  html[data-storefront-theme="luxury-atelier"] #products-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 2.25rem 1.25rem !important;
+  }
+}
+
+@media (min-width: 1760px) {
+  html[data-storefront-theme="luxury-atelier"] #products-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 2.5rem 1.5rem !important;
+  }
+}

@@ -5,6 +5,7 @@ import { hasMenu } from '@utils/rbac';
 import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, updateSystemSettings } from '@db';
 import { SecurityService, sanitizeAdminSettings, isMaskedSecret, SECRET_SETTING_KEYS } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
+import { isValidStorefrontTheme, VALID_STOREFRONT_THEMES } from '@config/storefrontThemes';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -163,8 +164,8 @@ export const POST: APIRoute = async ({ request }) => {
     // Validate Storefront Visual Theme
     if (rawUpdates.storefront_theme !== undefined) {
       const theme = String(rawUpdates.storefront_theme).trim().toLowerCase();
-      if (!['apple-minimal', 'warm-atelier', 'editorial-gallery'].includes(theme)) {
-        return jsonNoCache({ error: 'Storefront Theme must be one of: apple-minimal, warm-atelier, editorial-gallery.' }, 400);
+      if (!isValidStorefrontTheme(theme)) {
+        return jsonNoCache({ error: `Storefront Theme must be one of: ${VALID_STOREFRONT_THEMES.join(', ')}.` }, 400);
       }
       updates.storefront_theme = theme;
     }

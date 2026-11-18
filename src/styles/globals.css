@@ -13,17 +13,6 @@
   --color-apple-muted: #86868b;
   --color-apple-blue: #0071e3;
   --color-apple-blue-hover: #0077ed;
-
-  /* GWENVENNI Storefront Semantic Tokens */
-  --color-canvas: var(--gv-canvas);
-  --color-surface: var(--gv-surface);
-  --color-elevated: var(--gv-elevated);
-  --color-ink: var(--gv-ink);
-  --color-muted: var(--gv-muted);
-  --color-hairline: var(--gv-border);
-  --color-accent: var(--gv-accent);
-  --font-display: var(--gv-font-display);
-  --font-sans: var(--gv-font-sans);
 }
 
 /* ==========================================================================
@@ -31,22 +20,8 @@
    ========================================================================== */
 :root {
   color-scheme: light;
-  --gv-font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
-  --gv-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-sans: var(--gv-font-sans);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
-
-  /* Default Storefront Tokens (Apple Minimal baseline, overridden per theme below) */
-  --gv-canvas: #ffffff;
-  --gv-surface: #f5f5f7;
-  --gv-elevated: #ffffff;
-  --gv-ink: #1d1d1f;
-  --gv-muted: #5e5e63;
-  --gv-border: rgba(0, 0, 0, 0.08);
-  --gv-accent: #1d1d1f;
-  --gv-radius-card: 1.25rem;
-
-  /* Admin Legacy Tokens */
   --apple-bg-white: #ffffff;
   --apple-bg-gray: #f5f5f7;
   --apple-text-primary: #1d1d1f;
@@ -68,12 +43,13 @@
   --rail-max-narrow: 980px;
   --rail-max-bento: clamp(80rem, 82vw, 96.25rem);
 
-  /* Architectural Vertical Rhythm (80px mobile -> 96px~144px desktop) */
-  --space-hero-pt: clamp(6rem, 9vw, 9.5rem);
-  --space-hero-pb: clamp(4.5rem, 7vw, 7.5rem);
-  --space-section-pt: clamp(5.5rem, 8vw, 8.5rem);
-  --space-section-pb: clamp(5.5rem, 8vw, 8.5rem);
-  --space-bento-gap: clamp(1rem, 1.6vw, 1.5rem);
+  /* Golden-Ratio Vertical Spacing Tokens (φ⁻¹ ≈ 0.618) */
+  --phi-scale: 0.618;
+  --space-hero-pt: clamp(3.5rem, min(4.5vw, 7.5svh), 4.25rem);
+  --space-hero-pb: clamp(0.75rem, min(2vw, 3svh), 2rem);
+  --space-section-pt: calc(clamp(1.125rem, min(3.5vw, 5svh - 1rem), 3.75rem) * var(--phi-scale));
+  --space-section-pb: calc(var(--space-section-pt) * var(--phi-scale));
+  --space-bento-gap: clamp(0.5rem, min(1.1vw, 1.5svh), 1rem);
 }
 
 html:has(.breadcrumbs-bar) {
@@ -238,10 +214,10 @@ html:has(#shell-root)::view-transition-new(root) {
 
 .apple-nav {
   height: 48px;
-  background: color-mix(in srgb, var(--gv-canvas) 90%, transparent);
+  background: #fffffff0;
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 1px solid var(--gv-border);
+  border-bottom: 1px solid #00000014;
 }
 
 :is(.no-scrollbar, .scrollbar-none)::-webkit-scrollbar {
@@ -271,15 +247,15 @@ html:has(#shell-root)::view-transition-new(root) {
 }
 
 .fluid-hero-title {
-  font-size: clamp(2.5rem, 4.5vw + 0.5rem, 4.75rem);
-  line-height: 1.04;
-  letter-spacing: -0.02em;
+  font-size: clamp(2.25rem, 4.2vw + 0.5rem, 4.5rem);
+  line-height: 1.06;
+  letter-spacing: -0.028em;
 }
 
 .fluid-section-title {
-  font-size: clamp(2rem, 3.2vw + 0.4rem, 3.25rem);
-  line-height: 1.08;
-  letter-spacing: -0.018em;
+  font-size: clamp(1.75rem, 3vw + 0.4rem, 3.25rem);
+  line-height: 1.1;
+  letter-spacing: -0.022em;
 }
 
 @media (max-width: 767px) {
@@ -316,7 +292,7 @@ html:has(#shell-root)::view-transition-new(root) {
 
 @media (min-width: 1760px) {
   #products-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   }
 }
 
@@ -342,6 +318,21 @@ html:has(#shell-root)::view-transition-new(root) {
 
   details.apple-footer-col>ul {
     display: block !important;
+  }
+}
+
+html.apple-snap-active {
+  scroll-behavior: smooth;
+}
+
+@media (min-width: 1024px) {
+  html.apple-snap-active {
+    scroll-snap-type: y proximity;
+  }
+
+  html.apple-snap-active :is(section[id], footer) {
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
   }
 }
 
@@ -518,54 +509,8 @@ html:has(#shell-root)::view-transition-new(root) {
 }
 
 /* ==========================================================================
-   7. Storefront Visual Themes (Switchable via Admin Settings, Pure Token Swap)
+   7. Storefront Visual Themes (Isolated per-theme stylesheets)
    ========================================================================== */
-html[data-storefront-theme="warm-atelier"] {
-  --gv-canvas: #fcfbf9;
-  --gv-surface: #f4f0ea;
-  --gv-elevated: #ffffff;
-  --gv-ink: #1c1917;
-  --gv-muted: #5f5a53;
-  --gv-border: rgba(28, 25, 23, 0.09);
-  --gv-accent: #3f3228;
-  --gv-radius-card: 1rem;
-}
-
-html[data-storefront-theme="editorial-gallery"] {
-  --gv-canvas: #faf8f4;
-  --gv-surface: #f0ebe1;
-  --gv-elevated: #fdfcfa;
-  --gv-ink: #181614;
-  --gv-muted: #5c564e;
-  --gv-border: rgba(24, 22, 20, 0.10);
-  --gv-accent: #2c2520;
-  --gv-radius-card: 0.5rem;
-}
-
-html[data-storefront-theme="apple-minimal"] {
-  --gv-canvas: #ffffff;
-  --gv-surface: #f5f5f7;
-  --gv-elevated: #ffffff;
-  --gv-ink: #1d1d1f;
-  --gv-muted: #5e5e63;
-  --gv-border: rgba(0, 0, 0, 0.08);
-  --gv-accent: #1d1d1f;
-  --gv-radius-card: 1.25rem;
-}
-
-html[data-storefront-theme] .apple-skeleton-surface {
-  --skeleton-bg: var(--gv-surface);
-}
-
-html[data-storefront-theme="editorial-gallery"] :is(.fluid-hero-title, .fluid-section-title, .product-info-col h1, #collections h2, #specs h2, #manufacturing h2, #inquiry h2, header.apple-nav a > span.font-semibold) {
-  font-family: var(--gv-font-display);
-  font-weight: 500;
-  letter-spacing: -0.015em;
-}
-
-html[data-storefront-theme="editorial-gallery"] #products-grid h3 {
-  font-family: var(--gv-font-display);
-  font-size: 1rem;
-  font-weight: 500;
-  letter-spacing: 0;
-}
+@import './themes/warm-atelier.css';
+@import './themes/editorial-gallery.css';
+@import './themes/luxury-atelier.css';

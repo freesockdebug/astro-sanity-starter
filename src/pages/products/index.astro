@@ -88,23 +88,23 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   preloadHeroImage={catalogHeroPreload}
 >
   <!-- Main Catalog Container with Dynamic Mathematical Top Clearance -->
-  <div class="catalog-container min-h-screen bg-canvas text-ink pb-14 sm:pb-20">
+  <div class="catalog-container min-h-screen bg-white text-[#1d1d1f] pb-6 sm:pb-8">
     
-    <!-- 1. Catalog Hero Header (Narrow Rail) -->
-    <section class="catalog-hero-header apple-rail-narrow text-center mb-8 sm:mb-10 space-y-2.5">
-      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-hairline text-xs font-medium text-muted uppercase tracking-[0.14em]">
+    <!-- 1. Catalog Hero Header (Apple Rail Narrow) -->
+    <section class="catalog-hero-header apple-rail-narrow text-center mb-3 sm:mb-4 space-y-1">
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#f5f5f7] border border-black/5 text-[10px] font-semibold text-[#52525b] uppercase tracking-wider">
         <span>{getLocalizedValue(catalogSettings?.badgeText, currentLang, t('catalog.badge'))}</span>
       </div>
-      <h1 class="fluid-section-title font-display font-medium text-ink">
+      <h1 class="fluid-section-title font-semibold tracking-tight text-[#1d1d1f]">
         {getLocalizedValue(catalogSettings?.title, currentLang, t('catalog.title'))}
       </h1>
-      <p class="text-[15px] sm:text-[17px] text-muted max-w-xl mx-auto font-normal leading-relaxed">
+      <p class="text-xs sm:text-[13px] text-[#52525b] max-w-xl mx-auto font-normal leading-relaxed">
         {getLocalizedValue(catalogSettings?.subtitle, currentLang, t('catalog.subtitle'))}
       </p>
     </section>
 
-    <!-- 2. Sticky Control Toolbar: Search & Category Filter Rail -->
-    <div class="catalog-sticky-toolbar sticky top-[var(--apple-header-offset)] z-40 bg-canvas/95 backdrop-blur-md border-y border-hairline py-2.5 mb-8 sm:mb-10">
+    <!-- 2. Sticky Control Toolbar: Search & Category Filter Rail (Dynamic offset to match fixed header stack) -->
+    <div class="catalog-sticky-toolbar sticky top-[var(--apple-header-offset)] z-40 bg-white/95 backdrop-blur-md border-y border-black/5 py-1.5 sm:py-2 mb-3 sm:mb-4 transition-shadow shadow-xs">
       <div class="apple-rail-wide flex flex-col md:flex-row md:items-center justify-between gap-3">
         
         <!-- Category Filter Tabs (Horizontal Swipe on Mobile) -->
@@ -113,15 +113,15 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <button
               type="button"
               data-category-id={cat.id}
-              class={`category-tab-btn shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              class={`category-tab-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
                 cat.id === 'all'
-                  ? 'bg-ink text-canvas'
-                  : 'bg-surface text-ink hover:bg-elevated border border-hairline'
+                  ? 'bg-[#1d1d1f] text-white shadow-sm'
+                  : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/5'
               }`}
             >
               <span>{getLocalizedValue(cat.label, currentLang)}</span>
-              <span class={`text-xs px-1.5 rounded-full font-mono ${
-                cat.id === 'all' ? 'bg-canvas/20 text-canvas' : 'bg-canvas text-muted'
+              <span class={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                cat.id === 'all' ? 'bg-white/20 text-white' : 'bg-black/5 text-[#404040]'
               }`}>
                 {cat.count}
               </span>
@@ -131,19 +131,19 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
         <!-- Search Bar, Sorting Dropdown & Compact Count Indicator -->
         <div class="flex items-center gap-2 shrink-0">
-          <!-- Live Count Capsule -->
-          <div class="hidden sm:inline-flex items-center gap-1 px-3 py-1 rounded-full bg-surface border border-hairline text-xs font-mono text-muted shrink-0">
+          <!-- Live Count Capsule: Consolidated into toolbar to eliminate extra vertical row -->
+          <div class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f5f5f7] border border-black/5 text-[11px] font-mono text-[#71717a] shrink-0">
             <span>{t('catalog.showing')}</span>
-            <span id="displayed-count-label" class="font-semibold text-ink">{Math.min(initialProducts.length, mergedProducts.length)}</span>
+            <span id="displayed-count-label" class="font-semibold text-[#18181b]">{Math.min(initialProducts.length, mergedProducts.length)}</span>
             <span>{t('catalog.of')}</span>
-            <span id="total-count-label" class="font-semibold text-ink">{mergedProducts.length}</span>
+            <span id="total-count-label" class="font-semibold text-[#18181b]">{mergedProducts.length}</span>
             <span class="hidden md:inline">{t('catalog.styles')}</span>
           </div>
 
           <!-- Realtime Search Input -->
           <div class="relative flex-1 md:w-48 lg:w-52">
             <label for="catalog-search-input" class="sr-only">{t('catalog.searchPlaceholder')}</label>
-            <svg class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#52525b] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
@@ -151,13 +151,13 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
               id="catalog-search-input"
               aria-label={t('catalog.searchPlaceholder')}
               placeholder={getLocalizedValue(catalogSettings?.searchPlaceholder, currentLang, t('catalog.searchPlaceholder'))}
-              class="w-full pl-8 pr-7 py-1.5 text-xs rounded-full bg-surface border border-hairline focus:outline-none focus:border-ink text-ink placeholder:text-muted transition-colors"
+              class="w-full pl-8 pr-7 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] placeholder:text-[#52525b] transition-all"
             />
             <button
               type="button"
               id="catalog-search-clear"
               aria-label={t('rfq.clearAll')}
-              class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-ink text-xs"
+              class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-[#52525b] hover:text-black text-xs"
               title={t('rfq.clearAll')}
             >
               ✕
@@ -169,7 +169,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
           <select
             id="catalog-sort-select"
             aria-label={t('catalog.sortFeatured')}
-            class="px-3 py-1.5 text-xs rounded-full bg-surface border border-hairline text-ink focus:outline-none focus:border-ink cursor-pointer font-medium"
+            class="px-2.5 py-1.5 text-xs rounded-full bg-[#f5f5f7] border border-black/10 text-[#1d1d1f] focus:outline-none focus:border-black cursor-pointer font-medium"
           >
             <option value="featured">{t('catalog.sortFeatured')}</option>
             <option value="moq-asc">{t('catalog.sortMoq')}</option>
@@ -177,7 +177,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
           </select>
 
           <!-- Active Category Indicator Hook (Preserved for reactive script compatibility) -->
-          <span id="active-category-indicator" class="hidden text-xs font-medium text-ink">
+          <span id="active-category-indicator" class="hidden text-[11px] font-medium text-[#18181b]">
             {allLabel}
           </span>
         </div>
@@ -196,67 +196,81 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       -->
       <div
         id="products-grid"
-        class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-9 min-h-[50vh]"
+        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-2.5 lg:gap-x-3 lg:gap-y-3.5 min-h-[50vh]"
       >
         {initialProducts.map((item: any, idx: number) => (
-          <div class="group shrink-0 flex flex-col justify-between" data-product-id={item.id}>
-            <div class="flex flex-col">
-              <!-- 1. 4:5 Lookbook Gallery Image + Hover Quote Action -->
-              <div class="relative w-full aspect-[4/5] rounded-[var(--gv-radius-card)] overflow-hidden bg-surface apple-skeleton-surface">
-                <a
-                  href={getLocalizedPath(`/products/${item.slug}`, currentLang)}
-                  class="apple-img-wrapper block w-full h-full"
-                >
-                  <img
-                    src={item.image}
-                    srcset={SanityImageService.srcSet(item.image, [240, 360, 480]) || undefined}
-                    sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 320px"
-                    alt={getLocalizedValue(item.title, currentLang)}
-                    class="catalog-card-img w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-                    loading={idx < 8 ? "eager" : "lazy"}
-                    fetchpriority={idx === 0 ? "high" : "auto"}
-                    decoding={idx < 8 ? "sync" : "async"}
-                    width="320"
-                    height="400"
-                    onload="this.parentElement && (this.parentElement.parentElement?.classList.add('apple-img-loaded'), this.parentElement.parentElement?.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement.parentElement))"
-                  />
-                </a>
-                <button
-                  type="button"
-                  class="btn-catalog-quote absolute bottom-3 right-3 z-10 px-3.5 py-2 rounded-full text-xs font-medium bg-canvas/95 backdrop-blur-md text-ink border border-hairline hover:bg-ink hover:text-canvas transition-all duration-300 lg:opacity-0 lg:translate-y-1 lg:group-hover:opacity-100 lg:group-hover:translate-y-0 cursor-pointer flex items-center gap-1"
-                  data-id={item.id}
-                  data-title={item.shortTitle || item.title}
-                  data-sku={item.sku || item.id}
-                  data-image={item.image}
-                  data-moq={item.moq || '200 Pairs'}
-                  data-variant={item.composition || 'Standard Spec'}
-                >
-                  <span>+</span>
-                  <span>{cardQuoteText}</span>
-                </button>
+          <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-1.5 sm:p-2 flex flex-col justify-between" data-product-id={item.id}>
+            <div class="flex-1 min-h-0 flex flex-col">
+              <!-- 1. Catalog Shelf Image Box: 1:1 Aspect Ratio on top with Apple Progressive Skeleton Shimmer -->
+              <a
+                href={getLocalizedPath(`/products/${item.slug}`, currentLang)}
+                class="apple-img-wrapper block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] apple-skeleton-surface my-0 group-hover:opacity-95 transition-all shrink-0"
+              >
+                <img
+                  src={item.image}
+                  srcset={SanityImageService.srcSet(item.image, [240, 360, 480]) || undefined}
+                  sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
+                  alt={getLocalizedValue(item.title, currentLang)}
+                  class="catalog-card-img w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
+                  loading={idx < 8 ? "eager" : "lazy"}
+                  fetchpriority={idx === 0 ? "high" : "auto"}
+                  decoding={idx < 8 ? "sync" : "async"}
+                  width="240"
+                  height="240"
+                  onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
+                />
+                <div class="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
+                  {item.category ? item.category.toUpperCase() : 'OEM'}
+                </div>
+              </a>
+
+              <!-- 2. Colorway / Mini Swatch Row -->
+              <div class="shrink-0 flex items-center justify-between pt-1.5 pb-0.5 px-0.5">
+                <div class="flex items-center gap-1">
+                  {(item.colors || []).slice(0, 4).map((hex: string) => (
+                    <span class="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:scale-125 transition-transform" title={`Color: ${hex}`}>
+                      <span class="w-2.5 h-2.5 rounded-full border border-black/15 shadow-2xs block" style={`background-color: ${hex}`}></span>
+                    </span>
+                  ))}
+                </div>
+                <span class="text-[10px] text-[#52525b] font-mono">{item.leadTime || '15-20d'}</span>
               </div>
 
-              <!-- 2. Clean Lookbook Metadata -->
-              <div class="pt-3.5 space-y-1.5">
+              <!-- 3. Merged Title & Composition Block (Dynamic Typography Metric) -->
+              <div class="shrink-0 text-xs leading-tight min-h-[calc(2lh+1.2em)] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
                 <a href={getLocalizedPath(`/products/${item.slug}`, currentLang)} class="block">
-                  <h3 class="text-[15px] font-medium text-ink group-hover:text-muted transition-colors line-clamp-2 leading-snug" title={getLocalizedValue(item.title, currentLang)}>
+                  <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-tight" title={getLocalizedValue(item.title, currentLang)}>
                     {getLocalizedValue(item.shortTitle || item.title, currentLang)}
                   </h3>
                 </a>
-                <p class="text-[13px] text-muted line-clamp-1">{item.composition || 'Premium Knit'}</p>
-                <div class="pt-1 flex items-center justify-between gap-2">
-                  <div class="flex items-center gap-1.5">
-                    {(item.colors || []).slice(0, 4).map((hex: string) => (
-                      <span class="w-3 h-3 rounded-full border border-hairline block" style={`background-color: ${hex}`} title={`Color: ${hex}`}></span>
-                    ))}
-                  </div>
-                  <div class="flex items-baseline gap-1 text-xs font-mono text-muted">
-                    <span class="text-ink font-semibold">{item.currencySymbol || item.currency || '$'}{item.price}</span>
-                    <span>/{item.unit && item.unit.toLowerCase() !== 'pairs' ? item.unit : unitPairLabel}</span>
-                    <span>· {t('catalog.moqPrefix')} {item.moq}</span>
-                  </div>
-                </div>
+                <p class="text-[10px] leading-tight text-[#52525b] line-clamp-1 truncate">{item.composition || 'Premium Knit'}</p>
               </div>
+            </div>
+
+            <!-- 5. Wholesale Price & Action Bottom Row -->
+            <div class="shrink-0 mt-1 pt-1 border-t border-black/5 flex items-center justify-between px-0.5">
+              <div class="flex flex-col">
+                <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
+                  <span class="text-[10px] font-mono">{item.currencySymbol || item.currency || '$'}</span>
+                  <span class="text-sm font-mono tracking-tight font-bold">{item.price}</span>
+                  <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/{item.unit && item.unit.toLowerCase() !== 'pairs' ? item.unit : unitPairLabel}</span>
+                </div>
+                <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq}</span>
+              </div>
+
+              <button
+                type="button"
+                class="btn-catalog-quote px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1d1d1f] hover:bg-[#ff5000] text-white transition-all cursor-pointer flex items-center gap-1 shadow-2xs shrink-0"
+                data-id={item.id}
+                data-title={item.shortTitle || item.title}
+                data-sku={item.sku || item.id}
+                data-image={item.image}
+                data-moq={item.moq || '200 Pairs'}
+                data-variant={item.composition || 'Standard Spec'}
+              >
+                <span>+</span>
+                <span>{cardQuoteText}</span>
+              </button>
             </div>
           </div>
         ))}
@@ -264,67 +278,80 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
       <!-- Client-side Clone Template (Single Source of Truth for product cards) -->
       <template id="catalog-card-tpl">
-        <div class="group shrink-0 flex flex-col justify-between">
-          <div class="flex flex-col">
-            <div class="relative w-full aspect-[4/5] rounded-[var(--gv-radius-card)] overflow-hidden bg-surface apple-skeleton-surface">
-              <a href="" class="card-link-main apple-img-wrapper block w-full h-full">
-                <img
-                  src=""
-                  sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 320px"
-                  alt=""
-                  class="catalog-card-img w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-                  loading="lazy"
-                  decoding="async"
-                  width="320"
-                  height="400"
-                  onload="this.parentElement && (this.parentElement.parentElement?.classList.add('apple-img-loaded'), this.parentElement.parentElement?.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement.parentElement))"
-                />
-              </a>
-              <button
-                type="button"
-                class="btn-catalog-quote absolute bottom-3 right-3 z-10 px-3.5 py-2 rounded-full text-xs font-medium bg-canvas/95 backdrop-blur-md text-ink border border-hairline hover:bg-ink hover:text-canvas transition-all duration-300 lg:opacity-0 lg:translate-y-1 lg:group-hover:opacity-100 lg:group-hover:translate-y-0 cursor-pointer flex items-center gap-1"
-              >
-                <span>+</span>
-                <span>{cardQuoteText}</span>
-              </button>
+        <div class="group shrink-0 h-full rounded-2xl bg-white border border-black/8 hover:border-black/20 hover:shadow-lg transition-all duration-300 p-1.5 sm:p-2 flex flex-col justify-between">
+          <div class="flex-1 min-h-0 flex flex-col">
+            <a
+              href=""
+              class="card-link-main apple-img-wrapper block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] apple-skeleton-surface my-0 group-hover:opacity-95 transition-all shrink-0"
+            >
+              <img
+                src=""
+                sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
+                alt=""
+                class="catalog-card-img w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-105"
+                loading="lazy"
+                decoding="async"
+                width="240"
+                height="240"
+                onload="this.parentElement && (this.parentElement.classList.add('apple-img-loaded'), this.parentElement.classList.remove('is-shimmer-active'), window.__unobserveAppleShimmer && window.__unobserveAppleShimmer(this.parentElement))"
+              />
+              <div class="card-category absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-medium text-white tracking-tight">
+                OEM
+              </div>
+            </a>
+
+            <div class="shrink-0 flex items-center justify-between pt-1.5 pb-0.5 px-0.5">
+              <div class="card-colors flex items-center gap-1"></div>
+              <span class="card-lead text-[10px] text-[#52525b] font-mono">15-20d</span>
             </div>
 
-            <div class="pt-3.5 space-y-1.5">
+            <div class="shrink-0 text-xs leading-tight min-h-[calc(2lh+1.2em)] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
               <a href="" class="card-link-title block">
-                <h3 class="card-title text-[15px] font-medium text-ink group-hover:text-muted transition-colors line-clamp-2 leading-snug"></h3>
+                <h3 class="card-title text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-tight"></h3>
               </a>
-              <p class="card-comp text-[13px] text-muted line-clamp-1"></p>
-              <div class="pt-1 flex items-center justify-between gap-2">
-                <div class="card-colors flex items-center gap-1.5"></div>
-                <div class="flex items-baseline gap-1 text-xs font-mono text-muted">
-                  <span class="text-ink font-semibold"><span class="card-curr">$</span><span class="card-price"></span></span>
-                  <span class="card-unit">/{unitPairLabel}</span>
-                  <span>· <span class="card-moq"></span></span>
-                </div>
-              </div>
+              <p class="card-comp text-[10px] leading-tight text-[#52525b] line-clamp-1 truncate"></p>
             </div>
+          </div>
+
+          <div class="shrink-0 mt-1 pt-1 border-t border-black/5 flex items-center justify-between px-0.5">
+            <div class="flex flex-col">
+              <div class="flex items-baseline gap-0.5 text-[#1d1d1f] font-semibold leading-none">
+                <span class="card-curr text-[10px] font-mono">$</span>
+                <span class="card-price text-sm font-mono tracking-tight font-bold"></span>
+                <span class="card-unit text-[9px] text-[#52525b] font-normal ml-0.5">/{unitPairLabel}</span>
+              </div>
+              <span class="card-moq text-[9px] text-[#52525b] font-mono mt-0.5"></span>
+            </div>
+
+            <button
+              type="button"
+              class="btn-catalog-quote px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1d1d1f] hover:bg-[#ff5000] text-white transition-all cursor-pointer flex items-center gap-1 shadow-2xs shrink-0"
+            >
+              <span>+</span>
+              <span>{cardQuoteText}</span>
+            </button>
           </div>
         </div>
       </template>
 
-      <!-- Filter / Sort Transition Skeleton Grid -->
+      <!-- Apple Design Language Filter / Sort Transition Skeleton Grid -->
       <ProductGridSkeleton id="catalog-filter-skeleton" count={12} class="hidden min-h-[50vh]" />
 
       <!-- Zero Results Empty State -->
       <div id="catalog-empty-state" class="hidden py-20 text-center space-y-3">
-        <div class="w-12 h-12 rounded-full bg-surface text-muted flex items-center justify-center mx-auto border border-hairline">
+        <div class="w-12 h-12 rounded-full bg-[#f5f5f7] text-[#86868b] flex items-center justify-center mx-auto border border-black/5">
           <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h3 class="text-base font-semibold text-ink">{getLocalizedValue(catalogSettings?.emptyStateHeading, currentLang, t('catalog.emptyHeading'))}</h3>
-        <p class="text-xs text-muted max-w-sm mx-auto">
+        <h3 class="text-base font-semibold text-[#1d1d1f]">{getLocalizedValue(catalogSettings?.emptyStateHeading, currentLang, t('catalog.emptyHeading'))}</h3>
+        <p class="text-xs text-[#86868b] max-w-sm mx-auto">
           {getLocalizedValue(catalogSettings?.emptyStateText, currentLang, t('catalog.emptyText'))}
         </p>
         <button
           type="button"
           id="catalog-reset-btn"
-          class="px-5 py-2 rounded-full text-xs font-medium bg-ink text-canvas hover:opacity-85 transition-opacity cursor-pointer"
+          class="px-4 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all cursor-pointer"
         >
           {t('catalog.resetFilters')}
         </button>
@@ -638,15 +665,15 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       if (isCurrent) {
         activeLabel = b.querySelector('span:first-child')?.textContent || activeLabel;
       }
-      b.className = `category-tab-btn shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+      b.className = `category-tab-btn shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
         isCurrent
-          ? 'bg-ink text-canvas'
-          : 'bg-surface text-ink hover:bg-elevated border border-hairline'
+          ? 'bg-[#1d1d1f] text-white shadow-sm'
+          : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed] border border-black/5'
       }`;
       const badge = b.querySelector('span:last-child');
       if (badge) {
-        badge.className = `text-xs px-1.5 rounded-full font-mono ${
-          isCurrent ? 'bg-canvas/20 text-canvas' : 'bg-canvas text-muted'
+        badge.className = `text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+          isCurrent ? 'bg-white/20 text-white' : 'bg-black/5 text-[#86868b]'
         }`;
       }
     });

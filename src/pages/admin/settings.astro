@@ -5,6 +5,7 @@ import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
 import { sanitizeAdminSettings } from '@utils/security';
+import { STOREFRONT_THEMES as themeOptions } from '@config/storefrontThemes';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -117,30 +118,6 @@ const dictLinks = [
   { href: '/admin/dicts?group=customer_tiers', title: 'Customer Tiers & Tags', desc: 'B2B client discount tiers (Regular, Wholesale, VIP, Partner) and CRM tag chips.' },
 ];
 
-const themeOptions = [
-  {
-    value: 'apple-minimal',
-    name: 'Apple Minimal（极简冷灰）',
-    badge: 'Classic',
-    desc: '纯白画布 + #f5f5f7 冷灰展台 + 系统无衬线 + 高密度 7 列商品货架。',
-    swatches: ['#ffffff', '#f5f5f7', '#1d1d1f'],
-  },
-  {
-    value: 'warm-atelier',
-    name: 'Warm Atelier（原纱暖调画册）',
-    badge: 'Loro Piana 调性',
-    desc: '全站统一详情页同款暖石宣纸色阶（#fcfbf9 / #f6f3ee）、浓缩咖啡墨色与克制建筑细线。',
-    swatches: ['#fcfbf9', '#f6f3ee', '#1c1917'],
-  },
-  {
-    value: 'editorial-gallery',
-    name: 'Editorial Gallery（高定衬线画廊）',
-    badge: 'Atelier 旗舰推荐',
-    desc: '暖麻画布 + Cormorant Garamond 展示衬线体 + 无框画廊 4~5 列大图陈列（隐藏图片遮挡角标）。',
-    swatches: ['#faf8f4', '#f2ede4', '#1a1816'],
-  },
-];
-
 const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
   `w-full px-3 ${f.boxed ? 'py-1.5' : 'py-2'} text-xs rounded-xl ${bg} border border-black/10 focus:outline-none focus:border-black text-[#1d1d1f] focus:bg-white transition-all ${f.mono ? 'font-mono' : ''} ${f.extraClass || ''}`;
 ---
@@ -233,7 +210,7 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
             <p class="text-[11px] text-[#86868b] mt-0.5">一键切换首页、商品大厅与详情页的色彩材质、字体签名与陈列密度（若前台有边缘缓存，保存后可去 Cache 面板刷新或等待约 5 分钟自动生效）。</p>
           </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {themeOptions.map((opt) => {
             const isChecked = (settings.storefront_theme || 'apple-minimal') === opt.value;
             return (
@@ -278,7 +255,7 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
           <input type="checkbox" id="enable_email_notify" name="enable_email_notify" checked={Boolean(settings.enable_email_notify)} class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f]" />
           <span class="text-xs font-bold text-[#1d1d1f]">Dispatch Email Notifications via Resend</span>
         </label>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {s2EmailFields.map((f) => (
             <div>
               <label for={f.key} class="block text-xs font-medium text-[#52525b] mb-1">{f.label}</label>

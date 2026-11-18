@@ -59,16 +59,16 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
       {logoImage ? (
         <img src={logoImage} alt={resolvedBrandTitle} class="h-6 w-auto object-contain" loading="eager" decoding="async" />
       ) : (
-        <span class="text-sm font-semibold tracking-tight text-ink hover:opacity-70 transition-opacity">
+        <span class="text-sm font-semibold tracking-tight text-[#1d1d1f] hover:opacity-70 transition-opacity">
           {resolvedBrandTitle}
         </span>
       )}
     </a>
 
-    <!-- Nav Links (Desktop) -->
-    <nav class="hidden md:flex items-center gap-7 text-xs font-normal text-muted tracking-normal">
+    <!-- Nav Links (Desktop - Apple Centered Style) -->
+    <nav class="hidden md:flex items-center gap-7 text-xs font-normal text-[#1d1d1f]/75 tracking-normal">
       {navLinks.map((link: any) => (
-        <a href={getLocalizedPath(link.url, currentLang)} class="hover:text-ink transition-colors">{getLocalizedNavLabel(link)}</a>
+        <a href={getLocalizedPath(link.url, currentLang)} class="hover:text-[#1d1d1f] transition-colors">{getLocalizedNavLabel(link)}</a>
       ))}
     </nav>
 
@@ -77,19 +77,19 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
       <!-- Desktop Language Picker -->
       <LanguagePicker class="hidden md:flex" />
 
-      <!-- Quote Basket Drawer Trigger -->
+      <!-- Quote Basket Drawer Trigger (Apple Style Shopping Bag Icon) -->
       <button
         type="button"
         id="nav-quote-cart-btn"
         onclick="window.openQuoteDrawer && window.openQuoteDrawer()"
-        class="relative p-2 rounded-full hover:bg-surface text-ink transition-all flex items-center justify-center cursor-pointer"
+        class="relative p-2 rounded-full hover:bg-black/5 text-[#1d1d1f] transition-all flex items-center justify-center cursor-pointer"
         aria-label="Open Quote Basket"
         title="Quote Basket (RFQ)"
       >
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
         </svg>
-        <span class="nav-quote-badge hidden absolute -top-0.5 -right-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-ink text-canvas min-w-[16px] text-center shadow-xs">
+        <span class="nav-quote-badge hidden absolute -top-0.5 -right-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#1d1d1f] text-white min-w-[16px] text-center shadow-xs">
           0
         </span>
       </button>
@@ -98,7 +98,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
       <a
         href={getLocalizedPath('/orders', currentLang)}
         id="nav-user-account-btn"
-        class="relative p-2 rounded-full hover:bg-surface text-ink transition-all flex items-center justify-center cursor-pointer"
+        class="relative p-2 rounded-full hover:bg-black/5 text-[#1d1d1f] transition-all flex items-center justify-center cursor-pointer"
         aria-label="My Account & Orders"
         title="My Orders & RFQs"
       >
@@ -112,7 +112,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
         <a
           href={actionBtnUrl}
           data-swatch-sku={rfqSettings?.swatchKitSku}
-          class="hidden md:inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-ink text-canvas hover:opacity-85 transition-opacity"
+          class="hidden md:inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white hover:bg-black transition-all shadow-sm"
         >
           <span>{actionBtnText}</span>
         </a>
@@ -121,7 +121,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
       <!-- Mobile Menu Toggle Button -->
       <button
         id="mobile-menu-toggle"
-        class="md:hidden p-1.5 rounded-md text-muted hover:text-ink"
+        class="md:hidden p-1.5 rounded-md text-zinc-700 hover:text-black"
         aria-label="Toggle navigation"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,11 +132,11 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
   </div>
 
   <!-- Mobile Dropdown -->
-  <div id="mobile-menu" class="hidden md:hidden px-6 pt-3 pb-6 bg-canvas/95 backdrop-blur-xl border-b border-hairline space-y-3 text-sm">
+  <div id="mobile-menu" class="hidden md:hidden px-6 pt-3 pb-6 bg-white/95 backdrop-blur-xl border-b border-black/5 space-y-3 text-sm">
     {navLinks.map((link: any) => (
-      <a href={getLocalizedPath(link.url, currentLang)} class="block py-1 text-muted hover:text-ink">{getLocalizedNavLabel(link)}</a>
+      <a href={getLocalizedPath(link.url, currentLang)} class="block py-1 text-zinc-700 hover:text-black">{getLocalizedNavLabel(link)}</a>
     ))}
-    <a href={getLocalizedPath('/orders', currentLang)} class="block py-1 text-muted hover:text-ink font-medium">
+    <a href={getLocalizedPath('/orders', currentLang)} class="block py-1 text-zinc-700 hover:text-black font-medium">
       {t('orders.title')}
     </a>
     <a id="nav-mobile-admin-link" href="/admin/orders" class="hidden block py-1 text-amber-700 hover:text-amber-900 font-semibold">
@@ -146,7 +146,7 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
       <a
         href={actionBtnUrl}
         data-swatch-sku={rfqSettings?.swatchKitSku}
-        class="inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-full text-xs font-medium bg-ink text-canvas"
+        class="inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-full text-xs font-medium bg-[#1d1d1f] text-white"
       >
         <span>{actionBtnText}</span>
       </a>
