@@ -145,6 +145,30 @@ export const DDL_STATEMENTS = [
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(group_code, item_key)
 )`,
+  `CREATE TABLE IF NOT EXISTS waf_rules (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL DEFAULT 'custom',
+  name TEXT NOT NULL,
+  is_system INTEGER DEFAULT 0,
+  is_enabled INTEGER DEFAULT 1,
+  priority INTEGER DEFAULT 100,
+  conditions_json TEXT NOT NULL DEFAULT '[]',
+  match_mode TEXT DEFAULT 'ALL',
+  action TEXT NOT NULL DEFAULT 'block_403',
+  rate_limit_json TEXT DEFAULT '{}',
+  strike_weight INTEGER DEFAULT 0,
+  expires_at TEXT DEFAULT NULL,
+  updated_by TEXT DEFAULT '',
+  updated_at TEXT DEFAULT (datetime('now'))
+)`,
+  `CREATE TABLE IF NOT EXISTS waf_ip_acl (
+  ip_cidr TEXT PRIMARY KEY,
+  list_type TEXT NOT NULL,
+  reason TEXT DEFAULT '',
+  expires_at TEXT DEFAULT NULL,
+  created_by TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+)`,
   `INSERT INTO admin_roles (code, name, data_scope, menus_json, permissions_json, description, is_system) VALUES
   ('super_admin', '超级管理员', 'ALL', '["dashboard","orders","users","products","pages","cms_config","cache","members","roles","dicts","waf","logins","logs","settings"]', '["*"]', '全局最高权限，拥有全站所有操作及系统设置能力', 1),
   ('content_editor', '内容与美工运营', 'ALL', '["products","pages","cms_config","cache"]', '["cms:read","cms:write","cache:purge"]', '负责商品管理、分类维护、页面积木编排与边缘缓存刷新', 1),
@@ -280,7 +304,9 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_user_logins_email_created ON user_logins(email, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_assigned_status ON orders(assigned_to, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_email ON admin_audit_logs(admin_email)`
+  `CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_email ON admin_audit_logs(admin_email)`,
+  `CREATE INDEX IF NOT EXISTS idx_waf_rules_enabled_priority ON waf_rules(is_enabled, priority, id)`,
+  `CREATE INDEX IF NOT EXISTS idx_waf_ip_acl_type ON waf_ip_acl(list_type, expires_at)`
 ];
 
 let isSchemaVerifiedInIsolate = false;

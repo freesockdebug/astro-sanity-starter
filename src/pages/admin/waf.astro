@@ -6,12 +6,20 @@ import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import WafConditionBuilder from '@components/admin/WafConditionBuilder.astro';
 import { requireAdminContext } from '@utils/auth';
 import { hasPermission } from '@utils/rbac';
-import { getSystemSettings, listErrorLogs, getWaf24hSummary, type WafRuleMode } from '@db';
+import {
+  getSystemSettings,
+  listErrorLogs,
+  getWaf24hSummary,
+  listWafRules,
+  listWafIpAcl,
+  type WafRuleMode,
+} from '@db';
 import {
   EdgeWafService,
   parseIpList,
   normalizeWafRuleConfig,
   DEFAULT_WAF_RULE_CONFIG,
+  parseUtcTimestampMs,
 } from '@utils/waf';
 import { toIsoUtcString, formatUtcFallback } from '@utils/format';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -29,7 +37,7 @@ if (redirectResponse) return redirectResponse;
 const canManage = hasPermission(adminContext, 'waf:manage');
 const settings = systemSettings || (await getSystemSettings(cfEnv));
 
-const [recentLogsRes, daySummary] = await Promise.all([
+const [recentLogsRes, daySummary, dbRules, ipAcl] = await Promise.all([
   listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1 }, cfEnv).catch(() => ({
     logs: [],
     total: 0,
@@ -37,16 +45,41 @@ const [recentLogsRes, daySummary] = await Promise.all([
     bottlenecks: [],
   })),
   getWaf24hSummary(cfEnv).catch(() => ({ eventsCount: 0, totalHits: 0 })),
+  listWafRules(cfEnv).catch(() => []),
+  listWafIpAcl(cfEnv).catch(() => []),
 ]);
 
 const activeModes: WafRuleMode[] = Array.isArray(settings?.waf_active_modes) ? settings.waf_active_modes : [];
-const blockedIpsStr = settings?.waf_blocked_ips || '';
-const allowIpsStr = settings?.waf_allow_ips || '';
+const dbBlockedStr = ipAcl.filter((r) => r.list_type === 'BLACKLIST' && !r.expires_at).map((r) => r.ip_cidr).join('\n');
+const dbAllowStr = ipAcl.filter((r) => r.list_type === 'WHITELIST' && !r.expires_at).map((r) => r.ip_cidr).join('\n');
+const blockedIpsStr = dbBlockedStr || settings?.waf_blocked_ips || '';
+const allowIpsStr = dbAllowStr || settings?.waf_allow_ips || '';
 const ruleConfig = normalizeWafRuleConfig(settings?.waf_rule_config);
 const blockedCount = parseIpList(blockedIpsStr).length;
 const allowCount = parseIpList(allowIpsStr).length;
-const strikeStats = EdgeWafService.getStrikeStats();
-const activeBans = EdgeWafService.getActiveBans();
+
+const nowMs = Date.now();
+const mergedBanMap = new Map<string, { ip: string; strikes: number; remainingMinutes: number; bannedUntil: number }>();
+for (const ban of EdgeWafService.getActiveBans(nowMs)) {
+  mergedBanMap.set(ban.ip.toLowerCase(), ban);
+}
+for (const row of ipAcl) {
+  if (row.list_type !== 'AUTO_BAN') continue;
+  const expMs = parseUtcTimestampMs(row.expires_at);
+  if (expMs !== null && expMs <= nowMs) continue;
+  const key = row.ip_cidr.toLowerCase();
+  if (!mergedBanMap.has(key)) {
+    mergedBanMap.set(key, {
+      ip: row.ip_cidr,
+      strikes: 3,
+      remainingMinutes: expMs ? Math.max(1, Math.ceil((expMs - nowMs) / 60_000)) : 999,
+      bannedUntil: expMs ?? nowMs + 86_400_000,
+    });
+  }
+}
+const activeBans = Array.from(mergedBanMap.values()).sort((a, b) => b.bannedUntil - a.bannedUntil);
+const localStats = EdgeWafService.getStrikeStats(nowMs);
+const strikeStats = { activeBans: activeBans.length, trackedIps: Math.max(localStats.trackedIps, activeBans.length) };
 const blocked24hCount = daySummary.totalHits || 0;
 const blocked24hEvents = daySummary.eventsCount || 0;
 const logs = recentLogsRes.logs || [];
@@ -108,6 +141,8 @@ const initialPayload = JSON.stringify({
   blockedIps: blockedIpsStr,
   allowIps: allowIpsStr,
   ruleConfig,
+  dbRules,
+  ipAcl,
   defaultRuleConfig: DEFAULT_WAF_RULE_CONFIG,
 }).replace(/</g, '\\u003c');
 ---
@@ -463,8 +498,9 @@ const initialPayload = JSON.stringify({
         </div>
       </section>
 
-      <!-- 2.5 Unified Logical Condition Rules (Preset + Custom) -->
+      <!-- 2.5 Unified Logical Condition Rules (DB Preset + Custom) -->
       <WafConditionBuilder
+        dbRules={dbRules}
         rules={ruleConfig.customRules}
         ruleConfig={ruleConfig}
         activeModes={activeModes}
@@ -600,13 +636,25 @@ const initialPayload = JSON.stringify({
                       {canManage && (
                         <td class="adm-td text-right whitespace-nowrap">
                           {ipVal ? (
-                            <button
-                              type="button"
-                              class="btn-quick-block-ip px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/80 transition-colors cursor-pointer"
-                              data-block-ip={ipVal}
-                            >
-                              + Block IP
-                            </button>
+                            <div class="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                class="btn-quick-block-ip px-2 py-1 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200/80 transition-colors cursor-pointer"
+                                data-block-ip={ipVal}
+                                data-block-ttl="1440"
+                                title="Block IP in DB ACL for 24 hours immediately"
+                              >
+                                Ban 24h
+                              </button>
+                              <button
+                                type="button"
+                                class="btn-quick-block-ip px-2 py-1 rounded-lg text-[10px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/80 transition-colors cursor-pointer"
+                                data-block-ip={ipVal}
+                                title="Permanently block IP in DB ACL immediately"
+                              >
+                                + Block
+                              </button>
+                            </div>
                           ) : (
                             <span class="text-[10px] text-[#86868b]">—</span>
                           )}
@@ -655,6 +703,8 @@ const initialPayload = JSON.stringify({
         blockedIps?: string;
         allowIps?: string;
         ruleConfig?: Record<string, any>;
+        dbRules?: any[];
+        ipAcl?: any[];
         defaultRuleConfig?: Record<string, any>;
       }>('waf-initial-data', { canManage: false });
       const canManage = Boolean(initial.canManage);
@@ -681,15 +731,24 @@ const initialPayload = JSON.stringify({
         document.querySelector<HTMLInputElement>(`.waf-sub-checkbox[data-waf-group="${group}"][data-waf-key="${key}"]`);
 
       let customRules: any[] = [];
+      let dbRulesState: any[] = Array.isArray(initial.dbRules) ? initial.dbRules.map((r) => ({ ...r })) : [];
       let activeRuleFilter = 'all';
 
       const CUSTOM_FIELD_LABELS: Record<string, string> = {
+        path: 'If Path',
         path_matches: 'If Path',
+        header: 'If Request Header',
         header_contains: 'If Request Header',
+        query: 'If Query String',
         query_contains: 'If Query String',
+        payload_targets: 'If Payload + Headers',
+        ua: 'If User-Agent',
         ua_contains: 'If User-Agent',
+        method: 'If Method',
+        ip: 'If Client IP',
         ip_matches: 'If Client IP',
-        country_equals: 'If Country Code',
+        country: 'If Country',
+        country_equals: 'If Country',
       };
 
       const applyRuleFilter = () => {
@@ -712,51 +771,100 @@ const initialPayload = JSON.stringify({
       const renderCustomRules = () => {
         const listEl = document.getElementById('waf-custom-rules-list');
         const countEl = document.getElementById('waf-custom-rules-count');
-        const presetCount = Number(countEl?.dataset.presetCount || 15);
+        const presetCount = Number(countEl?.dataset.presetCount || 17);
+        const customRows = dbRulesState.filter((r) => r.is_system === 0);
+
         if (countEl) {
-          countEl.textContent = `${presetCount + customRules.length} Rules (${presetCount} Preset · ${customRules.length} Custom)`;
+          countEl.textContent = `${presetCount + customRows.length} Rules (${presetCount} Preset · ${customRows.length} Custom)`;
         }
         const allTab = document.querySelector<HTMLButtonElement>('.waf-filter-tab[data-rule-filter="all"]');
         const customTab = document.querySelector<HTMLButtonElement>('.waf-filter-tab[data-rule-filter="custom"]');
-        if (allTab) allTab.textContent = `All (${presetCount + customRules.length})`;
-        if (customTab) customTab.textContent = `Custom (${customRules.length})`;
+        if (allTab) allTab.textContent = `All (${presetCount + customRows.length})`;
+        if (customTab) customTab.textContent = `Custom (${customRows.length})`;
+
+        // Sync preset checkboxes from DB rules state when available
+        const sysMap = new Map(dbRulesState.filter((r) => r.is_system === 1).map((r) => [r.id, r]));
+        document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox[data-sys-rule-id]').forEach((cb) => {
+          const sysRule = sysMap.get(cb.dataset.sysRuleId || '');
+          if (sysRule) {
+            cb.checked = sysRule.is_enabled !== 0;
+          }
+        });
 
         if (!listEl) return;
 
-        if (!customRules.length) {
+        if (!customRows.length) {
           listEl.innerHTML = activeRuleFilter === 'custom'
-            ? `<div class="rounded-xl border border-dashed border-black/10 bg-[#fafafc] px-3 py-4 text-center text-[11px] text-[#86868b]">No custom logical rules configured yet. Use the builder above to create edge interception rules.</div>`
+            ? `<div class="rounded-xl border border-dashed border-black/10 bg-[#fafafc] px-3 py-4 text-center text-[11px] text-[#86868b]">No custom database rules configured yet. Use the builder above to add incremental WAF rules.</div>`
             : '';
           applyRuleFilter();
           return;
         }
 
-        listEl.innerHTML = customRules.map((rule) => {
-          const fieldLabel = CUSTOM_FIELD_LABELS[rule.field] || rule.field;
-          const headerChip = rule.headerName
-            ? `<code class="ml-1 font-mono text-[10px] bg-white border border-black/10 px-1 py-0.5 rounded text-[#52525b]">[${escapeHtml(rule.headerName)}]</code>`
-            : '';
-          const opLabel = escapeHtml(String(rule.operator || 'contains').replace('_', ' '));
-          const actionCls = rule.action === 'rate_limit_429' ? 'adm-badge-warn' : 'adm-badge-err';
+        listEl.innerHTML = customRows.map((rule) => {
+          let conds: any[] = [];
+          try {
+            const parsed = JSON.parse(rule.conditions_json || '[]');
+            if (Array.isArray(parsed)) conds = parsed;
+          } catch {}
+          let rl: any = {};
+          try {
+            rl = JSON.parse(rule.rate_limit_json || '{}') || {};
+          } catch {}
+
+          const condChips = conds.map((c, idx) => {
+            const fieldLabel = CUSTOM_FIELD_LABELS[c.field] || c.field;
+            const headerChip = c.headerName
+              ? `<code class="ml-0.5 font-mono text-[10px]">[${escapeHtml(c.headerName)}]</code>`
+              : '';
+            const opLabel = escapeHtml(String(c.op || 'contains').replace(/_/g, ' '));
+            const joinBadge = idx > 0 ? `<span class="text-[10px] font-bold text-[#86868b]">${escapeHtml(rule.match_mode || 'ALL')}</span>` : '';
+            return `<span class="inline-flex items-center gap-1">${joinBadge}<span class="font-medium text-[#52525b]">${escapeHtml(fieldLabel)}${headerChip}</span><span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1 py-0.5 rounded">${opLabel}</span><code class="font-mono text-[10px] text-[#1d1d1f] bg-white border border-black/10 px-1.5 py-0.5 rounded break-all">"${escapeHtml(c.value || '')}"</code></span>`;
+          }).join('');
+
+          const actionCls = rule.action === 'rate_limit_429'
+            ? 'adm-badge-warn'
+            : rule.action === 'allow'
+              ? 'adm-badge-ok'
+              : rule.action === 'log_only'
+                ? 'adm-badge-info'
+                : 'adm-badge-err';
           const actionText = rule.action === 'rate_limit_429'
-            ? `429 Throttle${rule.limit ? ` (${rule.limit} req)` : ''}`
-            : '403 Block';
-          const deleteBtn = canManage
-            ? `<button type="button" data-rule-id="${escapeHtml(rule.id)}" aria-label="Delete rule" title="Remove rule" class="waf-custom-rule-delete w-6 h-6 rounded-lg text-xs font-bold text-[#86868b] hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center">×</button>`
+            ? `429 Throttle${rl.limit ? ` (${rl.limit} req)` : ''}`
+            : rule.action === 'allow'
+              ? 'Allow'
+              : rule.action === 'log_only'
+                ? 'Shadow Log'
+                : '403 Block';
+          const strikeChip = Number(rule.strike_weight || 0) > 0
+            ? `<span class="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200/70 text-[10px] font-mono">+${Number(rule.strike_weight)} strike</span>`
             : '';
+          const ttlChip = rule.expires_at
+            ? `<span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200/70 text-[10px] font-mono" title="Expires UTC: ${escapeHtml(rule.expires_at)}">TTL</span>`
+            : '';
+          const editBtn = canManage
+            ? `<button type="button" data-edit-rule-id="${escapeHtml(rule.id)}" class="waf-rule-edit-btn px-2 py-0.5 rounded-lg text-[10px] font-semibold text-[#52525b] hover:text-[#1d1d1f] hover:bg-black/5 cursor-pointer">Edit</button>`
+            : '';
+          const deleteBtn = canManage
+            ? `<button type="button" data-rule-id="${escapeHtml(rule.id)}" aria-label="Delete rule" title="Delete rule from DB" class="waf-custom-rule-delete w-6 h-6 rounded-lg text-xs font-bold text-[#86868b] hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center">×</button>`
+            : '';
+          const isEnabled = rule.is_enabled !== 0;
+
           return `
-            <div data-custom-rule-id="${escapeHtml(rule.id)}" data-rule-scope="custom" class="waf-unified-rule-row rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity ${rule.enabled ? '' : 'opacity-55'}">
+            <div data-custom-rule-id="${escapeHtml(rule.id)}" data-rule-scope="custom" class="waf-unified-rule-row rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity ${isEnabled ? '' : 'opacity-55'}">
               <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                <input id="waf-cr-${escapeHtml(rule.id)}" type="checkbox" autocomplete="off" data-rule-id="${escapeHtml(rule.id)}" ${rule.enabled ? 'checked' : ''} ${canManage ? '' : 'disabled'} aria-label="Toggle custom rule ${escapeHtml(rule.id)}" class="waf-custom-rule-toggle w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0" />
-                <span class="px-1.5 py-0.5 rounded-md border text-[10px] font-semibold bg-sky-50 text-sky-700 border-sky-200/80 shrink-0">Custom</span>
+                <input id="waf-cr-${escapeHtml(rule.id)}" type="checkbox" autocomplete="off" data-rule-id="${escapeHtml(rule.id)}" ${isEnabled ? 'checked' : ''} ${canManage ? '' : 'disabled'} aria-label="Toggle custom rule ${escapeHtml(rule.name || rule.id)}" class="waf-custom-rule-toggle w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0" />
+                <span class="px-1.5 py-0.5 rounded-md border text-[10px] font-semibold bg-sky-50 text-sky-700 border-sky-200/80 shrink-0">P${Number(rule.priority ?? 50)}</span>
                 <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
-                  <span class="font-semibold text-[#1d1d1f]">${escapeHtml(fieldLabel)}${headerChip}</span>
-                  <span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1.5 py-0.5 rounded">${opLabel}</span>
-                  <code class="font-mono text-[10px] text-[#1d1d1f] bg-white border border-black/10 px-1.5 py-0.5 rounded break-all">"${escapeHtml(rule.value)}"</code>
+                  <span class="font-semibold text-[#1d1d1f]">${escapeHtml(rule.name || rule.id)}</span>
+                  ${condChips}
+                  ${strikeChip}
+                  ${ttlChip}
                 </div>
               </div>
-              <div class="flex items-center gap-2 shrink-0">
+              <div class="flex items-center gap-1.5 shrink-0">
                 <span class="adm-badge ${actionCls}">${actionText}</span>
+                ${editBtn}
                 ${deleteBtn}
               </div>
             </div>
@@ -835,6 +943,7 @@ const initialPayload = JSON.stringify({
         blockedIps?: string;
         allowIps?: string;
         ruleConfig?: Record<string, any>;
+        dbRules?: any[];
       }) => {
         if (Array.isArray(state.activeModes)) {
           const modeSet = new Set(state.activeModes);
@@ -848,8 +957,13 @@ const initialPayload = JSON.stringify({
         if (allowTextarea && typeof state.allowIps === 'string') {
           allowTextarea.value = state.allowIps;
         }
+        if (Array.isArray(state.dbRules)) {
+          dbRulesState = state.dbRules.map((r: any) => ({ ...r }));
+        }
         if (state.ruleConfig) {
           applyRuleConfig(state.ruleConfig);
+        } else if (Array.isArray(state.dbRules)) {
+          renderCustomRules();
         }
       };
 
@@ -996,7 +1110,7 @@ const initialPayload = JSON.stringify({
       const syncBuilderFieldUI = () => {
         if (!builderFieldEl) return;
         const field = builderFieldEl.value;
-        const isHeader = field === 'header_contains';
+        const isHeader = field === 'header' || field === 'header_contains';
         const isRate = builderActionEl?.value === 'rate_limit_429';
         builderHeaderWrap?.classList.toggle('hidden', !isHeader);
         builderHeaderWrap?.classList.toggle('block', isHeader);
@@ -1017,21 +1131,31 @@ const initialPayload = JSON.stringify({
       builderActionEl?.addEventListener('change', syncBuilderFieldUI, { signal });
       syncBuilderFieldUI();
 
-      const addCustomRuleFromBuilder = () => {
+      document.getElementById('waf-cond2-toggle-btn')?.addEventListener('click', () => {
+        document.getElementById('waf-builder-cond2-wrap')?.classList.toggle('hidden');
+      }, { signal });
+
+      const postWafAction = async (payload: Record<string, any>) => {
+        const res = await fetch('/api/admin/waf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        return { ok: res.ok && Boolean(data?.success), data };
+      };
+
+      const addCustomRuleFromBuilder = async () => {
         if (!canManage || !builderFieldEl || !builderOperatorEl || !builderValueInput || !builderActionEl) return;
-        if (customRules.length >= 50) {
-          showToast('Maximum 50 custom condition rules reached.', false);
-          return;
-        }
         const field = builderFieldEl.value;
-        const operator = builderOperatorEl.value;
+        const op = builderOperatorEl.value;
         const action = builderActionEl.value;
-        let headerName = field === 'header_contains'
+        let headerName = (field === 'header' || field === 'header_contains')
           ? (builderHeaderInput?.value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
           : '';
-        let value = builderValueInput.value.trim().slice(0, 200);
+        let value = builderValueInput.value.trim().slice(0, 256);
 
-        if (field === 'header_contains' && !headerName && value.includes(':')) {
+        if ((field === 'header' || field === 'header_contains') && !headerName && value.includes(':')) {
           const idx = value.indexOf(':');
           const prefix = value.slice(0, idx).trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
           const rest = value.slice(idx + 1).trim();
@@ -1047,26 +1171,72 @@ const initialPayload = JSON.stringify({
           return;
         }
 
+        const conditions: any[] = [{ field, op, ...(headerName ? { headerName } : {}), value }];
+        const f2 = (document.getElementById('waf-builder-field2') as HTMLSelectElement | null)?.value;
+        const op2 = (document.getElementById('waf-builder-operator2') as HTMLSelectElement | null)?.value;
+        let v2 = ((document.getElementById('waf-builder-value2') as HTMLInputElement | null)?.value || '').trim();
+        if (f2 && op2 && v2) {
+          let h2 = '';
+          if (f2 === 'header' && v2.includes(':')) {
+            const idx2 = v2.indexOf(':');
+            h2 = v2.slice(0, idx2).trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+            v2 = v2.slice(idx2 + 1).trim();
+          }
+          if (v2) conditions.push({ field: f2, op: op2, ...(h2 ? { headerName: h2 } : {}), value: v2 });
+        }
+
         const parsedLimit = action === 'rate_limit_429'
           ? Math.min(5000, Math.max(1, Math.round(Number(builderLimitInput?.value || 20))))
           : undefined;
+        const customName = ((document.getElementById('waf-builder-name') as HTMLInputElement | null)?.value || '').trim();
+        const matchMode = (document.getElementById('waf-builder-match-mode') as HTMLSelectElement | null)?.value === 'ANY' ? 'ANY' : 'ALL';
+        const priority = clampInput('waf-builder-priority', 50, 1, 999);
+        const strikeWeight = clampInput('waf-builder-strike', 0, 0, 10);
+        const ttlMins = Number((document.getElementById('waf-builder-ttl') as HTMLSelectElement | null)?.value || 0);
+        const expiresAt = ttlMins > 0
+          ? new Date(Date.now() + ttlMins * 60_000).toISOString().slice(0, 19).replace('T', ' ')
+          : null;
 
-        customRules.push({
-          id: `cr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-          enabled: true,
-          field,
-          operator,
-          ...(headerName ? { headerName } : {}),
-          value,
-          action,
-          ...(parsedLimit !== undefined ? { limit: parsedLimit } : {}),
-        });
-
-        builderValueInput.value = '';
-        if (builderHeaderInput) builderHeaderInput.value = '';
-        renderCustomRules();
-        setDirty(true);
-        scheduleAutoSave();
+        if (builderAddBtn) builderAddBtn.disabled = true;
+        try {
+          const { ok, data } = await postWafAction({
+            action: 'upsert_rule',
+            rule: {
+              id: `cr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+              category: 'custom',
+              name: customName || `${CUSTOM_FIELD_LABELS[field] || field} ${op} "${value.slice(0, 28)}"`,
+              is_system: 0,
+              is_enabled: 1,
+              priority,
+              conditions,
+              match_mode: matchMode,
+              action,
+              rate_limit: parsedLimit ? { limit: parsedLimit, key_by: 'ip' } : {},
+              strike_weight: strikeWeight,
+              expires_at: expiresAt,
+            },
+          });
+          if (!ok) {
+            showToast(data?.error || 'Failed to save rule.', false);
+            return;
+          }
+          if (Array.isArray(data.dbRules)) {
+            dbRulesState = data.dbRules;
+          }
+          builderValueInput.value = '';
+          if (builderHeaderInput) builderHeaderInput.value = '';
+          const nameEl = document.getElementById('waf-builder-name') as HTMLInputElement | null;
+          if (nameEl) nameEl.value = '';
+          const v2El = document.getElementById('waf-builder-value2') as HTMLInputElement | null;
+          if (v2El) v2El.value = '';
+          renderCustomRules();
+          syncModeCardsAndKpis();
+          showToast(data.message || 'Rule persisted to D1 + Edge KV.', true);
+        } catch (err: any) {
+          showToast(`Save rule failed: ${err.message}`, false);
+        } finally {
+          if (builderAddBtn) builderAddBtn.disabled = false;
+        }
       };
 
       // Rule Simulator (Dry-Run)
@@ -1116,8 +1286,13 @@ const initialPayload = JSON.stringify({
           const r = data.result;
           simResultEl.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-700', 'border-emerald-200', 'bg-rose-50', 'text-rose-700', 'border-rose-200', 'bg-amber-50', 'text-amber-800', 'border-amber-200');
           if (r.allowed) {
-            simResultEl.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
-            simResultEl.textContent = 'ALLOWED (200 OK)';
+            if (r.shadowMatch) {
+              simResultEl.classList.add('bg-amber-50', 'text-amber-800', 'border-amber-200');
+              simResultEl.textContent = `ALLOWED · SHADOW: ${r.shadowMatch.reason}`;
+            } else {
+              simResultEl.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+              simResultEl.textContent = 'ALLOWED (200 OK)';
+            }
           } else {
             if (r.status === 429) {
               simResultEl.classList.add('bg-amber-50', 'text-amber-800', 'border-amber-200');
@@ -1143,28 +1318,131 @@ const initialPayload = JSON.stringify({
         }, { signal });
       });
 
-      customRulesListEl?.addEventListener('change', (e) => {
+      customRulesListEl?.addEventListener('change', async (e) => {
         const target = e.target as HTMLInputElement | null;
-        if (!target || !target.classList.contains('waf-custom-rule-toggle')) return;
+        if (!target || !target.classList.contains('waf-custom-rule-toggle') || !canManage) return;
         const ruleId = target.dataset.ruleId;
-        const rule = customRules.find((r) => r.id === ruleId);
-        if (!rule) return;
-        rule.enabled = target.checked;
-        renderCustomRules();
-        setDirty(true);
-        scheduleAutoSave();
+        if (!ruleId) return;
+        target.disabled = true;
+        try {
+          const { ok, data } = await postWafAction({ action: 'toggle_rule', ruleId, is_enabled: target.checked });
+          if (ok && Array.isArray(data.dbRules)) {
+            dbRulesState = data.dbRules;
+            renderCustomRules();
+            showToast(`Rule ${target.checked ? 'enabled' : 'disabled'} in D1 + KV.`, true);
+          } else {
+            target.checked = !target.checked;
+            showToast(data?.error || 'Failed to toggle rule.', false);
+          }
+        } catch (err: any) {
+          target.checked = !target.checked;
+          showToast(`Toggle error: ${err.message}`, false);
+        } finally {
+          target.disabled = false;
+        }
       }, { signal });
 
-      customRulesListEl?.addEventListener('click', (e) => {
+      customRulesListEl?.addEventListener('click', async (e) => {
         const btn = (e.target as HTMLElement | null)?.closest?.('.waf-custom-rule-delete') as HTMLButtonElement | null;
         if (!btn || !canManage) return;
         const ruleId = btn.dataset.ruleId;
-        const prevLen = customRules.length;
-        customRules = customRules.filter((r) => r.id !== ruleId);
-        if (customRules.length !== prevLen) {
-          renderCustomRules();
-          setDirty(true);
-          scheduleAutoSave();
+        if (!ruleId) return;
+        btn.disabled = true;
+        try {
+          const { ok, data } = await postWafAction({ action: 'delete_rule', ruleId });
+          if (ok && Array.isArray(data.dbRules)) {
+            dbRulesState = data.dbRules;
+            renderCustomRules();
+            syncModeCardsAndKpis();
+            showToast(data.message || 'Deleted rule from DB.', true);
+          } else {
+            showToast(data?.error || 'Failed to delete rule.', false);
+          }
+        } catch (err: any) {
+          showToast(`Delete failed: ${err.message}`, false);
+        } finally {
+          btn.disabled = false;
+        }
+      }, { signal });
+
+      // DB Rule Edit Dialog (supports editing built-in sys_* regexes/actions & custom rules)
+      const editDialog = document.getElementById('waf-rule-edit-dialog') as HTMLDialogElement | null;
+      const editIdEl = document.getElementById('waf-edit-id') as HTMLInputElement | null;
+      const editTitleEl = document.getElementById('waf-edit-title');
+      const editSubtitleEl = document.getElementById('waf-edit-subtitle');
+      const editNameEl = document.getElementById('waf-edit-name') as HTMLInputElement | null;
+      const editActionEl = document.getElementById('waf-edit-action') as HTMLSelectElement | null;
+      const editPriorityEl = document.getElementById('waf-edit-priority') as HTMLInputElement | null;
+      const editMatchModeEl = document.getElementById('waf-edit-match-mode') as HTMLSelectElement | null;
+      const editStrikeEl = document.getElementById('waf-edit-strike') as HTMLInputElement | null;
+      const editConditionsEl = document.getElementById('waf-edit-conditions') as HTMLTextAreaElement | null;
+      const editRateLimitEl = document.getElementById('waf-edit-ratelimit') as HTMLInputElement | null;
+
+      document.getElementById('waf-condition-builder')?.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement | null)?.closest?.('.waf-rule-edit-btn') as HTMLButtonElement | null;
+        if (!btn || !canManage || !editDialog) return;
+        const ruleId = btn.dataset.editRuleId || '';
+        const rule = dbRulesState.find((r) => r.id === ruleId);
+        if (!rule) {
+          showToast('Rule details unavailable; click Refresh first.', false);
+          return;
+        }
+        if (editIdEl) editIdEl.value = rule.id;
+        if (editTitleEl) editTitleEl.textContent = rule.is_system === 1 ? 'Edit System Preset Rule' : 'Edit Custom DB Rule';
+        if (editSubtitleEl) editSubtitleEl.textContent = `id: ${rule.id} · category: ${rule.category}`;
+        if (editNameEl) editNameEl.value = rule.name || '';
+        if (editActionEl) editActionEl.value = rule.action || 'block_403';
+        if (editPriorityEl) editPriorityEl.value = String(rule.priority ?? 100);
+        if (editMatchModeEl) editMatchModeEl.value = rule.match_mode === 'ANY' ? 'ANY' : 'ALL';
+        if (editStrikeEl) editStrikeEl.value = String(rule.strike_weight ?? 0);
+        if (editConditionsEl) {
+          try {
+            editConditionsEl.value = JSON.stringify(JSON.parse(rule.conditions_json || '[]'), null, 2);
+          } catch {
+            editConditionsEl.value = rule.conditions_json || '[]';
+          }
+        }
+        if (editRateLimitEl) editRateLimitEl.value = rule.rate_limit_json || '{}';
+        editDialog.showModal();
+      }, { signal });
+
+      document.getElementById('waf-edit-close-btn')?.addEventListener('click', () => editDialog?.close(), { signal });
+      document.getElementById('waf-edit-cancel-btn')?.addEventListener('click', () => editDialog?.close(), { signal });
+      document.getElementById('waf-edit-save-btn')?.addEventListener('click', async () => {
+        if (!editIdEl || !canManage) return;
+        const ruleId = editIdEl.value;
+        const prev = dbRulesState.find((r) => r.id === ruleId);
+        if (!prev) return;
+        try {
+          const { ok, data } = await postWafAction({
+            action: 'upsert_rule',
+            rule: {
+              id: prev.id,
+              category: prev.category,
+              is_system: prev.is_system,
+              is_enabled: prev.is_enabled,
+              name: editNameEl?.value || prev.name,
+              action: editActionEl?.value || prev.action,
+              priority: Number(editPriorityEl?.value ?? prev.priority),
+              match_mode: editMatchModeEl?.value === 'ANY' ? 'ANY' : 'ALL',
+              strike_weight: Number(editStrikeEl?.value ?? prev.strike_weight ?? 0),
+              conditions_json: editConditionsEl?.value || '[]',
+              rate_limit_json: editRateLimitEl?.value || '{}',
+              expires_at: prev.expires_at ?? null,
+            },
+          });
+          if (!ok) {
+            showToast(data?.error || 'Validation failed.', false);
+            return;
+          }
+          if (Array.isArray(data.dbRules)) {
+            dbRulesState = data.dbRules;
+            renderCustomRules();
+          }
+          editDialog?.close();
+          showToast(data.message || 'Rule updated in D1 + Edge KV.', true);
+        } catch (err: any) {
+          showToast(`Save error: ${err.message}`, false);
         }
       }, { signal });
 
@@ -1195,32 +1473,37 @@ const initialPayload = JSON.stringify({
 
       const bindQuickBlockButtons = () => {
         document.querySelectorAll<HTMLButtonElement>('.btn-quick-block-ip').forEach((btn) => {
-          btn.addEventListener('click', () => {
+          btn.addEventListener('click', async () => {
             const ip = (btn.dataset.blockIp || '').trim();
-            if (!ip || !blockedTextarea) return;
-            const current = parseIpsClient(blockedTextarea.value);
-            const ipBlacklistCb = getCheckbox('malicious', 'enableIpBlacklist');
-            const enabledBlacklistNow = Boolean(ipBlacklistCb && !ipBlacklistCb.checked);
-            if (ipBlacklistCb && !ipBlacklistCb.checked) {
-              ipBlacklistCb.checked = true;
-            }
-            if (!current.includes(ip.toLowerCase())) {
-              current.push(ip.toLowerCase());
-              blockedTextarea.value = current.join('\n');
+            if (!ip || !canManage) return;
+            const ttlMinutes = Number(btn.dataset.blockTtl || 0);
+            btn.disabled = true;
+            try {
+              const { ok, data } = await postWafAction({
+                action: 'block_ip_acl',
+                ipAcl: {
+                  ip_cidr: ip,
+                  list_type: 'BLACKLIST',
+                  reason: ttlMinutes > 0 ? `Blocked 24h from WAF telemetry` : `Blocked permanently from WAF telemetry`,
+                  ttlMinutes: ttlMinutes > 0 ? ttlMinutes : null,
+                },
+              });
+              if (!ok) {
+                showToast(data?.error || 'Failed to block IP.', false);
+                return;
+              }
+              if (blockedTextarea && typeof data.waf_blocked_ips === 'string' && !ttlMinutes) {
+                blockedTextarea.value = data.waf_blocked_ips;
+              }
+              if (Array.isArray(data.activeBans)) {
+                renderActiveBans(data.activeBans);
+              }
               syncModeCardsAndKpis();
-              setDirty(true);
-              showToast(
-                enabledBlacklistNow
-                  ? `Added ${ip} to blacklist & enabled IP Blacklist rule (pending save).`
-                  : `Added ${ip} to blacklist (pending save).`,
-                true
-              );
-            } else if (enabledBlacklistNow) {
-              syncModeCardsAndKpis();
-              setDirty(true);
-              showToast(`${ip} is already in blacklist; enabled IP Blacklist rule (pending save).`, true);
-            } else {
-              showToast(`${ip} is already in blacklist.`, true);
+              showToast(ttlMinutes > 0 ? `Blocked ${ip} in D1 + KV for 24h.` : `Permanently blocked ${ip} in D1 + KV.`, true);
+            } catch (err: any) {
+              showToast(`Block IP failed: ${err.message}`, false);
+            } finally {
+              btn.disabled = false;
             }
           }, { signal });
         });
@@ -1267,7 +1550,7 @@ const initialPayload = JSON.stringify({
           const actionCell = canManage
             ? `<td class="adm-td text-right whitespace-nowrap">${
                 ipVal
-                  ? `<button type="button" class="btn-quick-block-ip px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/80 transition-colors cursor-pointer" data-block-ip="${escapeHtml(ipVal)}">+ Block IP</button>`
+                  ? `<div class="inline-flex items-center gap-1"><button type="button" class="btn-quick-block-ip px-2 py-1 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200/80 transition-colors cursor-pointer" data-block-ip="${escapeHtml(ipVal)}" data-block-ttl="1440">Ban 24h</button><button type="button" class="btn-quick-block-ip px-2 py-1 rounded-lg text-[10px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/80 transition-colors cursor-pointer" data-block-ip="${escapeHtml(ipVal)}">+ Block</button></div>`
                   : `<span class="text-[10px] text-[#86868b]">—</span>`
               }</td>`
             : '';
@@ -1317,6 +1600,7 @@ const initialPayload = JSON.stringify({
               blockedIps: data.waf_blocked_ips,
               allowIps: data.waf_allow_ips,
               ruleConfig: data.waf_rule_config,
+              dbRules: data.dbRules,
             });
             syncModeCardsAndKpis();
           }
@@ -1447,6 +1731,7 @@ const initialPayload = JSON.stringify({
               blockedIps: data.settings?.waf_blocked_ips,
               allowIps: data.settings?.waf_allow_ips,
               ruleConfig: data.settings?.waf_rule_config,
+              dbRules: data.dbRules,
             });
             syncModeCardsAndKpis();
             if (!pendingSave) {

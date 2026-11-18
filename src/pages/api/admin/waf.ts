@@ -8,11 +8,59 @@ import {
   listErrorLogs,
   getWaf24hSummary,
   recordAdminAudit,
+  getWafRuntime,
+  listWafRules,
+  listWafIpAcl,
+  upsertWafRule,
+  toggleWafRule,
+  deleteWafRule,
+  upsertWafIpAcl,
+  deleteWafIpAcl,
+  clearWafAutoBansInDb,
+  syncWafSettingsToDbTables,
   type WafRuleMode,
 } from '@db';
-import { EdgeWafService, parseIpList, isValidIpRule, normalizeWafRuleConfig } from '@utils/waf';
+import {
+  EdgeWafService,
+  parseIpList,
+  isValidIpRule,
+  normalizeWafRuleConfig,
+  parseUtcTimestampMs,
+  type WafDbIpAcl,
+} from '@utils/waf';
 
 export const prerender = false;
+
+function mergeActiveBans(ipAcl: WafDbIpAcl[]) {
+  const now = Date.now();
+  const map = new Map<string, { ip: string; strikes: number; remainingMinutes: number; bannedUntil: number; source: 'edge' | 'db' }>();
+  for (const ban of EdgeWafService.getActiveBans(now)) {
+    map.set(ban.ip.toLowerCase(), { ...ban, source: 'edge' });
+  }
+  for (const row of ipAcl) {
+    if (row.list_type !== 'AUTO_BAN') continue;
+    const expMs = parseUtcTimestampMs(row.expires_at);
+    if (expMs !== null && expMs <= now) continue;
+    const key = row.ip_cidr.toLowerCase();
+    if (!map.has(key)) {
+      map.set(key, {
+        ip: row.ip_cidr,
+        strikes: 3,
+        remainingMinutes: expMs ? Math.max(1, Math.ceil((expMs - now) / 60_000)) : 999,
+        bannedUntil: expMs ?? now + 86_400_000,
+        source: 'db',
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.bannedUntil - a.bannedUntil);
+}
+
+function deriveAclText(ipAcl: WafDbIpAcl[], type: 'BLACKLIST' | 'WHITELIST'): string {
+  return ipAcl
+    .filter((r) => r.list_type === type && !r.expires_at)
+    .map((r) => r.ip_cidr)
+    .join('\n');
+}
 
 function normalizeIpListInput(raw: unknown): { value: string; invalid: string[] } {
   const tokens = parseIpList(typeof raw === 'string' ? raw : '');
@@ -28,20 +76,27 @@ export const GET: APIRoute = defineAdminApi(
     menu: 'waf',
   },
   async ({ cfEnv }) => {
-    const [settings, recentRes, daySummary] = await Promise.all([
+    const [settings, recentRes, daySummary, dbRules, ipAcl] = await Promise.all([
       getSystemSettings(cfEnv),
       listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1 }, cfEnv),
       getWaf24hSummary(cfEnv),
+      listWafRules(cfEnv),
+      listWafIpAcl(cfEnv),
     ]);
+
+    const activeBans = mergeActiveBans(ipAcl);
+    const localStats = EdgeWafService.getStrikeStats();
 
     return jsonNoCache({
       success: true,
       waf_active_modes: settings.waf_active_modes,
-      waf_blocked_ips: settings.waf_blocked_ips,
-      waf_allow_ips: settings.waf_allow_ips,
+      waf_blocked_ips: deriveAclText(ipAcl, 'BLACKLIST') || settings.waf_blocked_ips,
+      waf_allow_ips: deriveAclText(ipAcl, 'WHITELIST') || settings.waf_allow_ips,
       waf_rule_config: normalizeWafRuleConfig(settings.waf_rule_config),
-      strikeStats: EdgeWafService.getStrikeStats(),
-      activeBans: EdgeWafService.getActiveBans(),
+      dbRules,
+      ipAcl,
+      strikeStats: { activeBans: activeBans.length, trackedIps: Math.max(localStats.trackedIps, activeBans.length) },
+      activeBans,
       blocked24hCount: daySummary.totalHits,
       blocked24hEvents: daySummary.eventsCount,
       logs: recentRes.logs,
@@ -52,6 +107,10 @@ export const GET: APIRoute = defineAdminApi(
 export const POST: APIRoute = defineAdminApi<{
   action?: string;
   ip?: string;
+  rule?: Record<string, any>;
+  ruleId?: string;
+  is_enabled?: boolean;
+  ipAcl?: Record<string, any>;
   sim?: Record<string, any>;
   waf_active_modes?: unknown;
   waf_blocked_ips?: unknown;
@@ -67,20 +126,27 @@ export const POST: APIRoute = defineAdminApi<{
 
     if (action === 'clear_strikes') {
       EdgeWafService.clearAllStrikes();
+      await clearWafAutoBansInDb(cfEnv);
+      const ipAcl = await listWafIpAcl(cfEnv);
+      const activeBans = mergeActiveBans(ipAcl);
       return jsonNoCache({
         success: true,
-        message: 'Edge isolate auto-ban strikes cleared.',
-        strikeStats: EdgeWafService.getStrikeStats(),
-        activeBans: EdgeWafService.getActiveBans(),
+        message: 'Auto-ban strikes cleared across edge isolate and DB ACL.',
+        strikeStats: { activeBans: activeBans.length, trackedIps: 0 },
+        activeBans,
+        ipAcl,
       });
     }
 
     if (action === 'unban_ip') {
-      const targetIp = typeof body?.ip === 'string' ? body.ip.trim() : '';
+      const targetIp = typeof body?.ip === 'string' ? body.ip.trim().toLowerCase() : '';
       if (!targetIp) {
         return jsonNoCache({ error: 'IP address is required.' }, 400);
       }
       EdgeWafService.unbanIp(targetIp);
+      await deleteWafIpAcl(targetIp, cfEnv);
+      const ipAcl = await listWafIpAcl(cfEnv);
+      const activeBans = mergeActiveBans(ipAcl);
       recordAdminAudit(context, {
         adminEmail: auth.user.email,
         action: 'UNBAN_WAF_IP',
@@ -91,15 +157,129 @@ export const POST: APIRoute = defineAdminApi<{
       });
       return jsonNoCache({
         success: true,
-        message: `Unbanned ${targetIp} from edge isolate strike cache.`,
-        strikeStats: EdgeWafService.getStrikeStats(),
-        activeBans: EdgeWafService.getActiveBans(),
+        message: `Unbanned ${targetIp} across edge isolate and DB ACL.`,
+        strikeStats: { activeBans: activeBans.length, trackedIps: Math.max(EdgeWafService.getStrikeStats().trackedIps, activeBans.length) },
+        activeBans,
+        ipAcl,
+      });
+    }
+
+    if (action === 'upsert_rule') {
+      const r = body?.rule && typeof body.rule === 'object' ? body.rule : {};
+      const id = typeof r.id === 'string' && r.id.trim() ? r.id.trim() : `cr_${Date.now()}`;
+      const name = typeof r.name === 'string' && r.name.trim() ? r.name.trim() : id;
+      const t0 = Date.now();
+      const saveRes = await upsertWafRule(
+        {
+          id,
+          category: r.category,
+          name,
+          is_system: r.is_system ? 1 : 0,
+          is_enabled: r.is_enabled === 0 || r.is_enabled === false ? 0 : 1,
+          priority: r.priority,
+          conditions_json: typeof r.conditions_json === 'string' ? r.conditions_json : JSON.stringify(r.conditions || []),
+          match_mode: r.match_mode,
+          action: r.action,
+          rate_limit_json: typeof r.rate_limit_json === 'string' ? r.rate_limit_json : JSON.stringify(r.rate_limit || {}),
+          strike_weight: r.strike_weight,
+          expires_at: r.expires_at ?? null,
+        },
+        auth.user.email,
+        cfEnv
+      );
+      if (!saveRes.success) {
+        return jsonNoCache({ error: saveRes.error || 'Failed to save WAF rule.' }, 400);
+      }
+      const dbRules = await listWafRules(cfEnv);
+      recordAdminAudit(context, {
+        adminEmail: auth.user.email,
+        action: 'UPDATE_WAF_RULES',
+        targetType: 'SETTINGS',
+        targetId: id,
+        after: r,
+        durationMs: Date.now() - t0,
+        cfEnv,
+      });
+      return jsonNoCache({ success: true, message: `Saved WAF rule "${name}" to D1 + Edge KV.`, dbRules });
+    }
+
+    if (action === 'toggle_rule') {
+      const ruleId = typeof body?.ruleId === 'string' ? body.ruleId.trim() : '';
+      if (!ruleId) return jsonNoCache({ error: 'ruleId is required.' }, 400);
+      const isEnabled = body?.is_enabled !== false;
+      const res = await toggleWafRule(ruleId, isEnabled, auth.user.email, cfEnv);
+      if (!res.success) return jsonNoCache({ error: res.error || 'Failed to toggle rule.' }, 400);
+      const dbRules = await listWafRules(cfEnv);
+      return jsonNoCache({ success: true, message: `Rule ${ruleId} ${isEnabled ? 'enabled' : 'disabled'}.`, dbRules });
+    }
+
+    if (action === 'delete_rule') {
+      const ruleId = typeof body?.ruleId === 'string' ? body.ruleId.trim() : '';
+      if (!ruleId) return jsonNoCache({ error: 'ruleId is required.' }, 400);
+      const res = await deleteWafRule(ruleId, cfEnv);
+      if (!res.success) return jsonNoCache({ error: res.error || 'Failed to delete rule.' }, 400);
+      const dbRules = await listWafRules(cfEnv);
+      return jsonNoCache({ success: true, message: `Deleted rule ${ruleId}.`, dbRules });
+    }
+
+    if (action === 'block_ip_acl') {
+      const acl = body?.ipAcl && typeof body.ipAcl === 'object' ? body.ipAcl : {};
+      const ipCidr = typeof acl.ip_cidr === 'string' ? acl.ip_cidr.trim() : '';
+      if (!ipCidr) return jsonNoCache({ error: 'ip_cidr is required.' }, 400);
+      const res = await upsertWafIpAcl(
+        {
+          ip_cidr: ipCidr,
+          list_type: acl.list_type === 'WHITELIST' ? 'WHITELIST' : acl.list_type === 'AUTO_BAN' ? 'AUTO_BAN' : 'BLACKLIST',
+          reason: typeof acl.reason === 'string' ? acl.reason : '',
+          ttlMinutes: acl.ttlMinutes ? Number(acl.ttlMinutes) : null,
+        },
+        auth.user.email,
+        cfEnv
+      );
+      if (!res.success) return jsonNoCache({ error: res.error || 'Failed to update IP ACL.' }, 400);
+      const ipAcl = await listWafIpAcl(cfEnv);
+      const activeBans = mergeActiveBans(ipAcl);
+      recordAdminAudit(context, {
+        adminEmail: auth.user.email,
+        action: 'UPDATE_WAF_RULES',
+        targetType: 'SETTINGS',
+        targetId: ipCidr,
+        after: acl,
+        cfEnv,
+      });
+      return jsonNoCache({
+        success: true,
+        message: `Updated IP ACL for ${ipCidr}.`,
+        ipAcl,
+        activeBans,
+        waf_blocked_ips: deriveAclText(ipAcl, 'BLACKLIST'),
+        waf_allow_ips: deriveAclText(ipAcl, 'WHITELIST'),
+      });
+    }
+
+    if (action === 'unblock_ip_acl') {
+      const ipCidr = typeof body?.ip === 'string' ? body.ip.trim() : '';
+      if (!ipCidr) return jsonNoCache({ error: 'ip is required.' }, 400);
+      EdgeWafService.unbanIp(ipCidr);
+      await deleteWafIpAcl(ipCidr, cfEnv);
+      const ipAcl = await listWafIpAcl(cfEnv);
+      const activeBans = mergeActiveBans(ipAcl);
+      return jsonNoCache({
+        success: true,
+        message: `Removed ${ipCidr} from IP ACL.`,
+        ipAcl,
+        activeBans,
+        waf_blocked_ips: deriveAclText(ipAcl, 'BLACKLIST'),
+        waf_allow_ips: deriveAclText(ipAcl, 'WHITELIST'),
       });
     }
 
     if (action === 'simulate') {
       const sim = body?.sim && typeof body.sim === 'object' ? body.sim : {};
-      const currentSettings = await getSystemSettings(cfEnv);
+      const [currentSettings, liveRuntime] = await Promise.all([
+        getSystemSettings(cfEnv),
+        getWafRuntime(cfEnv).catch(() => null),
+      ]);
       const validSet = new Set<string>(VALID_WAF_MODES);
       const simModes = Array.isArray(body?.waf_active_modes)
         ? (body.waf_active_modes.filter((m): m is WafRuleMode => typeof m === 'string' && validSet.has(m)))
@@ -131,6 +311,7 @@ export const POST: APIRoute = defineAdminApi<{
         }
       }
 
+      const useLiveDbRuntime = sim.useDraftOnly !== true && liveRuntime;
       const result = EdgeWafService.evaluate(
         {
           clientIp: typeof sim.clientIp === 'string' ? sim.clientIp.trim() : '198.51.100.10',
@@ -147,7 +328,8 @@ export const POST: APIRoute = defineAdminApi<{
           waf_blocked_ips: typeof body?.waf_blocked_ips === 'string' ? body.waf_blocked_ips : currentSettings.waf_blocked_ips,
           waf_allow_ips: typeof body?.waf_allow_ips === 'string' ? body.waf_allow_ips : currentSettings.waf_allow_ips,
           waf_rule_config: simRuleConfig,
-        }
+        },
+        useLiveDbRuntime || null
       );
 
       return jsonNoCache({ success: true, result });
@@ -207,7 +389,17 @@ export const POST: APIRoute = defineAdminApi<{
     if (!res.success) {
       return jsonNoCache({ error: res.error || 'Failed to save WAF rules.' }, 500);
     }
+    await syncWafSettingsToDbTables(
+      {
+        blockedIpsStr: blockedParsed.value,
+        allowIpsStr: allowParsed.value,
+        ruleConfig: normalizedRuleConfig,
+        updatedBy: auth.user.email,
+      },
+      cfEnv
+    );
     EdgeWafService.clearLogSuppressions();
+    const [dbRules, ipAcl] = await Promise.all([listWafRules(cfEnv), listWafIpAcl(cfEnv)]);
 
     recordAdminAudit(context, {
       adminEmail: auth.user.email,
@@ -222,8 +414,11 @@ export const POST: APIRoute = defineAdminApi<{
 
     return jsonNoCache({
       success: true,
-      message: 'Edge WAF rules saved and propagated.',
+      message: 'Edge WAF rules saved and propagated to DB + Edge KV.',
       settings: after,
+      dbRules,
+      ipAcl,
+      activeBans: mergeActiveBans(ipAcl),
     });
   }
 );

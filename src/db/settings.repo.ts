@@ -4,7 +4,7 @@
 import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
-import { kvGet, kvPut, kvDelete } from '../utils/cache';
+import { createTieredCache, type TieredCacheFetchResult } from '../utils/cache';
 import {
   DEFAULT_BRAND_TITLE,
   DEFAULT_SITE_URL,
@@ -119,42 +119,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
 
 export const KV_SETTINGS_KEY = 'sys:settings:v1';
 
-// L1 in-memory TTL cache (5s) for instant micro-loop execution
-let cachedSettings: SystemSettings | null = null;
-let cacheExpiry = 0;
-const CACHE_TTL_MS = 5_000;
-
-export async function invalidateSettingsCache(customEnv?: any) {
-  cachedSettings = null;
-  cacheExpiry = 0;
-  await kvDelete(KV_SETTINGS_KEY, customEnv).catch(() => {});
-}
-
-/**
- * Resolves current system settings with priority:
- * L1 Memory Cache (5s) -> L2 Cloudflare KV (sys:settings:v1) -> L3 D1 Database -> Runtime Env -> Defaults
- */
-export async function getSystemSettings(customEnv?: any, forceRefresh: boolean = false): Promise<SystemSettings> {
-  const now = Date.now();
-  if (!forceRefresh && cachedSettings && now < cacheExpiry) {
-    return cachedSettings;
-  }
-
-  // L2: Try Cloudflare Edge KV cache (1~5ms edge response)
-  if (!forceRefresh) {
-    try {
-      const kvData = await kvGet<SystemSettings>(KV_SETTINGS_KEY, customEnv);
-      if (kvData && typeof kvData === 'object' && kvData.brand_name) {
-        kvData.waf_rule_config = normalizeWafRuleConfig(kvData.waf_rule_config);
-        cachedSettings = kvData;
-        cacheExpiry = now + CACHE_TTL_MS;
-        return kvData;
-      }
-    } catch {
-      // Non-blocking fallback to D1
-    }
-  }
-
+async function loadSystemSettingsFromDb(customEnv?: any): Promise<TieredCacheFetchResult<SystemSettings>> {
   let dbRecords: { key: string; value: string }[] = [];
   let d1QuerySucceeded = false;
   try {
@@ -165,7 +130,7 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
     });
     d1QuerySucceeded = true;
   } catch (err) {
-    console.warn('[SettingsRepo] D1 settings query warning, falling back to env/defaults:', err);
+    console.warn('[SettingsRepo] DB settings query warning, falling back to env/defaults:', err);
   }
 
   const dbMap = new Map<string, string>();
@@ -176,8 +141,6 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
   }
 
   // Resolve setting by checking DB -> Env -> Default
-  // If a key has been configured in DB (dbMap.has), respect the DB value (even if cleared to "")
-  // unless allowEmpty is false (e.g. required identifiers like brand_name or order_no_prefix).
   const resolveStr = (key: keyof SystemSettings, envKey: string, fallback: string, allowEmpty: boolean = true): string => {
     if (dbMap.has(key)) {
       const valFromDb = (dbMap.get(key) ?? '').trim();
@@ -276,15 +239,33 @@ export async function getSystemSettings(customEnv?: any, forceRefresh: boolean =
     }
   }
 
-  cachedSettings = settings;
-  cacheExpiry = now + CACHE_TTL_MS;
+  return { data: settings, persistToKv: d1QuerySucceeded };
+}
 
-  // L2: Asynchronously populate KV cache if D1 query succeeded
-  if (d1QuerySucceeded) {
-    await kvPut(KV_SETTINGS_KEY, settings, { expirationTtl: 86400 }, customEnv).catch(() => {});
-  }
+export const settingsCache = createTieredCache<SystemSettings>({
+  name: 'system_settings',
+  kvKey: KV_SETTINGS_KEY,
+  ttlMs: 5_000,
+  kvTtlSeconds: 86400,
+  fallbackRaw: DEFAULT_SYSTEM_SETTINGS,
+  deserializeKv: (kvData) => {
+    if (kvData && typeof kvData === 'object' && kvData.brand_name) {
+      return { ...kvData, waf_rule_config: normalizeWafRuleConfig(kvData.waf_rule_config) };
+    }
+    return null;
+  },
+  fetchRaw: (customEnv) => loadSystemSettingsFromDb(customEnv),
+});
 
-  return settings;
+export async function invalidateSettingsCache(customEnv?: any) {
+  await settingsCache.evict(customEnv);
+}
+
+/**
+ * Resolves current system settings via unified L1/L2/L3 cache.
+ */
+export async function getSystemSettings(customEnv?: any, forceRefresh: boolean = false): Promise<SystemSettings> {
+  return settingsCache.get(customEnv, { forceRefresh, syncKv: forceRefresh });
 }
 
 /**
@@ -328,10 +309,7 @@ export async function updateSystemSettings(
       await db.execute(sql, params);
     });
 
-    // Invalidate local memory and force D1 read + KV overwrite in a single write
-    cachedSettings = null;
-    cacheExpiry = 0;
-    await getSystemSettings(customEnv, true);
+    await settingsCache.refresh(customEnv);
     return { success: true };
   } catch (err: any) {
     console.error('[SettingsRepo] Failed to update settings:', err);

@@ -31,6 +31,15 @@ import {
   toggleDictItemEnabled,
   deleteDictItem,
   getDashboardStats,
+  listWafRules,
+  listWafIpAcl,
+  upsertWafRule,
+  toggleWafRule,
+  deleteWafRule,
+  upsertWafIpAcl,
+  deleteWafIpAcl,
+  clearWafAutoBansInDb,
+  getWafRuntime,
 } from '../src/db';
 import { getTrackingUrl } from '../src/utils/shipping';
 import {
@@ -1158,6 +1167,59 @@ async function runSelfCheck() {
   assert.ok(!deleteSync.refreshedTasks.includes('refreshProductSlug(deleted-item)'));
 
   console.log('✔ [PASS] Sanity Webhook HMAC Signature, URL Expansion & Selective Sync verified');
+
+  // 14. Database-Backed WAF Rules & IP ACL Self-Check (L1/L2/L3 Cache + ReDoS + CRUD)
+  const initialWafRules = await listWafRules();
+  assert.ok(initialWafRules.length >= 17, `Expected >= 17 seeded system WAF rules, got ${initialWafRules.length}`);
+
+  const unsafeRegexRes = await upsertWafRule(
+    {
+      id: 'cr_test_unsafe',
+      name: 'Unsafe Regex',
+      conditions_json: JSON.stringify([{ field: 'path', op: 'regex', value: '(a+)+' }]),
+    },
+    'test@admin.com'
+  );
+  assert.strictEqual(unsafeRegexRes.success, false, 'ReDoS pattern must be rejected by upsertWafRule');
+
+  const safeRuleRes = await upsertWafRule(
+    {
+      id: 'cr_test_bot_db',
+      category: 'custom',
+      name: 'DB Incremental Custom Rule',
+      priority: 35,
+      match_mode: 'ALL',
+      conditions_json: JSON.stringify([{ field: 'ua', op: 'contains', value: 'BadScraperDB' }]),
+      action: 'block_403',
+      strike_weight: 2,
+    },
+    'test@admin.com'
+  );
+  assert.strictEqual(safeRuleRes.success, true, 'Safe custom DB rule should persist');
+
+  const toggledRes = await toggleWafRule('cr_test_bot_db', false, 'test@admin.com');
+  assert.strictEqual(toggledRes.success, true);
+
+  const sysDeleteRes = await deleteWafRule('sys_owasp_sqli');
+  assert.strictEqual(sysDeleteRes.success, false, 'System WAF rules must not be deletable');
+
+  const customDeleteRes = await deleteWafRule('cr_test_bot_db');
+  assert.strictEqual(customDeleteRes.success, true, 'Custom WAF rule should delete cleanly');
+
+  const banRes = await upsertWafIpAcl(
+    { ip_cidr: '198.51.100.222', list_type: 'AUTO_BAN', reason: 'Test auto-ban persistence', ttlMinutes: 15 },
+    'edge_autoban'
+  );
+  assert.strictEqual(banRes.success, true);
+  const aclAfterBan = await listWafIpAcl();
+  assert.ok(aclAfterBan.some((a) => a.ip_cidr === '198.51.100.222' && a.list_type === 'AUTO_BAN'));
+
+  const compiledRt = await getWafRuntime(undefined, true);
+  assert.ok(compiledRt.autoBans.timedExact.some((x) => x.ip === '198.51.100.222'));
+
+  await clearWafAutoBansInDb();
+  await deleteWafIpAcl('198.51.100.222');
+  console.log('✔ [PASS] Database-backed WAF Rules, IP ACL & L1/L2/L3 pre-compiled runtime verified');
 
   console.log('\n🎉 All B2B Order, Customer & Claiming self-checks passed!\n');
 }

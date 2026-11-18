@@ -27,17 +27,140 @@ export interface WafBlockStats {
   lastHitAt: number;
 }
 
+export interface WafShadowMatch {
+  ruleId: string;
+  ruleName: string;
+  code: WafBlockCode;
+  mode: WafRuleMode;
+  reason: string;
+  matchedSample: string;
+}
+
 export interface WafEvaluationResult {
   allowed: boolean;
   status?: 403 | 429;
   code?: WafBlockCode;
   mode?: WafRuleMode;
+  ruleId?: string;
   reason?: string;
   matchedSample?: string;
   retryAfter?: number;
   autoBanned?: boolean;
   suppressLog?: boolean;
   blockStats?: WafBlockStats;
+  shadowMatch?: WafShadowMatch;
+}
+
+export type WafDynamicField =
+  | 'path'
+  | 'query'
+  | 'path_and_query'
+  | 'payload_targets'
+  | 'header'
+  | 'ua'
+  | 'method'
+  | 'ip'
+  | 'country'
+  | 'bot_vendor';
+
+export type WafDynamicOperator =
+  | 'contains'
+  | 'not_contains'
+  | 'starts_with'
+  | 'not_starts_with'
+  | 'equals'
+  | 'not_equals'
+  | 'regex'
+  | 'in_list'
+  | 'is_empty'
+  | 'is_true';
+
+export type WafDynamicAction = 'allow' | 'block_403' | 'rate_limit_429' | 'challenge_fingerprint' | 'log_only';
+
+export type WafRuleCategory = 'malicious' | 'rate_limit' | 'bot' | 'custom';
+
+export interface WafRuleCondition {
+  field: WafDynamicField;
+  op: WafDynamicOperator;
+  headerName?: string;
+  value: string;
+}
+
+export interface WafRuleRateLimit {
+  limit?: number;
+  window_s?: number;
+  key_by?: 'ip' | 'ip_and_path';
+  bucket_prefix?: string;
+}
+
+export interface WafDbRule {
+  id: string;
+  category: WafRuleCategory;
+  name: string;
+  is_system: number;
+  is_enabled: number;
+  priority: number;
+  conditions_json: string;
+  match_mode: 'ALL' | 'ANY';
+  action: WafDynamicAction;
+  rate_limit_json: string;
+  strike_weight: number;
+  expires_at: string | null;
+  updated_by?: string;
+  updated_at?: string;
+}
+
+export interface WafDbIpAcl {
+  ip_cidr: string;
+  list_type: 'WHITELIST' | 'BLACKLIST' | 'AUTO_BAN';
+  reason: string;
+  expires_at: string | null;
+  created_by?: string;
+  created_at?: string;
+}
+
+export interface WafRuntimeData {
+  rules: WafDbRule[];
+  ipAcl: WafDbIpAcl[];
+}
+
+export interface CompiledIpAclList {
+  exact: Set<string>;
+  prefixes: string[];
+  cidrs: Array<{ netInt: number; maskInt: number; expiresAtMs: number | null; raw: string; reason: string }>;
+  timedExact: Array<{ ip: string; expiresAtMs: number | null; reason: string }>;
+  timedPrefixes: Array<{ prefix: string; expiresAtMs: number | null; reason: string }>;
+}
+
+export interface CompiledCondition extends WafRuleCondition {
+  compiledRegex: RegExp | null;
+  listValues: string[];
+}
+
+export interface CompiledWafRule {
+  id: string;
+  category: WafRuleCategory;
+  name: string;
+  isSystem: boolean;
+  isEnabled: boolean;
+  priority: number;
+  conditions: CompiledCondition[];
+  matchMode: 'ALL' | 'ANY';
+  action: WafDynamicAction;
+  rateLimit: WafRuleRateLimit;
+  strikeWeight: number;
+  expiresAtMs: number | null;
+}
+
+export interface CompiledWafRuntime {
+  rules: CompiledWafRule[];
+  blacklistEnabled: boolean;
+  autoBanEnabled: boolean;
+  autoBanOnRateAbuseEnabled: boolean;
+  whitelist: CompiledIpAclList;
+  blacklist: CompiledIpAclList;
+  autoBans: CompiledIpAclList;
+  rawAcl: WafDbIpAcl[];
 }
 
 export type WafConditionField =
@@ -635,6 +758,527 @@ export function matchesIpRule(clientIp: string | undefined, rules: string[]): bo
   return false;
 }
 
+export function formatUtcSqlTimestamp(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+export function parseUtcTimestampMs(raw?: string | null): number | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(trimmed)
+    ? `${trimmed.replace(' ', 'T')}Z`
+    : /[+-]\d{2}$/.test(trimmed)
+      ? `${trimmed.replace(' ', 'T')}:00`
+      : trimmed;
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+const REDOS_NESTED_QUANTIFIER = /\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]|(?:[+*]\s*[+*?{])/;
+
+/**
+ * Validates regex length and prevents nested-quantifier ReDoS patterns before storing or compiling.
+ */
+export function validateRegexSafety(pattern: string, maxLen = 256): { valid: boolean; error?: string } {
+  if (typeof pattern !== 'string' || !pattern.trim()) {
+    return { valid: false, error: 'Regex pattern cannot be empty.' };
+  }
+  if (pattern.length > maxLen) {
+    return { valid: false, error: `Regex pattern exceeds ${maxLen} characters.` };
+  }
+  if (REDOS_NESTED_QUANTIFIER.test(pattern)) {
+    return { valid: false, error: 'Unsafe nested quantifier detected (ReDoS guard).' };
+  }
+  try {
+    new RegExp(pattern, 'i');
+    return { valid: true };
+  } catch (err: any) {
+    return { valid: false, error: err?.message || 'Invalid regular expression syntax.' };
+  }
+}
+
+export function compileSafeRegex(pattern: string, maxLen = 512): RegExp | null {
+  const check = validateRegexSafety(pattern, maxLen);
+  if (!check.valid) return null;
+  try {
+    return new RegExp(pattern, 'i');
+  } catch {
+    return null;
+  }
+}
+
+function emptyCompiledAclList(): CompiledIpAclList {
+  return { exact: new Set<string>(), prefixes: [], cidrs: [], timedExact: [], timedPrefixes: [] };
+}
+
+function addEntryToCompiledAcl(list: CompiledIpAclList, rawEntry: string, expiresAtMs: number | null, reason: string) {
+  const rule = rawEntry.trim().toLowerCase();
+  if (!rule) return;
+  if (rule.endsWith('*') || rule.endsWith('.')) {
+    const prefix = rule.endsWith('*') ? rule.slice(0, -1) : rule;
+    if (!prefix) return;
+    if (expiresAtMs !== null) {
+      list.timedPrefixes.push({ prefix, expiresAtMs, reason });
+    } else {
+      list.prefixes.push(prefix);
+    }
+    return;
+  }
+  if (rule.includes('/')) {
+    const [baseIp, maskStr] = rule.split('/');
+    const baseInt = ipv4ToInt(baseIp);
+    const prefixLen = Number(maskStr);
+    if (baseInt !== null && Number.isInteger(prefixLen) && prefixLen >= 0 && prefixLen <= 32) {
+      const maskInt = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
+      list.cidrs.push({ netInt: (baseInt & maskInt) >>> 0, maskInt, expiresAtMs, raw: rule, reason });
+    }
+    return;
+  }
+  if (expiresAtMs !== null) {
+    list.timedExact.push({ ip: rule, expiresAtMs, reason });
+  } else {
+    list.exact.add(rule);
+  }
+}
+
+export function matchesCompiledIpAcl(
+  clientIp: string | undefined,
+  list: CompiledIpAclList,
+  now: number
+): { matched: boolean; reason?: string } {
+  if (!clientIp) return { matched: false };
+  const ip = clientIp.trim().toLowerCase();
+  if (!ip) return { matched: false };
+  if (list.exact.has(ip)) return { matched: true };
+  for (const item of list.timedExact) {
+    if (item.ip === ip && now < (item.expiresAtMs ?? Infinity)) {
+      return { matched: true, reason: item.reason };
+    }
+  }
+  for (const prefix of list.prefixes) {
+    if (ip.startsWith(prefix)) return { matched: true };
+  }
+  for (const item of list.timedPrefixes) {
+    if (ip.startsWith(item.prefix) && now < (item.expiresAtMs ?? Infinity)) {
+      return { matched: true, reason: item.reason };
+    }
+  }
+  if (list.cidrs.length > 0) {
+    const ipInt = ipv4ToInt(ip);
+    if (ipInt !== null) {
+      for (const c of list.cidrs) {
+        if (c.expiresAtMs !== null && now >= c.expiresAtMs) continue;
+        if (((ipInt & c.maskInt) >>> 0) === c.netInt) {
+          return { matched: true, reason: c.reason };
+        }
+      }
+    }
+  }
+  return { matched: false };
+}
+
+export function convertCustomRuleToDbRule(rule: WafCustomConditionRule, idx = 0): WafDbRule {
+  const fieldMap: Record<WafConditionField, WafDynamicField> = {
+    path_matches: 'path',
+    header_contains: 'header',
+    query_contains: 'query',
+    ua_contains: 'ua',
+    ip_matches: 'ip',
+    country_equals: 'country',
+  };
+  const cond: WafRuleCondition = {
+    field: fieldMap[rule.field] || 'path',
+    op: rule.operator,
+    ...(rule.headerName ? { headerName: rule.headerName } : {}),
+    value: rule.value,
+  };
+  return {
+    id: rule.id || `cr_${idx + 1}`,
+    category: 'custom',
+    name: rule.note || `Custom: ${cond.field} ${cond.op} "${rule.value.slice(0, 32)}"`,
+    is_system: 0,
+    is_enabled: rule.enabled ? 1 : 0,
+    priority: 50 + idx,
+    conditions_json: JSON.stringify([cond]),
+    match_mode: 'ALL',
+    action: rule.action === 'rate_limit_429' ? 'rate_limit_429' : 'block_403',
+    rate_limit_json: rule.action === 'rate_limit_429' && rule.limit ? JSON.stringify({ limit: rule.limit, key_by: 'ip' }) : '{}',
+    strike_weight: 0,
+    expires_at: null,
+  };
+}
+
+export function parseLegacyIpListToAcl(blockedStr?: string | null, allowStr?: string | null): WafDbIpAcl[] {
+  const out: WafDbIpAcl[] = [];
+  for (const ip of parseIpList(allowStr)) {
+    out.push({ ip_cidr: ip, list_type: 'WHITELIST', reason: 'Trusted Whitelist', expires_at: null });
+  }
+  for (const ip of parseIpList(blockedStr)) {
+    out.push({ ip_cidr: ip, list_type: 'BLACKLIST', reason: 'Manual Blacklist', expires_at: null });
+  }
+  return out;
+}
+
+/**
+ * Generates the 17 default built-in system WAF rules cleanly backed by WafDbRule rows.
+ */
+export function buildSystemWafRulesSeed(legacyCfg?: WafRuleConfig): WafDbRule[] {
+  const c = legacyCfg ? normalizeWafRuleConfig(legacyCfg) : DEFAULT_WAF_RULE_CONFIG;
+  const sys = (
+    id: string,
+    category: WafRuleCategory,
+    name: string,
+    enabled: boolean,
+    priority: number,
+    conditions: WafRuleCondition[],
+    matchMode: 'ALL' | 'ANY',
+    action: WafDynamicAction,
+    rateLimit: WafRuleRateLimit = {},
+    strikeWeight = 0
+  ): WafDbRule => ({
+    id,
+    category,
+    name,
+    is_system: 1,
+    is_enabled: enabled ? 1 : 0,
+    priority,
+    conditions_json: JSON.stringify(conditions),
+    match_mode: matchMode,
+    action,
+    rate_limit_json: JSON.stringify(rateLimit),
+    strike_weight: strikeWeight,
+    expires_at: null,
+    updated_by: 'system_init',
+  });
+
+  return [
+    sys('sys_ip_blacklist', 'malicious', 'IP / CIDR Blacklist Match', c.malicious.enableIpBlacklist, 10, [], 'ALL', 'block_403', {}, 0),
+    sys('sys_ip_autoban', 'malicious', 'Dynamic Strike Auto-Ban', c.malicious.enableAutoBan, 11, [], 'ALL', 'block_403', {}, 0),
+    sys('sys_rate_abuse_ban', 'malicious', 'Rate-Limit Flood Auto-Ban Escalation', c.malicious.autoBanOnRateAbuse, 12, [], 'ALL', 'block_403', {}, 1),
+    sys(
+      'sys_probe_paths',
+      'malicious',
+      'Vulnerability Probe Paths',
+      c.malicious.enableProbePaths,
+      20,
+      [
+        { field: 'path', op: 'regex', value: '^/\\.well-known/' },
+        { field: 'path', op: 'regex', value: PROBE_PATH_EXT.source },
+        { field: 'path', op: 'regex', value: PROBE_PATH_PATTERN.source },
+      ],
+      'ANY',
+      'block_403',
+      {},
+      1
+    ),
+    sys(
+      'sys_owasp_sqli',
+      'malicious',
+      'OWASP SQL Injection (SQLi)',
+      c.malicious.enableSqli,
+      30,
+      [{ field: 'payload_targets', op: 'regex', value: PAYLOAD_RULES[2].regex.source }],
+      'ALL',
+      'block_403',
+      {},
+      1
+    ),
+    sys(
+      'sys_owasp_xss',
+      'malicious',
+      'OWASP Cross-Site Scripting (XSS)',
+      c.malicious.enableXss,
+      31,
+      [{ field: 'payload_targets', op: 'regex', value: PAYLOAD_RULES[1].regex.source }],
+      'ALL',
+      'block_403',
+      {},
+      1
+    ),
+    sys(
+      'sys_path_traversal',
+      'malicious',
+      'Directory Traversal (LFI)',
+      c.malicious.enablePathTraversal,
+      32,
+      [{ field: 'payload_targets', op: 'regex', value: PAYLOAD_RULES[0].regex.source }],
+      'ALL',
+      'block_403',
+      {},
+      1
+    ),
+    sys(
+      'sys_rl_public_write',
+      'rate_limit',
+      'Public Write / Auth Endpoints',
+      true,
+      100,
+      [
+        { field: 'method', op: 'equals', value: 'POST' },
+        { field: 'path', op: 'in_list', value: '/api/submit-quote,/api/client-error,/api/auth/login,/api/auth/callback,/api/auth/logout,/api/auth/session' },
+      ],
+      'ALL',
+      'rate_limit_429',
+      { limit: c.rateLimit.publicWriteLimit, window_s: c.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'pub_write' },
+      0
+    ),
+    sys(
+      'sys_rl_api',
+      'rate_limit',
+      'Standard API Endpoints',
+      true,
+      101,
+      [{ field: 'path', op: 'starts_with', value: '/api/' }],
+      'ALL',
+      'rate_limit_429',
+      { limit: c.rateLimit.apiLimit, window_s: c.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'api' },
+      0
+    ),
+    sys(
+      'sys_rl_page',
+      'rate_limit',
+      'SSR Storefront & Dynamic Pages',
+      true,
+      102,
+      [{ field: 'path', op: 'not_starts_with', value: '/api/' }],
+      'ALL',
+      'rate_limit_429',
+      { limit: c.rateLimit.pageLimit, window_s: c.rateLimit.windowSeconds, key_by: 'ip', bucket_prefix: 'page' },
+      0
+    ),
+    sys(
+      'sys_bot_empty_ua',
+      'bot',
+      'Empty User-Agent Header',
+      c.bot.blockEmptyUa,
+      110,
+      [{ field: 'ua', op: 'is_empty', value: '1' }],
+      'ALL',
+      'block_403',
+      {},
+      0
+    ),
+    sys(
+      'sys_bot_ua_rotation',
+      'bot',
+      'Spoofed Bot UA Rotation',
+      c.bot.blockUaRotation,
+      111,
+      [{ field: 'bot_vendor', op: 'is_true', value: 'rotate>=3' }],
+      'ALL',
+      'block_403',
+      {},
+      1
+    ),
+    sys(
+      'sys_bot_scanner',
+      'bot',
+      'Security & Vulnerability Scanners',
+      c.bot.blockScannerTools,
+      112,
+      [{ field: 'ua', op: 'regex', value: BOT_UA_GROUPS[0].regex.source }],
+      'ALL',
+      'block_403',
+      {},
+      0
+    ),
+    sys(
+      'sys_bot_cli',
+      'bot',
+      'Automated CLI & Script Scrapers',
+      c.bot.blockCliScrapers,
+      113,
+      [{ field: 'ua', op: 'regex', value: BOT_UA_GROUPS[1].regex.source }],
+      'ALL',
+      'block_403',
+      {},
+      0
+    ),
+    sys(
+      'sys_bot_ai',
+      'bot',
+      'AI Training & LLM Crawlers',
+      c.bot.blockAiCrawlers,
+      114,
+      [{ field: 'ua', op: 'regex', value: BOT_UA_GROUPS[2].regex.source }],
+      'ALL',
+      'block_403',
+      {},
+      0
+    ),
+    sys(
+      'sys_bot_seo',
+      'bot',
+      'Commercial SEO Backlink Crawlers',
+      c.bot.blockSeoBots,
+      115,
+      [{ field: 'ua', op: 'regex', value: BOT_UA_GROUPS[3].regex.source }],
+      'ALL',
+      'block_403',
+      {},
+      0
+    ),
+    sys(
+      'sys_bot_quote_fp',
+      'bot',
+      'RFQ Submission Browser Fingerprint',
+      c.bot.enforceQuoteFingerprint,
+      116,
+      [
+        { field: 'method', op: 'equals', value: 'POST' },
+        { field: 'path', op: 'equals', value: '/api/submit-quote' },
+      ],
+      'ALL',
+      'challenge_fingerprint',
+      {},
+      0
+    ),
+  ];
+}
+
+function compileConditionsList(rawJson: string): CompiledCondition[] {
+  let parsed: WafRuleCondition[] = [];
+  try {
+    const tmp = JSON.parse(rawJson || '[]');
+    if (Array.isArray(tmp)) parsed = tmp;
+  } catch {
+    parsed = [];
+  }
+  return parsed
+    .filter((c) => c && typeof c.field === 'string' && typeof c.op === 'string')
+    .map((c) => {
+      const value = typeof c.value === 'string' ? c.value : String(c.value ?? '');
+      const compiledRegex = c.op === 'regex' ? compileSafeRegex(value, 512) : null;
+      const listValues = c.op === 'in_list'
+        ? value.split(/[\r\n,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean)
+        : [];
+      return {
+        field: c.field,
+        op: c.op,
+        ...(c.headerName ? { headerName: c.headerName.toLowerCase() } : {}),
+        value,
+        compiledRegex,
+        listValues,
+      };
+    });
+}
+
+/**
+ * Compiles DB WAF rules + IP ACL once into pre-parsed RegExps & integer CIDR masks for sub-ms evaluation.
+ */
+export function compileWafRuntime(data: WafRuntimeData): CompiledWafRuntime {
+  const whitelist = emptyCompiledAclList();
+  const blacklist = emptyCompiledAclList();
+  const autoBans = emptyCompiledAclList();
+
+  for (const row of data.ipAcl || []) {
+    const expMs = parseUtcTimestampMs(row.expires_at);
+    if (row.list_type === 'WHITELIST') {
+      addEntryToCompiledAcl(whitelist, row.ip_cidr, expMs, row.reason || 'Whitelisted');
+    } else if (row.list_type === 'AUTO_BAN') {
+      addEntryToCompiledAcl(autoBans, row.ip_cidr, expMs, row.reason || 'Auto-Banned');
+    } else {
+      addEntryToCompiledAcl(blacklist, row.ip_cidr, expMs, row.reason || 'Blacklisted');
+    }
+  }
+
+  let blacklistEnabled = true;
+  let autoBanEnabled = true;
+  let autoBanOnRateAbuseEnabled = true;
+
+  const compiledRules: CompiledWafRule[] = [];
+  for (const row of data.rules || []) {
+    if (row.id === 'sys_ip_blacklist') blacklistEnabled = row.is_enabled !== 0;
+    if (row.id === 'sys_ip_autoban') autoBanEnabled = row.is_enabled !== 0;
+    if (row.id === 'sys_rate_abuse_ban') autoBanOnRateAbuseEnabled = row.is_enabled !== 0;
+
+    let rateLimit: WafRuleRateLimit = {};
+    try {
+      const rl = JSON.parse(row.rate_limit_json || '{}');
+      if (rl && typeof rl === 'object') rateLimit = rl;
+    } catch {}
+
+    compiledRules.push({
+      id: row.id,
+      category: row.category || 'custom',
+      name: row.name || row.id,
+      isSystem: row.is_system === 1,
+      isEnabled: row.is_enabled !== 0,
+      priority: Number.isFinite(row.priority) ? Number(row.priority) : 100,
+      conditions: compileConditionsList(row.conditions_json),
+      matchMode: row.match_mode === 'ANY' ? 'ANY' : 'ALL',
+      action: row.action || 'block_403',
+      rateLimit,
+      strikeWeight: Math.max(0, Math.min(50, Math.round(Number(row.strike_weight || 0)))),
+      expiresAtMs: parseUtcTimestampMs(row.expires_at),
+    });
+  }
+
+  compiledRules.sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
+
+  return {
+    rules: compiledRules,
+    blacklistEnabled,
+    autoBanEnabled,
+    autoBanOnRateAbuseEnabled,
+    whitelist,
+    blacklist,
+    autoBans,
+    rawAcl: data.ipAcl || [],
+  };
+}
+
+function buildRuntimeFromLegacySettings(settings?: WafSettingsSubset | null): CompiledWafRuntime {
+  const cfg = normalizeWafRuleConfig(settings?.waf_rule_config);
+  const rules = buildSystemWafRulesSeed(cfg);
+
+  const customPaths = parseCustomKeywords(cfg.malicious.customBlockedPaths);
+  if (customPaths.length > 0) {
+    rules.push({
+      id: 'legacy_custom_paths',
+      category: 'malicious',
+      name: 'Legacy Custom Blocked Paths',
+      is_system: 1,
+      is_enabled: 1,
+      priority: 25,
+      conditions_json: JSON.stringify(customPaths.map((kw) => ({ field: 'path', op: 'contains', value: kw }))),
+      match_mode: 'ANY',
+      action: 'block_403',
+      rate_limit_json: '{}',
+      strike_weight: 1,
+      expires_at: null,
+    });
+  }
+
+  const customUas = parseCustomKeywords(cfg.bot.customBlockedUa);
+  if (customUas.length > 0) {
+    rules.push({
+      id: 'legacy_custom_ua',
+      category: 'bot',
+      name: 'Legacy Custom Blocked UAs',
+      is_system: 1,
+      is_enabled: 1,
+      priority: 115,
+      conditions_json: JSON.stringify(customUas.map((kw) => ({ field: 'ua', op: 'contains', value: kw }))),
+      match_mode: 'ANY',
+      action: 'block_403',
+      rate_limit_json: '{}',
+      strike_weight: 0,
+      expires_at: null,
+    });
+  }
+
+  cfg.customRules.forEach((cr, idx) => {
+    rules.push(convertCustomRuleToDbRule(cr, idx));
+  });
+
+  return compileWafRuntime({
+    rules,
+    ipAcl: parseLegacyIpListToAcl(settings?.waf_blocked_ips, settings?.waf_allow_ips),
+  });
+}
+
 export class EdgeWafService {
   public static isStaticAsset(pathname: string): boolean {
     if (pathname.startsWith('/_astro/') || pathname.startsWith('/images/') || pathname.startsWith('/favicon')) {
@@ -670,13 +1314,15 @@ export class EdgeWafService {
     ip: string | undefined,
     now = Date.now(),
     strikeLimit = AUTO_BAN_STRIKE_LIMIT,
-    banDurationMs = AUTO_BAN_DURATION_MS
+    banDurationMs = AUTO_BAN_DURATION_MS,
+    weight = 1
   ): { strikes: number; autoBanned: boolean } {
-    if (!ip) return { strikes: 0, autoBanned: false };
+    if (!ip || weight <= 0) return { strikes: 0, autoBanned: false };
     const key = ip.trim().toLowerCase();
     pruneMapIfNeeded(strikeRecords);
     const prev = strikeRecords.get(key);
-    const strikes = (prev && prev.bannedUntil <= now ? prev.strikes : prev?.strikes || 0) + 1;
+    const prevStrikes = prev && prev.bannedUntil <= now ? prev.strikes : prev?.strikes || 0;
+    const strikes = prevStrikes + Math.max(1, Math.round(weight));
     const autoBanned = strikes >= strikeLimit;
     const bannedUntil = autoBanned ? now + banDurationMs : 0;
     strikeRecords.set(key, { strikes, bannedUntil, updatedAt: now });
@@ -687,16 +1333,18 @@ export class EdgeWafService {
     ip: string,
     now: number,
     cfg: WafRuleConfig['malicious'],
-    dryRun = false
+    dryRun = false,
+    weight = 1
   ): { strikes: number; autoBanned: boolean } {
-    if (!cfg.enableAutoBan) return { strikes: 0, autoBanned: false };
+    if (!cfg.enableAutoBan || weight <= 0) return { strikes: 0, autoBanned: false };
     if (dryRun) {
       const key = ip.trim().toLowerCase();
       const prev = key ? strikeRecords.get(key) : undefined;
-      const strikes = (prev && prev.bannedUntil <= now ? prev.strikes : prev?.strikes || 0) + 1;
+      const prevStrikes = prev && prev.bannedUntil <= now ? prev.strikes : prev?.strikes || 0;
+      const strikes = prevStrikes + Math.max(1, Math.round(weight));
       return { strikes, autoBanned: strikes >= cfg.strikeLimit };
     }
-    return this.recordStrike(ip, now, cfg.strikeLimit, cfg.banDurationMinutes * 60_000);
+    return this.recordStrike(ip, now, cfg.strikeLimit, cfg.banDurationMinutes * 60_000, weight);
   }
 
   public static getActiveBans(now = Date.now()): Array<{ ip: string; strikes: number; remainingMinutes: number; bannedUntil: number }> {
@@ -838,176 +1486,250 @@ export class EdgeWafService {
     return haystack.includes(needle);
   }
 
-  private static formatConditionSummary(rule: WafCustomConditionRule): string {
-    const fieldNames: Record<WafConditionField, string> = {
-      path_matches: 'Path',
-      header_contains: rule.headerName ? `Request Header [${rule.headerName}]` : 'Request Header',
-      query_contains: 'Query String',
-      ua_contains: 'User-Agent',
-      ip_matches: 'Client IP',
-      country_equals: 'Country Code',
+  private static evaluateCompiledCondition(
+    cond: CompiledCondition,
+    ctx: {
+      rawPathname: string;
+      pathname: string;
+      search: string;
+      pathAndQuery: string;
+      payloadTargets: string[];
+      method: string;
+      clientIp: string;
+      ua: string;
+      country: string;
+      headers?: Headers;
+      now: number;
+      dryRun: boolean;
+    }
+  ): { matched: boolean; sample: string } {
+    const { op, field, value } = cond;
+
+    if (field === 'bot_vendor' && op === 'is_true') {
+      if (!ctx.ua || !ctx.clientIp) return { matched: false, sample: '' };
+      const vendor = detectBotVendor(ctx.ua);
+      if (!vendor) return { matched: false, sample: '' };
+      const rotation = this.trackUaVendorRotation(ctx.clientIp, vendor, ctx.now, ctx.dryRun);
+      return {
+        matched: rotation.rotating,
+        sample: rotation.rotating ? `${vendor}: ${ctx.ua} (${rotation.vendorList.slice(0, 5).join(', ')})` : '',
+      };
+    }
+
+    if (field === 'payload_targets') {
+      for (const target of ctx.payloadTargets) {
+        if (op === 'regex' && cond.compiledRegex) {
+          const m = target.match(cond.compiledRegex);
+          if (m) return { matched: true, sample: m[0].slice(0, 120) };
+        } else if (op !== 'regex' && this.matchDynamicOp(target, op, value, cond.compiledRegex, cond.listValues)) {
+          return { matched: true, sample: target.slice(0, 120) };
+        }
+      }
+      if (op === 'regex' && !cond.compiledRegex && value) {
+        const needle = value.toLowerCase();
+        for (const target of ctx.payloadTargets) {
+          if (target.toLowerCase().includes(needle)) return { matched: true, sample: value.slice(0, 120) };
+        }
+      }
+      return { matched: false, sample: '' };
+    }
+
+    if (field === 'ip') {
+      const rules = cond.listValues.length > 0 ? cond.listValues : [value.toLowerCase()];
+      if (op === 'not_equals') {
+        const matched = !matchesIpRule(ctx.clientIp, rules);
+        return { matched, sample: ctx.clientIp || '(unknown)' };
+      }
+      if (op === 'not_contains') {
+        const matched = !ctx.clientIp.toLowerCase().includes(value.toLowerCase());
+        return { matched, sample: ctx.clientIp || '(unknown)' };
+      }
+      if (op === 'equals' || op === 'in_list' || value.includes('*') || value.includes('/')) {
+        const matched = matchesIpRule(ctx.clientIp, rules);
+        return { matched, sample: ctx.clientIp || '(unknown)' };
+      }
+      const matched = Boolean(ctx.clientIp) && this.matchDynamicOp(ctx.clientIp, op, value, cond.compiledRegex, cond.listValues);
+      return { matched, sample: ctx.clientIp || '(unknown)' };
+    }
+
+    if (field === 'header') {
+      const isNegated = op === 'not_contains' || op === 'not_equals' || op === 'not_starts_with';
+      if (cond.headerName) {
+        const val = (ctx.headers?.get(cond.headerName) ?? (cond.headerName === 'user-agent' ? ctx.ua : '') ?? '').trim();
+        if (!val && !isNegated && op !== 'is_empty') return { matched: false, sample: '' };
+        const matched = this.matchDynamicOp(val, op, value, cond.compiledRegex, cond.listValues);
+        return { matched, sample: `${cond.headerName}: ${val || '(missing)'}`.slice(0, 120) };
+      }
+      if (ctx.headers) {
+        if (isNegated) {
+          const positiveOp: WafDynamicOperator = op === 'not_equals' ? 'equals' : op === 'not_starts_with' ? 'starts_with' : 'contains';
+          let anyMatched = false;
+          for (const hdrVal of ctx.headers.values()) {
+            if (this.matchDynamicOp(hdrVal, positiveOp, value, cond.compiledRegex, cond.listValues)) {
+              anyMatched = true;
+              break;
+            }
+          }
+          return { matched: !anyMatched, sample: `(no header matches "${value}")` };
+        }
+        for (const [hdrKey, hdrVal] of ctx.headers.entries()) {
+          if (this.matchDynamicOp(hdrVal, op, value, cond.compiledRegex, cond.listValues)) {
+            return { matched: true, sample: `${hdrKey}: ${hdrVal}`.slice(0, 120) };
+          }
+        }
+      }
+      return { matched: false, sample: '' };
+    }
+
+    let targetVal = '';
+    if (field === 'path') targetVal = ctx.pathname;
+    else if (field === 'query') targetVal = ctx.search;
+    else if (field === 'path_and_query') targetVal = ctx.pathAndQuery;
+    else if (field === 'method') targetVal = ctx.method;
+    else if (field === 'ua') targetVal = ctx.ua;
+    else if (field === 'country') targetVal = ctx.country;
+
+    const isNegated = op === 'not_contains' || op === 'not_equals' || op === 'not_starts_with';
+    if (!targetVal && !isNegated && op !== 'is_empty') {
+      return { matched: false, sample: '' };
+    }
+    const matched = this.matchDynamicOp(targetVal, op, value, cond.compiledRegex, cond.listValues);
+    return { matched, sample: (targetVal || '(empty)').slice(0, 120) };
+  }
+
+  private static matchDynamicOp(
+    haystackRaw: string,
+    op: WafDynamicOperator,
+    valueRaw: string,
+    compiledRegex: RegExp | null,
+    listValues: string[]
+  ): boolean {
+    if (op === 'is_empty') return !haystackRaw.trim();
+    if (op === 'regex') {
+      if (compiledRegex) return compiledRegex.test(haystackRaw);
+      // Graceful ReDoS/invalid-regex downgrade to literal substring match
+      return valueRaw ? haystackRaw.toLowerCase().includes(valueRaw.toLowerCase()) : false;
+    }
+    const haystack = haystackRaw.toLowerCase();
+    if (op === 'in_list') {
+      return listValues.includes(haystack);
+    }
+    const needle = valueRaw.toLowerCase();
+    if (!needle) return false;
+    if (op === 'equals') return haystack === needle;
+    if (op === 'not_equals') return haystack !== needle;
+    if (op === 'starts_with') return haystack.startsWith(needle);
+    if (op === 'not_starts_with') return !haystack.startsWith(needle);
+    if (op === 'not_contains') return !haystack.includes(needle);
+    return haystack.includes(needle);
+  }
+
+  private static buildRateLimitBlockResult(params: {
+    clientIp: string;
+    excess: number;
+    limit: number;
+    windowSeconds: number;
+    ruleId?: string;
+    reason: string;
+    matchedSample: string;
+    maliciousCfg?: WafRuleConfig['malicious'];
+    strikeWeight?: number;
+    autoBanOnAbuse?: boolean;
+    now: number;
+    dryRun: boolean;
+  }): WafEvaluationResult {
+    const { clientIp, excess, limit, windowSeconds, maliciousCfg, now, dryRun } = params;
+    const abuseEnabled = Boolean(
+      maliciousCfg?.enableAutoBan && (params.autoBanOnAbuse ?? maliciousCfg.autoBanOnRateAbuse)
+    );
+    const weight = Math.max(1, params.strikeWeight || 1);
+    if (abuseEnabled) {
+      if (this.isAutoBanned(clientIp, now)) {
+        return {
+          allowed: false,
+          status: 403,
+          code: 'WAF_MALICIOUS_IP',
+          mode: 'block_malicious_ips',
+          ruleId: params.ruleId,
+          reason: 'IP temporarily auto-banned after repeated rate-limit abuse.',
+          matchedSample: clientIp || params.matchedSample,
+          autoBanned: true,
+        };
+      }
+      if (excess >= 10 && excess % 10 === 0) {
+        const strike = this.maybeRecordStrike(clientIp, now, maliciousCfg!, dryRun, weight);
+        if (strike.autoBanned) {
+          return {
+            allowed: false,
+            status: 403,
+            code: 'WAF_MALICIOUS_IP',
+            mode: 'block_malicious_ips',
+            ruleId: params.ruleId,
+            reason: `Auto-banned after ignoring ${limit} req/${windowSeconds}s rate limit repeatedly.`,
+            matchedSample: `${params.matchedSample} (+${excess} excess 429s)`.slice(0, 160),
+            autoBanned: true,
+          };
+        }
+      }
+    }
+    return {
+      allowed: false,
+      status: 429,
+      code: 'WAF_STRICT_RATE_LIMIT',
+      mode: 'strict_rate_limiting',
+      ruleId: params.ruleId,
+      reason: params.reason,
+      matchedSample: params.matchedSample.slice(0, 160),
+      retryAfter: windowSeconds,
     };
-    return `If ${fieldNames[rule.field]} ${rule.operator.replace('_', ' ')} "${rule.value}"`;
   }
 
   public static evaluateCustomRules(
     input: WafEvaluationInput,
     rules: WafCustomConditionRule[],
     rateCfg: WafRuleConfig['rateLimit'] = DEFAULT_WAF_RULE_CONFIG.rateLimit,
-    now = input.now ?? Date.now()
+    now = input.now ?? Date.now(),
+    maliciousCfg?: WafRuleConfig['malicious']
   ): WafEvaluationResult | null {
     if (!Array.isArray(rules) || rules.length === 0) return null;
-
-    const pathname = this.decodeSafe(input.pathname || '/');
-    const search = this.decodeSafe(input.search || '');
-    const clientIp = (input.clientIp || '').trim();
-    const ua = (input.userAgent ?? input.headers?.get('user-agent') ?? '').trim();
-    const country = (input.country ?? input.headers?.get('cf-ipcountry') ?? '').trim();
-
-    for (const rule of rules) {
-      if (!rule?.enabled || !rule.value) continue;
-
-      let matched = false;
-      let sample = rule.value;
-      const isNegated = rule.operator === 'not_contains' || rule.operator === 'not_equals';
-
-      if (rule.field === 'path_matches') {
-        matched = this.matchConditionValue(pathname, rule.value, rule.operator);
-        if (matched) sample = pathname.slice(0, 120);
-      } else if (rule.field === 'query_contains') {
-        matched = this.matchConditionValue(search, rule.value, rule.operator);
-        if (matched) sample = (search || '(empty)').slice(0, 120);
-      } else if (rule.field === 'ua_contains') {
-        matched = (Boolean(ua) || isNegated) && this.matchConditionValue(ua, rule.value, rule.operator);
-        if (matched) sample = (ua || '(empty)').slice(0, 120);
-      } else if (rule.field === 'country_equals') {
-        matched = (Boolean(country) || isNegated) && this.matchConditionValue(country, rule.value, rule.operator);
-        if (matched) sample = country || '(unknown)';
-      } else if (rule.field === 'ip_matches') {
-        if (rule.operator === 'not_equals') {
-          matched = !matchesIpRule(clientIp, [rule.value.toLowerCase()]);
-        } else if (rule.operator === 'not_contains') {
-          matched = this.matchConditionValue(clientIp, rule.value, 'not_contains');
-        } else if (rule.operator === 'equals' || rule.value.includes('*') || rule.value.includes('/')) {
-          matched = matchesIpRule(clientIp, [rule.value.toLowerCase()]);
-        } else {
-          matched = Boolean(clientIp) && this.matchConditionValue(clientIp, rule.value, rule.operator);
-        }
-        if (matched) sample = clientIp || '(unknown)';
-      } else if (rule.field === 'header_contains') {
-        if (rule.headerName) {
-          const val = (input.headers?.get(rule.headerName) ?? (rule.headerName === 'user-agent' ? ua : '') ?? '').trim();
-          if ((Boolean(val) || isNegated) && this.matchConditionValue(val, rule.value, rule.operator)) {
-            matched = true;
-            sample = `${rule.headerName}: ${val || '(missing)'}`.slice(0, 120);
-          }
-        } else if (input.headers) {
-          if (isNegated) {
-            const positiveOp = rule.operator === 'not_equals' ? 'equals' : 'contains';
-            let anyMatched = false;
-            for (const hdrVal of input.headers.values()) {
-              if (this.matchConditionValue(hdrVal, rule.value, positiveOp)) {
-                anyMatched = true;
-                break;
-              }
-            }
-            if (!anyMatched) {
-              matched = true;
-              sample = `(no header matches "${rule.value}")`;
-            }
-          } else {
-            for (const [hdrKey, hdrVal] of input.headers.entries()) {
-              if (this.matchConditionValue(hdrVal, rule.value, rule.operator)) {
-                matched = true;
-                sample = `${hdrKey}: ${hdrVal}`.slice(0, 120);
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      if (!matched) continue;
-
-      const summary = this.formatConditionSummary(rule);
-      if (rule.action === 'rate_limit_429') {
-        const ruleLimit = rule.limit ?? rateCfg.publicWriteLimit;
-        const { limited } = this.consumeRateLimitBucket(
-          `custom:${rule.id}:${clientIp || 'unknown'}`,
-          ruleLimit,
-          rateCfg.windowSeconds,
-          now,
-          Boolean(input.dryRun)
-        );
-        if (!limited) continue;
-        return {
-          allowed: false,
-          status: 429,
-          code: 'WAF_STRICT_RATE_LIMIT',
-          mode: 'strict_rate_limiting',
-          reason: `Custom Rule (${summary}) rate limit exceeded (${ruleLimit} req/${rateCfg.windowSeconds}s).`,
-          matchedSample: `${summary} → ${sample}`.slice(0, 160),
-          retryAfter: rateCfg.windowSeconds,
-        };
-      }
-
-      return {
-        allowed: false,
-        status: 403,
-        code: rule.field === 'ua_contains' ? 'WAF_BOT_CHALLENGE' : rule.field === 'ip_matches' ? 'WAF_MALICIOUS_IP' : 'WAF_MALICIOUS_PAYLOAD',
-        mode: rule.field === 'ua_contains' ? 'bot_challenge' : 'block_malicious_ips',
-        reason: `Blocked by Custom Rule: ${summary}.`,
-        matchedSample: `${summary} → ${sample}`.slice(0, 160),
-      };
-    }
-
-    return null;
+    const dbRules = rules.map((cr, idx) => convertCustomRuleToDbRule(cr, idx));
+    const runtime = compileWafRuntime({ rules: dbRules, ipAcl: [] });
+    const res = this.evaluateCompiledRules(
+      input,
+      runtime,
+      new Set<WafRuleMode>(),
+      { rateLimit: rateCfg, malicious: maliciousCfg || DEFAULT_WAF_RULE_CONFIG.malicious },
+      now
+    );
+    return res.allowed ? null : res;
   }
 
-  private static checkStrictRateLimit(
-    ip: string,
-    pathname: string,
-    method: string,
-    now: number,
-    rateCfg: WafRuleConfig['rateLimit'] = DEFAULT_WAF_RULE_CONFIG.rateLimit,
-    dryRun = false
-  ): { limited: boolean; excess: number; limit: number; bucket: string } {
-    const isPublicWriteApi =
-      method === 'POST' &&
-      (pathname === '/api/submit-quote' || pathname === '/api/client-error' || pathname.startsWith('/api/auth/'));
-    const isApi = pathname.startsWith('/api/');
-    const bucketType = isPublicWriteApi ? 'pub_write' : isApi ? 'api' : 'page';
-    const limit = isPublicWriteApi
-      ? rateCfg.publicWriteLimit
-      : isApi
-        ? rateCfg.apiLimit
-        : rateCfg.pageLimit;
-
-    const { limited, excess } = this.consumeRateLimitBucket(`${bucketType}:${ip || 'unknown'}`, limit, rateCfg.windowSeconds, now, dryRun);
-    return { limited, excess, limit, bucket: bucketType };
-  }
-
-  public static evaluate(input: WafEvaluationInput, settings?: WafSettingsSubset | null): WafEvaluationResult {
+  public static evaluate(
+    input: WafEvaluationInput,
+    settings?: WafSettingsSubset | null,
+    compiledRuntime?: CompiledWafRuntime | null
+  ): WafEvaluationResult {
     const pathname = input.pathname || '/';
     const now = input.now ?? Date.now();
-    const res = this.evaluateCore(input, settings, now);
+    const runtime = compiledRuntime ?? buildRuntimeFromLegacySettings(settings);
+    const res = this.evaluateCore(input, settings, runtime, now);
     if (input.dryRun) return res;
 
     const ipKey = (input.clientIp || '').trim().toLowerCase();
 
     if (res.allowed) {
       if (ipKey && !this.isStaticAsset(pathname) && !this.isAntiLockoutPath(pathname)) {
-        const allowList = parseIpList(settings?.waf_allow_ips);
-        const cfg = normalizeWafRuleConfig(settings?.waf_rule_config);
         const activeModes = Array.isArray(settings?.waf_active_modes) ? settings.waf_active_modes : [];
-        const isStandby = activeModes.length === 0 && !cfg.customRules.some((r) => r.enabled);
+        const hasEnabledCustom = runtime.rules.some((r) => r.category === 'custom' && r.isEnabled && (r.expiresAtMs === null || now < r.expiresAtMs));
+        const isStandby = activeModes.length === 0 && !hasEnabledCustom;
+        const isWhitelisted = matchesCompiledIpAcl(ipKey, runtime.whitelist, now).matched;
 
-        if (input.isAuthenticatedAdmin || isStandby || matchesIpRule(ipKey, allowList)) {
+        if (input.isAuthenticatedAdmin || isStandby || isWhitelisted) {
           this.clearLogSuppressions(ipKey);
         } else {
-          // Clear IP blacklist/auto-ban suppression only once IP is no longer blocked by IP rules
-          const blockedList = parseIpList(settings?.waf_blocked_ips);
-          if (!this.isAutoBanned(ipKey, now) && (!cfg.malicious.enableIpBlacklist || !matchesIpRule(ipKey, blockedList))) {
+          const isBlacklisted = runtime.blacklistEnabled && matchesCompiledIpAcl(ipKey, runtime.blacklist, now).matched;
+          const isDbAutoBanned = runtime.autoBanEnabled && matchesCompiledIpAcl(ipKey, runtime.autoBans, now).matched;
+          if (!this.isAutoBanned(ipKey, now) && !isDbAutoBanned && !isBlacklisted) {
             this.clearLogSuppressions(ipKey, 'WAF_MALICIOUS_IP');
           }
         }
@@ -1054,11 +1776,14 @@ export class EdgeWafService {
     };
   }
 
-  private static evaluateCore(input: WafEvaluationInput, settings: WafSettingsSubset | null | undefined, now: number): WafEvaluationResult {
+  private static evaluateCore(
+    input: WafEvaluationInput,
+    settings: WafSettingsSubset | null | undefined,
+    runtime: CompiledWafRuntime,
+    now: number
+  ): WafEvaluationResult {
     const pathname = input.pathname || '/';
-    const method = (input.method || 'GET').toUpperCase();
     const clientIp = (input.clientIp || '').trim();
-    const dryRun = Boolean(input.dryRun);
 
     if (this.isStaticAsset(pathname)) {
       return { allowed: true };
@@ -1069,9 +1794,8 @@ export class EdgeWafService {
       return { allowed: true };
     }
 
-    // Trusted IP whitelist always bypasses all WAF rules
-    const allowList = parseIpList(settings?.waf_allow_ips);
-    if (matchesIpRule(clientIp, allowList)) {
+    // Trusted IP whitelist (pre-compiled CIDR/exact/prefix from waf_ip_acl) always bypasses all WAF rules
+    if (matchesCompiledIpAcl(clientIp, runtime.whitelist, now).matched) {
       return { allowed: true };
     }
 
@@ -1079,227 +1803,233 @@ export class EdgeWafService {
       Array.isArray(settings?.waf_active_modes) ? settings.waf_active_modes : []
     );
     const cfg = normalizeWafRuleConfig(settings?.waf_rule_config);
-    const hasCustomRules = cfg.customRules.some((r) => r.enabled);
+    const hasCustomRules = runtime.rules.some((r) => r.category === 'custom' && r.isEnabled && (r.expiresAtMs === null || now < r.expiresAtMs));
     if (activeModes.size === 0 && !hasCustomRules) {
       return { allowed: true };
     }
 
-    // 0. Custom Visual Logical Condition Rules
-    if (hasCustomRules) {
-      const customResult = this.evaluateCustomRules(input, cfg.customRules, cfg.rateLimit, now);
-      if (customResult) return customResult;
+    return this.evaluateCompiledRules(
+      input,
+      runtime,
+      activeModes,
+      { rateLimit: cfg.rateLimit, malicious: cfg.malicious },
+      now
+    );
+  }
+
+  private static evaluateCompiledRules(
+    input: WafEvaluationInput,
+    runtime: CompiledWafRuntime,
+    activeModes: Set<WafRuleMode>,
+    cfg: { rateLimit: WafRuleConfig['rateLimit']; malicious: WafRuleConfig['malicious'] },
+    now: number
+  ): WafEvaluationResult {
+    const rawPathname = input.pathname || '/';
+    const pathname = this.decodeSafe(rawPathname);
+    const search = this.decodeSafe(input.search || '');
+    const pathAndQuery = this.decodeSafe(`${rawPathname}${input.search || ''}`);
+    const method = (input.method || 'GET').toUpperCase();
+    const clientIp = (input.clientIp || '').trim();
+    const ua = (input.userAgent ?? input.headers?.get('user-agent') ?? '').trim();
+    const country = (input.country ?? input.headers?.get('cf-ipcountry') ?? '').trim();
+    const dryRun = Boolean(input.dryRun);
+
+    const headerTargets: string[] = [pathAndQuery];
+    for (const hdr of ['referer', 'user-agent', 'x-forwarded-host']) {
+      const val = hdr === 'user-agent' ? ua : (input.headers?.get(hdr) || '');
+      if (val) headerTargets.push(this.decodeSafe(val));
     }
 
-    // 1. Block Malicious IPs + OWASP Payloads + Configurable Strike Auto-Ban
-    if (activeModes.has('block_malicious_ips')) {
-      if (cfg.malicious.enableIpBlacklist) {
-        const blockedList = parseIpList(settings?.waf_blocked_ips);
-        if (matchesIpRule(clientIp, blockedList)) {
+    const hasWebhookSecret = Boolean(
+      input.headers?.get('x-sanity-signature') ||
+      input.headers?.get('x-webhook-secret') ||
+      input.headers?.get('x-revalidate-secret')
+    );
+
+    const ctx = {
+      rawPathname,
+      pathname,
+      search,
+      pathAndQuery,
+      payloadTargets: headerTargets,
+      method,
+      clientIp,
+      ua,
+      country,
+      headers: input.headers,
+      now,
+      dryRun,
+    };
+
+    const effectiveMaliciousCfg: WafRuleConfig['malicious'] = {
+      ...cfg.malicious,
+      enableIpBlacklist: runtime.blacklistEnabled,
+      enableAutoBan: runtime.autoBanEnabled,
+      autoBanOnRateAbuse: runtime.autoBanOnRateAbuseEnabled,
+    };
+
+    let firstShadowMatch: WafShadowMatch | undefined;
+
+    for (const rule of runtime.rules) {
+      if (!rule.isEnabled) continue;
+      if (rule.expiresAtMs !== null && now >= rule.expiresAtMs) continue;
+
+      if (rule.category === 'malicious' && !activeModes.has('block_malicious_ips')) continue;
+      if (rule.category === 'rate_limit' && !activeModes.has('strict_rate_limiting')) continue;
+      if (rule.category === 'bot') {
+        if (!activeModes.has('bot_challenge')) continue;
+        if (rawPathname === '/api/revalidate' && hasWebhookSecret) continue;
+      }
+
+      // Built-in ACL & Auto-Ban meta rules evaluated at their configured priority slot
+      if (rule.id === 'sys_ip_blacklist') {
+        const blMatch = matchesCompiledIpAcl(clientIp, runtime.blacklist, now);
+        if (blMatch.matched) {
           return {
             allowed: false,
             status: 403,
             code: 'WAF_MALICIOUS_IP',
             mode: 'block_malicious_ips',
-            reason: 'Access denied by Edge WAF IP blacklist.',
+            ruleId: rule.id,
+            reason: blMatch.reason || 'Access denied by Edge WAF IP blacklist.',
             matchedSample: clientIp,
           };
         }
+        continue;
       }
-
-      if (cfg.malicious.enableAutoBan && this.isAutoBanned(clientIp, now)) {
-        return {
-          allowed: false,
-          status: 403,
-          code: 'WAF_MALICIOUS_IP',
-          mode: 'block_malicious_ips',
-          reason: 'IP temporarily auto-banned after repeated security violations.',
-          matchedSample: clientIp,
-          autoBanned: true,
-        };
-      }
-
-      if (cfg.malicious.enableProbePaths && this.isBlockedProbePath(pathname)) {
-        const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun);
-        return {
-          allowed: false,
-          status: 403,
-          code: strike.autoBanned ? 'WAF_MALICIOUS_IP' : 'WAF_MALICIOUS_PAYLOAD',
-          mode: 'block_malicious_ips',
-          reason: 'Blocked vulnerability probe path.',
-          matchedSample: pathname.slice(0, 120),
-          autoBanned: strike.autoBanned,
-        };
-      }
-
-      const decodedPath = this.decodeSafe(pathname);
-      const matchedCustomPath = matchCustomKeyword(decodedPath.toLowerCase(), cfg.malicious.customBlockedPaths);
-      if (matchedCustomPath) {
-        const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun);
-        return {
-          allowed: false,
-          status: 403,
-          code: strike.autoBanned ? 'WAF_MALICIOUS_IP' : 'WAF_MALICIOUS_PAYLOAD',
-          mode: 'block_malicious_ips',
-          reason: `Blocked custom path keyword (${matchedCustomPath}).`,
-          matchedSample: pathname.slice(0, 120),
-          autoBanned: strike.autoBanned,
-        };
-      }
-
-      // Inspect multi-pass decoded URL target + high-risk headers for SQLi / XSS / Path Traversal
-      const decodedTarget = this.decodeSafe(`${pathname}${input.search || ''}`);
-      const headerTargets: string[] = [];
-      for (const hdr of ['referer', 'user-agent', 'x-forwarded-host']) {
-        const val = hdr === 'user-agent'
-          ? (input.userAgent ?? input.headers?.get('user-agent') ?? '')
-          : (input.headers?.get(hdr) || '');
-        if (val) headerTargets.push(this.decodeSafe(val));
-      }
-      const inspectTargets = [decodedTarget, ...headerTargets];
-
-      for (const rule of PAYLOAD_RULES) {
-        if (!cfg.malicious[rule.flagKey]) continue;
-        for (const target of inspectTargets) {
-          const match = target.match(rule.regex);
-          if (match) {
-            const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun);
-            return {
-              allowed: false,
-              status: 403,
-              code: 'WAF_MALICIOUS_PAYLOAD',
-              mode: 'block_malicious_ips',
-              reason: `Blocked malicious ${rule.label} payload.`,
-              matchedSample: match[0].slice(0, 120),
-              autoBanned: strike.autoBanned,
-            };
-          }
+      if (rule.id === 'sys_ip_autoban') {
+        const dbBan = matchesCompiledIpAcl(clientIp, runtime.autoBans, now);
+        if (dbBan.matched || this.isAutoBanned(clientIp, now)) {
+          return {
+            allowed: false,
+            status: 403,
+            code: 'WAF_MALICIOUS_IP',
+            mode: 'block_malicious_ips',
+            ruleId: rule.id,
+            reason: dbBan.reason || 'IP temporarily auto-banned after repeated security violations.',
+            matchedSample: clientIp,
+            autoBanned: true,
+          };
         }
+        continue;
       }
-    }
+      if (rule.id === 'sys_rate_abuse_ban') continue;
+      if (rule.id === 'sys_probe_paths' && ALLOWED_WELL_KNOWN.test(rawPathname)) continue;
+      if (rule.conditions.length === 0) continue;
 
-    // 2. Strict Rate Limiting (+ persistent 429 abuse strike escalation)
-    if (activeModes.has('strict_rate_limiting')) {
-      const rate = this.checkStrictRateLimit(clientIp || 'unknown', pathname, method, now, cfg.rateLimit, dryRun);
-      if (rate.limited) {
-        if (
-          activeModes.has('block_malicious_ips') &&
-          cfg.malicious.enableAutoBan &&
-          cfg.malicious.autoBanOnRateAbuse &&
-          rate.excess >= 10 &&
-          rate.excess % 10 === 0
-        ) {
-          const strike = this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun);
-          if (strike.autoBanned) {
-            return {
-              allowed: false,
-              status: 403,
-              code: 'WAF_MALICIOUS_IP',
-              mode: 'block_malicious_ips',
-              reason: `Auto-banned after ignoring ${rate.limit} req/${cfg.rateLimit.windowSeconds}s rate limit repeatedly.`,
-              matchedSample: `${method} ${pathname} (+${rate.excess} excess 429s)`,
-              autoBanned: true,
-            };
-          }
-        }
-        return {
-          allowed: false,
-          status: 429,
-          code: 'WAF_STRICT_RATE_LIMIT',
-          mode: 'strict_rate_limiting',
-          reason: `Strict rate limit exceeded (${rate.limit} req/${cfg.rateLimit.windowSeconds}s for ${rate.bucket}).`,
-          matchedSample: `${method} ${pathname} (${rate.limit}/${cfg.rateLimit.windowSeconds}s)`,
-          retryAfter: cfg.rateLimit.windowSeconds,
-        };
-      }
-    }
-
-    // 3. Bot Challenge
-    if (activeModes.has('bot_challenge')) {
-      const hasWebhookSecret = Boolean(
-        input.headers?.get('x-sanity-signature') ||
-        input.headers?.get('x-webhook-secret') ||
-        input.headers?.get('x-revalidate-secret')
-      );
-      if (!(pathname === '/api/revalidate' && hasWebhookSecret)) {
-        const ua = (input.userAgent ?? input.headers?.get('user-agent') ?? '').trim();
-        if (!ua) {
-          if (cfg.bot.blockEmptyUa) {
-            return {
-              allowed: false,
-              status: 403,
-              code: 'WAF_BOT_CHALLENGE',
-              mode: 'bot_challenge',
-              reason: 'Missing User-Agent header blocked by Bot Challenge.',
-              matchedSample: '(empty user-agent)',
-            };
+      let ruleMatched = rule.matchMode === 'ALL';
+      let sample = '';
+      for (const cond of rule.conditions) {
+        const cRes = this.evaluateCompiledCondition(cond, ctx);
+        if (rule.matchMode === 'ANY') {
+          if (cRes.matched) {
+            ruleMatched = true;
+            sample = cRes.sample;
+            break;
           }
         } else {
-          if (cfg.bot.blockUaRotation && clientIp) {
-            const botVendor = detectBotVendor(ua);
-            if (botVendor) {
-              const rotation = this.trackUaVendorRotation(clientIp, botVendor, now, dryRun);
-              if (rotation.rotating) {
-                const strike = activeModes.has('block_malicious_ips')
-                  ? this.maybeRecordStrike(clientIp, now, cfg.malicious, dryRun)
-                  : { strikes: 0, autoBanned: false };
-                return {
-                  allowed: false,
-                  status: 403,
-                  code: strike.autoBanned ? 'WAF_MALICIOUS_IP' : 'WAF_BOT_CHALLENGE',
-                  mode: strike.autoBanned ? 'block_malicious_ips' : 'bot_challenge',
-                  reason: `Spoofed bot User-Agent rotation detected (${rotation.vendorList.slice(0, 5).join(', ')}).`,
-                  matchedSample: `${botVendor}: ${ua}`.slice(0, 120),
-                  autoBanned: strike.autoBanned,
-                };
-              }
-            }
+          if (!cRes.matched) {
+            ruleMatched = false;
+            break;
           }
-          for (const group of BOT_UA_GROUPS) {
-            if (!cfg.bot[group.flagKey]) continue;
-            if (group.regex.test(ua)) {
-              return {
-                allowed: false,
-                status: 403,
-                code: 'WAF_BOT_CHALLENGE',
-                mode: 'bot_challenge',
-                reason: `Automated ${group.label} blocked by Bot Challenge.`,
-                matchedSample: ua.slice(0, 120),
-              };
-            }
-          }
-          const matchedCustomUa = matchCustomKeyword(ua.toLowerCase(), cfg.bot.customBlockedUa);
-          if (matchedCustomUa) {
-            return {
-              allowed: false,
-              status: 403,
-              code: 'WAF_BOT_CHALLENGE',
-              mode: 'bot_challenge',
-              reason: `Custom User-Agent rule (${matchedCustomUa}) blocked by Bot Challenge.`,
-              matchedSample: ua.slice(0, 120),
-            };
-          }
-        }
-
-        if (cfg.bot.enforceQuoteFingerprint && method === 'POST' && pathname === '/api/submit-quote' && input.headers) {
-          const hasAcceptLang = Boolean(input.headers.get('accept-language'));
-          const hasBrowserFetchMeta = Boolean(
-            input.headers.get('sec-fetch-site') || input.headers.get('sec-ch-ua')
-          );
-          const hasTurnstileHeader = Boolean(input.headers.get('cf-turnstile-response'));
-          if (!hasAcceptLang && !hasBrowserFetchMeta && !hasTurnstileHeader) {
-            return {
-              allowed: false,
-              status: 403,
-              code: 'WAF_BOT_CHALLENGE',
-              mode: 'bot_challenge',
-              reason: 'Missing browser fingerprint headers on sensitive submission.',
-              matchedSample: 'missing accept-language & sec-fetch-*',
-            };
-          }
+          if (!sample && cRes.sample) sample = cRes.sample;
         }
       }
+      if (!ruleMatched) continue;
+
+      if (rule.action === 'allow') {
+        return { allowed: true, ruleId: rule.id };
+      }
+
+      const modeForCategory: WafRuleMode =
+        rule.category === 'bot' ? 'bot_challenge' : rule.category === 'rate_limit' ? 'strict_rate_limiting' : 'block_malicious_ips';
+      const defaultCode: WafBlockCode =
+        rule.category === 'bot' ? 'WAF_BOT_CHALLENGE' : rule.id.startsWith('sys_ip') ? 'WAF_MALICIOUS_IP' : 'WAF_MALICIOUS_PAYLOAD';
+
+      if (rule.action === 'log_only') {
+        firstShadowMatch ??= {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          code: defaultCode,
+          mode: modeForCategory,
+          reason: `Shadow rule matched: ${rule.name}`,
+          matchedSample: (sample || rawPathname).slice(0, 120),
+        };
+        continue;
+      }
+
+      if (rule.action === 'rate_limit_429') {
+        const limit = rule.rateLimit.limit ?? cfg.rateLimit.publicWriteLimit;
+        const windowSeconds = rule.rateLimit.window_s ?? cfg.rateLimit.windowSeconds;
+        const prefix = rule.rateLimit.bucket_prefix || `custom:${rule.id}`;
+        const bucketKey = rule.rateLimit.key_by === 'ip_and_path'
+          ? `${prefix}:${clientIp || 'unknown'}:${rawPathname}`
+          : `${prefix}:${clientIp || 'unknown'}`;
+        const { limited, excess } = this.consumeRateLimitBucket(bucketKey, limit, windowSeconds, now, dryRun);
+        if (!limited) continue;
+        return this.buildRateLimitBlockResult({
+          clientIp,
+          excess,
+          limit,
+          windowSeconds,
+          ruleId: rule.id,
+          reason: rule.isSystem
+            ? `Strict rate limit exceeded (${limit} req/${windowSeconds}s for ${prefix}).`
+            : `Custom Rule (${rule.name}) rate limit exceeded (${limit} req/${windowSeconds}s).`,
+          matchedSample: rule.isSystem
+            ? `${method} ${rawPathname} (${limit}/${windowSeconds}s)`
+            : `${rule.name} → ${sample || rawPathname}`,
+          maliciousCfg: activeModes.has('block_malicious_ips') ? effectiveMaliciousCfg : undefined,
+          strikeWeight: rule.strikeWeight || 1,
+          autoBanOnAbuse: effectiveMaliciousCfg.autoBanOnRateAbuse || rule.strikeWeight > 0,
+          now,
+          dryRun,
+        });
+      }
+
+      if (rule.action === 'challenge_fingerprint') {
+        if (!input.headers) continue;
+        const hasAcceptLang = Boolean(input.headers.get('accept-language'));
+        const hasBrowserFetchMeta = Boolean(
+          input.headers.get('sec-fetch-site') || input.headers.get('sec-ch-ua')
+        );
+        const hasTurnstileHeader = Boolean(input.headers.get('cf-turnstile-response'));
+        if (hasAcceptLang || hasBrowserFetchMeta || hasTurnstileHeader) continue;
+
+        const strike = activeModes.has('block_malicious_ips') && rule.strikeWeight > 0
+          ? this.maybeRecordStrike(clientIp, now, effectiveMaliciousCfg, dryRun, rule.strikeWeight)
+          : { strikes: 0, autoBanned: false };
+        return {
+          allowed: false,
+          status: 403,
+          code: strike.autoBanned ? 'WAF_MALICIOUS_IP' : 'WAF_BOT_CHALLENGE',
+          mode: strike.autoBanned ? 'block_malicious_ips' : 'bot_challenge',
+          ruleId: rule.id,
+          reason: 'Missing browser fingerprint headers on sensitive submission.',
+          matchedSample: 'missing accept-language & sec-fetch-*',
+          autoBanned: strike.autoBanned,
+        };
+      }
+
+      // action === 'block_403'
+      const strike = activeModes.has('block_malicious_ips') && rule.strikeWeight > 0
+        ? this.maybeRecordStrike(clientIp, now, effectiveMaliciousCfg, dryRun, rule.strikeWeight)
+        : { strikes: 0, autoBanned: false };
+
+      return {
+        allowed: false,
+        status: 403,
+        code: strike.autoBanned ? 'WAF_MALICIOUS_IP' : defaultCode,
+        mode: strike.autoBanned ? 'block_malicious_ips' : modeForCategory,
+        ruleId: rule.id,
+        reason: rule.isSystem
+          ? `Blocked by ${rule.name}.`
+          : `Blocked by Custom Rule: ${rule.name}.`,
+        matchedSample: (sample || rawPathname).slice(0, 120),
+        autoBanned: strike.autoBanned,
+      };
     }
 
-    return { allowed: true };
+    return firstShadowMatch ? { allowed: true, shadowMatch: firstShadowMatch } : { allowed: true };
   }
 }

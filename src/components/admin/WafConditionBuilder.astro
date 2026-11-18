@@ -1,61 +1,102 @@
 ---
 // src/components/admin/WafConditionBuilder.astro
-// Unified Logical Condition Rules & Visual Builder Sub-Component for EdgeWafService
+// Unified Logical Condition Rules & DB Rule Builder Sub-Component for EdgeWafService
 import {
   DEFAULT_WAF_RULE_CONFIG,
   WAF_CONDITION_CATALOG,
   type WafCustomConditionRule,
-  type WafConditionField,
-  type WafConditionOperator,
+  type WafDbRule,
+  type WafDynamicAction,
+  type WafDynamicField,
+  type WafDynamicOperator,
   type WafRuleConfig,
+  type WafRuleCondition,
 } from '@utils/waf';
 import type { WafRuleMode } from '@db';
 
 interface Props {
   rules?: WafCustomConditionRule[];
+  dbRules?: WafDbRule[];
   ruleConfig?: WafRuleConfig;
   activeModes?: WafRuleMode[];
   canManage?: boolean;
 }
 
 const {
-  rules = [],
+  dbRules = [],
   ruleConfig = DEFAULT_WAF_RULE_CONFIG,
   activeModes = [],
   canManage = false,
 } = Astro.props;
 
 const activeModeSet = new Set<WafRuleMode>(activeModes);
+const customDbRules = dbRules.filter((r) => r.is_system === 0);
+const sysRuleMap = new Map(dbRules.filter((r) => r.is_system === 1).map((r) => [r.id, r]));
 
-const CONDITION_FIELD_OPTIONS: Array<{ value: WafConditionField; label: string; placeholder: string }> = [
-  { value: 'path_matches', label: 'If Path matches', placeholder: 'e.g. /wp-admin, /secret-api, .bak' },
-  { value: 'header_contains', label: 'If Request Header', placeholder: 'e.g. evil.com or x-forwarded-host: evil.com' },
-  { value: 'query_contains', label: 'If Query String', placeholder: 'e.g. base64_decode, cmd=, ../../' },
-  { value: 'ua_contains', label: 'If User-Agent', placeholder: 'e.g. HeadlessChrome, PhantomJS, PetalBot' },
-  { value: 'ip_matches', label: 'If Client IP / CIDR', placeholder: 'e.g. 185.220.101.0/24 or 45.155.*' },
-  { value: 'country_equals', label: 'If Country Code (CF)', placeholder: 'e.g. XX, T1, US' },
+const CONDITION_FIELD_OPTIONS: Array<{ value: WafDynamicField; label: string; placeholder: string }> = [
+  { value: 'path', label: 'If Path', placeholder: 'e.g. /wp-admin, /secret-api, .bak' },
+  { value: 'header', label: 'If Request Header', placeholder: 'e.g. evil.com or x-forwarded-host: evil.com' },
+  { value: 'query', label: 'If Query String', placeholder: 'e.g. base64_decode, cmd=, ../../' },
+  { value: 'payload_targets', label: 'If Payload + Headers', placeholder: 'e.g. \\$\\{jndi: or union select' },
+  { value: 'ua', label: 'If User-Agent', placeholder: 'e.g. HeadlessChrome, NewBot/1.0, PetalBot' },
+  { value: 'method', label: 'If HTTP Method', placeholder: 'e.g. POST, PUT, DELETE' },
+  { value: 'ip', label: 'If Client IP / CIDR', placeholder: 'e.g. 185.220.101.0/24 or 45.155.*' },
+  { value: 'country', label: 'If Country Code (CF)', placeholder: 'e.g. XX, T1, US' },
 ];
 
-const OPERATOR_OPTIONS: Array<{ value: WafConditionOperator; label: string }> = [
+const OPERATOR_OPTIONS: Array<{ value: WafDynamicOperator; label: string }> = [
   { value: 'contains', label: 'contains' },
   { value: 'not_contains', label: 'not contains' },
   { value: 'starts_with', label: 'starts with' },
+  { value: 'not_starts_with', label: 'not starts with' },
   { value: 'equals', label: 'equals' },
   { value: 'not_equals', label: 'not equals' },
+  { value: 'regex', label: 'matches regex' },
+  { value: 'in_list', label: 'in list (comma)' },
 ];
 
-const ACTION_OPTIONS = [
+const ACTION_OPTIONS: Array<{ value: WafDynamicAction; label: string }> = [
   { value: 'block_403', label: 'Block (403 Forbidden)' },
   { value: 'rate_limit_429', label: 'Throttle (429 Rate Limit)' },
-] as const;
+  { value: 'allow', label: 'Allow (Bypass Early)' },
+  { value: 'log_only', label: 'Shadow (Log Only)' },
+];
 
-const FIELD_LABEL_MAP: Record<WafConditionField, string> = {
+const FIELD_LABEL_MAP: Record<string, string> = {
+  path: 'If Path',
   path_matches: 'If Path',
+  header: 'If Request Header',
   header_contains: 'If Request Header',
+  query: 'If Query String',
   query_contains: 'If Query String',
+  payload_targets: 'If Payload + Headers',
+  ua: 'If User-Agent',
   ua_contains: 'If User-Agent',
+  method: 'If Method',
+  ip: 'If Client IP',
   ip_matches: 'If Client IP',
-  country_equals: 'If Country Code',
+  country: 'If Country',
+  country_equals: 'If Country',
+};
+
+const SYS_KEY_TO_ID: Record<string, string> = {
+  enableIpBlacklist: 'sys_ip_blacklist',
+  enableAutoBan: 'sys_ip_autoban',
+  autoBanOnRateAbuse: 'sys_rate_abuse_ban',
+  enableProbePaths: 'sys_probe_paths',
+  enableSqli: 'sys_owasp_sqli',
+  enableXss: 'sys_owasp_xss',
+  enablePathTraversal: 'sys_path_traversal',
+  publicWriteLimit: 'sys_rl_public_write',
+  apiLimit: 'sys_rl_api',
+  pageLimit: 'sys_rl_page',
+  blockEmptyUa: 'sys_bot_empty_ua',
+  blockUaRotation: 'sys_bot_ua_rotation',
+  blockScannerTools: 'sys_bot_scanner',
+  blockCliScrapers: 'sys_bot_cli',
+  blockAiCrawlers: 'sys_bot_ai',
+  blockSeoBots: 'sys_bot_seo',
+  enforceQuoteFingerprint: 'sys_bot_quote_fp',
 };
 
 const PRESET_GROUPS: Array<{
@@ -70,7 +111,7 @@ const PRESET_GROUPS: Array<{
 ];
 
 const presetTotalCount = PRESET_GROUPS.reduce((sum, g) => sum + WAF_CONDITION_CATALOG[g.mode].length, 0);
-const totalRulesCount = presetTotalCount + rules.length;
+const totalRulesCount = presetTotalCount + customDbRules.length;
 
 const formatPresetCondition = (key: string, fallback: string) => {
   if (key === 'enableAutoBan') {
@@ -78,19 +119,37 @@ const formatPresetCondition = (key: string, fallback: string) => {
   }
   return fallback;
 };
+
+const parseRuleConditions = (rawJson: string): WafRuleCondition[] => {
+  try {
+    const arr = JSON.parse(rawJson || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+};
+
+const parseRateLimit = (rawJson: string): { limit?: number; window_s?: number } => {
+  try {
+    const obj = JSON.parse(rawJson || '{}');
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch {
+    return {};
+  }
+};
 ---
 
 <section id="waf-condition-builder" class="adm-card p-4 space-y-3">
   <div class="flex flex-wrap items-center justify-between gap-2.5">
     <div>
       <div class="flex items-center gap-2">
-        <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">WAF Logical Condition Rules</h2>
+        <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">WAF Dynamic Rules Engine (D1 + Edge KV)</h2>
         <span id="waf-custom-rules-count" class="adm-badge adm-badge-info" data-preset-count={presetTotalCount}>
-          {totalRulesCount} Rules ({presetTotalCount} Preset · {rules.length} Custom)
+          {totalRulesCount} Rules ({presetTotalCount} Preset · {customDbRules.length} Custom)
         </span>
       </div>
       <p class="text-[11px] text-[#86868b]">
-        Unified edge rule engine showing all built-in preset conditions and custom logical rules in one view. Toggle any rule or create custom rules below.
+        Database-backed rules compiled once per L1/L2 cache fill. Edit built-in system patterns, add multi-condition rules, set priority/strike weights, or test in Shadow mode.
       </p>
     </div>
 
@@ -100,7 +159,7 @@ const formatPresetCondition = (key: string, fallback: string) => {
         All ({totalRulesCount})
       </button>
       <button type="button" data-rule-filter="custom" class="waf-filter-tab px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer">
-        Custom ({rules.length})
+        Custom ({customDbRules.length})
       </button>
       <button type="button" data-rule-filter="block_malicious_ips" class="waf-filter-tab px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer">
         Malicious IP ({WAF_CONDITION_CATALOG.block_malicious_ips.length})
@@ -114,7 +173,7 @@ const formatPresetCondition = (key: string, fallback: string) => {
     </div>
   </div>
 
-  <!-- 1. Custom Condition Builder Input Bar -->
+  <!-- 1. Incremental Dynamic Rule Builder Bar -->
   {canManage && (
     <div class="rounded-2xl border border-black/8 bg-[#fafafc] p-3 space-y-2.5">
       <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
@@ -191,6 +250,67 @@ const formatPresetCondition = (key: string, fallback: string) => {
         </div>
       </div>
 
+      <!-- Optional Rule Metadata: Name / Match Mode / Priority / Strike Weight / TTL + 2nd Condition -->
+      <div class="grid grid-cols-2 md:grid-cols-12 gap-2 items-end pt-1.5 border-t border-black/5">
+        <label class="block space-y-1 col-span-2 md:col-span-4">
+          <span class="text-[10px] font-semibold text-[#52525b]">Rule Name (optional)</span>
+          <input id="waf-builder-name" type="text" autocomplete="off" placeholder="e.g. Block NewBot Scraper" class="adm-input text-[11px] py-1" />
+        </label>
+        <label class="block space-y-1 md:col-span-2">
+          <span class="text-[10px] font-semibold text-[#52525b]">Match Logic</span>
+          <select id="waf-builder-match-mode" autocomplete="off" class="adm-input text-[11px] py-1">
+            <option value="ALL">ALL (AND)</option>
+            <option value="ANY">ANY (OR)</option>
+          </select>
+        </label>
+        <label class="block space-y-1 md:col-span-2">
+          <span class="text-[10px] font-semibold text-[#52525b]">Priority (1–999)</span>
+          <input id="waf-builder-priority" type="number" min="1" max="999" value="50" autocomplete="off" class="adm-input font-mono text-[11px] py-1" />
+        </label>
+        <label class="block space-y-1 md:col-span-2">
+          <span class="text-[10px] font-semibold text-[#52525b]">Strike Weight</span>
+          <input id="waf-builder-strike" type="number" min="0" max="10" value="0" autocomplete="off" class="adm-input font-mono text-[11px] py-1" />
+        </label>
+        <label class="block space-y-1 md:col-span-2">
+          <span class="text-[10px] font-semibold text-[#52525b]">TTL Expiration</span>
+          <select id="waf-builder-ttl" autocomplete="off" class="adm-input text-[11px] py-1">
+            <option value="">Permanent</option>
+            <option value="60">1 Hour</option>
+            <option value="120">2 Hours</option>
+            <option value="1440">24 Hours</option>
+            <option value="10080">7 Days</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="pt-1">
+        <button id="waf-cond2-toggle-btn" type="button" class="text-[11px] font-medium text-[#52525b] hover:text-[#1d1d1f] cursor-pointer">
+          + Add 2nd Composite Condition (AND / OR)
+        </button>
+        <div id="waf-builder-cond2-wrap" class="hidden mt-2 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+          <label class="block space-y-1 md:col-span-4">
+            <span class="text-[10px] font-semibold text-[#52525b]">2nd Field</span>
+            <select id="waf-builder-field2" autocomplete="off" class="adm-input text-[11px] py-1">
+              {CONDITION_FIELD_OPTIONS.map((opt) => (
+                <option value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block space-y-1 md:col-span-3">
+            <span class="text-[10px] font-semibold text-[#52525b]">2nd Operator</span>
+            <select id="waf-builder-operator2" autocomplete="off" class="adm-input font-mono text-[11px] py-1">
+              {OPERATOR_OPTIONS.map((opt) => (
+                <option value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block space-y-1 md:col-span-5">
+            <span class="text-[10px] font-semibold text-[#52525b]">2nd Value (optional; leave blank for 1-condition rule)</span>
+            <input id="waf-builder-value2" type="text" autocomplete="off" placeholder="e.g. POST or RU or headerName: value" class="adm-input font-mono text-[11px] py-1" />
+          </label>
+        </div>
+      </div>
+
       <!-- Compact Rule Simulator Toggle & Bar -->
       <div class="pt-2 border-t border-black/5">
         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -199,7 +319,7 @@ const formatPresetCondition = (key: string, fallback: string) => {
             type="button"
             class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#52525b] hover:text-[#1d1d1f] cursor-pointer"
           >
-            <span>🧪 Rule Simulator (Dry-Run against current draft rules)</span>
+            <span>🧪 Rule Simulator (Dry-Run against live compiled DB ruleset)</span>
             <span id="waf-sim-chevron" class="text-[10px]">▸</span>
           </button>
           <span id="waf-sim-result" class="hidden text-[11px] font-mono px-2 py-0.5 rounded-md border"></span>
@@ -242,68 +362,101 @@ const formatPresetCondition = (key: string, fallback: string) => {
     </div>
   )}
 
-  <!-- 2. Unified Rules Table/List (Custom Rules + Preset Rules) -->
+  <!-- 2. Unified Rules Table/List (DB Custom Rules + System Rules) -->
   <div class="space-y-2">
     <div id="waf-custom-rules-list" class="space-y-1.5">
-      {rules.map((rule) => (
-        <div
-          data-custom-rule-id={rule.id}
-          data-rule-scope="custom"
-          class:list={[
-            'waf-unified-rule-row rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity',
-            !rule.enabled && 'opacity-55',
-          ]}
-        >
-          <div class="flex items-center gap-2.5 min-w-0 flex-1">
-            <input
-              id={`waf-cr-${rule.id}`}
-              type="checkbox"
-              autocomplete="off"
-              data-rule-id={rule.id}
-              checked={rule.enabled}
-              disabled={!canManage}
-              aria-label={`Toggle custom rule ${rule.id}`}
-              class="waf-custom-rule-toggle w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0"
-            />
-            <span class="px-1.5 py-0.5 rounded-md border text-[10px] font-semibold bg-sky-50 text-sky-700 border-sky-200/80 shrink-0">
-              Custom
-            </span>
-            <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
-              <span class="font-semibold text-[#1d1d1f]">
-                {FIELD_LABEL_MAP[rule.field]}
-                {rule.headerName && (
-                  <code class="ml-1 font-mono text-[10px] bg-white border border-black/10 px-1 py-0.5 rounded text-[#52525b]">[{rule.headerName}]</code>
+      {customDbRules.map((rule) => {
+        const conds = parseRuleConditions(rule.conditions_json);
+        const rl = parseRateLimit(rule.rate_limit_json);
+        const actionCls = rule.action === 'rate_limit_429'
+          ? 'adm-badge-warn'
+          : rule.action === 'allow'
+            ? 'adm-badge-ok'
+            : rule.action === 'log_only'
+              ? 'adm-badge-info'
+              : 'adm-badge-err';
+        const actionText = rule.action === 'rate_limit_429'
+          ? `429 Throttle${rl.limit ? ` (${rl.limit} req)` : ''}`
+          : rule.action === 'allow'
+            ? 'Allow'
+            : rule.action === 'log_only'
+              ? 'Shadow Log'
+              : '403 Block';
+        return (
+          <div
+            data-custom-rule-id={rule.id}
+            data-rule-scope="custom"
+            class:list={[
+              'waf-unified-rule-row rounded-xl border border-black/8 bg-[#fafafc] px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition-opacity',
+              rule.is_enabled === 0 && 'opacity-55',
+            ]}
+          >
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <input
+                id={`waf-cr-${rule.id}`}
+                type="checkbox"
+                autocomplete="off"
+                data-rule-id={rule.id}
+                checked={rule.is_enabled !== 0}
+                disabled={!canManage}
+                aria-label={`Toggle custom rule ${rule.name}`}
+                class="waf-custom-rule-toggle w-3.5 h-3.5 accent-[#1d1d1f] rounded cursor-pointer shrink-0"
+              />
+              <span class="px-1.5 py-0.5 rounded-md border text-[10px] font-semibold bg-sky-50 text-sky-700 border-sky-200/80 shrink-0">
+                P{rule.priority}
+              </span>
+              <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
+                <span class="font-semibold text-[#1d1d1f]">{rule.name}</span>
+                {conds.map((c, idx) => (
+                  <span class="inline-flex items-center gap-1">
+                    {idx > 0 && <span class="text-[10px] font-bold text-[#86868b]">{rule.match_mode}</span>}
+                    <span class="font-medium text-[#52525b]">
+                      {FIELD_LABEL_MAP[c.field] || c.field}
+                      {c.headerName && <code class="ml-0.5 font-mono text-[10px]">[{c.headerName}]</code>}
+                    </span>
+                    <span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1 py-0.5 rounded">{String(c.op || '').replace(/_/g, ' ')}</span>
+                    <code class="font-mono text-[10px] text-[#1d1d1f] bg-white border border-black/10 px-1.5 py-0.5 rounded break-all">"{c.value}"</code>
+                  </span>
+                ))}
+                {rule.strike_weight > 0 && (
+                  <span class="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200/70 text-[10px] font-mono">
+                    +{rule.strike_weight} strike
+                  </span>
                 )}
-              </span>
-              <span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1.5 py-0.5 rounded">
-                {rule.operator.replace('_', ' ')}
-              </span>
-              <code class="font-mono text-[10px] text-[#1d1d1f] bg-white border border-black/10 px-1.5 py-0.5 rounded break-all">
-                "{rule.value}"
-              </code>
+                {rule.expires_at && (
+                  <span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200/70 text-[10px] font-mono">
+                    TTL
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class:list={['adm-badge', actionCls]}>{actionText}</span>
+              {canManage && (
+                <button
+                  type="button"
+                  data-edit-rule-id={rule.id}
+                  class="waf-rule-edit-btn px-2 py-0.5 rounded-lg text-[10px] font-semibold text-[#52525b] hover:text-[#1d1d1f] hover:bg-black/5 cursor-pointer"
+                >
+                  Edit
+                </button>
+              )}
+              {canManage && (
+                <button
+                  type="button"
+                  data-rule-id={rule.id}
+                  aria-label="Delete rule"
+                  title="Delete DB rule"
+                  class="waf-custom-rule-delete w-6 h-6 rounded-lg text-xs font-bold text-[#86868b] hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center"
+                >
+                  ×
+                </button>
+              )}
             </div>
           </div>
-
-          <div class="flex items-center gap-2 shrink-0">
-            <span class:list={['adm-badge', rule.action === 'rate_limit_429' ? 'adm-badge-warn' : 'adm-badge-err']}>
-              {rule.action === 'rate_limit_429'
-                ? `429 Throttle${rule.limit ? ` (${rule.limit} req)` : ''}`
-                : '403 Block'}
-            </span>
-            {canManage && (
-              <button
-                type="button"
-                data-rule-id={rule.id}
-                aria-label="Delete rule"
-                title="Remove rule"
-                class="waf-custom-rule-delete w-6 h-6 rounded-lg text-xs font-bold text-[#86868b] hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-center"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
 
     <div id="waf-preset-rules-list" class="space-y-1.5">
@@ -312,14 +465,18 @@ const formatPresetCondition = (key: string, fallback: string) => {
         const conditions = WAF_CONDITION_CATALOG[group.mode];
         return conditions.map((cond) => {
           const isRateMode = group.subGroup === 'rateLimit';
+          const sysId = SYS_KEY_TO_ID[cond.key];
+          const dbSys = sysId ? sysRuleMap.get(sysId) : undefined;
           const isSubChecked = isRateMode
-            ? isModeOn
-            : Boolean((ruleConfig as any)[group.subGroup]?.[cond.key]);
-          const rateVal = isRateMode ? (ruleConfig.rateLimit as any)[cond.key] : null;
+            ? (dbSys ? dbSys.is_enabled !== 0 : isModeOn)
+            : (dbSys ? dbSys.is_enabled !== 0 : Boolean((ruleConfig as any)[group.subGroup]?.[cond.key]));
+          const rlDb = dbSys ? parseRateLimit(dbSys.rate_limit_json) : {};
+          const rateVal = isRateMode ? (rlDb.limit ?? (ruleConfig.rateLimit as any)[cond.key]) : null;
           const badgeCls = cond.actionTone === 'warn' ? 'adm-badge-warn' : cond.actionTone === 'info' ? 'adm-badge-info' : 'adm-badge-err';
           return (
             <div
               data-cond-row={`${group.mode}:${cond.key}`}
+              data-sys-rule-id={sysId}
               data-rule-scope={group.mode}
               data-preset-mode={group.mode}
               class:list={[
@@ -348,6 +505,7 @@ const formatPresetCondition = (key: string, fallback: string) => {
                     autocomplete="off"
                     data-waf-group={group.subGroup}
                     data-waf-key={cond.key}
+                    data-sys-rule-id={sysId}
                     checked={isSubChecked}
                     disabled={!canManage}
                     aria-label={cond.label}
@@ -357,6 +515,9 @@ const formatPresetCondition = (key: string, fallback: string) => {
                 <span class:list={['px-1.5 py-0.5 rounded-md border text-[10px] font-semibold shrink-0', group.modeBadgeCls]}>
                   {group.modeTitle}
                 </span>
+                {dbSys && (
+                  <span class="text-[10px] font-mono text-[#86868b] shrink-0">P{dbSys.priority}</span>
+                )}
                 <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
                   <span class="font-semibold text-[#1d1d1f]">{cond.fieldExpr}</span>
                   <span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1.5 py-0.5 rounded">
@@ -386,12 +547,22 @@ const formatPresetCondition = (key: string, fallback: string) => {
                     data-rate-badge={cond.key}
                     class="adm-badge adm-badge-warn font-mono"
                   >
-                    429 &gt; {rateVal} req/{ruleConfig.rateLimit.windowSeconds}s
+                    429 &gt; {rateVal} req/{rlDb.window_s ?? ruleConfig.rateLimit.windowSeconds}s
                   </span>
                 ) : (
                   <span class:list={['adm-badge', badgeCls]}>
-                    {cond.actionLabel}
+                    {dbSys?.action === 'log_only' ? 'Shadow Log' : cond.actionLabel}
                   </span>
+                )}
+                {canManage && sysId && (
+                  <button
+                    type="button"
+                    data-edit-rule-id={sysId}
+                    class="waf-rule-edit-btn px-2 py-0.5 rounded-lg text-[10px] font-semibold text-[#52525b] hover:text-[#1d1d1f] hover:bg-black/5 cursor-pointer"
+                    title="Customize conditions, priority, action, or strike weight in DB"
+                  >
+                    Edit
+                  </button>
                 )}
               </div>
             </div>
@@ -400,4 +571,64 @@ const formatPresetCondition = (key: string, fallback: string) => {
       })}
     </div>
   </div>
+
+  <!-- Inline DB Rule Editor Modal (supports system & custom rules, ReDoS validated) -->
+  {canManage && (
+    <dialog id="waf-rule-edit-dialog" class="rounded-2xl border border-black/10 p-0 shadow-2xl max-w-2xl w-[94vw] backdrop:bg-black/35 m-auto">
+      <div class="p-4 border-b border-black/8 flex items-center justify-between">
+        <div>
+          <h3 id="waf-edit-title" class="text-sm font-bold text-[#1d1d1f]">Edit WAF Rule</h3>
+          <p id="waf-edit-subtitle" class="text-[11px] font-mono text-[#86868b]"></p>
+        </div>
+        <button id="waf-edit-close-btn" type="button" class="w-7 h-7 rounded-lg text-sm font-bold text-[#86868b] hover:bg-black/5 cursor-pointer">×</button>
+      </div>
+      <div class="p-4 space-y-3 text-xs">
+        <input id="waf-edit-id" type="hidden" />
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <label class="block space-y-1 sm:col-span-2">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Rule Name</span>
+            <input id="waf-edit-name" type="text" class="adm-input text-xs py-1.5" />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Action</span>
+            <select id="waf-edit-action" class="adm-input text-xs py-1.5">
+              {ACTION_OPTIONS.map((opt) => (
+                <option value={opt.value}>{opt.label}</option>
+              ))}
+              <option value="challenge_fingerprint">Challenge Fingerprint</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid grid-cols-3 gap-2.5">
+          <label class="block space-y-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Priority</span>
+            <input id="waf-edit-priority" type="number" min="1" max="9999" class="adm-input font-mono text-xs py-1.5" />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Match Mode</span>
+            <select id="waf-edit-match-mode" class="adm-input text-xs py-1.5">
+              <option value="ALL">ALL (AND)</option>
+              <option value="ANY">ANY (OR)</option>
+            </select>
+          </label>
+          <label class="block space-y-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Strike Weight</span>
+            <input id="waf-edit-strike" type="number" min="0" max="50" class="adm-input font-mono text-xs py-1.5" />
+          </label>
+        </div>
+        <label class="block space-y-1">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Conditions JSON (ReDoS-validated on save)</span>
+          <textarea id="waf-edit-conditions" rows="5" class="adm-input font-mono text-[11px] leading-relaxed resize-y"></textarea>
+        </label>
+        <label class="block space-y-1">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Rate Limit JSON (optional)</span>
+          <input id="waf-edit-ratelimit" type="text" class="adm-input font-mono text-[11px] py-1.5" />
+        </label>
+      </div>
+      <div class="p-3.5 border-t border-black/8 bg-[#fafafc] flex justify-end gap-2">
+        <button id="waf-edit-cancel-btn" type="button" class="adm-btn-secondary text-xs py-1.5 px-3">Cancel</button>
+        <button id="waf-edit-save-btn" type="button" class="adm-btn text-xs py-1.5 px-4">Save Rule to D1 + KV</button>
+      </div>
+    </dialog>
+  )}
 </section>

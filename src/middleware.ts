@@ -10,6 +10,8 @@ import { SecurityService } from './utils/security';
 import { logger, syncWafBlockStats } from './utils/logger';
 import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
 import { getSystemSettings } from './db/settings.repo';
+import { getWafRuntime, upsertWafIpAcl } from './db/waf.repo';
+import { runInBackground } from './utils/cache';
 import { EdgeWafService, normalizeWafRuleConfig } from './utils/waf';
 
 /**
@@ -97,7 +99,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
     };
 
     if (!EdgeWafService.isStaticAsset(pathname)) {
-      const wafSettings = await getSystemSettings(cfEnv).catch(() => null);
+      const [wafSettings, wafRuntime] = await Promise.all([
+        getSystemSettings(cfEnv).catch(() => null),
+        getWafRuntime(cfEnv).catch(() => null),
+      ]);
       if (wafSettings) {
         (context.locals as any).systemSettings = wafSettings;
       }
@@ -117,6 +122,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         }
       }
 
+      const wafRuleCfg = normalizeWafRuleConfig(wafSettings?.waf_rule_config);
       const wafResult = EdgeWafService.evaluate(
         {
           clientIp: clientMeta.ip,
@@ -127,13 +133,31 @@ export const onRequest = defineMiddleware(async (context, next) => {
           headers: request.headers,
           isAuthenticatedAdmin,
         },
-        wafSettings
+        wafSettings,
+        wafRuntime
       );
 
       if (!wafResult.allowed) {
         const blockStatus = wafResult.status || 403;
         const stats = wafResult.blockStats;
         const lastBlockedAt = new Date().toISOString();
+        if (wafResult.autoBanned && !wafResult.suppressLog && clientMeta.ip) {
+          const banPromise = upsertWafIpAcl(
+            {
+              ip_cidr: clientMeta.ip,
+              list_type: 'AUTO_BAN',
+              reason: wafResult.reason || 'Triggered Edge Auto-Ban',
+              ttlMinutes: wafRuleCfg.malicious.banDurationMinutes,
+            },
+            'edge_autoban',
+            cfEnv
+          );
+          if (runtimeCtx && typeof runtimeCtx.waitUntil === 'function') {
+            runtimeCtx.waitUntil(banPromise.catch(() => {}));
+          } else {
+            runInBackground(banPromise);
+          }
+        }
         if (!wafResult.suppressLog) {
           logger.warn(
             {
@@ -149,6 +173,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
               city: clientMeta.city,
               context: {
                 mode: wafResult.mode,
+                ruleId: wafResult.ruleId,
                 matchedSample: wafResult.matchedSample,
                 userAgent: request.headers.get('user-agent') || '',
                 autoBanned: Boolean(wafResult.autoBanned),
@@ -191,8 +216,35 @@ export const onRequest = defineMiddleware(async (context, next) => {
         );
       }
 
-      const wafRuleCfg = normalizeWafRuleConfig(wafSettings?.waf_rule_config);
-      if (!isAuthenticatedAdmin && wafRuleCfg.malicious.enableProbePaths && EdgeWafService.isBlockedProbePath(pathname)) {
+      if (wafResult.shadowMatch) {
+        logger.warn(
+          {
+            module: 'EDGE_WAF',
+            event: wafResult.shadowMatch.code,
+            message: wafResult.shadowMatch.reason,
+            path: pathname,
+            method: request.method,
+            statusCode: 200,
+            rayId,
+            clientIp: clientMeta.ip,
+            country: clientMeta.country,
+            city: clientMeta.city,
+            context: {
+              shadow: true,
+              mode: wafResult.shadowMatch.mode,
+              ruleId: wafResult.shadowMatch.ruleId,
+              matchedSample: wafResult.shadowMatch.matchedSample,
+              userAgent: request.headers.get('user-agent') || '',
+            },
+          },
+          { cfEnv, ctx: runtimeCtx }
+        );
+      }
+
+      const probeEnabled = wafRuntime
+        ? Boolean(wafRuntime.rules.find((r) => r.id === 'sys_probe_paths')?.isEnabled)
+        : wafRuleCfg.malicious.enableProbePaths;
+      if (!isAuthenticatedAdmin && probeEnabled && EdgeWafService.isBlockedProbePath(pathname)) {
         return new Response('Not Found', {
           status: 404,
           statusText: 'Not Found',

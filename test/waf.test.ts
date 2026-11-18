@@ -8,8 +8,13 @@ import {
   isValidIpRule,
   matchesIpRule,
   normalizeWafRuleConfig,
+  validateRegexSafety,
+  compileSafeRegex,
+  compileWafRuntime,
+  buildSystemWafRulesSeed,
   WAF_CONDITION_CATALOG,
 } from '../src/utils/waf.js';
+import { createTieredCache } from '../src/utils/cache.js';
 
 const BROWSER_HEADERS = new Headers({
   'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36',
@@ -619,4 +624,227 @@ test('EdgeWafService auto-bans spoofed bot UA rotation and persistent 429 flood 
   assert.equal(escalated.status, 403);
   assert.equal(escalated.code, 'WAF_MALICIOUS_IP');
   assert.equal(escalated.autoBanned, true);
+
+  // 3. Custom rule rate_limit_429 also escalates into Auto-Ban via shared buildRateLimitBlockResult
+  EdgeWafService.clearAllStrikes();
+  const customAbuseSettings = {
+    waf_active_modes: ['block_malicious_ips'] as ('block_malicious_ips')[],
+    waf_rule_config: normalizeWafRuleConfig({
+      malicious: { enableAutoBan: true, autoBanOnRateAbuse: true, strikeLimit: 3, banDurationMinutes: 20 },
+      customRules: [
+        { id: 'c_rl', enabled: true, field: 'path_matches', operator: 'starts_with', value: '/products', action: 'rate_limit_429', limit: 2 },
+      ],
+    }),
+  };
+  const crIp = '198.51.100.88';
+  for (let i = 0; i < 2; i++) {
+    assert.equal(EdgeWafService.evaluate({ clientIp: crIp, pathname: '/products', headers: BROWSER_HEADERS, now }, customAbuseSettings).allowed, true);
+  }
+  for (let ex = 1; ex < 30; ex++) {
+    assert.equal(EdgeWafService.evaluate({ clientIp: crIp, pathname: '/products', headers: BROWSER_HEADERS, now: now + ex }, customAbuseSettings).status, 429);
+  }
+  const crBan = EdgeWafService.evaluate({ clientIp: crIp, pathname: '/products', headers: BROWSER_HEADERS, now: now + 40 }, customAbuseSettings);
+  assert.equal(crBan.status, 403);
+  assert.equal(crBan.code, 'WAF_MALICIOUS_IP');
+  assert.equal(crBan.autoBanned, true);
+  // Follow-up hit stays 403 while banned
+  assert.equal(EdgeWafService.evaluate({ clientIp: crIp, pathname: '/products', headers: BROWSER_HEADERS, now: now + 50 }, customAbuseSettings).status, 403);
+});
+
+test('EdgeTieredCache provides unified L1 pre-compiled -> L2 KV -> L3 DB lifecycle', async () => {
+  const kvStore = new Map<string, string>();
+  const mockEnv = {
+    CACHE_KV: {
+      get: async (k: string) => kvStore.get(k) ?? null,
+      put: async (k: string, v: string) => {
+        kvStore.set(k, v);
+      },
+      delete: async (k: string) => {
+        kvStore.delete(k);
+      },
+    },
+  };
+
+  let dbFetchCount = 0;
+  let compileCount = 0;
+  let dbVersion = 1;
+
+  const cache = createTieredCache<{ items: string[] }, { set: Set<string>; version: number }>({
+    name: 'test_waf',
+    kvKey: 'test:waf:v1',
+    ttlMs: 5_000,
+    fallbackRaw: { items: [] },
+    compile: (raw) => {
+      compileCount += 1;
+      return { set: new Set(raw.items), version: compileCount };
+    },
+    fetchRaw: async () => {
+      dbFetchCount += 1;
+      return { data: { items: [`v${dbVersion}`, 'rule-a'] }, persistToKv: true };
+    },
+  });
+
+  // 1. Cold miss: hits L3 DB once, compiles once, populates L1 & L2 KV
+  const first = await cache.get(mockEnv);
+  assert.equal(first.set.has('v1'), true);
+  assert.equal(dbFetchCount, 1);
+  assert.equal(compileCount, 1);
+
+  // Wait briefly for runInBackground KV write
+  await new Promise((r) => setTimeout(r, 15));
+  assert.ok(kvStore.has('test:waf:v1'));
+
+  // 2. Hot L1 hit: 0 DB fetches, 0 recompilations
+  const second = await cache.get(mockEnv);
+  assert.equal(second.version, first.version);
+  assert.equal(dbFetchCount, 1);
+  assert.equal(compileCount, 1);
+
+  // 3. L1 invalidated (simulating another Isolate or TTL expiry): reads from L2 KV, compiles once, 0 DB calls!
+  cache.invalidate();
+  const fromKv = await cache.get(mockEnv);
+  assert.equal(fromKv.set.has('v1'), true);
+  assert.equal(dbFetchCount, 1);
+  assert.equal(compileCount, 2);
+
+  // 4. Explicit refresh (simulating DB mutation): reads L3 DB, compiles, updates L2 KV
+  dbVersion = 2;
+  const refreshed = await cache.refresh(mockEnv);
+  assert.equal(refreshed.set.has('v2'), true);
+  assert.equal(dbFetchCount, 2);
+  assert.equal(compileCount, 3);
+  assert.match(kvStore.get('test:waf:v1') || '', /"v2"/);
+
+  // 5. Evict clears L1 and L2 KV
+  await cache.evict(mockEnv);
+  assert.equal(cache.peek(), null);
+  assert.equal(kvStore.has('test:waf:v1'), false);
+});
+
+test('Compiled DB WAF runtime enforces ReDoS protection, composite ALL/ANY rules, priority allow, shadow log_only, strike_weight & expires_at', () => {
+  EdgeWafService.clearAllStrikes();
+  const now = 1_700_000_000_000;
+
+  // ReDoS checks
+  assert.equal(validateRegexSafety('(a+)+').valid, false);
+  assert.equal(validateRegexSafety('([a-z]+)*').valid, false);
+  assert.equal(validateRegexSafety('a'.repeat(300)).valid, false);
+  assert.equal(compileSafeRegex('(a+)+'), null);
+  assert.ok(compileSafeRegex('^/products/custom-[0-9]+$') instanceof RegExp);
+
+  const dbRules = [
+    ...buildSystemWafRulesSeed(),
+    {
+      id: 'cr_allow_vip_ip',
+      category: 'custom' as const,
+      name: 'Allow VIP Partner CIDR Early',
+      is_system: 0,
+      is_enabled: 1,
+      priority: 5,
+      conditions_json: JSON.stringify([{ field: 'ip', op: 'equals', value: '198.51.200.0/24' }]),
+      match_mode: 'ALL' as const,
+      action: 'allow' as const,
+      rate_limit_json: '{}',
+      strike_weight: 0,
+      expires_at: null,
+    },
+    {
+      id: 'cr_shadow_test',
+      category: 'custom' as const,
+      name: 'Shadow Observe /beta',
+      is_system: 0,
+      is_enabled: 1,
+      priority: 20,
+      conditions_json: JSON.stringify([{ field: 'path', op: 'starts_with', value: '/beta' }]),
+      match_mode: 'ALL' as const,
+      action: 'log_only' as const,
+      rate_limit_json: '{}',
+      strike_weight: 0,
+      expires_at: null,
+    },
+    {
+      id: 'cr_composite_and',
+      category: 'custom' as const,
+      name: 'Composite POST /api/submit-quote from XX',
+      is_system: 0,
+      is_enabled: 1,
+      priority: 40,
+      conditions_json: JSON.stringify([
+        { field: 'method', op: 'equals', value: 'POST' },
+        { field: 'path', op: 'starts_with', value: '/api/submit-quote' },
+        { field: 'country', op: 'equals', value: 'XX' },
+      ]),
+      match_mode: 'ALL' as const,
+      action: 'block_403' as const,
+      rate_limit_json: '{}',
+      strike_weight: 3, // Instant 1-hit auto-ban!
+      expires_at: null,
+    },
+    {
+      id: 'cr_expired',
+      category: 'custom' as const,
+      name: 'Expired Emergency Rule',
+      is_system: 0,
+      is_enabled: 1,
+      priority: 15,
+      conditions_json: JSON.stringify([{ field: 'path', op: 'equals', value: '/expired-test' }]),
+      match_mode: 'ALL' as const,
+      action: 'block_403' as const,
+      rate_limit_json: '{}',
+      strike_weight: 0,
+      expires_at: '2020-01-01 00:00:00',
+    },
+    {
+      id: 'cr_redos_downgrade',
+      category: 'custom' as const,
+      name: 'Downgraded Unsafe Regex Fallback',
+      is_system: 0,
+      is_enabled: 1,
+      priority: 45,
+      conditions_json: JSON.stringify([{ field: 'query', op: 'regex', value: '(a+)+' }]),
+      match_mode: 'ALL' as const,
+      action: 'block_403' as const,
+      rate_limit_json: '{}',
+      strike_weight: 0,
+      expires_at: null,
+    },
+  ];
+
+  const runtime = compileWafRuntime({
+    rules: dbRules,
+    ipAcl: [
+      { ip_cidr: '203.0.113.77', list_type: 'BLACKLIST', reason: 'Manual DB Ban', expires_at: null },
+      { ip_cidr: '203.0.113.88', list_type: 'AUTO_BAN', reason: 'Cross-Node DB Ban', expires_at: new Date(now + 60_000).toISOString().slice(0, 19).replace('T', ' ') },
+    ],
+  });
+
+  const settings = { waf_active_modes: ['block_malicious_ips'] as ('block_malicious_ips')[] };
+
+  // Pre-compiled DB BLACKLIST & timed AUTO_BAN enforce across nodes
+  assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.77', pathname: '/', headers: BROWSER_HEADERS, now }, settings, runtime).status, 403);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.88', pathname: '/', headers: BROWSER_HEADERS, now }, settings, runtime).autoBanned, true);
+  // Expired AUTO_BAN (now + 120s) is allowed
+  assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.88', pathname: '/', headers: BROWSER_HEADERS, now: now + 120_000 }, settings, runtime).allowed, true);
+
+  // Priority 5 custom allow rule bypasses .env probe check
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.200.42', pathname: '/.env', headers: BROWSER_HEADERS, now }, settings, runtime).allowed, true);
+
+  // Shadow mode allows request while attaching shadowMatch
+  const shadow = EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/beta/feature', headers: BROWSER_HEADERS, now }, settings, runtime);
+  assert.equal(shadow.allowed, true);
+  assert.equal(shadow.shadowMatch?.ruleId, 'cr_shadow_test');
+
+  // Expired rule skipped
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/expired-test', headers: BROWSER_HEADERS, now }, settings, runtime).allowed, true);
+
+  // Unsafe regex downgraded to literal substring match (no crash; only blocks literal '(a+)+' substring)
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/products', search: '?q=aaaa', headers: BROWSER_HEADERS, now }, settings, runtime).allowed, true);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '198.51.100.1', pathname: '/products', search: '?q=%28a%2B%29%2B', headers: BROWSER_HEADERS, now }, settings, runtime).status, 403);
+
+  // Composite ALL condition with strike_weight=3 auto-bans on 1st hit
+  const nonMatchCountry = EdgeWafService.evaluate({ clientIp: '198.51.100.2', pathname: '/api/submit-quote', method: 'POST', country: 'US', headers: BROWSER_HEADERS, now }, settings, runtime);
+  assert.equal(nonMatchCountry.allowed, true);
+  const strike3 = EdgeWafService.evaluate({ clientIp: '198.51.100.2', pathname: '/api/submit-quote', method: 'POST', country: 'XX', headers: BROWSER_HEADERS, now }, settings, runtime);
+  assert.equal(strike3.status, 403);
+  assert.equal(strike3.autoBanned, true);
 });

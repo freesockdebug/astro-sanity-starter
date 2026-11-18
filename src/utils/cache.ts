@@ -96,6 +96,159 @@ export function runInBackground(promise: Promise<any>) {
   promise.catch(() => {});
 }
 
+export interface TieredCacheFetchResult<TRaw> {
+  data: TRaw;
+  persistToKv?: boolean;
+}
+
+export interface TieredCacheOptions<TRaw, TCompiled = TRaw> {
+  name: string;
+  kvKey: string;
+  ttlMs?: number;
+  kvTtlSeconds?: number;
+  fallbackRaw: TRaw;
+  compile?: (raw: TRaw) => TCompiled;
+  deserializeKv?: (raw: any) => TRaw | null;
+  fetchRaw: (customEnv?: any) => Promise<TieredCacheFetchResult<TRaw> | TRaw | null>;
+}
+
+/**
+ * Reusable L1 (Isolate Memory + Pre-Compiled Object) -> L2 (Edge KV) -> L3 (DB/Upstream) Cache Library.
+ * - Compiles TRaw -> TCompiled once on L1 fill, eliminating repeated RegExp/CIDR parsing on hot paths.
+ * - Never caches cross-request Promises in module scope (Cloudflare Workers isolate safe).
+ */
+export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
+  private entry: { raw: TRaw; compiled: TCompiled; loadedAt: number } | null = null;
+  private readonly name: string;
+  private readonly kvKey: string;
+  private readonly ttlMs: number;
+  private readonly kvTtlSeconds?: number;
+  private readonly fallbackRaw: TRaw;
+  private readonly compileFn: (raw: TRaw) => TCompiled;
+  private readonly deserializeKv?: (raw: any) => TRaw | null;
+  private readonly fetchRawFn: (customEnv?: any) => Promise<TieredCacheFetchResult<TRaw> | TRaw | null>;
+
+  constructor(options: TieredCacheOptions<TRaw, TCompiled>) {
+    this.name = options.name;
+    this.kvKey = options.kvKey;
+    this.ttlMs = options.ttlMs ?? 5_000;
+    this.kvTtlSeconds = options.kvTtlSeconds;
+    this.fallbackRaw = options.fallbackRaw;
+    this.compileFn = options.compile ?? ((raw: TRaw) => raw as unknown as TCompiled);
+    this.deserializeKv = options.deserializeKv;
+    this.fetchRawFn = options.fetchRaw;
+  }
+
+  private storeL1(raw: TRaw): TCompiled {
+    const compiled = this.compileFn(raw);
+    this.entry = { raw, compiled, loadedAt: Date.now() };
+    return compiled;
+  }
+
+  public peek(): TCompiled | null {
+    return this.entry ? this.entry.compiled : null;
+  }
+
+  public peekRaw(): TRaw | null {
+    return this.entry ? this.entry.raw : null;
+  }
+
+  public invalidate(): void {
+    this.entry = null;
+  }
+
+  public async evict(customEnv?: any): Promise<void> {
+    this.entry = null;
+    await kvDelete(this.kvKey, customEnv).catch(() => {});
+  }
+
+  public async set(
+    raw: TRaw,
+    customEnv?: any,
+    options?: { syncKv?: boolean }
+  ): Promise<TCompiled> {
+    const compiled = this.storeL1(raw);
+    const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
+    if (options?.syncKv !== false) {
+      await kvPut(this.kvKey, raw, kvOpts, customEnv).catch(() => {});
+    } else {
+      runInBackground(kvPut(this.kvKey, raw, kvOpts, customEnv));
+    }
+    return compiled;
+  }
+
+  public async get(
+    customEnv?: any,
+    options?: { forceRefresh?: boolean; syncKv?: boolean }
+  ): Promise<TCompiled> {
+    const forceRefresh = Boolean(options?.forceRefresh);
+    const now = Date.now();
+
+    // L1: Isolate Memory (pre-compiled)
+    if (!forceRefresh && this.entry && now - this.entry.loadedAt < this.ttlMs) {
+      return this.entry.compiled;
+    }
+
+    // L2: Shared Cloudflare Edge KV
+    if (!forceRefresh) {
+      try {
+        const kvVal = await kvGet<any>(this.kvKey, customEnv);
+        if (kvVal !== null && kvVal !== undefined) {
+          const raw = this.deserializeKv ? this.deserializeKv(kvVal) : (kvVal as TRaw);
+          if (raw !== null && raw !== undefined) {
+            return this.storeL1(raw);
+          }
+        }
+      } catch (err) {
+        console.warn(`[TieredCache:${this.name}] L2 KV read failed:`, err);
+      }
+    }
+
+    // L3: Upstream / Database
+    try {
+      const res = await this.fetchRawFn(customEnv);
+      if (res !== null && res !== undefined) {
+        const isWrapped =
+          typeof res === 'object' &&
+          res !== null &&
+          'data' in res &&
+          'persistToKv' in res &&
+          typeof (res as any).persistToKv === 'boolean';
+        const raw = isWrapped ? (res as TieredCacheFetchResult<TRaw>).data : (res as TRaw);
+        const persistToKv = isWrapped ? (res as TieredCacheFetchResult<TRaw>).persistToKv !== false : true;
+        const compiled = this.storeL1(raw);
+
+        if (persistToKv) {
+          const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
+          if (forceRefresh || options?.syncKv) {
+            await kvPut(this.kvKey, raw, kvOpts, customEnv).catch(() => {});
+          } else {
+            runInBackground(kvPut(this.kvKey, raw, kvOpts, customEnv));
+          }
+        }
+        return compiled;
+      }
+    } catch (err) {
+      console.error(`[TieredCache:${this.name}] L3 fetch failed:`, err);
+    }
+
+    if (this.entry) {
+      return this.entry.compiled;
+    }
+    return this.storeL1(this.fallbackRaw);
+  }
+
+  public async refresh(customEnv?: any): Promise<TCompiled> {
+    return this.get(customEnv, { forceRefresh: true, syncKv: true });
+  }
+}
+
+export function createTieredCache<TRaw, TCompiled = TRaw>(
+  options: TieredCacheOptions<TRaw, TCompiled>
+): EdgeTieredCache<TRaw, TCompiled> {
+  return new EdgeTieredCache(options);
+}
+
 export interface CmsCache<T> {
   seed(val?: T | null): void;
   invalidate(): void;

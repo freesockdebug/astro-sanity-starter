@@ -12,4 +12,5 @@ export * from './settings.repo';
 export * from './rbac.repo';
 export * from './audit.repo';
 export * from './dicts.repo';
+export * from './waf.repo';
 
