@@ -97,15 +97,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
     };
 
     if (!EdgeWafService.isStaticAsset(pathname)) {
-      const [wafSettings, wafRuntime, , routeRevisions] = await Promise.all([
+      if (request.method === 'GET') {
+        const routeRevisions = await getRouteRevisions(cfEnv).catch(() => null);
+        if (routeRevisions) {
+          (context.locals as any).routeRevisions = routeRevisions;
+        }
+      }
+      const [wafSettings, wafRuntime] = await Promise.all([
         getSystemSettings(cfEnv).catch(() => null),
         getWafRuntime(cfEnv).catch(() => null),
         SiteConfigService.getConfig().catch(() => null),
-        request.method === 'GET' ? getRouteRevisions(cfEnv).catch(() => null) : Promise.resolve(null),
       ]);
-      if (routeRevisions) {
-        (context.locals as any).routeRevisions = routeRevisions;
-      }
       if (wafSettings) {
         (context.locals as any).systemSettings = wafSettings;
       }

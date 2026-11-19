@@ -171,6 +171,7 @@ const adminRolesCache = createTieredCache<AdminRole[]>({
   scope: 'rbac',
   purgeAction: 'refresh',
   kvKey: 'rbac:roles:v1',
+  epochKey: '__rbac',
   ttlMs: Infinity,
   fallbackRaw: Object.values(SYSTEM_ROLES),
   fetchRaw: () =>
@@ -194,6 +195,7 @@ const adminMembersCache = createTieredCache<AdminMemberWithRole[]>({
   scope: 'rbac',
   purgeAction: 'refresh',
   kvKey: 'rbac:members:v1',
+  epochKey: '__rbac',
   ttlMs: Infinity,
   fallbackRaw: [],
   fetchRaw: () =>

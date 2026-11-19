@@ -242,6 +242,7 @@ const productSlugsCache = createTieredCache<string[], Set<string>>({
   scope: 'products',
   purgeAction: 'refresh',
   kvKey: 'cms:product_slugs:v1',
+  epochKey: '__cms',
   ttlMs: Infinity,
   fallbackRaw: [],
   compile: (slugs) => (Array.isArray(slugs) && slugs.length > 0 ? new Set(slugs.filter(Boolean)) : new Set<string>()),

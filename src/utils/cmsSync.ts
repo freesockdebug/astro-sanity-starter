@@ -8,7 +8,7 @@ import { RfqSettingsService } from '@data/rfqSettings';
 import { SecurityService } from '@utils/security';
 import { getSystemSettings, invalidateSettingsCache } from '@db';
 import { getRuntimeEnv } from '@utils/auth';
-import { kvGet, kvPut, runInBackground, ROUTE_REVS_KV_KEY, invalidateRegisteredCachesByScope, registerEpochBumpListener } from '@utils/cache';
+import { kvGet, kvPut, runInBackground, ROUTE_REVS_KV_KEY, invalidateRegisteredCachesByScope, registerEpochBumpListener, syncActiveCacheEpochs } from '@utils/cache';
 
 export interface CmsSyncOptions {
   docType?: string;
@@ -48,6 +48,7 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
   if (kvRevs && typeof kvRevs === 'object') {
     const prevRevs = localRouteRevs;
     localRouteRevs = kvRevs;
+    syncActiveCacheEpochs(kvRevs);
 
     if (prevRevs && Object.keys(prevRevs).length > 0) {
       for (const [epochKey, scope] of EPOCH_SCOPE_MAP) {
@@ -107,6 +108,7 @@ export async function bumpRouteRevisions(basePaths: Iterable<string>, bumpGlobal
 
   localRouteRevs = updated;
   localRouteRevsLoadedAt = now;
+  syncActiveCacheEpochs(updated);
   await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
   return updated;
 }

@@ -52,6 +52,7 @@ export const dictsCache = createTieredCache<SysDictItem[], CompiledDicts>({
   scope: 'dicts',
   purgeAction: 'refresh',
   kvKey: 'sys:dicts:all',
+  epochKey: '__dicts',
   ttlMs: Infinity,
   fallbackRaw: [],
   compile: compileDicts,

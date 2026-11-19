@@ -30,6 +30,7 @@ const pageSlugsCache = createTieredCache<string[], Set<string>>({
   scope: 'pages',
   purgeAction: 'refresh',
   kvKey: 'cms:page_slugs:v1',
+  epochKey: '__cms',
   ttlMs: Infinity,
   fallbackRaw: [],
   compile: (slugs) => {

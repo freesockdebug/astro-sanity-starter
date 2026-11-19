@@ -253,6 +253,7 @@ export const settingsCache = createTieredCache<SystemSettings>({
   scope: 'settings',
   purgeAction: 'refresh',
   kvKey: KV_SETTINGS_KEY,
+  epochKey: '__settings',
   ttlMs: Infinity,
   fallbackRaw: DEFAULT_SYSTEM_SETTINGS,
   deserializeKv: (kvData) => {

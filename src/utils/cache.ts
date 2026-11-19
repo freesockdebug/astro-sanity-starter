@@ -24,13 +24,19 @@ export async function getKvNamespace(customEnv?: any): Promise<any | null> {
 /**
  * Reads and automatically parses a JSON or string entry from Cloudflare KV.
  */
-export async function kvGet<T = any>(key: string, customEnv?: any): Promise<T | null> {
+export async function kvGet<T = any>(
+  key: string,
+  customEnv?: any,
+  options?: { cacheTtl?: number }
+): Promise<T | null> {
   const profiler = getActiveProfiler();
   const t0 = profiler ? performance.now() : 0;
   try {
     const kv = await getKvNamespace(customEnv);
     if (!kv) return null;
-    const raw = await kv.get(key, 'text');
+    const raw = options?.cacheTtl && options.cacheTtl >= 60
+      ? await kv.get(key, { type: 'text', cacheTtl: Math.floor(options.cacheTtl) })
+      : await kv.get(key, 'text');
     if (raw === null || raw === undefined) return null;
     try {
       return JSON.parse(raw) as T;
@@ -178,26 +184,35 @@ export function invalidateRegisteredCachesByScope(scope: string): string[] {
   return invalidated;
 }
 
+let activeCacheEpochs: Record<string, any> = {};
 let epochBumpListener: ((epochKey: string, ts: number) => void) | null = null;
 
 export function registerEpochBumpListener(fn: (epochKey: string, ts: number) => void): void {
   epochBumpListener = fn;
 }
 
+export function syncActiveCacheEpochs(epochs: Record<string, any>): void {
+  if (epochs && typeof epochs === 'object') {
+    activeCacheEpochs = { ...epochs };
+  }
+}
+
 /**
  * Bumps a partition epoch key (e.g. '__settings', '__waf', '__dicts', '__rbac') in cms:route_revs
  * so other global Cloudflare Isolates detect the change and invalidate only that L1 partition.
  */
-export async function bumpCacheEpoch(epochKey: string, cfEnv?: any): Promise<void> {
+export async function bumpCacheEpoch(epochKey: string, cfEnv?: any, explicitTs?: number): Promise<number> {
+  const ts = explicitTs ?? Date.now();
   try {
-    const ts = Date.now();
     const current = (await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null)) || {};
     const updated = { ...current, [epochKey]: ts };
+    activeCacheEpochs[epochKey] = ts;
     if (epochBumpListener) epochBumpListener(epochKey, ts);
     await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
   } catch {
     // Non-fatal epoch bump
   }
+  return ts;
 }
 
 function calcHitRatePct(hits: number, total: number): number {
@@ -350,6 +365,7 @@ export interface TieredCacheOptions<TRaw, TCompiled = TRaw> {
   scope?: string | string[];
   purgeAction?: 'invalidate' | 'evict' | 'refresh';
   kvKey?: string;
+  epochKey?: string;
   ttlMs?: number;
   kvTtlSeconds?: number;
   fallbackRaw: TRaw;
@@ -371,6 +387,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
   private stats = { l1Hits: 0, l2Hits: 0, l3Misses: 0, writes: 0, evictions: 0 };
   private readonly name: string;
   private readonly kvKey?: string;
+  private readonly epochKey?: string;
   private readonly ttlMs: number;
   private readonly kvTtlSeconds?: number;
   private readonly fallbackRaw: TRaw;
@@ -383,6 +400,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
   constructor(options: TieredCacheOptions<TRaw, TCompiled>) {
     this.name = options.name;
     this.kvKey = options.kvKey;
+    this.epochKey = options.epochKey;
     this.ttlMs = options.ttlMs ?? 5_000;
     this.kvTtlSeconds = options.kvTtlSeconds;
     this.fallbackRaw = options.fallbackRaw;
@@ -454,20 +472,31 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     }
   }
 
+  private async persistToKv(raw: TRaw, customEnv: any, syncKv: boolean): Promise<void> {
+    if (!this.kvKey) return;
+    const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
+    const write = async () => {
+      await kvPut(this.kvKey!, raw, kvOpts, customEnv).catch(() => {});
+      if (this.epochKey) {
+        const nextEpoch = Date.now();
+        await kvPut(`${this.kvKey!}@${nextEpoch}`, raw, { expirationTtl: 86400 * 30 }, customEnv).catch(() => {});
+        await bumpCacheEpoch(this.epochKey, customEnv, nextEpoch);
+      }
+    };
+    if (syncKv) {
+      await write();
+    } else {
+      runInBackground(write());
+    }
+  }
+
   public async set(
     raw: TRaw,
     customEnv?: any,
     options?: { syncKv?: boolean }
   ): Promise<TCompiled> {
     const compiled = this.storeL1(raw);
-    if (this.kvKey) {
-      const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
-      if (options?.syncKv !== false) {
-        await kvPut(this.kvKey, raw, kvOpts, customEnv).catch(() => {});
-      } else {
-        runInBackground(kvPut(this.kvKey, raw, kvOpts, customEnv));
-      }
-    }
+    await this.persistToKv(raw, customEnv, options?.syncKv !== false);
     return compiled;
   }
 
@@ -484,10 +513,16 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
       return this.entry.compiled;
     }
 
-    // L2: Shared Cloudflare Edge KV (when kvKey is configured)
+    // L2: Shared Cloudflare Edge KV (epoch-versioned PoP cache when epochKey is set -> fallback to base kvKey)
     if (!forceRefresh && this.kvKey) {
       try {
-        const kvVal = await kvGet<any>(this.kvKey, customEnv);
+        const epoch = this.epochKey ? activeCacheEpochs[this.epochKey] : undefined;
+        let kvVal = epoch
+          ? await kvGet<any>(`${this.kvKey}@${epoch}`, customEnv, { cacheTtl: 86400 })
+          : null;
+        if (kvVal === null || kvVal === undefined) {
+          kvVal = await kvGet<any>(this.kvKey, customEnv);
+        }
         if (kvVal !== null && kvVal !== undefined) {
           const raw = this.deserializeKv ? this.deserializeKv(kvVal) : (kvVal as TRaw);
           if (raw !== null && raw !== undefined) {
@@ -518,12 +553,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
         if (valid) {
           const compiled = this.storeL1(raw);
           if (persistToKv && this.kvKey) {
-            const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
-            if (forceRefresh || options?.syncKv) {
-              await kvPut(this.kvKey, raw, kvOpts, customEnv).catch(() => {});
-            } else {
-              runInBackground(kvPut(this.kvKey, raw, kvOpts, customEnv));
-            }
+            await this.persistToKv(raw, customEnv, Boolean(forceRefresh || options?.syncKv));
           }
           return compiled;
         }
@@ -584,6 +614,7 @@ export interface CmsCacheOptions<T> {
   scope?: string | string[];
   purgeAction?: 'invalidate' | 'evict' | 'refresh';
   kvKey?: string;
+  epochKey?: string;
   ttlMs?: number;
   onUpdate?: (val: T) => void;
 }
@@ -601,6 +632,7 @@ export function createCmsCache<T>(
     scope: options?.scope,
     purgeAction: options?.purgeAction,
     kvKey: options?.kvKey,
+    epochKey: options?.epochKey ?? (options?.kvKey && (options?.ttlMs === undefined || !Number.isFinite(options.ttlMs)) ? '__cms' : undefined),
     ttlMs: options?.ttlMs ?? Infinity,
     fallbackRaw: fallback,
     onUpdate: options?.onUpdate,

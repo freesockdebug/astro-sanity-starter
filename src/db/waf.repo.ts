@@ -26,7 +26,36 @@ export const KV_WAF_RUNTIME_KEY = 'waf:compiled_ruleset:v1';
 
 async function ensureWafSeededAndMigrated(db: DbClient): Promise<void> {
   const countRow = await db.first<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM waf_rules');
-  if (Number(countRow?.cnt || 0) > 0) return;
+  if (Number(countRow?.cnt || 0) > 0) {
+    const hasLegacyRule = await db.first<{ id: string }>('SELECT id FROM waf_rules WHERE id = ?', ['sys_legacy_cms_paths']).catch(() => null);
+    if (!hasLegacyRule) {
+      const legacyRule = buildSystemWafRulesSeed().find((r) => r.id === 'sys_legacy_cms_paths');
+      if (legacyRule) {
+        await db.execute(
+          `INSERT INTO waf_rules (
+             id, category, name, is_system, is_enabled, priority,
+             conditions_json, match_mode, action, rate_limit_json,
+             strike_weight, expires_at, updated_by, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'system_migration', datetime('now'))
+           ON CONFLICT(id) DO NOTHING`,
+          [
+            legacyRule.id,
+            legacyRule.category,
+            legacyRule.name,
+            legacyRule.is_system,
+            legacyRule.is_enabled,
+            legacyRule.priority,
+            legacyRule.conditions_json,
+            legacyRule.match_mode,
+            legacyRule.action,
+            legacyRule.rate_limit_json,
+            legacyRule.strike_weight,
+          ]
+        );
+      }
+    }
+    return;
+  }
 
   // One-time smooth migration from legacy system_settings keys
   const legacyRows = await db
@@ -166,11 +195,15 @@ export const wafRuntimeCache = createTieredCache<WafRuntimeData, CompiledWafRunt
   scope: ['waf', 'settings'],
   purgeAction: 'refresh',
   kvKey: KV_WAF_RUNTIME_KEY,
+  epochKey: '__waf',
   ttlMs: Infinity,
   fallbackRaw: { rules: buildSystemWafRulesSeed(), ipAcl: [] },
   compile: (raw) => compileWafRuntime(raw),
   deserializeKv: (kvVal) => {
     if (kvVal && typeof kvVal === 'object' && Array.isArray(kvVal.rules) && Array.isArray(kvVal.ipAcl)) {
+      if (!kvVal.rules.some((r: any) => r?.id === 'sys_legacy_cms_paths')) {
+        return null;
+      }
       return kvVal as WafRuntimeData;
     }
     return null;
