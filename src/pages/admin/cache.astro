@@ -28,7 +28,7 @@ if (redirectResponse) return redirectResponse;
 const canPurge = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cache:purge'));
 const statsSnapshot = getGlobalCacheStatsSnapshot();
 const routeRevisions = await getRouteRevisions(cfEnv).catch(() => ({} as Record<string, number>));
-const revEntries = Object.entries(routeRevisions).sort(([a], [b]) => a.localeCompare(b));
+const revEntries = Object.entries(routeRevisions).filter(([, ts]) => typeof ts === 'number').sort(([a], [b]) => a.localeCompare(b));
 
 const formatTtl = (ms: number) => {
   if (ms >= 3600_000) return `${Math.round(ms / 3600_000)}h`;
@@ -346,6 +346,7 @@ const pageTitle = 'Edge & KV Cache Console';
   }
 
   function formatTtl(ms: number) {
+    if (!Number.isFinite(ms) || ms < 0) return '∞ (Epoch)';
     if (ms >= 3600_000) return `${Math.round(ms / 3600_000)}h`;
     if (ms >= 60_000) return `${Math.round(ms / 60_000)}m`;
     return `${Math.round(ms / 1000)}s`;
@@ -424,7 +425,7 @@ const pageTitle = 'Edge & KV Cache Console';
     }
 
     if (routeRevisions && typeof routeRevisions === 'object') {
-      const entries = Object.entries(routeRevisions).sort(([a], [b]) => a.localeCompare(b));
+      const entries = Object.entries(routeRevisions).filter(([, ts]) => typeof ts === 'number').sort(([a], [b]) => a.localeCompare(b));
       setText('route-revisions-count', `${entries.length} routes`);
       const revList = document.getElementById('route-revisions-list');
       if (revList) {

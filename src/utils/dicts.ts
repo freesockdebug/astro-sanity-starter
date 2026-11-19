@@ -2,7 +2,7 @@
 // Universal High-Speed Data Dictionary SDK (L1 Pre-Indexed Map -> L2 Edge KV -> L3 DB)
 
 import { listDictItems, type SysDictItem, type DictBadgeColor } from '../db/dicts.repo';
-import { createTieredCache } from './cache';
+import { bumpCacheEpoch, createTieredCache } from './cache';
 
 export type { SysDictItem, DictBadgeColor };
 
@@ -52,8 +52,7 @@ export const dictsCache = createTieredCache<SysDictItem[], CompiledDicts>({
   scope: 'dicts',
   purgeAction: 'evict',
   kvKey: 'sys:dicts:all',
-  ttlMs: 60_000,
-  kvTtlSeconds: 1800,
+  ttlMs: Infinity,
   fallbackRaw: [],
   compile: compileDicts,
   deserializeKv: (raw) => (Array.isArray(raw) && raw.length > 0 ? raw : null),
@@ -76,6 +75,7 @@ export async function invalidateDictCache(cfEnv?: any): Promise<void> {
   } catch {
     await dictsCache.evict(cfEnv);
   }
+  await bumpCacheEpoch('__dicts', cfEnv);
 }
 
 /**

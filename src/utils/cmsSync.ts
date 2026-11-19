@@ -8,8 +8,7 @@ import { RfqSettingsService } from '@data/rfqSettings';
 import { SecurityService } from '@utils/security';
 import { getSystemSettings, invalidateSettingsCache } from '@db';
 import { getRuntimeEnv } from '@utils/auth';
-import { kvGet, kvPut } from '@utils/cache';
-import { runInBackground } from '@utils/cache';
+import { kvGet, kvPut, runInBackground, ROUTE_REVS_KV_KEY, invalidateRegisteredCachesByScope } from '@utils/cache';
 
 export interface CmsSyncOptions {
   docType?: string;
@@ -23,32 +22,54 @@ export interface CmsSyncOptions {
   cardFieldsChanged?: boolean;
 }
 
-export const ROUTE_REVS_KV_KEY = 'cms:route_revs';
-let localRouteRevs: Record<string, number> | null = null;
+let localRouteRevs: Record<string, any> | null = null;
 let localRouteRevsLoadedAt = 0;
 const ROUTE_REVS_SYNC_INTERVAL_MS = 5_000;
+
+const EPOCH_SCOPE_MAP: Array<[string, string]> = [
+  ['__settings', 'settings'],
+  ['__waf', 'waf'],
+  ['__dicts', 'dicts'],
+  ['__rbac', 'rbac'],
+];
 
 export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Record<string, number>> {
   const now = Date.now();
   if (!force && localRouteRevs && now - localRouteRevsLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
     return localRouteRevs;
   }
-  const kvRevs = await kvGet<Record<string, number>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+  const kvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
   if (kvRevs && typeof kvRevs === 'object') {
-    const hasChanged = Boolean(
-      localRouteRevs &&
-      Object.keys(localRouteRevs).length > 0 &&
-      JSON.stringify(kvRevs) !== JSON.stringify(localRouteRevs)
-    );
+    const prevRevs = localRouteRevs;
     localRouteRevs = kvRevs;
-    if (hasChanged) {
-      // Cross-Isolate version drift detected: flush local L1 memory caches
-      // to ensure next SSR render reads fresh data from shared L2 KV
-      ProductService.invalidateCache();
-      PageService.invalidateCache();
-      SiteConfigService.invalidate();
-      RfqSettingsService.invalidate();
-      invalidateSettingsCache(cfEnv).catch(() => {});
+
+    if (Array.isArray(kvRevs.__page_slugs) && kvRevs.__page_slugs.length > 0) {
+      PageService.seedSlugs(kvRevs.__page_slugs);
+    }
+
+    if (prevRevs && Object.keys(prevRevs).length > 0) {
+      for (const [epochKey, scope] of EPOCH_SCOPE_MAP) {
+        if (kvRevs[epochKey] !== prevRevs[epochKey]) {
+          invalidateRegisteredCachesByScope(scope);
+        }
+      }
+
+      const epochSet = new Set(EPOCH_SCOPE_MAP.map(([k]) => k));
+      const allKeys = new Set([...Object.keys(prevRevs), ...Object.keys(kvRevs)]);
+      let cmsChanged = false;
+      for (const k of allKeys) {
+        if (epochSet.has(k)) continue;
+        if (JSON.stringify(prevRevs[k]) !== JSON.stringify(kvRevs[k])) {
+          cmsChanged = true;
+          break;
+        }
+      }
+      if (cmsChanged) {
+        ProductService.invalidateCache();
+        PageService.invalidateCache();
+        SiteConfigService.invalidate();
+        RfqSettingsService.invalidate();
+      }
     }
   } else if (!localRouteRevs) {
     localRouteRevs = {};
@@ -63,7 +84,7 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
 export async function bumpRouteRevisions(basePaths: Iterable<string>, bumpGlobalLayout = false, cfEnv?: any): Promise<Record<string, number>> {
   const current = await getRouteRevisions(cfEnv, true);
   const now = Date.now();
-  const updated = { ...current };
+  const updated: Record<string, any> = { ...current };
 
   if (bumpGlobalLayout) {
     updated['__layout'] = now;
@@ -72,6 +93,10 @@ export async function bumpRouteRevisions(basePaths: Iterable<string>, bumpGlobal
     if (!rawPath) continue;
     const clean = rawPath === '/' ? '/' : `/${rawPath.replace(/^\/+|\/+$/g, '')}`;
     updated[clean] = now;
+  }
+  const cachedPageSlugs = PageService.getCachedSlugs();
+  if (cachedPageSlugs) {
+    updated['__page_slugs'] = cachedPageSlugs;
   }
 
   localRouteRevs = updated;

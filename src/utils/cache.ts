@@ -149,15 +149,46 @@ export interface CacheRegistryEntry {
   name: string;
   scopes: string[];
   purge: (customEnv?: any) => Promise<void>;
+  invalidate?: () => void;
   getSnapshot?: () => CachePartitionSnapshot;
   resetStats?: () => void;
 }
 
 const cacheRegistry = new Map<string, CacheRegistryEntry>();
 
+export const ROUTE_REVS_KV_KEY = 'cms:route_revs';
+
 export function registerCache(entry: CacheRegistryEntry): void {
   if (entry.scopes.length > 0) {
     cacheRegistry.set(entry.name, entry);
+  }
+}
+
+/**
+ * Synchronously invalidates L1 memory caches registered under a given scope (zero KV/DB I/O).
+ */
+export function invalidateRegisteredCachesByScope(scope: string): string[] {
+  const invalidated: string[] = [];
+  for (const entry of cacheRegistry.values()) {
+    if (entry.scopes.includes(scope) && entry.invalidate) {
+      entry.invalidate();
+      invalidated.push(entry.name);
+    }
+  }
+  return invalidated;
+}
+
+/**
+ * Bumps a partition epoch key (e.g. '__settings', '__waf', '__dicts', '__rbac') in cms:route_revs
+ * so other global Cloudflare Isolates detect the change and invalidate only that L1 partition.
+ */
+export async function bumpCacheEpoch(epochKey: string, cfEnv?: any): Promise<void> {
+  try {
+    const current = (await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null)) || {};
+    const updated = { ...current, [epochKey]: Date.now() };
+    await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
+  } catch {
+    // Non-fatal epoch bump
   }
 }
 
@@ -371,7 +402,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
       scope,
       kind: 'singleton',
       kvKey: this.kvKey,
-      ttlMs: this.ttlMs,
+      ttlMs: Number.isFinite(this.ttlMs) ? this.ttlMs : -1,
       l1State: isWarm ? 'WARM' : 'COLD',
       l1Entries: this.entry ? 1 : 0,
       lastLoadedAt: this.entry?.loadedAt ?? null,
@@ -514,6 +545,7 @@ export function createTieredCache<TRaw, TCompiled = TRaw>(
     registerCache({
       name: options.name,
       scopes,
+      invalidate: () => instance.invalidate(),
       purge: async (cfEnv) => {
         if (action === 'refresh') {
           await instance.refresh(cfEnv);
@@ -561,7 +593,7 @@ export function createCmsCache<T>(
     scope: options?.scope,
     purgeAction: options?.purgeAction,
     kvKey: options?.kvKey,
-    ttlMs: options?.ttlMs ?? 300_000,
+    ttlMs: options?.ttlMs ?? Infinity,
     fallbackRaw: fallback,
     onUpdate: options?.onUpdate,
     isValidRaw: (raw, forceRefresh) =>
@@ -754,6 +786,7 @@ export function createKeyedCache<T>(
     registerCache({
       name: label,
       scopes,
+      invalidate: () => instance.invalidate(),
       purge: async () => {
         instance.invalidate();
       },
@@ -764,7 +797,7 @@ export function createKeyedCache<T>(
           scope: scopes[0],
           kind: 'keyed',
           kvKey: kvPrefix ? `${kvPrefix}:*` : undefined,
-          ttlMs,
+          ttlMs: Number.isFinite(ttlMs) ? ttlMs : -1,
           l1State: l1Map.size > 0 ? 'WARM' : 'COLD',
           l1Entries: l1Map.size,
           lastLoadedAt: stats.lastLoadedAt,
@@ -799,5 +832,10 @@ export function createCmsKeyedCache<T>(
   fetcher: (key: string, forceRefresh?: boolean) => Promise<T | null>,
   options?: KeyedCacheOptions
 ): KeyedCache<T> {
-  return createKeyedCache<T>(fetcher, { ...options, kvPrefix: keyPrefix, name: options?.name || keyPrefix });
+  return createKeyedCache<T>(fetcher, {
+    ...options,
+    ttlMs: options?.ttlMs ?? Infinity,
+    kvPrefix: keyPrefix,
+    name: options?.name || keyPrefix,
+  });
 }

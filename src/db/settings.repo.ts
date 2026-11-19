@@ -4,7 +4,7 @@
 import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
-import { createTieredCache, type TieredCacheFetchResult } from '../utils/cache';
+import { bumpCacheEpoch, createTieredCache, type TieredCacheFetchResult } from '../utils/cache';
 import {
   DEFAULT_BRAND_TITLE,
   DEFAULT_SITE_URL,
@@ -253,8 +253,7 @@ export const settingsCache = createTieredCache<SystemSettings>({
   scope: 'settings',
   purgeAction: 'evict',
   kvKey: KV_SETTINGS_KEY,
-  ttlMs: 5_000,
-  kvTtlSeconds: 86400,
+  ttlMs: Infinity,
   fallbackRaw: DEFAULT_SYSTEM_SETTINGS,
   deserializeKv: (kvData) => {
     if (kvData && typeof kvData === 'object' && kvData.brand_name) {
@@ -318,6 +317,7 @@ export async function updateSystemSettings(
     });
 
     await settingsCache.refresh(customEnv);
+    await bumpCacheEpoch('__settings', customEnv);
     return { success: true };
   } catch (err: any) {
     console.error('[SettingsRepo] Failed to update settings:', err);

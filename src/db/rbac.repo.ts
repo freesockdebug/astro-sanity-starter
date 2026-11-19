@@ -1,7 +1,7 @@
 // src/db/rbac.repo.ts
 // Repository for RBAC Roles and Admin Members Management
 import { executeWithAutoSchema } from './schema';
-import { createTieredCache } from '../utils/cache';
+import { bumpCacheEpoch, createTieredCache, runInBackground } from '../utils/cache';
 import type { DbClient } from './client';
 import { ALL_MENU_KEYS } from '../config/adminNavigation';
 
@@ -138,7 +138,7 @@ export interface ActiveTeamMemberLite {
 const activeMembersLiteCache = createTieredCache<ActiveTeamMemberLite[]>({
   name: 'rbac_active_members_lite',
   scope: 'rbac',
-  ttlMs: 60_000,
+  ttlMs: Infinity,
   fallbackRaw: [],
   fetchRaw: () =>
     executeWithAutoSchema(async (db: DbClient) => {
@@ -169,7 +169,7 @@ const activeMembersLiteCache = createTieredCache<ActiveTeamMemberLite[]>({
 const adminRolesCache = createTieredCache<AdminRole[]>({
   name: 'rbac_admin_roles',
   scope: 'rbac',
-  ttlMs: 60_000,
+  ttlMs: Infinity,
   fallbackRaw: Object.values(SYSTEM_ROLES),
   fetchRaw: () =>
     executeWithAutoSchema(async (db: DbClient) => {
@@ -190,7 +190,7 @@ const adminRolesCache = createTieredCache<AdminRole[]>({
 const adminMembersCache = createTieredCache<AdminMemberWithRole[]>({
   name: 'rbac_admin_members',
   scope: 'rbac',
-  ttlMs: 60_000,
+  ttlMs: Infinity,
   fallbackRaw: [],
   fetchRaw: () =>
     executeWithAutoSchema(async (db: DbClient) => {
@@ -255,6 +255,7 @@ export function invalidateRbacCache(): void {
   adminRolesCache.invalidate();
   adminMembersCache.invalidate();
   activeMembersLiteCache.invalidate();
+  runInBackground(bumpCacheEpoch('__rbac'));
 }
 
 /**

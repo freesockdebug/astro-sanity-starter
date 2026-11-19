@@ -30,8 +30,7 @@ const pageSlugsCache = createTieredCache<string[], Set<string>>({
   scope: 'pages',
   purgeAction: 'refresh',
   kvKey: 'cms:page_slugs:v1',
-  ttlMs: 300_000,
-  kvTtlSeconds: 86400,
+  ttlMs: Infinity,
   fallbackRaw: [],
   compile: (slugs) => {
     if (!Array.isArray(slugs) || slugs.length === 0) return new Set<string>();
@@ -92,6 +91,17 @@ export class PageService {
    */
   public static async getHomePage(forceRefresh = false, customEnv?: any): Promise<Page | null> {
     return pageBySlugCache.get('home', customEnv, forceRefresh);
+  }
+
+  public static seedSlugs(slugs: string[]): void {
+    if (Array.isArray(slugs) && slugs.length > 0) {
+      pageSlugsCache.seed(slugs);
+    }
+  }
+
+  public static getCachedSlugs(): string[] | null {
+    const raw = pageSlugsCache.peekRaw();
+    return Array.isArray(raw) && raw.length > 0 ? raw : null;
   }
 
   public static invalidateCache(): void {

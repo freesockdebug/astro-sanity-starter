@@ -3,7 +3,7 @@
 
 import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
-import { createTieredCache, type TieredCacheFetchResult } from '../utils/cache';
+import { bumpCacheEpoch, createTieredCache, type TieredCacheFetchResult } from '../utils/cache';
 import {
   buildSystemWafRulesSeed,
   compileWafRuntime,
@@ -166,8 +166,7 @@ export const wafRuntimeCache = createTieredCache<WafRuntimeData, CompiledWafRunt
   scope: ['waf', 'settings'],
   purgeAction: 'refresh',
   kvKey: KV_WAF_RUNTIME_KEY,
-  ttlMs: 5_000,
-  kvTtlSeconds: 86400,
+  ttlMs: Infinity,
   fallbackRaw: { rules: buildSystemWafRulesSeed(), ipAcl: [] },
   compile: (raw) => compileWafRuntime(raw),
   deserializeKv: (kvVal) => {
@@ -184,7 +183,9 @@ export async function getWafRuntime(customEnv?: any, forceRefresh = false): Prom
 }
 
 export async function refreshWafRuntimeCache(customEnv?: any): Promise<CompiledWafRuntime> {
-  return wafRuntimeCache.refresh(customEnv);
+  const compiled = await wafRuntimeCache.refresh(customEnv);
+  await bumpCacheEpoch('__waf', customEnv);
+  return compiled;
 }
 
 export async function listWafRules(customEnv?: any): Promise<WafDbRule[]> {
