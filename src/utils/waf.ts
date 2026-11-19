@@ -276,6 +276,15 @@ export const WAF_CONDITION_CATALOG = {
       actionTone: 'err',
     },
     {
+      key: 'enableLegacyCms404',
+      label: 'Legacy CMS & Tag 404 Fast-Path',
+      fieldExpr: 'If Path',
+      operatorExpr: 'matches regex',
+      condition: '/product-tag/*, /product-category/*, /category/*, /tag/*, /author/*, /feed/*',
+      actionLabel: '404 Fast-Path',
+      actionTone: 'warn',
+    },
+    {
       key: 'enableSqli',
       label: 'OWASP SQL Injection (SQLi)',
       fieldExpr: 'If Path + Query',

@@ -144,24 +144,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
       if (!wafResult.allowed) {
         const blockStatus = wafResult.status || 403;
-        if (blockStatus === 404) {
-          const legacy404Ttl = typeof wafSettings?.waf_legacy_404_ttl_sec === 'number'
-            ? Math.max(0, wafSettings.waf_legacy_404_ttl_sec)
-            : 3600;
-          return new Response('Not Found', {
-            status: 404,
-            statusText: 'Not Found',
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-              'Cache-Control': legacy404Ttl > 0
-                ? `public, max-age=${legacy404Ttl}, s-maxage=${legacy404Ttl}`
-                : 'no-store, no-cache, must-revalidate',
-              'X-Request-Id': rayId,
-              'X-Edge-WAF': 'FAST-404',
-              'X-Robots-Tag': 'noindex, nofollow',
-            },
-          });
-        }
         const stats = wafResult.blockStats;
         const lastBlockedAt = new Date().toISOString();
         if (wafResult.autoBanned && !wafResult.autoBanPersisted && !wafResult.suppressLog && clientMeta.ip) {
@@ -217,6 +199,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
             },
             { cfEnv, ctx: runtimeCtx }
           );
+        }
+
+        if (blockStatus === 404) {
+          const legacy404Ttl = typeof wafSettings?.waf_legacy_404_ttl_sec === 'number'
+            ? Math.max(0, wafSettings.waf_legacy_404_ttl_sec)
+            : 3600;
+          return new Response('Not Found', {
+            status: 404,
+            statusText: 'Not Found',
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Cache-Control': legacy404Ttl > 0
+                ? `public, max-age=${legacy404Ttl}, s-maxage=${legacy404Ttl}`
+                : 'no-store, no-cache, must-revalidate',
+              'X-Request-Id': rayId,
+              'X-Edge-WAF': 'FAST-404',
+              'X-Robots-Tag': 'noindex, nofollow',
+            },
+          });
         }
 
         const blockHeaders: Record<string, string> = {

@@ -238,7 +238,7 @@ test('normalizeWafRuleConfig clamps out-of-range thresholds and merges partial o
   assert.equal(normalized.bot.blockScannerTools, true);
   assert.equal(normalized.bot.blockUaRotation, true);
   assert.equal(normalized.bot.customBlockedUa, 'MyScraper');
-  assert.equal(WAF_CONDITION_CATALOG.block_malicious_ips.length, 7);
+  assert.equal(WAF_CONDITION_CATALOG.block_malicious_ips.length, 8);
   assert.equal(WAF_CONDITION_CATALOG.strict_rate_limiting.length, 3);
   assert.equal(WAF_CONDITION_CATALOG.bot_challenge.length, 7);
 });
@@ -1064,6 +1064,8 @@ test('EdgeWafService sys_legacy_cms_paths returns 404 fast-path without strikes 
     assert.equal(res.code, 'WAF_LEGACY_404');
     assert.equal(res.ruleId, 'sys_legacy_cms_paths');
     assert.equal(res.autoBanned, false);
+    assert.equal(res.blockStats?.hitCount, i + 1);
+    assert.equal(Boolean(res.suppressLog), i > 0);
   }
   // Crawler IP must NOT be auto-banned and still passes normal routes
   assert.equal(EdgeWafService.getActiveBans(now).length, 0);

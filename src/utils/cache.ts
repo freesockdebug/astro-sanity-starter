@@ -106,9 +106,9 @@ export function runInBackground(promise: Promise<any>) {
     try {
       cfWaitUntil(promise);
       return;
-    } catch {}
+    } catch { }
   }
-  promise.catch(() => {});
+  promise.catch(() => { });
 }
 
 export interface TieredCacheFetchResult<TRaw> {
@@ -203,12 +203,12 @@ export function syncActiveCacheEpochs(epochs: Record<string, any>): void {
  */
 export async function bumpCacheEpoch(epochKey: string, cfEnv?: any, explicitTs?: number): Promise<number> {
   const ts = explicitTs ?? Date.now();
+  activeCacheEpochs[epochKey] = ts;
+  if (epochBumpListener) epochBumpListener(epochKey, ts);
   try {
     const current = (await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null)) || {};
-    const updated = { ...current, [epochKey]: ts };
-    activeCacheEpochs[epochKey] = ts;
-    if (epochBumpListener) epochBumpListener(epochKey, ts);
-    await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
+    const updated = { ...current, ...activeCacheEpochs, [epochKey]: ts };
+    await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => { });
   } catch {
     // Non-fatal epoch bump
   }
@@ -344,7 +344,7 @@ export function resetGlobalCacheStats(): void {
 export async function purgeSingleCacheByName(name: string, customEnv?: any): Promise<boolean> {
   const entry = cacheRegistry.get(name);
   if (!entry) return false;
-  await entry.purge(customEnv).catch(() => {});
+  await entry.purge(customEnv).catch(() => { });
   return true;
 }
 
@@ -356,7 +356,7 @@ export async function purgeRegisteredCaches(scope: string, customEnv?: any): Pro
     (entry) => scope === 'all' || entry.scopes.includes(scope)
   );
   if (targets.length === 0) return [];
-  await Promise.all(targets.map((entry) => entry.purge(customEnv).catch(() => {})));
+  await Promise.all(targets.map((entry) => entry.purge(customEnv).catch(() => { })));
   return targets.map((t) => t.name);
 }
 
@@ -468,7 +468,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     this.entry = null;
     this.stats.evictions += 1;
     if (this.kvKey) {
-      await kvDelete(this.kvKey, customEnv).catch(() => {});
+      await kvDelete(this.kvKey, customEnv).catch(() => { });
     }
   }
 
@@ -476,10 +476,10 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     if (!this.kvKey) return;
     const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
     const write = async () => {
-      await kvPut(this.kvKey!, raw, kvOpts, customEnv).catch(() => {});
+      await kvPut(this.kvKey!, raw, kvOpts, customEnv).catch(() => { });
       if (this.epochKey) {
         const nextEpoch = Date.now();
-        await kvPut(`${this.kvKey!}@${nextEpoch}`, raw, { expirationTtl: 86400 * 30 }, customEnv).catch(() => {});
+        await kvPut(`${this.kvKey!}@${nextEpoch}`, raw, { expirationTtl: 86400 * 30 }, customEnv).catch(() => { });
         await bumpCacheEpoch(this.epochKey, customEnv, nextEpoch);
       }
     };
@@ -632,7 +632,7 @@ export function createCmsCache<T>(
     scope: options?.scope,
     purgeAction: options?.purgeAction,
     kvKey: options?.kvKey,
-    epochKey: options?.epochKey ?? (options?.kvKey && (options?.ttlMs === undefined || !Number.isFinite(options.ttlMs)) ? '__cms' : undefined),
+    epochKey: options?.epochKey ?? (options?.kvKey && (options?.ttlMs === undefined || !Number.isFinite(options.ttlMs)) ? `__cms:${options.kvKey}` : undefined),
     ttlMs: options?.ttlMs ?? Infinity,
     fallbackRaw: fallback,
     onUpdate: options?.onUpdate,
@@ -744,7 +744,7 @@ export function createKeyedCache<T>(
             stats.negativeHits += 1;
             return null;
           }
-        } catch {}
+        } catch { }
       }
     }
 
@@ -758,7 +758,7 @@ export function createKeyedCache<T>(
             setL1(rawKey, kvHit);
             return maybeClone(kvHit);
           }
-        } catch {}
+        } catch { }
       }
 
       stats.l3Misses += 1;
@@ -767,7 +767,7 @@ export function createKeyedCache<T>(
         setL1(rawKey, data);
         if (cacheKey) {
           if (forceRefresh) {
-            await kvPut(cacheKey, data, undefined, customEnv).catch(() => {});
+            await kvPut(cacheKey, data, undefined, customEnv).catch(() => { });
           } else {
             runInBackground(kvPut(cacheKey, data, undefined, customEnv));
           }
@@ -778,7 +778,7 @@ export function createKeyedCache<T>(
           setL1(rawKey, null);
         }
         if (forceRefresh && cacheKey) {
-          await kvDelete(cacheKey, customEnv).catch(() => {});
+          await kvDelete(cacheKey, customEnv).catch(() => { });
         }
         return null;
       }
@@ -798,7 +798,7 @@ export function createKeyedCache<T>(
       l1Map.delete(key);
       stats.evictions += 1;
       if (kvPrefix) {
-        await kvDelete(`${kvPrefix}:${key}`, customEnv).catch(() => {});
+        await kvDelete(`${kvPrefix}:${key}`, customEnv).catch(() => { });
       }
     },
     seed(key: string, data: T) {
