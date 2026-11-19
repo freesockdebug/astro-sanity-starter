@@ -1,6 +1,6 @@
 import { getSanityClient } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
-import { createCmsCache, createCmsKeyedCache } from '@utils/cache';
+import { createCmsCache, createCmsKeyedCache, createTieredCache } from '@utils/cache';
 import { DEFAULT_CATALOG } from './defaults';
 import { getLocalizedPath } from '@i18n';
 import type { Product } from 'types';
@@ -237,7 +237,17 @@ export interface CatalogCategoryItem {
   count: number;
 }
 
-let knownProductSlugs: Set<string> | null = null;
+const productSlugsCache = createTieredCache<string[], Set<string>>({
+  name: 'prod:slugs',
+  scope: 'products',
+  purgeAction: 'refresh',
+  kvKey: 'cms:product_slugs:v1',
+  ttlMs: 300_000,
+  kvTtlSeconds: 86400,
+  fallbackRaw: [],
+  compile: (slugs) => (Array.isArray(slugs) && slugs.length > 0 ? new Set(slugs.filter(Boolean)) : new Set<string>()),
+  fetchRaw: () => getSanityClient().fetch<string[]>(`*[_type == "product" && defined(slug.current)].slug.current`),
+});
 
 const productsCache = createCmsCache<Product[]>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`),
@@ -247,9 +257,9 @@ const productsCache = createCmsCache<Product[]>(
     scope: 'products',
     purgeAction: 'refresh',
     onUpdate: (list) => {
-      knownProductSlugs = Array.isArray(list) && list.length > 0
-        ? new Set(list.map((p) => p?.slug).filter(Boolean))
-        : null;
+      if (Array.isArray(list) && list.length > 0) {
+        productSlugsCache.seed(list.map((p) => p?.slug).filter(Boolean) as string[]);
+      }
     },
   }
 );
@@ -279,10 +289,8 @@ const productBySlugCache = createCmsKeyedCache<Product>(
     name: 'prod:details',
     scope: 'products',
     existsGuard: async (slug, customEnv) => {
-      if (!knownProductSlugs) {
-        await productsCache.get(false, customEnv);
-      }
-      return !knownProductSlugs || knownProductSlugs.size === 0 || knownProductSlugs.has(slug);
+      const slugs = await productSlugsCache.get(customEnv);
+      return slugs.size === 0 || slugs.has(slug);
     },
   }
 );
@@ -299,7 +307,8 @@ export class ProductService {
   }
 
   public static seedSlug(slug: string, product: Product): void {
-    if (knownProductSlugs && slug) knownProductSlugs.add(slug);
+    const existing = productSlugsCache.peek();
+    if (existing && slug) existing.add(slug);
     productBySlugCache.seed(slug, product);
   }
 
@@ -487,7 +496,7 @@ export class ProductService {
    * Clears in-memory cache if needed
    */
   public static invalidateCache(): void {
-    knownProductSlugs = null;
+    productSlugsCache.invalidate();
     productsCache.invalidate();
     categoriesCache.invalidate();
     catalogSettingsCache.invalidate();

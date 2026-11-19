@@ -151,6 +151,8 @@ export const POST: APIRoute = async ({ request }) => {
       login_retention_days: [7, 365, 'Login Retention Days must be an integer between 7 and 365.'],
       log_retention_days: [1, 365, 'Log Retention Days must be an integer between 1 and 365.'],
       slow_request_threshold_ms: [50, 30000, 'Slow Request Threshold must be between 50ms and 30000ms.'],
+      edge_404_cache_ttl_sec: [0, 86400, 'Edge 404 Cache TTL must be between 0 and 86400 seconds.'],
+      waf_legacy_404_ttl_sec: [0, 86400, 'WAF Legacy 404 Cache TTL must be between 0 and 86400 seconds.'],
     };
     for (const [key, [min, max, errMsg]] of Object.entries(NUMBER_RANGES)) {
       if (rawUpdates[key] !== undefined) {

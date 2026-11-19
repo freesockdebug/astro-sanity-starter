@@ -1,4 +1,5 @@
 import { waitUntil as cfWaitUntil } from 'cloudflare:workers';
+import { getActiveProfiler } from './profiler';
 
 /**
  * Resolves Cloudflare KV Namespace from runtime environment or worker context.
@@ -24,6 +25,8 @@ export async function getKvNamespace(customEnv?: any): Promise<any | null> {
  * Reads and automatically parses a JSON or string entry from Cloudflare KV.
  */
 export async function kvGet<T = any>(key: string, customEnv?: any): Promise<T | null> {
+  const profiler = getActiveProfiler();
+  const t0 = profiler ? performance.now() : 0;
   try {
     const kv = await getKvNamespace(customEnv);
     if (!kv) return null;
@@ -37,6 +40,8 @@ export async function kvGet<T = any>(key: string, customEnv?: any): Promise<T | 
   } catch (err) {
     console.warn(`[KV:Get] Non-fatal read failure for key "${key}":`, err);
     return null;
+  } finally {
+    if (profiler) profiler.addSpan('kv', performance.now() - t0);
   }
 }
 
@@ -54,6 +59,8 @@ export async function kvPut(
     return false;
   }
 
+  const profiler = getActiveProfiler();
+  const t0 = profiler ? performance.now() : 0;
   try {
     const kv = await getKvNamespace(customEnv);
     if (!kv) return false;
@@ -68,6 +75,8 @@ export async function kvPut(
   } catch (err) {
     console.warn(`[KV:Put] Non-fatal write failure for key "${key}":`, err);
     return false;
+  } finally {
+    if (profiler) profiler.addSpan('kv', performance.now() - t0);
   }
 }
 

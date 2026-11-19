@@ -49,13 +49,12 @@ if (rawSlug && (
 const formattedSlug = !rawSlug || rawSlug === '/' ? '/' : (rawSlug.startsWith('/') ? rawSlug : `/${rawSlug}`);
 const unslashed = formattedSlug.replace(/^\//, '');
 
-// Multi-tier cached resolution: fetch dynamic page concurrently with shared CMS services (L1 memory -> L2 KV -> L3 Sanity)
-const [pages] = await Promise.all([
-  PageService.getBySlug(formattedSlug),
-  SiteConfigService.getConfig(),
-  RfqSettingsService.getSettings(),
-]);
+// Resolve page first so 404s don't eagerly trigger unrelated settings fetches
+const pages = await PageService.getBySlug(formattedSlug);
 const page = pages && pages.length > 0 ? pages[0] : null;
+if (page) {
+  await Promise.all([SiteConfigService.getConfig(), RfqSettingsService.getSettings()]);
+}
 
 if (!page) {
   Astro.response.status = 404;

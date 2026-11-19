@@ -110,6 +110,8 @@ const s7Fields: SettingField[] = [
   { key: 'revalidate_secret', label: 'Revalidation Webhook Secret', type: 'password', placeholder: 'e.g. my-secret-revalidate-token', mono: true, help: 'Shared secret for Sanity Webhook or manual /api/revalidate calls.' },
   { key: 'cloudflare_zone_id', label: 'Cloudflare Zone ID', placeholder: 'e.g. 023e105f4ecef8ad9ca31a8372d0c353', mono: true, help: 'Found on Cloudflare dashboard Overview tab for your domain.' },
   { key: 'cloudflare_api_token', label: 'Cloudflare Purge API Token', type: 'password', placeholder: 'Bearer token with Cache:Purge permission', mono: true, help: 'API Token with Zone.Cache Purge permissions.' },
+  { key: 'edge_404_cache_ttl_sec', label: 'Edge 404 HTML Cache TTL (sec)', type: 'number', min: 0, max: 86400, step: 30, boxed: true, mono: true, extraClass: 'font-bold', unit: 'sec (Default: 300s)', help: 'Edge caches.default TTL for 404 pages (0 disables 404 HTML edge caching; route revisions still bypass on publish).' },
+  { key: 'waf_legacy_404_ttl_sec', label: 'WAF Legacy 404 Fast-Path TTL (sec)', type: 'number', min: 0, max: 86400, step: 60, boxed: true, mono: true, extraClass: 'font-bold', unit: 'sec (Default: 3600s)', help: 'CDN Cache-Control TTL for WAF block_404 rules (e.g. /product-tag/*, /category/*, /feed/*).' },
 ];
 
 const dictLinks = [

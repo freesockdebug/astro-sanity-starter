@@ -57,6 +57,7 @@ const OPERATOR_OPTIONS: Array<{ value: WafDynamicOperator; label: string }> = [
 
 const ACTION_OPTIONS: Array<{ value: WafDynamicAction; label: string }> = [
   { value: 'block_403', label: 'Block (403 Forbidden)' },
+  { value: 'block_404', label: '404 Fast-Path (No Strike)' },
   { value: 'rate_limit_429', label: 'Throttle (429 Rate Limit)' },
   { value: 'allow', label: 'Allow (Bypass Early)' },
   { value: 'log_only', label: 'Shadow (Log Only)' },

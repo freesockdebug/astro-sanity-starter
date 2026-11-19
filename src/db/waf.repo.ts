@@ -263,7 +263,7 @@ export async function upsertWafRule(
     ? (input.category as WafDbRule['category'])
     : 'custom';
   const matchMode = input.match_mode === 'ANY' ? 'ANY' : 'ALL';
-  const action = ['allow', 'block_403', 'rate_limit_429', 'challenge_fingerprint', 'log_only'].includes(String(input.action))
+  const action = ['allow', 'block_403', 'block_404', 'rate_limit_429', 'challenge_fingerprint', 'log_only'].includes(String(input.action))
     ? (input.action as WafDbRule['action'])
     : 'block_403';
   const priority = Math.max(1, Math.min(9999, Math.round(Number(input.priority ?? 100))));

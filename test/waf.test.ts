@@ -1043,3 +1043,32 @@ test('createKeyedCache zero-copy reads and purgeRegisteredCaches scope dispatch 
   assert.equal(forced?.id, 'fresh-published');
   assert.equal(guardedFetches, 1);
 });
+
+test('EdgeWafService sys_legacy_cms_paths returns 404 fast-path without strikes or auto-ban', () => {
+  EdgeWafService.clearAllStrikes();
+  const now = 1_700_000_000_000;
+  const settings = {
+    waf_active_modes: ['block_malicious_ips'] as ('block_malicious_ips')[],
+    waf_rule_config: normalizeWafRuleConfig({
+      malicious: { enableAutoBan: true, strikeLimit: 2, banDurationMinutes: 20 },
+    }),
+  };
+
+  for (let i = 0; i < 5; i++) {
+    const res = EdgeWafService.evaluate(
+      { clientIp: '66.249.66.77', pathname: '/product-tag/lighting/', headers: BROWSER_HEADERS, now: now + i * 1000 },
+      settings
+    );
+    assert.equal(res.allowed, false);
+    assert.equal(res.status, 404);
+    assert.equal(res.code, 'WAF_LEGACY_404');
+    assert.equal(res.ruleId, 'sys_legacy_cms_paths');
+    assert.equal(res.autoBanned, false);
+  }
+  // Crawler IP must NOT be auto-banned and still passes normal routes
+  assert.equal(EdgeWafService.getActiveBans(now).length, 0);
+  assert.equal(
+    EdgeWafService.evaluate({ clientIp: '66.249.66.77', pathname: '/products/cotton-lace', headers: BROWSER_HEADERS, now: now + 6000 }, settings).allowed,
+    true
+  );
+});

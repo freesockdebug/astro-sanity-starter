@@ -77,6 +77,8 @@ export interface SystemSettings {
   revalidate_secret: string;
   cloudflare_zone_id: string;
   cloudflare_api_token: string;
+  edge_404_cache_ttl_sec: number;
+  waf_legacy_404_ttl_sec: number;
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -115,6 +117,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   revalidate_secret: '',
   cloudflare_zone_id: '',
   cloudflare_api_token: '',
+  edge_404_cache_ttl_sec: 300,
+  waf_legacy_404_ttl_sec: 3600,
 };
 
 export const KV_SETTINGS_KEY = 'sys:settings:v1';
@@ -168,14 +172,16 @@ async function loadSystemSettingsFromDb(customEnv?: any): Promise<TieredCacheFet
   };
 
   const resolveNum = (key: keyof SystemSettings, envKey: string, fallback: number): number => {
+    const allowZero = key.endsWith('_ttl_sec');
+    const isValid = (n: number) => !isNaN(n) && (allowZero ? n >= 0 : n > 0);
     if (dbMap.has(key)) {
       const parsed = parseInt((dbMap.get(key) ?? '').trim(), 10);
-      if (!isNaN(parsed) && parsed > 0) return parsed;
+      if (isValid(parsed)) return parsed;
     }
     const valFromEnv = getRuntimeEnv(envKey, customEnv);
     if (typeof valFromEnv === 'string' && valFromEnv.trim().length > 0) {
       const parsed = parseInt(valFromEnv.trim(), 10);
-      if (!isNaN(parsed) && parsed > 0) return parsed;
+      if (isValid(parsed)) return parsed;
     }
     return fallback;
   };

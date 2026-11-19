@@ -765,7 +765,7 @@ const initialPayload = JSON.stringify({
           if (actionEl) {
             const act = sysRule.action;
             actionEl.className = `adm-badge ${
-              act === 'rate_limit_429' ? 'adm-badge-warn' : act === 'allow' ? 'adm-badge-ok' : act === 'log_only' ? 'adm-badge-info' : 'adm-badge-err'
+              act === 'rate_limit_429' || act === 'block_404' ? 'adm-badge-warn' : act === 'allow' ? 'adm-badge-ok' : act === 'log_only' ? 'adm-badge-info' : 'adm-badge-err'
             }`;
             actionEl.textContent =
               act === 'log_only'
@@ -774,9 +774,11 @@ const initialPayload = JSON.stringify({
                   ? 'Allow'
                   : act === 'rate_limit_429'
                     ? '429 Throttle'
-                    : act === 'challenge_fingerprint'
-                      ? 'Challenge'
-                      : '403 Block';
+                    : act === 'block_404'
+                      ? '404 Fast-Path'
+                      : act === 'challenge_fingerprint'
+                        ? 'Challenge'
+                        : '403 Block';
           }
         });
 
@@ -811,7 +813,7 @@ const initialPayload = JSON.stringify({
             return `<span class="inline-flex items-center gap-1">${joinBadge}<span class="font-medium text-[#52525b]">${escapeHtml(fieldLabel)}${headerChip}</span><span class="font-mono text-[10px] text-[#52525b] bg-black/5 px-1 py-0.5 rounded">${opLabel}</span><code class="font-mono text-[10px] text-[#1d1d1f] bg-white border border-black/10 px-1.5 py-0.5 rounded break-all">"${escapeHtml(c.value || '')}"</code></span>`;
           }).join('');
 
-          const actionCls = rule.action === 'rate_limit_429'
+          const actionCls = rule.action === 'rate_limit_429' || rule.action === 'block_404'
             ? 'adm-badge-warn'
             : rule.action === 'allow'
               ? 'adm-badge-ok'
@@ -820,11 +822,13 @@ const initialPayload = JSON.stringify({
                 : 'adm-badge-err';
           const actionText = rule.action === 'rate_limit_429'
             ? `429 Throttle${rl.limit ? ` (${rl.limit} req)` : ''}`
-            : rule.action === 'allow'
-              ? 'Allow'
-              : rule.action === 'log_only'
-                ? 'Shadow Log'
-                : '403 Block';
+            : rule.action === 'block_404'
+              ? '404 Fast-Path'
+              : rule.action === 'allow'
+                ? 'Allow'
+                : rule.action === 'log_only'
+                  ? 'Shadow Log'
+                  : '403 Block';
           const strikeChip = Number(rule.strike_weight || 0) > 0
             ? `<span class="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200/70 text-[10px] font-mono">+${Number(rule.strike_weight)} strike</span>`
             : '';

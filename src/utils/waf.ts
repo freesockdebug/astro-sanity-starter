@@ -7,7 +7,8 @@ export type WafBlockCode =
   | 'WAF_MALICIOUS_IP'
   | 'WAF_MALICIOUS_PAYLOAD'
   | 'WAF_STRICT_RATE_LIMIT'
-  | 'WAF_BOT_CHALLENGE';
+  | 'WAF_BOT_CHALLENGE'
+  | 'WAF_LEGACY_404';
 
 export interface WafEvaluationInput {
   clientIp?: string;
@@ -40,7 +41,7 @@ export interface WafShadowMatch {
 
 export interface WafEvaluationResult {
   allowed: boolean;
-  status?: 403 | 429;
+  status?: 403 | 404 | 429;
   code?: WafBlockCode;
   mode?: WafRuleMode;
   ruleId?: string;
@@ -78,7 +79,7 @@ export type WafDynamicOperator =
   | 'is_empty'
   | 'is_true';
 
-export type WafDynamicAction = 'allow' | 'block_403' | 'rate_limit_429' | 'challenge_fingerprint' | 'log_only';
+export type WafDynamicAction = 'allow' | 'block_403' | 'block_404' | 'rate_limit_429' | 'challenge_fingerprint' | 'log_only';
 
 export type WafRuleCategory = 'malicious' | 'rate_limit' | 'bot' | 'custom';
 
@@ -608,6 +609,7 @@ const SAFE_AUTH_PATHS = new Set([
 
 const PROBE_PATH_EXT = /\.(?:php\d*|asp|aspx|jsp|cgi|env|git|sql|bak|zip|tar|gz|sh|py|rb|pl|ini|log|ya?ml|toml|action|do|key|pem|crt)$/i;
 const PROBE_PATH_PATTERN = /(?:^|\/)(?:wp-[a-z0-9_-]+|wordpress|phpmyadmin|pma|mysql|actuator|\.(?:env|git|npmrc|htpasswd|htaccess)|vendor|cgi-bin|eval-stdin|xmlrpc|wlwmanifest|(?:credentials|secrets|service-account|serviceAccountKey|firebase-adminsdk|config)\.json)(?:\/|$|\.)/i;
+const LEGACY_CMS_PATH_PATTERN = /(?:^|\/)(?:product-tag|product-category|category|tag|author|feed)(?:\/|$)/i;
 
 type MaliciousFlagKey = 'enablePathTraversal' | 'enableXss' | 'enableSqli';
 const PAYLOAD_RULES: Array<{ flagKey: MaliciousFlagKey; label: string; regex: RegExp }> = [
@@ -1081,6 +1083,18 @@ export function buildSystemWafRulesSeed(legacyCfg?: WafRuleConfig): WafDbRule[] 
       'block_403',
       {},
       1
+    ),
+    sys(
+      'sys_legacy_cms_paths',
+      'malicious',
+      'Legacy CMS & Tag 404 Fast-Path',
+      true,
+      21,
+      [{ field: 'path', op: 'regex', value: LEGACY_CMS_PATH_PATTERN.source }],
+      'ALL',
+      'block_404',
+      {},
+      0
     ),
     sys(
       'sys_owasp_sqli',
@@ -2138,6 +2152,21 @@ export class EdgeWafService {
           reason: 'Missing browser fingerprint headers on sensitive submission.',
           matchedSample: 'missing accept-language & sec-fetch-*',
           autoBanned: strike.autoBanned,
+        };
+      }
+
+      if (rule.action === 'block_404') {
+        return {
+          allowed: false,
+          status: 404,
+          code: 'WAF_LEGACY_404',
+          mode: modeForCategory,
+          ruleId: rule.id,
+          reason: rule.isSystem
+            ? `Matched ${rule.name}.`
+            : `Matched Custom 404 Rule: ${rule.name}.`,
+          matchedSample: (sample || rawPathname).slice(0, 120),
+          autoBanned: false,
         };
       }
 

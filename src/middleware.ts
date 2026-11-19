@@ -67,8 +67,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const pathname = url.pathname;
 
-  // Preload SiteConfig in L1 memory so SanityImageService.studioEnableProxy is accurate across cold starts
-  SiteConfigService.getConfig().catch(() => {});
 
   const startTime = performance.now();
   const profiler = new RequestProfiler();
@@ -99,10 +97,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
     };
 
     if (!EdgeWafService.isStaticAsset(pathname)) {
-      const [wafSettings, wafRuntime] = await Promise.all([
+      const [wafSettings, wafRuntime, , routeRevisions] = await Promise.all([
         getSystemSettings(cfEnv).catch(() => null),
         getWafRuntime(cfEnv).catch(() => null),
+        SiteConfigService.getConfig().catch(() => null),
+        request.method === 'GET' ? getRouteRevisions(cfEnv).catch(() => null) : Promise.resolve(null),
       ]);
+      if (routeRevisions) {
+        (context.locals as any).routeRevisions = routeRevisions;
+      }
       if (wafSettings) {
         (context.locals as any).systemSettings = wafSettings;
       }
@@ -139,6 +142,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
       if (!wafResult.allowed) {
         const blockStatus = wafResult.status || 403;
+        if (blockStatus === 404) {
+          const legacy404Ttl = typeof wafSettings?.waf_legacy_404_ttl_sec === 'number'
+            ? Math.max(0, wafSettings.waf_legacy_404_ttl_sec)
+            : 3600;
+          return new Response('Not Found', {
+            status: 404,
+            statusText: 'Not Found',
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Cache-Control': legacy404Ttl > 0
+                ? `public, max-age=${legacy404Ttl}, s-maxage=${legacy404Ttl}`
+                : 'no-store, no-cache, must-revalidate',
+              'X-Request-Id': rayId,
+              'X-Edge-WAF': 'FAST-404',
+              'X-Robots-Tag': 'noindex, nofollow',
+            },
+          });
+        }
         const stats = wafResult.blockStats;
         const lastBlockedAt = new Date().toISOString();
         if (wafResult.autoBanned && !wafResult.autoBanPersisted && !wafResult.suppressLog && clientMeta.ip) {
@@ -544,7 +565,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     : null;
 
   // Resolve versioned cache key: binds page route revision to ensure instant global edge invalidation
-  const revs = await getRouteRevisions(cfEnv).catch(() => ({}));
+  const revs = (context.locals as any)?.routeRevisions ?? (await getRouteRevisions(cfEnv).catch(() => ({})));
   const pathRev = resolvePathRevision(pathname, revs, NON_DEFAULT_LOCALES);
 
   const canonicalUrl = new URL(pathname, url.origin);
@@ -634,8 +655,24 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
         }
 
         const is404 = response.status === 404;
-        const effectiveTtl = is404 ? Math.min(edgeTtl, 60) : edgeTtl;
-        const swr = is404 ? Math.min(Math.max(edgeTtl * 10, 3600), 120) : Math.max(edgeTtl * 10, 3600);
+        const sysSettings = (context.locals as any)?.systemSettings;
+        const configured404Ttl = typeof sysSettings?.edge_404_cache_ttl_sec === 'number' && sysSettings.edge_404_cache_ttl_sec >= 0
+          ? sysSettings.edge_404_cache_ttl_sec
+          : 300;
+        const effectiveTtl = is404 ? configured404Ttl : edgeTtl;
+        if (effectiveTtl === 0) {
+          recordEdgeHtmlCacheResult('BYPASS', pathname);
+          const bypassHeaders = new Headers(response.headers);
+          bypassHeaders.set('Cache-Control', 'public, max-age=0, no-cache, no-store, must-revalidate');
+          bypassHeaders.set('X-Edge-Cache', 'BYPASS');
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: bypassHeaders,
+          });
+        }
+
+        const swr = is404 ? Math.max(effectiveTtl * 2, 600) : Math.max(edgeTtl * 10, 3600);
         const cloned = response.clone();
         const edgeHeaders = new Headers(cloned.headers);
 
