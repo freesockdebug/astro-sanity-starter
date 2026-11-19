@@ -50,7 +50,7 @@ function compileDicts(items: SysDictItem[]): CompiledDicts {
 export const dictsCache = createTieredCache<SysDictItem[], CompiledDicts>({
   name: 'dicts',
   scope: 'dicts',
-  purgeAction: 'evict',
+  purgeAction: 'refresh',
   kvKey: 'sys:dicts:all',
   ttlMs: Infinity,
   fallbackRaw: [],

@@ -178,14 +178,22 @@ export function invalidateRegisteredCachesByScope(scope: string): string[] {
   return invalidated;
 }
 
+let epochBumpListener: ((epochKey: string, ts: number) => void) | null = null;
+
+export function registerEpochBumpListener(fn: (epochKey: string, ts: number) => void): void {
+  epochBumpListener = fn;
+}
+
 /**
  * Bumps a partition epoch key (e.g. '__settings', '__waf', '__dicts', '__rbac') in cms:route_revs
  * so other global Cloudflare Isolates detect the change and invalidate only that L1 partition.
  */
 export async function bumpCacheEpoch(epochKey: string, cfEnv?: any): Promise<void> {
   try {
+    const ts = Date.now();
     const current = (await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null)) || {};
-    const updated = { ...current, [epochKey]: Date.now() };
+    const updated = { ...current, [epochKey]: ts };
+    if (epochBumpListener) epochBumpListener(epochKey, ts);
     await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
   } catch {
     // Non-fatal epoch bump

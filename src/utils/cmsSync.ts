@@ -8,7 +8,7 @@ import { RfqSettingsService } from '@data/rfqSettings';
 import { SecurityService } from '@utils/security';
 import { getSystemSettings, invalidateSettingsCache } from '@db';
 import { getRuntimeEnv } from '@utils/auth';
-import { kvGet, kvPut, runInBackground, ROUTE_REVS_KV_KEY, invalidateRegisteredCachesByScope } from '@utils/cache';
+import { kvGet, kvPut, runInBackground, ROUTE_REVS_KV_KEY, invalidateRegisteredCachesByScope, registerEpochBumpListener } from '@utils/cache';
 
 export interface CmsSyncOptions {
   docType?: string;
@@ -33,6 +33,12 @@ const EPOCH_SCOPE_MAP: Array<[string, string]> = [
   ['__rbac', 'rbac'],
 ];
 
+registerEpochBumpListener((epochKey, ts) => {
+  if (localRouteRevs) {
+    localRouteRevs[epochKey] = ts;
+  }
+});
+
 export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Record<string, number>> {
   const now = Date.now();
   if (!force && localRouteRevs && now - localRouteRevsLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
@@ -43,10 +49,6 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
     const prevRevs = localRouteRevs;
     localRouteRevs = kvRevs;
 
-    if (Array.isArray(kvRevs.__page_slugs) && kvRevs.__page_slugs.length > 0) {
-      PageService.seedSlugs(kvRevs.__page_slugs);
-    }
-
     if (prevRevs && Object.keys(prevRevs).length > 0) {
       for (const [epochKey, scope] of EPOCH_SCOPE_MAP) {
         if (kvRevs[epochKey] !== prevRevs[epochKey]) {
@@ -54,7 +56,7 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
         }
       }
 
-      const epochSet = new Set(EPOCH_SCOPE_MAP.map(([k]) => k));
+      const epochSet = new Set([...EPOCH_SCOPE_MAP.map(([k]) => k), '__page_slugs']);
       const allKeys = new Set([...Object.keys(prevRevs), ...Object.keys(kvRevs)]);
       let cmsChanged = false;
       for (const k of allKeys) {
@@ -70,6 +72,10 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
         SiteConfigService.invalidate();
         RfqSettingsService.invalidate();
       }
+    }
+
+    if (Array.isArray(kvRevs.__page_slugs) && kvRevs.__page_slugs.length > 0) {
+      PageService.seedSlugs(kvRevs.__page_slugs);
     }
   } else if (!localRouteRevs) {
     localRouteRevs = {};

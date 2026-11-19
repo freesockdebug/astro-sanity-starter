@@ -1,5 +1,5 @@
 import { client, getSanityClient } from '@utils/sanity-client';
-import { createCmsCache, createCmsKeyedCache, createTieredCache } from '@utils/cache';
+import { createCmsCache, createCmsKeyedCache, createTieredCache, runInBackground } from '@utils/cache';
 import { SECTIONS } from './blocks';
 import type { Page } from 'types';
 
@@ -76,7 +76,7 @@ const allPagesCache = createCmsCache<Page[]>(
         const slugs = pages
           .map((p) => (typeof p?.slug === 'string' ? p.slug : (p?.slug as any)?.current))
           .filter(Boolean) as string[];
-        pageSlugsCache.seed(slugs);
+        runInBackground(pageSlugsCache.set(slugs, undefined, { syncKv: false }));
       }
     },
   }

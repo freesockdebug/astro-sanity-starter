@@ -169,6 +169,8 @@ const activeMembersLiteCache = createTieredCache<ActiveTeamMemberLite[]>({
 const adminRolesCache = createTieredCache<AdminRole[]>({
   name: 'rbac_admin_roles',
   scope: 'rbac',
+  purgeAction: 'refresh',
+  kvKey: 'rbac:roles:v1',
   ttlMs: Infinity,
   fallbackRaw: Object.values(SYSTEM_ROLES),
   fetchRaw: () =>
@@ -190,6 +192,8 @@ const adminRolesCache = createTieredCache<AdminRole[]>({
 const adminMembersCache = createTieredCache<AdminMemberWithRole[]>({
   name: 'rbac_admin_members',
   scope: 'rbac',
+  purgeAction: 'refresh',
+  kvKey: 'rbac:members:v1',
   ttlMs: Infinity,
   fallbackRaw: [],
   fetchRaw: () =>
@@ -255,7 +259,13 @@ export function invalidateRbacCache(): void {
   adminRolesCache.invalidate();
   adminMembersCache.invalidate();
   activeMembersLiteCache.invalidate();
-  runInBackground(bumpCacheEpoch('__rbac'));
+  runInBackground(
+    Promise.all([
+      adminRolesCache.refresh().catch(() => {}),
+      adminMembersCache.refresh().catch(() => {}),
+      activeMembersLiteCache.refresh().catch(() => {}),
+    ]).then(() => bumpCacheEpoch('__rbac'))
+  );
 }
 
 /**
@@ -292,48 +302,8 @@ export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
 export async function getAdminMember(email: string): Promise<AdminMemberWithRole | null> {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail) return null;
-
-  return executeWithAutoSchema(async (db: DbClient) => {
-    try {
-      const row = await db.first<any>(
-        `SELECT m.*, r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system
-         FROM admin_members m
-         LEFT JOIN admin_roles r ON m.role_code = r.code
-         WHERE m.email = ?`,
-        [cleanEmail]
-      );
-
-      if (!row) return null;
-
-      return {
-        email: row.email.toLowerCase(),
-        name: row.name || '',
-        role_code: row.role_code,
-        status: (row.status as 'ACTIVE' | 'DISABLED') || 'ACTIVE',
-        created_by: row.created_by || '',
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        role: row.role_name
-          ? parseRoleRow({
-              code: row.role_code,
-              name: row.role_name,
-              data_scope: row.data_scope,
-              menus_json: row.menus_json,
-              permissions_json: row.permissions_json,
-              description: row.role_desc,
-              is_system: row.is_system,
-            })
-          : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
-      };
-    } catch (e: any) {
-      const msg = (e?.message || String(e)).toLowerCase();
-      if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
-        throw e;
-      }
-      console.error('[RBAC] getAdminMember failed:', e);
-      return null;
-    }
-  });
+  const members = await listAdminMembers();
+  return members.find((m) => m.email === cleanEmail) || null;
 }
 
 export async function upsertAdminMember(data: {

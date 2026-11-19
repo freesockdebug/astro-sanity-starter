@@ -1,7 +1,7 @@
 // src/utils/rbac.ts
 // RBAC Permission Engine with Cloudflare KV In-Memory Caching & Root Env Fallback
 import { getRuntimeEnv } from './auth';
-import { kvGet, kvPut, kvDelete, registerCache } from './cache';
+import { bumpCacheEpoch, registerCache } from './cache';
 import {
   getAdminMember,
   getAdminRole,
@@ -29,7 +29,6 @@ interface L1RbacEntry {
 
 const l1RbacCache = new Map<string, L1RbacEntry>();
 const L1_RBAC_TTL_MS = Infinity; // Driven by cms:route_revs __rbac epoch & explicit invalidation
-const KV_RBAC_PREFIX = 'rbac:member:';
 
 registerCache({
   name: 'rbac:members_l1',
@@ -75,25 +74,12 @@ export async function resolveAdminContext(
     return memHit.ctx;
   }
 
-  // 3. Check KV Edge Cache (1~3ms response)
-  const cacheKey = `${KV_RBAC_PREFIX}${cleanEmail}`;
-  try {
-    const cached = await kvGet<AdminContextInfo>(cacheKey, cfEnv);
-    if (cached) {
-      if (!cached.isRootAdmin && cached.dataScope !== 'ALL' && !cached.queryScope) {
-        cached.queryScope = { email: cached.email, dataScope: cached.dataScope };
-      }
-      l1RbacCache.set(cleanEmail, { ctx: cached, expiresAt: now + L1_RBAC_TTL_MS });
-      return cached;
-    }
-  } catch {}
-
-  // 4. Query D1 admin_members table
+  // 3. Query cached adminMembersCache (L1 Infinity -> L2 permanent KV rbac:members:v1 -> L3 D1)
   let member: AdminMemberWithRole | null = null;
   try {
     member = await getAdminMember(cleanEmail);
   } catch (e) {
-    console.error('[RBAC] resolveAdminContext D1 query failed:', e);
+    console.error('[RBAC] resolveAdminContext lookup failed:', e);
   }
 
   // 5. Fallback for legacy co_admin_emails if not yet in admin_members
@@ -116,7 +102,6 @@ export async function resolveAdminContext(
         ...(managerRole.data_scope !== 'ALL' ? { queryScope: { email: cleanEmail, dataScope: managerRole.data_scope } } : {}),
       };
       l1RbacCache.set(cleanEmail, { ctx, expiresAt: now + L1_RBAC_TTL_MS });
-      await kvPut(cacheKey, ctx, undefined, cfEnv).catch(() => {});
       return ctx;
     }
   }
@@ -137,9 +122,8 @@ export async function resolveAdminContext(
     ...(role.data_scope !== 'ALL' ? { queryScope: { email: member.email, dataScope: role.data_scope } } : {}),
   };
 
-  // Cache in L1 memory and permanent KV
+  // Cache in L1 memory (L2 KV is already permanently cached via rbac:members:v1)
   l1RbacCache.set(cleanEmail, { ctx: adminCtx, expiresAt: now + L1_RBAC_TTL_MS });
-  await kvPut(cacheKey, adminCtx, undefined, cfEnv).catch(() => {});
 
   return adminCtx;
 }
@@ -148,7 +132,7 @@ export async function invalidateAdminRbacCache(email: string, cfEnv?: any): Prom
   const cleanEmail = (email || '').trim().toLowerCase();
   if (!cleanEmail) return;
   l1RbacCache.delete(cleanEmail);
-  await kvDelete(`${KV_RBAC_PREFIX}${cleanEmail}`, cfEnv).catch(() => {});
+  await bumpCacheEpoch('__rbac', cfEnv).catch(() => {});
 }
 
 export function hasPermission(adminCtx: AdminContextInfo | null | undefined, requiredPerm: string): boolean {

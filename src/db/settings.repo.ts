@@ -251,7 +251,7 @@ async function loadSystemSettingsFromDb(customEnv?: any): Promise<TieredCacheFet
 export const settingsCache = createTieredCache<SystemSettings>({
   name: 'system_settings',
   scope: 'settings',
-  purgeAction: 'evict',
+  purgeAction: 'refresh',
   kvKey: KV_SETTINGS_KEY,
   ttlMs: Infinity,
   fallbackRaw: DEFAULT_SYSTEM_SETTINGS,
@@ -265,7 +265,8 @@ export const settingsCache = createTieredCache<SystemSettings>({
 });
 
 export async function invalidateSettingsCache(customEnv?: any) {
-  await settingsCache.evict(customEnv);
+  await settingsCache.refresh(customEnv);
+  await bumpCacheEpoch('__settings', customEnv);
 }
 
 /**
