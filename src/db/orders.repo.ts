@@ -4,18 +4,28 @@
 import { getDb, generateOrderNo, generateUuid, formatUtcCutoff, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { invalidateUserStatusCache } from './users.repo';
+import { createTieredCache } from '../utils/cache';
 import type { DataScope } from './rbac.repo';
 
-let pendingOrdersCountCache: { count: number; exp: number } | null = null;
-let dashboardStatsCache: { data: any; exp: number } | null = null;
+const EMPTY_DASHBOARD_STATS: DashboardStats = {
+  totalOrders: 0,
+  orders7Days: 0,
+  pendingReview: 0,
+  overdueSla: 0,
+  statusFunnel: { pending: 0, approved: 0, shipped: 0, rejected: 0 },
+  topCountries: [],
+  topSkus: [],
+  repWorkloads: [],
+};
+
 const claimedUsersDebounce = new Map<string, number>();
 
 export function invalidatePendingOrdersCountCache(): void {
-  pendingOrdersCountCache = null;
+  pendingOrdersCountCache.invalidate();
 }
 
 export function invalidateDashboardStatsCache(): void {
-  dashboardStatsCache = null;
+  dashboardStatsCache.invalidate();
 }
 
 export function invalidateClaimedUsersCache(): void {
@@ -568,24 +578,26 @@ export async function batchUpdateOrderStatus(
   });
 }
 
+const pendingOrdersCountCache = createTieredCache<number>({
+  name: 'orders:pending_count',
+  scope: 'orders',
+  ttlMs: 30_000,
+  fallbackRaw: 0,
+  fetchRaw: () =>
+    executeWithAutoSchema(async (db: DbClient) => {
+      const row = await db.first<{ count: number }>(
+        `SELECT COUNT(*) as count FROM orders WHERE status = 'PENDING_APPROVAL'`
+      );
+      return Number(row?.count || 0);
+    }),
+});
+
 /**
  * Fast indexed lookup for count of pending orders (used for admin badges without executing full list query)
  * Cached for 30s in L1 memory.
  */
 export async function getPendingOrdersCount(): Promise<number> {
-  const now = Date.now();
-  if (pendingOrdersCountCache && pendingOrdersCountCache.exp > now) {
-    return pendingOrdersCountCache.count;
-  }
-
-  return executeWithAutoSchema(async (db: DbClient) => {
-    const row = await db.first<{ count: number }>(
-      `SELECT COUNT(*) as count FROM orders WHERE status = 'PENDING_APPROVAL'`
-    );
-    const count = Number(row?.count || 0);
-    pendingOrdersCountCache = { count, exp: Date.now() + 30_000 };
-    return count;
-  });
+  return pendingOrdersCountCache.get();
 }
 
 export interface DashboardStats {
@@ -612,136 +624,137 @@ export interface DashboardStats {
   }>;
 }
 
+const dashboardStatsCache = createTieredCache<DashboardStats>({
+  name: 'orders:dashboard_stats',
+  scope: 'orders',
+  ttlMs: 30_000,
+  fallbackRaw: EMPTY_DASHBOARD_STATS,
+  fetchRaw: () =>
+    executeWithAutoSchema(async (db: DbClient) => {
+      const slaRow = await db.first<{ meta_json: string | null }>(
+        `SELECT meta_json FROM sys_dict_items WHERE group_code = 'order_statuses' AND item_key = 'PENDING_APPROVAL' AND is_enabled = 1 LIMIT 1`
+      );
+      let slaHours = 24;
+      if (slaRow?.meta_json) {
+        try {
+          const parsed = JSON.parse(slaRow.meta_json);
+          const h = Number(parsed?.sla_hours);
+          if (Number.isFinite(h) && h > 0) slaHours = h;
+        } catch {
+          // Fallback to default 24h SLA on malformed JSON
+        }
+      }
+      const sevenDaysCutoff = formatUtcCutoff(7 * 86_400_000, db.dialect);
+      const slaCutoff = formatUtcCutoff(slaHours * 3600_000, db.dialect);
+
+      const [
+        totalsRow,
+        statusRows,
+        countryRows,
+        skuRows,
+        repRows,
+      ] = await Promise.all([
+        db.first<any>(`
+          SELECT 
+            COUNT(*) as total_orders,
+            SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as orders_7d,
+            SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as pending_review,
+            SUM(CASE WHEN status = 'PENDING_APPROVAL' AND created_at <= ? THEN 1 ELSE 0 END) as overdue_sla
+          FROM orders
+        `, [sevenDaysCutoff, slaCutoff]),
+        db.query<any>(`SELECT status, COUNT(*) as count FROM orders GROUP BY status`),
+        db.query<any>(`
+          SELECT destination_country, COUNT(*) as count 
+          FROM orders 
+          WHERE destination_country IS NOT NULL AND destination_country != '' 
+          GROUP BY destination_country 
+          ORDER BY count DESC 
+          LIMIT 5
+        `),
+        db.query<any>(`
+          SELECT title, MAX(sku) as sku, SUM(quantity) as total_qty, COUNT(id) as count
+          FROM order_items
+          WHERE title IS NOT NULL AND title != ''
+          GROUP BY title
+          ORDER BY count DESC
+          LIMIT 5
+        `),
+        db.query<any>(`
+          SELECT m.email, m.name, m.role_code,
+                 (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email) as total_orders,
+                 (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email AND o.status = 'PENDING_APPROVAL') as pending_orders,
+                 (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email AND o.status = 'SHIPPED') as shipped_orders,
+                 (SELECT COUNT(*) FROM users u WHERE u.assigned_to = m.email) as assigned_customers
+          FROM admin_members m
+          WHERE m.status = 'ACTIVE'
+          ORDER BY total_orders DESC
+          LIMIT 10
+        `),
+      ]);
+
+      const total = Number(totalsRow?.total_orders || 0);
+
+      const funnel = {
+        pending: 0,
+        approved: 0,
+        shipped: 0,
+        rejected: 0,
+      };
+
+      (statusRows || []).forEach((r) => {
+        const s = (r.status || '').toUpperCase();
+        const cnt = Number(r.count || 0);
+        if (s === 'PENDING_APPROVAL') funnel.pending = cnt;
+        else if (s === 'APPROVED') funnel.approved = cnt;
+        else if (s === 'SHIPPED') funnel.shipped = cnt;
+        else if (s === 'REJECTED') funnel.rejected = cnt;
+      });
+
+      const topCountries = (countryRows || []).map((r) => {
+        const cnt = Number(r.count || 0);
+        return {
+          country: r.destination_country || 'Unknown',
+          count: cnt,
+          percentage: total > 0 ? Math.round((cnt / total) * 100) : 0,
+        };
+      });
+
+      const topSkus = (skuRows || []).map((r) => ({
+        title: r.title,
+        slug: r.sku || '',
+        totalQty: Number(r.total_qty || 0),
+        count: Number(r.count || 0),
+      }));
+
+      const repWorkloads = (repRows || []).map((r) => ({
+        email: r.email,
+        name: r.name || r.email.split('@')[0],
+        roleCode: r.role_code,
+        totalOrders: Number(r.total_orders || 0),
+        pendingOrders: Number(r.pending_orders || 0),
+        shippedOrders: Number(r.shipped_orders || 0),
+        assignedCustomers: Number(r.assigned_customers || 0),
+      }));
+
+      return {
+        totalOrders: total,
+        orders7Days: Number(totalsRow?.orders_7d || 0),
+        pendingReview: Number(totalsRow?.pending_review || 0),
+        overdueSla: Number(totalsRow?.overdue_sla || 0),
+        statusFunnel: funnel,
+        topCountries,
+        topSkus,
+        repWorkloads,
+      };
+    }),
+});
+
 /**
  * Aggregates business overview statistics for the executive dashboard in a single roundtrip.
  * Cached for 30s in L1 memory.
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const now = Date.now();
-  if (dashboardStatsCache && dashboardStatsCache.exp > now) {
-    return dashboardStatsCache.data;
-  }
-
-  return executeWithAutoSchema(async (db: DbClient) => {
-    const slaRow = await db.first<{ meta_json: string | null }>(
-      `SELECT meta_json FROM sys_dict_items WHERE group_code = 'order_statuses' AND item_key = 'PENDING_APPROVAL' AND is_enabled = 1 LIMIT 1`
-    );
-    let slaHours = 24;
-    if (slaRow?.meta_json) {
-      try {
-        const parsed = JSON.parse(slaRow.meta_json);
-        const h = Number(parsed?.sla_hours);
-        if (Number.isFinite(h) && h > 0) slaHours = h;
-      } catch {
-        // Fallback to default 24h SLA on malformed JSON
-      }
-    }
-    const sevenDaysCutoff = formatUtcCutoff(7 * 86_400_000, db.dialect);
-    const slaCutoff = formatUtcCutoff(slaHours * 3600_000, db.dialect);
-
-    const [
-      totalsRow,
-      statusRows,
-      countryRows,
-      skuRows,
-      repRows,
-    ] = await Promise.all([
-      db.first<any>(`
-        SELECT 
-          COUNT(*) as total_orders,
-          SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as orders_7d,
-          SUM(CASE WHEN status = 'PENDING_APPROVAL' THEN 1 ELSE 0 END) as pending_review,
-          SUM(CASE WHEN status = 'PENDING_APPROVAL' AND created_at <= ? THEN 1 ELSE 0 END) as overdue_sla
-        FROM orders
-      `, [sevenDaysCutoff, slaCutoff]),
-      db.query<any>(`SELECT status, COUNT(*) as count FROM orders GROUP BY status`),
-      db.query<any>(`
-        SELECT destination_country, COUNT(*) as count 
-        FROM orders 
-        WHERE destination_country IS NOT NULL AND destination_country != '' 
-        GROUP BY destination_country 
-        ORDER BY count DESC 
-        LIMIT 5
-      `),
-      db.query<any>(`
-        SELECT title, MAX(sku) as sku, SUM(quantity) as total_qty, COUNT(id) as count
-        FROM order_items
-        WHERE title IS NOT NULL AND title != ''
-        GROUP BY title
-        ORDER BY count DESC
-        LIMIT 5
-      `),
-      db.query<any>(`
-        SELECT m.email, m.name, m.role_code,
-               (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email) as total_orders,
-               (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email AND o.status = 'PENDING_APPROVAL') as pending_orders,
-               (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email AND o.status = 'SHIPPED') as shipped_orders,
-               (SELECT COUNT(*) FROM users u WHERE u.assigned_to = m.email) as assigned_customers
-        FROM admin_members m
-        WHERE m.status = 'ACTIVE'
-        ORDER BY total_orders DESC
-        LIMIT 10
-      `),
-    ]);
-
-    const total = Number(totalsRow?.total_orders || 0);
-
-    const funnel = {
-      pending: 0,
-      approved: 0,
-      shipped: 0,
-      rejected: 0,
-    };
-
-    (statusRows || []).forEach((r) => {
-      const s = (r.status || '').toUpperCase();
-      const cnt = Number(r.count || 0);
-      if (s === 'PENDING_APPROVAL') funnel.pending = cnt;
-      else if (s === 'APPROVED') funnel.approved = cnt;
-      else if (s === 'SHIPPED') funnel.shipped = cnt;
-      else if (s === 'REJECTED') funnel.rejected = cnt;
-    });
-
-    const topCountries = (countryRows || []).map((r) => {
-      const cnt = Number(r.count || 0);
-      return {
-        country: r.destination_country || 'Unknown',
-        count: cnt,
-        percentage: total > 0 ? Math.round((cnt / total) * 100) : 0,
-      };
-    });
-
-    const topSkus = (skuRows || []).map((r) => ({
-      title: r.title,
-      slug: r.sku || '',
-      totalQty: Number(r.total_qty || 0),
-      count: Number(r.count || 0),
-    }));
-
-    const repWorkloads = (repRows || []).map((r) => ({
-      email: r.email,
-      name: r.name || r.email.split('@')[0],
-      roleCode: r.role_code,
-      totalOrders: Number(r.total_orders || 0),
-      pendingOrders: Number(r.pending_orders || 0),
-      shippedOrders: Number(r.shipped_orders || 0),
-      assignedCustomers: Number(r.assigned_customers || 0),
-    }));
-
-    const result: DashboardStats = {
-      totalOrders: total,
-      orders7Days: Number(totalsRow?.orders_7d || 0),
-      pendingReview: Number(totalsRow?.pending_review || 0),
-      overdueSla: Number(totalsRow?.overdue_sla || 0),
-      statusFunnel: funnel,
-      topCountries,
-      topSkus,
-      repWorkloads,
-    };
-
-    dashboardStatsCache = { data: result, exp: Date.now() + 30_000 };
-    return result;
-  });
+  return dashboardStatsCache.get();
 }
 
 

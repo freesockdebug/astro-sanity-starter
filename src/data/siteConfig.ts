@@ -31,6 +31,8 @@ const configCache = createCmsCache<SiteConfig | null>(
   {} as SiteConfig,
   {
     kvKey: 'cms:siteConfig',
+    scope: 'config',
+    purgeAction: 'refresh',
     onUpdate: (cfg) => SanityImageService.setStudioProxyConfig(cfg?.enableImageProxy),
   }
 );

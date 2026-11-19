@@ -15,7 +15,15 @@ import {
   mergeActiveTimedBans,
   WAF_CONDITION_CATALOG,
 } from '../src/utils/waf.js';
-import { createTieredCache } from '../src/utils/cache.js';
+import {
+  createTieredCache,
+  createKeyedCache,
+  purgeRegisteredCaches,
+  purgeSingleCacheByName,
+  recordEdgeHtmlCacheResult,
+  getGlobalCacheStatsSnapshot,
+  resetGlobalCacheStats,
+} from '../src/utils/cache.js';
 
 const BROWSER_HEADERS = new Headers({
   'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36',
@@ -937,4 +945,63 @@ test('IPv6 exact/CIDR matching, timed Ban 24h visibility, and shadow log memory 
   assert.equal(s1.shadowMatch?.hitCount, 1);
   assert.equal(s2.shadowMatch?.suppressLog, true);
   assert.equal(s2.shadowMatch?.hitCount, 2);
+});
+
+test('createKeyedCache zero-copy reads and purgeRegisteredCaches scope dispatch work cleanly', async () => {
+  let fetches = 0;
+  const obj = { id: 'p1', nested: { title: 'Silk' } };
+  const keyed = createKeyedCache<{ id: string; nested: { title: string } }>(
+    async (k) => {
+      fetches += 1;
+      return k === 'p1' ? obj : null;
+    },
+    { name: 'test_keyed_reg', scope: 'test_scope_a', ttlMs: 5_000, negativeTtlMs: 0 }
+  );
+  const first = await keyed.get('p1');
+  const second = await keyed.get('p1');
+  assert.equal(first, obj); // Zero-copy reference (no structuredClone overhead)
+  assert.equal(second, first);
+  assert.equal(fetches, 1);
+
+  const singleCache = createTieredCache<{ v: number }>({
+    name: 'test_tiered_reg',
+    scope: 'test_scope_b',
+    ttlMs: 5_000,
+    fallbackRaw: { v: 0 },
+    fetchRaw: async () => ({ v: 1 }),
+  });
+  singleCache.seed({ v: 9 });
+  assert.equal(singleCache.peek()?.v, 9);
+
+  // Purging test_scope_a clears keyed cache without clearing test_scope_b
+  const purgedA = await purgeRegisteredCaches('test_scope_a');
+  assert.ok(purgedA.includes('test_keyed_reg'));
+  assert.equal(singleCache.peek()?.v, 9);
+  await keyed.get('p1');
+  assert.equal(fetches, 2);
+
+  // Purging 'all' clears test_scope_b too
+  const purgedAll = await purgeRegisteredCaches('all');
+  assert.ok(purgedAll.includes('test_tiered_reg'));
+  assert.equal(singleCache.peek(), null);
+
+  // Telemetry snapshot, Edge HTML counters, purgeSingleCacheByName & resetGlobalCacheStats
+  resetGlobalCacheStats();
+  await singleCache.get(); // L3 miss -> WARM
+  await singleCache.get(); // L1 hit
+  recordEdgeHtmlCacheResult('HIT', '/products');
+  recordEdgeHtmlCacheResult('MISS', '/about');
+  const snap = getGlobalCacheStatsSnapshot();
+  assert.ok(snap.l1Hits >= 1);
+  assert.equal(snap.edgeHtmlHits, 1);
+  assert.equal(snap.edgeHtmlMisses, 1);
+  assert.equal(snap.edgeHtmlHitRatePct, 50);
+  const singleSnap = snap.partitions.find((p) => p.name === 'test_tiered_reg');
+  assert.equal(singleSnap?.l1State, 'WARM');
+  assert.equal(singleSnap?.l1Hits, 1);
+  assert.equal(singleSnap?.l3Misses, 1);
+  assert.equal(await purgeSingleCacheByName('test_tiered_reg'), true);
+  assert.equal(singleCache.peek(), null);
+  resetGlobalCacheStats();
+  assert.equal(getGlobalCacheStatsSnapshot().edgeHtmlHits, 0);
 });

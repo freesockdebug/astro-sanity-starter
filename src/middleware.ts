@@ -11,7 +11,7 @@ import { logger, syncWafBlockStats } from './utils/logger';
 import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
 import { getSystemSettings } from './db/settings.repo';
 import { getWafRuntime, upsertWafIpAcl } from './db/waf.repo';
-import { runInBackground } from './utils/cache';
+import { runInBackground, recordEdgeHtmlCacheResult } from './utils/cache';
 import { EdgeWafService, normalizeWafRuleConfig } from './utils/waf';
 
 /**
@@ -587,6 +587,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     try {
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
+        recordEdgeHtmlCacheResult('HIT', pathname);
         let hitResponse = new Response(cachedResponse.body, cachedResponse);
         hitResponse = safeSetHeader(hitResponse, 'X-Edge-Cache', 'HIT');
         return hitResponse;
@@ -621,6 +622,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
           : 300;
 
         if (edgeTtl === 0) {
+          recordEdgeHtmlCacheResult('BYPASS', pathname);
           const bypassHeaders = new Headers(response.headers);
           bypassHeaders.set('Cache-Control', 'public, max-age=0, no-cache, no-store, must-revalidate');
           bypassHeaders.set('X-Edge-Cache', 'BYPASS');
@@ -639,6 +641,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
         edgeHeaders.delete('Cloudflare-CDN-Cache-Control');
         edgeHeaders.delete('CDN-Cache-Control');
         edgeHeaders.set('X-Edge-Cache', 'MISS');
+        recordEdgeHtmlCacheResult('MISS', pathname);
 
         const responseToCache = new Response(cloned.body, {
           status: cloned.status,

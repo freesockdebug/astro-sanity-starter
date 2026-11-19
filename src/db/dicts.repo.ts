@@ -43,6 +43,7 @@ function parseJsonSafe<T>(jsonStr: any, fallback: T): T {
 
 const dictGroupsCache = createTieredCache<SysDictGroup[]>({
   name: 'dict_groups',
+  scope: 'dicts',
   ttlMs: 60_000,
   fallbackRaw: [],
   fetchRaw: () =>

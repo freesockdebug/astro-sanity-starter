@@ -41,7 +41,7 @@ const rfqCache = createCmsCache<RfqSettings>(
     return { ...DEFAULT_RFQ_SETTINGS };
   },
   { ...DEFAULT_RFQ_SETTINGS },
-  { kvKey: 'cms:rfqSettings' }
+  { kvKey: 'cms:rfqSettings', scope: 'config', purgeAction: 'refresh' }
 );
 
 /**

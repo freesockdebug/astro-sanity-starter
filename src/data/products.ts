@@ -240,30 +240,31 @@ export interface CatalogCategoryItem {
 const productsCache = createCmsCache<Product[]>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`),
   [],
-  { kvKey: 'cms:products:all' }
+  { kvKey: 'cms:products:all', scope: 'products', purgeAction: 'refresh' }
 );
 
 const categoriesCache = createCmsCache<any[]>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<any[]>(`*[_type == "category"] | order(order asc, _createdAt asc) ${CATEGORY_FIELDS}`),
   [],
-  { kvKey: 'cms:categories:all' }
+  { kvKey: 'cms:categories:all', scope: 'products', purgeAction: 'refresh' }
 );
 
 const catalogSettingsCache = createCmsCache<any | null>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<any>(`*[_type == "catalogSettings"][0]`),
   null,
-  { kvKey: 'cms:catalogSettings' }
+  { kvKey: 'cms:catalogSettings', scope: 'products', purgeAction: 'refresh' }
 );
 
 const storySettingsCache = createCmsCache<any | null>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<any>(`*[_type == "productStorySettings"][0]`),
   null,
-  { kvKey: 'cms:productStorySettings' }
+  { kvKey: 'cms:productStorySettings', scope: 'products', purgeAction: 'refresh' }
 );
 
 const productBySlugCache = createCmsKeyedCache<Product>(
   'cms:product',
-  (slug, forceRefresh) => getSanityClient(forceRefresh).fetch<Product | null>(`*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`, { slug })
+  (slug, forceRefresh) => getSanityClient(forceRefresh).fetch<Product | null>(`*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`, { slug }),
+  { name: 'prod:details', scope: 'products' }
 );
 
 /**

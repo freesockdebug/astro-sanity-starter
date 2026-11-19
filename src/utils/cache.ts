@@ -101,8 +101,206 @@ export interface TieredCacheFetchResult<TRaw> {
   persistToKv?: boolean;
 }
 
+export interface CachePartitionSnapshot {
+  name: string;
+  scope: string;
+  kind: 'singleton' | 'keyed' | 'edge_html';
+  kvKey?: string;
+  ttlMs: number;
+  l1State: 'WARM' | 'COLD';
+  l1Entries: number;
+  lastLoadedAt: number | null;
+  l1Hits: number;
+  l2Hits: number;
+  l3Misses: number;
+  negativeHits: number;
+  writes: number;
+  evictions: number;
+  hitRatePct: number;
+}
+
+export interface GlobalCacheStatsSnapshot {
+  generatedAt: number;
+  totalRequests: number;
+  totalHits: number;
+  overallHitRatePct: number;
+  l1Hits: number;
+  l2Hits: number;
+  l3Misses: number;
+  edgeHtmlHits: number;
+  edgeHtmlMisses: number;
+  edgeHtmlBypasses: number;
+  edgeHtmlHitRatePct: number;
+  edgeHtmlTopPaths: Array<{ pathname: string; hits: number; misses: number; hitRatePct: number }>;
+  estimatedQueriesSaved: number;
+  partitions: CachePartitionSnapshot[];
+}
+
+export interface CacheRegistryEntry {
+  name: string;
+  scopes: string[];
+  purge: (customEnv?: any) => Promise<void>;
+  getSnapshot?: () => CachePartitionSnapshot;
+  resetStats?: () => void;
+}
+
+const cacheRegistry = new Map<string, CacheRegistryEntry>();
+
+export function registerCache(entry: CacheRegistryEntry): void {
+  if (entry.scopes.length > 0) {
+    cacheRegistry.set(entry.name, entry);
+  }
+}
+
+function calcHitRatePct(hits: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round((hits / total) * 1000) / 10;
+}
+
+const edgeHtmlMetrics = {
+  hits: 0,
+  misses: 0,
+  bypasses: 0,
+  lastLoadedAt: null as number | null,
+  paths: new Map<string, { hits: number; misses: number; lastAt: number }>(),
+};
+
+/**
+ * Records Cloudflare Worker caches.default HTML edge cache Hit/Miss/Bypass in O(1) Isolate RAM.
+ */
+export function recordEdgeHtmlCacheResult(status: 'HIT' | 'MISS' | 'BYPASS', pathname: string): void {
+  const now = Date.now();
+  if (status === 'HIT') {
+    edgeHtmlMetrics.hits += 1;
+    edgeHtmlMetrics.lastLoadedAt = now;
+  } else if (status === 'MISS') {
+    edgeHtmlMetrics.misses += 1;
+    edgeHtmlMetrics.lastLoadedAt = now;
+  } else {
+    edgeHtmlMetrics.bypasses += 1;
+    return;
+  }
+
+  const cleanPath = (pathname || '/').slice(0, 120);
+  const existing = edgeHtmlMetrics.paths.get(cleanPath);
+  if (existing) {
+    if (status === 'HIT') existing.hits += 1;
+    else existing.misses += 1;
+    existing.lastAt = now;
+  } else {
+    if (edgeHtmlMetrics.paths.size >= 100) {
+      const oldest = edgeHtmlMetrics.paths.keys().next().value;
+      if (oldest !== undefined) edgeHtmlMetrics.paths.delete(oldest);
+    }
+    edgeHtmlMetrics.paths.set(cleanPath, {
+      hits: status === 'HIT' ? 1 : 0,
+      misses: status === 'MISS' ? 1 : 0,
+      lastAt: now,
+    });
+  }
+}
+
+export function getGlobalCacheStatsSnapshot(): GlobalCacheStatsSnapshot {
+  const partitions: CachePartitionSnapshot[] = [];
+  let l1Hits = 0;
+  let l2Hits = 0;
+  let l3Misses = 0;
+
+  for (const entry of cacheRegistry.values()) {
+    if (!entry.getSnapshot) continue;
+    const snap = entry.getSnapshot();
+    partitions.push(snap);
+    l1Hits += snap.l1Hits;
+    l2Hits += snap.l2Hits;
+    l3Misses += snap.l3Misses;
+  }
+
+  const edgeTotal = edgeHtmlMetrics.hits + edgeHtmlMetrics.misses;
+  const edgeRate = calcHitRatePct(edgeHtmlMetrics.hits, edgeTotal);
+  partitions.push({
+    name: 'edge:html_cache',
+    scope: 'edge_html',
+    kind: 'edge_html',
+    kvKey: 'caches.default',
+    ttlMs: 300_000,
+    l1State: edgeHtmlMetrics.hits > 0 || edgeHtmlMetrics.misses > 0 ? 'WARM' : 'COLD',
+    l1Entries: edgeHtmlMetrics.paths.size,
+    lastLoadedAt: edgeHtmlMetrics.lastLoadedAt,
+    l1Hits: 0,
+    l2Hits: edgeHtmlMetrics.hits,
+    l3Misses: edgeHtmlMetrics.misses,
+    negativeHits: 0,
+    writes: edgeHtmlMetrics.misses,
+    evictions: 0,
+    hitRatePct: edgeRate,
+  });
+
+  const edgeHtmlTopPaths = Array.from(edgeHtmlMetrics.paths.entries())
+    .map(([pathname, s]) => ({
+      pathname,
+      hits: s.hits,
+      misses: s.misses,
+      hitRatePct: calcHitRatePct(s.hits, s.hits + s.misses),
+    }))
+    .sort((a, b) => b.hits + b.misses - (a.hits + a.misses))
+    .slice(0, 10);
+
+  const totalHits = l1Hits + l2Hits + edgeHtmlMetrics.hits;
+  const totalMisses = l3Misses + edgeHtmlMetrics.misses;
+  const totalRequests = totalHits + totalMisses;
+
+  return {
+    generatedAt: Date.now(),
+    totalRequests,
+    totalHits,
+    overallHitRatePct: calcHitRatePct(totalHits, totalRequests),
+    l1Hits,
+    l2Hits,
+    l3Misses,
+    edgeHtmlHits: edgeHtmlMetrics.hits,
+    edgeHtmlMisses: edgeHtmlMetrics.misses,
+    edgeHtmlBypasses: edgeHtmlMetrics.bypasses,
+    edgeHtmlHitRatePct: edgeRate,
+    edgeHtmlTopPaths,
+    estimatedQueriesSaved: l1Hits + l2Hits + edgeHtmlMetrics.hits,
+    partitions,
+  };
+}
+
+export function resetGlobalCacheStats(): void {
+  for (const entry of cacheRegistry.values()) {
+    entry.resetStats?.();
+  }
+  edgeHtmlMetrics.hits = 0;
+  edgeHtmlMetrics.misses = 0;
+  edgeHtmlMetrics.bypasses = 0;
+  edgeHtmlMetrics.lastLoadedAt = null;
+  edgeHtmlMetrics.paths.clear();
+}
+
+export async function purgeSingleCacheByName(name: string, customEnv?: any): Promise<boolean> {
+  const entry = cacheRegistry.get(name);
+  if (!entry) return false;
+  await entry.purge(customEnv).catch(() => {});
+  return true;
+}
+
+/**
+ * Purges/refreshes all caches registered under the requested scope (or 'all').
+ */
+export async function purgeRegisteredCaches(scope: string, customEnv?: any): Promise<string[]> {
+  const targets = Array.from(cacheRegistry.values()).filter(
+    (entry) => scope === 'all' || entry.scopes.includes(scope)
+  );
+  if (targets.length === 0) return [];
+  await Promise.all(targets.map((entry) => entry.purge(customEnv).catch(() => {})));
+  return targets.map((t) => t.name);
+}
+
 export interface TieredCacheOptions<TRaw, TCompiled = TRaw> {
   name: string;
+  scope?: string | string[];
+  purgeAction?: 'invalidate' | 'evict' | 'refresh';
   kvKey?: string;
   ttlMs?: number;
   kvTtlSeconds?: number;
@@ -122,6 +320,7 @@ export interface TieredCacheOptions<TRaw, TCompiled = TRaw> {
  */
 export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
   private entry: { raw: TRaw; compiled: TCompiled; loadedAt: number } | null = null;
+  private stats = { l1Hits: 0, l2Hits: 0, l3Misses: 0, writes: 0, evictions: 0 };
   private readonly name: string;
   private readonly kvKey?: string;
   private readonly ttlMs: number;
@@ -149,8 +348,36 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
   private storeL1(raw: TRaw): TCompiled {
     const compiled = this.compileFn(raw);
     this.entry = { raw, compiled, loadedAt: Date.now() };
+    this.stats.writes += 1;
     if (this.onUpdateFn) this.onUpdateFn(compiled);
     return compiled;
+  }
+
+  public getMetricsSnapshot(scope: string): CachePartitionSnapshot {
+    const now = Date.now();
+    const isWarm = Boolean(this.entry && now - this.entry.loadedAt < this.ttlMs);
+    const total = this.stats.l1Hits + this.stats.l2Hits + this.stats.l3Misses;
+    return {
+      name: this.name,
+      scope,
+      kind: 'singleton',
+      kvKey: this.kvKey,
+      ttlMs: this.ttlMs,
+      l1State: isWarm ? 'WARM' : 'COLD',
+      l1Entries: this.entry ? 1 : 0,
+      lastLoadedAt: this.entry?.loadedAt ?? null,
+      l1Hits: this.stats.l1Hits,
+      l2Hits: this.stats.l2Hits,
+      l3Misses: this.stats.l3Misses,
+      negativeHits: 0,
+      writes: this.stats.writes,
+      evictions: this.stats.evictions,
+      hitRatePct: calcHitRatePct(this.stats.l1Hits + this.stats.l2Hits, total),
+    };
+  }
+
+  public resetStats(): void {
+    this.stats = { l1Hits: 0, l2Hits: 0, l3Misses: 0, writes: 0, evictions: 0 };
   }
 
   public seed(val?: TRaw | null): void {
@@ -168,10 +395,12 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
 
   public invalidate(): void {
     this.entry = null;
+    this.stats.evictions += 1;
   }
 
   public async evict(customEnv?: any): Promise<void> {
     this.entry = null;
+    this.stats.evictions += 1;
     if (this.kvKey) {
       await kvDelete(this.kvKey, customEnv).catch(() => {});
     }
@@ -203,6 +432,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
 
     // L1: Isolate Memory (pre-compiled)
     if (!forceRefresh && this.entry && now - this.entry.loadedAt < this.ttlMs) {
+      this.stats.l1Hits += 1;
       return this.entry.compiled;
     }
 
@@ -213,6 +443,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
         if (kvVal !== null && kvVal !== undefined) {
           const raw = this.deserializeKv ? this.deserializeKv(kvVal) : (kvVal as TRaw);
           if (raw !== null && raw !== undefined) {
+            this.stats.l2Hits += 1;
             return this.storeL1(raw);
           }
         }
@@ -222,6 +453,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     }
 
     // L3: Upstream / Database
+    this.stats.l3Misses += 1;
     try {
       const res = await this.fetchRawFn(customEnv, forceRefresh);
       if (res !== null && res !== undefined) {
@@ -266,7 +498,27 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
 export function createTieredCache<TRaw, TCompiled = TRaw>(
   options: TieredCacheOptions<TRaw, TCompiled>
 ): EdgeTieredCache<TRaw, TCompiled> {
-  return new EdgeTieredCache(options);
+  const instance = new EdgeTieredCache(options);
+  if (options.scope) {
+    const scopes = Array.isArray(options.scope) ? options.scope : [options.scope];
+    const action = options.purgeAction ?? 'invalidate';
+    registerCache({
+      name: options.name,
+      scopes,
+      purge: async (cfEnv) => {
+        if (action === 'refresh') {
+          await instance.refresh(cfEnv);
+        } else if (action === 'evict') {
+          await instance.evict(cfEnv);
+        } else {
+          instance.invalidate();
+        }
+      },
+      getSnapshot: () => instance.getMetricsSnapshot(scopes[0]),
+      resetStats: () => instance.resetStats(),
+    });
+  }
+  return instance;
 }
 
 export interface CmsCache<T> {
@@ -279,6 +531,9 @@ export interface CmsCache<T> {
 }
 
 export interface CmsCacheOptions<T> {
+  name?: string;
+  scope?: string | string[];
+  purgeAction?: 'invalidate' | 'evict' | 'refresh';
   kvKey?: string;
   ttlMs?: number;
   onUpdate?: (val: T) => void;
@@ -293,7 +548,9 @@ export function createCmsCache<T>(
   options?: CmsCacheOptions<T>
 ): CmsCache<T> {
   const tiered = createTieredCache<T>({
-    name: options?.kvKey || 'cms_cache',
+    name: options?.name || options?.kvKey || 'cms_cache',
+    scope: options?.scope,
+    purgeAction: options?.purgeAction,
     kvKey: options?.kvKey,
     ttlMs: options?.ttlMs ?? 300_000,
     fallbackRaw: fallback,
@@ -313,36 +570,62 @@ export function createCmsCache<T>(
   };
 }
 
-export interface CmsKeyedCache<T> {
+export interface KeyedCache<T> {
   get(key: string, customEnv?: any, forceRefresh?: boolean): Promise<T | null>;
   refresh(key: string, customEnv?: any): Promise<T | null>;
   evict(key: string, customEnv?: any): Promise<void>;
   seed(key: string, data: T): void;
+  deleteL1(key: string): void;
+  invalidateWhere(predicate: (key: string, data: T | null) => boolean): void;
   invalidate(): void;
 }
 
-export interface CmsKeyedCacheOptions {
+export type CmsKeyedCache<T> = KeyedCache<T>;
+
+export interface KeyedCacheOptions {
+  name?: string;
+  scope?: string | string[];
+  kvPrefix?: string;
   ttlMs?: number;
   negativeTtlMs?: number;
   maxL1Entries?: number;
+  cloneOnRead?: boolean;
 }
 
+export type CmsKeyedCacheOptions = KeyedCacheOptions;
+
 /**
- * Keyed multi-tier CMS cache with Single-Flight deduplication & 404 negative L1 caching
- * Replaces bespoke slug caches across products and pages.
+ * Reusable Keyed L1 Map -> Optional L2 KV Cache Library with bounded capacity & optional negative caching.
+ * Zero-copy on read by default (set cloneOnRead: true only if callers mutate returned objects).
  */
-export function createCmsKeyedCache<T>(
-  keyPrefix: string,
+export function createKeyedCache<T>(
   fetcher: (key: string, forceRefresh?: boolean) => Promise<T | null>,
-  options?: CmsKeyedCacheOptions
-): CmsKeyedCache<T> {
+  options?: KeyedCacheOptions
+): KeyedCache<T> {
+  const kvPrefix = options?.kvPrefix;
+  const label = options?.name || kvPrefix || 'keyed_cache';
   const ttlMs = options?.ttlMs ?? 300_000;
   const negativeTtlMs = options?.negativeTtlMs ?? 30_000;
   const maxEntries = options?.maxL1Entries ?? 500;
+  const cloneOnRead = Boolean(options?.cloneOnRead);
   const l1Map = new Map<string, { data: T | null; timestamp: number }>();
+  const stats = {
+    l1Hits: 0,
+    l2Hits: 0,
+    l3Misses: 0,
+    negativeHits: 0,
+    writes: 0,
+    evictions: 0,
+    lastLoadedAt: null as number | null,
+  };
+
+  const maybeClone = (val: T): T => (cloneOnRead ? structuredClone(val) : val);
 
   const setL1 = (key: string, data: T | null) => {
-    l1Map.set(key, { data, timestamp: Date.now() });
+    const now = Date.now();
+    l1Map.set(key, { data, timestamp: now });
+    stats.writes += 1;
+    stats.lastLoadedAt = now;
     if (l1Map.size > maxEntries) {
       const oldest = l1Map.keys().next().value;
       if (oldest !== undefined) l1Map.delete(oldest);
@@ -359,62 +642,140 @@ export function createCmsKeyedCache<T>(
       if (hit) {
         const age = now - hit.timestamp;
         if (hit.data === null) {
-          if (age < negativeTtlMs) return null;
+          if (negativeTtlMs > 0 && age < negativeTtlMs) {
+            stats.l1Hits += 1;
+            stats.negativeHits += 1;
+            return null;
+          }
         } else if (age < ttlMs) {
-          return structuredClone(hit.data);
+          stats.l1Hits += 1;
+          return maybeClone(hit.data);
         }
       }
     }
 
-    const cacheKey = `${keyPrefix}:${rawKey}`;
+    const cacheKey = kvPrefix ? `${kvPrefix}:${rawKey}` : '';
     try {
-      if (!forceRefresh) {
+      if (!forceRefresh && cacheKey) {
         try {
           const kvHit = await kvGet<any>(cacheKey, customEnv);
           if (kvHit && !kvHit.notFound) {
+            stats.l2Hits += 1;
             setL1(rawKey, kvHit);
-            return structuredClone(kvHit);
+            return maybeClone(kvHit);
           }
         } catch {}
       }
 
+      stats.l3Misses += 1;
       const data = await fetcher(rawKey, forceRefresh);
       if (data) {
         setL1(rawKey, data);
-        if (forceRefresh) {
-          await kvPut(cacheKey, data, undefined, customEnv).catch(() => {});
-        } else {
-          runInBackground(kvPut(cacheKey, data, undefined, customEnv));
+        if (cacheKey) {
+          if (forceRefresh) {
+            await kvPut(cacheKey, data, undefined, customEnv).catch(() => {});
+          } else {
+            runInBackground(kvPut(cacheKey, data, undefined, customEnv));
+          }
         }
-        return structuredClone(data);
+        return maybeClone(data);
       } else {
-        setL1(rawKey, null);
-        if (forceRefresh) {
+        if (negativeTtlMs > 0) {
+          setL1(rawKey, null);
+        }
+        if (forceRefresh && cacheKey) {
           await kvDelete(cacheKey, customEnv).catch(() => {});
         }
         return null;
       }
     } catch (err: any) {
-      console.error(`[createCmsKeyedCache:${keyPrefix}] Fetch failed for ${rawKey}:`, err?.message);
+      console.error(`[createKeyedCache:${label}] Fetch failed for ${rawKey}:`, err?.message);
       const stale = l1Map.get(rawKey);
-      return stale && stale.data ? structuredClone(stale.data) : null;
+      return stale && stale.data ? maybeClone(stale.data) : null;
     }
   };
 
-  return {
+  const instance: KeyedCache<T> = {
     get,
     async refresh(key: string, customEnv?: any): Promise<T | null> {
       return get(key, customEnv, true);
     },
     async evict(key: string, customEnv?: any): Promise<void> {
       l1Map.delete(key);
-      await kvDelete(`${keyPrefix}:${key}`, customEnv).catch(() => {});
+      stats.evictions += 1;
+      if (kvPrefix) {
+        await kvDelete(`${kvPrefix}:${key}`, customEnv).catch(() => {});
+      }
     },
     seed(key: string, data: T) {
       setL1(key, data);
     },
+    deleteL1(key: string) {
+      l1Map.delete(key);
+    },
+    invalidateWhere(predicate: (key: string, data: T | null) => boolean) {
+      for (const [k, entry] of l1Map.entries()) {
+        if (predicate(k, entry.data)) {
+          l1Map.delete(k);
+          stats.evictions += 1;
+        }
+      }
+    },
     invalidate() {
       l1Map.clear();
+      stats.evictions += 1;
     },
   };
+
+  if (options?.scope) {
+    const scopes = Array.isArray(options.scope) ? options.scope : [options.scope];
+    registerCache({
+      name: label,
+      scopes,
+      purge: async () => {
+        instance.invalidate();
+      },
+      getSnapshot: () => {
+        const total = stats.l1Hits + stats.l2Hits + stats.l3Misses;
+        return {
+          name: label,
+          scope: scopes[0],
+          kind: 'keyed',
+          kvKey: kvPrefix ? `${kvPrefix}:*` : undefined,
+          ttlMs,
+          l1State: l1Map.size > 0 ? 'WARM' : 'COLD',
+          l1Entries: l1Map.size,
+          lastLoadedAt: stats.lastLoadedAt,
+          l1Hits: stats.l1Hits,
+          l2Hits: stats.l2Hits,
+          l3Misses: stats.l3Misses,
+          negativeHits: stats.negativeHits,
+          writes: stats.writes,
+          evictions: stats.evictions,
+          hitRatePct: calcHitRatePct(stats.l1Hits + stats.l2Hits, total),
+        };
+      },
+      resetStats: () => {
+        stats.l1Hits = 0;
+        stats.l2Hits = 0;
+        stats.l3Misses = 0;
+        stats.negativeHits = 0;
+        stats.writes = 0;
+        stats.evictions = 0;
+      },
+    });
+  }
+
+  return instance;
+}
+
+/**
+ * Keyed multi-tier CMS cache backed by createKeyedCache.
+ */
+export function createCmsKeyedCache<T>(
+  keyPrefix: string,
+  fetcher: (key: string, forceRefresh?: boolean) => Promise<T | null>,
+  options?: KeyedCacheOptions
+): KeyedCache<T> {
+  return createKeyedCache<T>(fetcher, { ...options, kvPrefix: keyPrefix, name: options?.name || keyPrefix });
 }

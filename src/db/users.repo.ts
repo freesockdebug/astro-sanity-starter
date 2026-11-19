@@ -5,6 +5,7 @@ import { getAdminEmailList, formatUtcCutoff, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getOrdersByUserId } from './orders.repo';
 import { getUserLoginHistory } from './logins.repo';
+import { createKeyedCache } from '../utils/cache';
 import type {
   CustomerTier,
   UserStatus,
@@ -15,19 +16,33 @@ import type {
   ListAdminUsersResult,
 } from './types';
 
-// 30-second Isolate cache for user status & tier (Hybrid Stateless-Stateful Auth)
-const userStatusCache = new Map<string, { record: UserRecord; exp: number }>();
+// 30-second Isolate L1 cache for user status & tier (Hybrid Stateless-Stateful Auth)
+const userStatusCache = createKeyedCache<UserRecord>(
+  async (key) =>
+    executeWithAutoSchema(async (db: DbClient) => {
+      const isId = key.startsWith('id:');
+      const val = isId ? key.slice(3) : key.slice(6);
+      const found = await db.first<UserRecord>(
+        isId ? 'SELECT * FROM users WHERE id = ? LIMIT 1' : 'SELECT * FROM users WHERE email = ? LIMIT 1',
+        [val]
+      );
+      if (!found) return null;
+      const copy = { ...found };
+      if (isId && found.email) userStatusCache.seed(`email:${found.email.toLowerCase()}`, copy);
+      if (!isId && found.id) userStatusCache.seed(`id:${found.id}`, copy);
+      return copy;
+    }),
+  { name: 'users:status', scope: 'users', ttlMs: 30_000, negativeTtlMs: 0, maxL1Entries: 1000 }
+);
 
 export function invalidateUserStatusCache(userId?: string | null, email?: string | null) {
   const normEmail = email ? email.trim().toLowerCase() : null;
-  if (userId) userStatusCache.delete(`id:${userId}`);
-  if (normEmail) userStatusCache.delete(`email:${normEmail}`);
-
-  for (const [k, v] of userStatusCache.entries()) {
-    if ((userId && v.record.id === userId) || (normEmail && v.record.email?.toLowerCase() === normEmail)) {
-      userStatusCache.delete(k);
-    }
-  }
+  if (userId) userStatusCache.deleteL1(`id:${userId}`);
+  if (normEmail) userStatusCache.deleteL1(`email:${normEmail}`);
+  userStatusCache.invalidateWhere(
+    (_k, record) =>
+      Boolean((userId && record?.id === userId) || (normEmail && record?.email?.toLowerCase() === normEmail))
+  );
 }
 
 /**
@@ -36,57 +51,14 @@ export function invalidateUserStatusCache(userId?: string | null, email?: string
 export async function getUserByIdOrEmail(userId?: string | null, email?: string | null): Promise<UserRecord | null> {
   if (!userId && !email) return null;
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
-  const cacheKey = userId ? `id:${userId}` : `email:${normalizedEmail}`;
-
-  const cached = userStatusCache.get(cacheKey);
-  if (cached && Date.now() < cached.exp) {
-    return cached.record;
+  if (userId) {
+    const byId = await userStatusCache.get(`id:${userId}`);
+    if (byId) return byId;
   }
-
-  try {
-    return await executeWithAutoSchema(async (db: DbClient) => {
-      let found: UserRecord | null = null;
-
-      // 1. Fast path: Direct Primary Key lookup (1~3ms index seek)
-      if (userId) {
-        found = await db.first<UserRecord>(
-          `SELECT * FROM users WHERE id = ? LIMIT 1`,
-          [userId]
-        );
-      }
-
-      // 2. Secondary fallback by email if ID not matched or not provided
-      if (!found && normalizedEmail) {
-        found = await db.first<UserRecord>(
-          `SELECT * FROM users WHERE email = ? LIMIT 1`,
-          [normalizedEmail]
-        );
-      }
-
-      if (found) {
-        if (userStatusCache.size > 1000) {
-          const now = Date.now();
-          for (const [k, v] of userStatusCache.entries()) {
-            if (now > v.exp) userStatusCache.delete(k);
-          }
-          if (userStatusCache.size > 1000) {
-            userStatusCache.clear();
-          }
-        }
-        const exp = Date.now() + 30_000;
-        const shallowCopy = { ...found };
-        userStatusCache.set(`id:${found.id}`, { record: shallowCopy, exp });
-        if (found.email) {
-          userStatusCache.set(`email:${found.email.toLowerCase()}`, { record: shallowCopy, exp });
-        }
-      }
-
-      return found;
-    });
-  } catch (err) {
-    console.warn('[DB] getUserByIdOrEmail non-fatal fallback:', err);
-    return null;
+  if (normalizedEmail) {
+    return await userStatusCache.get(`email:${normalizedEmail}`);
   }
+  return null;
 }
 
 export const getUserById = (userId: string) => getUserByIdOrEmail(userId, null);

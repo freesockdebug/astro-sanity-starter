@@ -163,6 +163,8 @@ async function loadWafRuntimeFromDb(): Promise<TieredCacheFetchResult<WafRuntime
  */
 export const wafRuntimeCache = createTieredCache<WafRuntimeData, CompiledWafRuntime>({
   name: 'waf_runtime',
+  scope: ['waf', 'settings'],
+  purgeAction: 'refresh',
   kvKey: KV_WAF_RUNTIME_KEY,
   ttlMs: 5_000,
   kvTtlSeconds: 86400,

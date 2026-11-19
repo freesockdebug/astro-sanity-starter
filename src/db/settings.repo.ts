@@ -244,6 +244,8 @@ async function loadSystemSettingsFromDb(customEnv?: any): Promise<TieredCacheFet
 
 export const settingsCache = createTieredCache<SystemSettings>({
   name: 'system_settings',
+  scope: 'settings',
+  purgeAction: 'evict',
   kvKey: KV_SETTINGS_KEY,
   ttlMs: 5_000,
   kvTtlSeconds: 86400,

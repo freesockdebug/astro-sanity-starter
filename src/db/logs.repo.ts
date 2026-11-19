@@ -4,6 +4,7 @@
 import { formatUtcCutoff, toPostgresSql, type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getSystemSettings } from './settings.repo';
+import { createKeyedCache } from '../utils/cache';
 
 export type DiagnosticLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'critical';
 
@@ -64,13 +65,74 @@ export const LOG_LEVEL_WEIGHT: Record<string, number> = {
 };
 
 interface LogsOverviewEntry {
-  exp: number;
   stats: { total: number; debug: number; info: number; warns: number; errors: number; critical: number; slow: number };
   bottlenecks: EndpointBottleneck[];
 }
 
-const LOGS_OVERVIEW_TTL_MS = 30_000;
-const logsOverviewCache = new Map<string, LogsOverviewEntry>();
+const LOGS_OVERVIEW_WINDOW_MS: Record<string, number> = {
+  '1h': 3600_000,
+  '24h': 24 * 3600_000,
+  '7d': 7 * 86_400_000,
+  '30d': 30 * 86_400_000,
+};
+
+const EMPTY_LOGS_OVERVIEW: LogsOverviewEntry = {
+  stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0, slow: 0 },
+  bottlenecks: [],
+};
+
+const logsOverviewCache = createKeyedCache<LogsOverviewEntry>(
+  async (windowKey) =>
+    executeWithAutoSchema(async (db: DbClient) => {
+      const thirtyDaysCutoff = formatUtcCutoff(30 * 86_400_000, db.dialect);
+      const bottleneckCutoff = formatUtcCutoff(LOGS_OVERVIEW_WINDOW_MS[windowKey] || 7 * 86_400_000, db.dialect);
+      const [s, b] = await Promise.all([
+        db.first<{ total: number; debug: number; info: number; warns: number; errors: number; critical: number; slow: number }>(
+          `SELECT
+             COUNT(*) as total,
+             SUM(CASE WHEN level = 'debug' THEN 1 ELSE 0 END) as debug,
+             SUM(CASE WHEN level = 'info' THEN 1 ELSE 0 END) as info,
+             SUM(CASE WHEN level = 'warn' THEN 1 ELSE 0 END) as warns,
+             SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as errors,
+             SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) as critical,
+             SUM(CASE WHEN (latency_ms >= 1000 AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%') THEN 1 ELSE 0 END) as slow
+           FROM system_error_logs
+           WHERE created_at >= ?`,
+          [thirtyDaysCutoff]
+        ),
+        db.query<EndpointBottleneck>(
+          `SELECT
+             path,
+             COALESCE(method, 'GET') as method,
+             COUNT(*) as call_count,
+             ROUND(AVG(latency_ms)) as avg_latency,
+             MAX(latency_ms) as max_latency,
+             SUM(CASE WHEN latency_ms >= 500 THEN 1 ELSE 0 END) as slow_count
+           FROM system_error_logs
+           WHERE latency_ms IS NOT NULL AND latency_ms > 0 AND path IS NOT NULL AND path != '' AND created_at >= ?
+             AND (method IS NULL OR method != 'CLIENT')
+             AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))
+           GROUP BY path, method
+           ORDER BY avg_latency DESC, call_count DESC
+           LIMIT 8`,
+          [bottleneckCutoff]
+        ).catch(() => []),
+      ]);
+      return {
+        stats: {
+          total: s?.total || 0,
+          debug: s?.debug || 0,
+          info: s?.info || 0,
+          warns: s?.warns || 0,
+          errors: s?.errors || 0,
+          critical: s?.critical || 0,
+          slow: s?.slow || 0,
+        },
+        bottlenecks: b || [],
+      };
+    }),
+  { name: 'logs:overview', scope: 'logs', ttlMs: 30_000, negativeTtlMs: 0, maxL1Entries: 20 }
+);
 
 const INSERT_ERROR_LOG_SQL = `INSERT INTO system_error_logs (
   level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, hit_count, created_at
@@ -514,20 +576,8 @@ export async function listErrorLogs(
         : options.timeWindow === '30d'
         ? '30d'
         : '7d';
-      const bottleneckMsMap: Record<string, number> = {
-        '1h': 3600_000,
-        '24h': 24 * 3600_000,
-        '7d': 7 * 86_400_000,
-        '30d': 30 * 86_400_000,
-      };
-      const thirtyDaysCutoff = formatUtcCutoff(30 * 86_400_000, db.dialect);
-      const bottleneckCutoff = formatUtcCutoff(bottleneckMsMap[bottleneckWindowKey], db.dialect);
 
-      const now = Date.now();
-      const cachedOverview = logsOverviewCache.get(bottleneckWindowKey);
-      const hasFreshOverview = Boolean(cachedOverview && cachedOverview.exp > now);
-
-      const [logs, countRes, overview] = await Promise.all([
+      const [logs, countRes, overviewRes] = await Promise.all([
         db.query<ErrorLogRecord>(
           `SELECT id, level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, hit_count, created_at
            FROM system_error_logs
@@ -540,57 +590,9 @@ export async function listErrorLogs(
           `SELECT COUNT(*) as count FROM system_error_logs ${whereClause}`,
           params
         ),
-        hasFreshOverview
-          ? Promise.resolve(cachedOverview!)
-          : Promise.all([
-              db.first<{ total: number; debug: number; info: number; warns: number; errors: number; critical: number; slow: number }>(
-                `SELECT
-                   COUNT(*) as total,
-                   SUM(CASE WHEN level = 'debug' THEN 1 ELSE 0 END) as debug,
-                   SUM(CASE WHEN level = 'info' THEN 1 ELSE 0 END) as info,
-                   SUM(CASE WHEN level = 'warn' THEN 1 ELSE 0 END) as warns,
-                   SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as errors,
-                   SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END) as critical,
-                   SUM(CASE WHEN (latency_ms >= 1000 AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))) OR (error_code = 'WEB_VITALS' AND context_json LIKE '%"rating":"poor"%') THEN 1 ELSE 0 END) as slow
-                 FROM system_error_logs
-                 WHERE created_at >= ?`,
-                [thirtyDaysCutoff]
-              ),
-              db.query<EndpointBottleneck>(
-                `SELECT
-                   path,
-                   COALESCE(method, 'GET') as method,
-                   COUNT(*) as call_count,
-                   ROUND(AVG(latency_ms)) as avg_latency,
-                   MAX(latency_ms) as max_latency,
-                   SUM(CASE WHEN latency_ms >= 500 THEN 1 ELSE 0 END) as slow_count
-                 FROM system_error_logs
-                 WHERE latency_ms IS NOT NULL AND latency_ms > 0 AND path IS NOT NULL AND path != '' AND created_at >= ?
-                   AND (method IS NULL OR method != 'CLIENT')
-                   AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'))
-                 GROUP BY path, method
-                 ORDER BY avg_latency DESC, call_count DESC
-                 LIMIT 8`,
-                [bottleneckCutoff]
-              ).catch(() => []),
-            ]).then(([s, b]) => {
-              const entry: LogsOverviewEntry = {
-                exp: Date.now() + LOGS_OVERVIEW_TTL_MS,
-                stats: {
-                  total: s?.total || 0,
-                  debug: s?.debug || 0,
-                  info: s?.info || 0,
-                  warns: s?.warns || 0,
-                  errors: s?.errors || 0,
-                  critical: s?.critical || 0,
-                  slow: s?.slow || 0,
-                },
-                bottlenecks: b || [],
-              };
-              logsOverviewCache.set(bottleneckWindowKey, entry);
-              return entry;
-            }),
+        logsOverviewCache.get(bottleneckWindowKey),
       ]);
+      const overview = overviewRes || EMPTY_LOGS_OVERVIEW;
 
       return {
         logs: logs || [],
@@ -717,7 +719,7 @@ export async function clearErrorLogs(customEnv?: any): Promise<boolean> {
       } else {
         await db.execute('DELETE FROM system_error_logs');
       }
-      logsOverviewCache.clear();
+      logsOverviewCache.invalidate();
       return true;
     });
   } catch {

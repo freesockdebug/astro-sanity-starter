@@ -137,6 +137,7 @@ export interface ActiveTeamMemberLite {
 
 const activeMembersLiteCache = createTieredCache<ActiveTeamMemberLite[]>({
   name: 'rbac_active_members_lite',
+  scope: 'rbac',
   ttlMs: 60_000,
   fallbackRaw: [],
   fetchRaw: () =>
@@ -167,6 +168,7 @@ const activeMembersLiteCache = createTieredCache<ActiveTeamMemberLite[]>({
 
 const adminRolesCache = createTieredCache<AdminRole[]>({
   name: 'rbac_admin_roles',
+  scope: 'rbac',
   ttlMs: 60_000,
   fallbackRaw: Object.values(SYSTEM_ROLES),
   fetchRaw: () =>
@@ -187,6 +189,7 @@ const adminRolesCache = createTieredCache<AdminRole[]>({
 
 const adminMembersCache = createTieredCache<AdminMemberWithRole[]>({
   name: 'rbac_admin_members',
+  scope: 'rbac',
   ttlMs: 60_000,
   fallbackRaw: [],
   fetchRaw: () =>

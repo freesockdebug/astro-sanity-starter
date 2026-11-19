@@ -49,6 +49,8 @@ function compileDicts(items: SysDictItem[]): CompiledDicts {
 
 export const dictsCache = createTieredCache<SysDictItem[], CompiledDicts>({
   name: 'dicts',
+  scope: 'dicts',
+  purgeAction: 'evict',
   kvKey: 'sys:dicts:all',
   ttlMs: 60_000,
   kvTtlSeconds: 1800,

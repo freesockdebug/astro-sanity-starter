@@ -35,13 +35,14 @@ const pageBySlugCache = createCmsKeyedCache<Page>(
       { formattedSlug, unslashed }
     );
     return data && data.length > 0 ? data[0] : null;
-  }
+  },
+  { name: 'page:doc', scope: 'pages' }
 );
 
 const allPagesCache = createCmsCache<Page[]>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<Page[]>(`*[_type == "page"] ${PAGE_QUERY_OBJ}`),
   [],
-  { kvKey: 'cms:pages:all' }
+  { kvKey: 'cms:pages:all', scope: 'pages', purgeAction: 'refresh' }
 );
 
 /**
