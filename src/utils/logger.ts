@@ -277,6 +277,24 @@ function emit(level: LogLevel, context: LogContext, options: { cfEnv?: any; ctx?
     console.debug ? console.debug(jsonStr) : console.log(jsonStr);
   }
 
+  // Build lean DB context_json: omit fields already persisted in dedicated system_error_logs columns
+  // and flatten payload.context to avoid 3x-14x storage bloat and double-nested context.context JSON.
+  const COLUMN_DUPLICATED_KEYS = new Set([
+    'timestamp', 'level', 'module', 'event', 'message', 'userId', 'userEmail',
+    'rayId', 'path', 'latencyMs', 'method', 'statusCode', 'clientIp', 'country', 'city', 'context',
+  ]);
+  const dbContext: Record<string, any> = {};
+  if (payload.context && typeof payload.context === 'object' && !Array.isArray(payload.context)) {
+    Object.assign(dbContext, payload.context);
+  } else if (payload.context !== undefined && payload.context !== null) {
+    dbContext.value = payload.context;
+  }
+  for (const [k, v] of Object.entries(payload)) {
+    if (!COLUMN_DUPLICATED_KEYS.has(k) && v !== undefined && v !== null && !(k in dbContext)) {
+      dbContext[k] = v;
+    }
+  }
+
   // Persist asynchronously (filtering by level weight and slow threshold is handled in recordErrorLog)
   persistToD1Async(
     {
@@ -284,7 +302,7 @@ function emit(level: LogLevel, context: LogContext, options: { cfEnv?: any; ctx?
       source: context.module || 'system',
       errorCode: context.event || null,
       message: context.message || '',
-      context: payload,
+      context: Object.keys(dbContext).length > 0 ? dbContext : null,
       userId: context.userId || null,
       userEmail: context.userEmail || null,
       rayId: context.rayId || null,

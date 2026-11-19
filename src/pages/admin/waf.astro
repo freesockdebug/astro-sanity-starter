@@ -566,7 +566,7 @@ const initialPayload = JSON.stringify({
                   const ctx = parseLogContext(log.context_json);
                   const badge = modeBadgeLabel(ctx.mode);
                   const ipVal = (log.client_ip || '').trim();
-                  const hitCount = Math.max(1, Number(ctx.hitCount || 1));
+                  const hitCount = Math.max(1, Number(log.hit_count || ctx.hitCount || 1));
                   const statusCode = Number(log.status_code || ctx.statusCode || 403);
                   const countCls = statusCode === 429
                     ? 'bg-amber-50 text-amber-800 border-amber-200/80'
@@ -1530,7 +1530,7 @@ const initialPayload = JSON.stringify({
           } catch {}
           const [modeText, modeCls] = badgeFor(ctx.mode);
           const ipVal = (log.client_ip || '').trim();
-          const hitCount = Math.max(1, Number(ctx.hitCount || 1));
+          const hitCount = Math.max(1, Number(log.hit_count || ctx.hitCount || 1));
           const statusCode = Number(log.status_code || ctx.statusCode || 403);
           const countCls = statusCode === 429
             ? 'bg-amber-50 text-amber-800 border-amber-200/80'

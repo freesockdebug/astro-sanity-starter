@@ -24,6 +24,7 @@ export interface ErrorLogRecord {
   client_ip?: string | null;
   country?: string | null;
   city?: string | null;
+  hit_count?: number | null;
   created_at: string;
 }
 
@@ -72,8 +73,8 @@ const LOGS_OVERVIEW_TTL_MS = 30_000;
 const logsOverviewCache = new Map<string, LogsOverviewEntry>();
 
 const INSERT_ERROR_LOG_SQL = `INSERT INTO system_error_logs (
-  level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
+  level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, hit_count, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
 
 const IGNORED_LOG_PATH_PREFIXES = ['/api/admin/logs', '/admin/logs', '/_astro/', '/favicon'];
 const IGNORED_LOG_PATH_EXTS = ['.css', '.js', '.png', '.jpg', '.svg', '.ico'];
@@ -94,6 +95,7 @@ interface PreparedLogEntry {
   clientIp: string | null;
   country: string | null;
   city: string | null;
+  hitCount: number;
   wafCoalesce?: {
     key: string;
     hitCount: number;
@@ -104,8 +106,8 @@ interface PreparedLogEntry {
 
 function buildMergedWafContextJson(
   prevJson: string | null | undefined,
-  opts: { hitIncrement?: number; absHitCount?: number | null; lastBlockedAt: string }
-): string {
+  opts: { prevRowHitCount?: number | null; hitIncrement?: number; absHitCount?: number | null; lastBlockedAt: string }
+): { json: string; hitCount: number } {
   let ctxObj: Record<string, any> = {};
   if (prevJson) {
     try {
@@ -115,7 +117,9 @@ function buildMergedWafContextJson(
     }
   }
   const prevNested = ctxObj.context && typeof ctxObj.context === 'object' ? ctxObj.context : {};
-  const prevHits = Math.max(0, Number(ctxObj.hitCount ?? prevNested.hitCount ?? 1));
+  const jsonHits = Math.max(0, Number(ctxObj.hitCount ?? prevNested.hitCount ?? 1));
+  const rowHits = opts.prevRowHitCount != null ? Math.max(0, Number(opts.prevRowHitCount)) : 0;
+  const prevHits = Math.max(jsonHits, rowHits);
   const nextHitCount = opts.hitIncrement && opts.hitIncrement > 0
     ? prevHits + opts.hitIncrement
     : Math.max(prevHits, Number(opts.absHitCount ?? prevHits));
@@ -132,7 +136,7 @@ function buildMergedWafContextJson(
       lastBlockedAt: opts.lastBlockedAt,
     };
   }
-  return JSON.stringify(nextCtx).slice(0, 4000);
+  return { json: JSON.stringify(nextCtx).slice(0, 4000), hitCount: nextHitCount };
 }
 
 function prepareLogEntry(input: RecordErrorLogInput, settings: any): PreparedLogEntry | null {
@@ -228,6 +232,7 @@ function prepareLogEntry(input: RecordErrorLogInput, settings: any): PreparedLog
     clientIp,
     country,
     city,
+    hitCount: wafCoalesce?.hitCount ?? 1,
     wafCoalesce,
   };
 }
@@ -235,7 +240,7 @@ function prepareLogEntry(input: RecordErrorLogInput, settings: any): PreparedLog
 function toInsertParams(e: PreparedLogEntry): any[] {
   return [
     e.level, e.source, e.errorCode, e.message, e.contextJson, e.userId, e.userEmail,
-    e.rayId, e.path, e.latencyMs, e.method, e.statusCode, e.clientIp, e.country, e.city,
+    e.rayId, e.path, e.latencyMs, e.method, e.statusCode, e.clientIp, e.country, e.city, e.hitCount,
   ];
 }
 
@@ -261,10 +266,12 @@ function coalesceWafEntriesInBatch(entries: PreparedLogEntry[]): {
         : existing.wafCoalesce.lastBlockedAt;
       existing.wafCoalesce.hitCount = nextHits;
       existing.wafCoalesce.lastBlockedAt = latestAt;
-      existing.contextJson = buildMergedWafContextJson(existing.contextJson, {
+      existing.hitCount = nextHits;
+      const merged = buildMergedWafContextJson(existing.contextJson, {
         absHitCount: nextHits,
         lastBlockedAt: latestAt,
       });
+      existing.contextJson = merged.json;
     }
   }
 
@@ -282,8 +289,8 @@ async function persistPreparedLogEntries(entries: PreparedLogEntry[], settings: 
 
   try {
     return await executeWithAutoSchema(async (db: DbClient) => {
-      const findWafSql = `SELECT id, context_json FROM system_error_logs WHERE source = 'EDGE_WAF' AND client_ip = ? AND error_code = ? AND created_at >= ? ORDER BY id DESC LIMIT 1`;
-      const updateWafSql = `UPDATE system_error_logs SET context_json = ? WHERE id = ?`;
+      const findWafSql = `SELECT id, hit_count, context_json FROM system_error_logs WHERE source = 'EDGE_WAF' AND client_ip = ? AND error_code = ? AND created_at >= ? ORDER BY id DESC LIMIT 1`;
+      const updateWafSql = `UPDATE system_error_logs SET context_json = ?, hit_count = ? WHERE id = ?`;
       const deleteRetentionSql = `DELETE FROM system_error_logs WHERE created_at < ?`;
 
       // Postgres / Hyperdrive: serialize per (client_ip, error_code) via transaction-scoped advisory lock
@@ -300,11 +307,12 @@ async function persistPreparedLogEntries(entries: PreparedLogEntry[], settings: 
             ]);
             const existingRow = rows?.[0];
             if (existingRow?.id) {
-              const mergedJson = buildMergedWafContextJson(existingRow.context_json, {
+              const merged = buildMergedWafContextJson(existingRow.context_json, {
+                prevRowHitCount: existingRow.hit_count,
                 hitIncrement: meta.hitCount,
                 lastBlockedAt: meta.lastBlockedAt,
               });
-              await tx.unsafe(toPostgresSql(updateWafSql), [mergedJson, existingRow.id]);
+              await tx.unsafe(toPostgresSql(updateWafSql), [merged.json, merged.hitCount, existingRow.id]);
             } else {
               await tx.unsafe(toPostgresSql(INSERT_ERROR_LOG_SQL), toInsertParams(entry));
             }
@@ -322,21 +330,20 @@ async function persistPreparedLogEntries(entries: PreparedLogEntry[], settings: 
       const ops: { sql: string; params: any[] }[] = [];
       for (const entry of wafEntries) {
         const meta = entry.wafCoalesce!;
-        const existingRow = await db.first<{ id: number; context_json: string | null }>(findWafSql, [
+        const existingRow = await db.first<{ id: number; hit_count: number | null; context_json: string | null }>(findWafSql, [
           entry.clientIp,
           entry.errorCode,
           formatUtcCutoff(meta.windowMs, db.dialect),
         ]);
         if (existingRow?.id) {
+          const merged = buildMergedWafContextJson(existingRow.context_json, {
+            prevRowHitCount: existingRow.hit_count,
+            hitIncrement: meta.hitCount,
+            lastBlockedAt: meta.lastBlockedAt,
+          });
           ops.push({
             sql: updateWafSql,
-            params: [
-              buildMergedWafContextJson(existingRow.context_json, {
-                hitIncrement: meta.hitCount,
-                lastBlockedAt: meta.lastBlockedAt,
-              }),
-              existingRow.id,
-            ],
+            params: [merged.json, merged.hitCount, existingRow.id],
           });
         } else {
           ops.push({ sql: INSERT_ERROR_LOG_SQL, params: toInsertParams(entry) });
@@ -524,7 +531,7 @@ export async function listErrorLogs(
 
       const [logs, countRes, overview] = await Promise.all([
         db.query<ErrorLogRecord>(
-          `SELECT id, level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, created_at
+          `SELECT id, level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, hit_count, created_at
            FROM system_error_logs
            ${whereClause}
            ${orderClause}
@@ -601,7 +608,7 @@ export async function listErrorLogs(
 }
 
 /**
- * Aggregates 24h EDGE_WAF attack events (row count) and total intercepted hits (sum of hitCount).
+ * Aggregates 24h EDGE_WAF attack events (row count) and total intercepted hits via pure SQL SUM(hit_count).
  */
 export async function getWaf24hSummary(
   customEnv?: any
@@ -609,25 +616,16 @@ export async function getWaf24hSummary(
   try {
     return await executeWithAutoSchema(async (db: DbClient) => {
       const cutoff = formatUtcCutoff(24 * 3600_000, db.dialect);
-      const rows = await db.query<{ context_json: string | null }>(
-        `SELECT context_json FROM system_error_logs WHERE source = 'EDGE_WAF' AND created_at >= ?`,
+      const row = await db.first<{ events_count: number; total_hits: number }>(
+        `SELECT COUNT(*) AS events_count, COALESCE(SUM(COALESCE(hit_count, 1)), 0) AS total_hits
+         FROM system_error_logs
+         WHERE source = 'EDGE_WAF' AND created_at >= ?`,
         [cutoff]
       );
-      let totalHits = 0;
-      for (const row of rows) {
-        let hits = 1;
-        if (row.context_json) {
-          try {
-            const parsed = JSON.parse(row.context_json);
-            const rawHits = Number(parsed?.hitCount ?? parsed?.context?.hitCount ?? 1);
-            if (Number.isFinite(rawHits) && rawHits > 1) {
-              hits = Math.round(rawHits);
-            }
-          } catch {}
-        }
-        totalHits += hits;
-      }
-      return { eventsCount: rows.length, totalHits };
+      return {
+        eventsCount: Number(row?.events_count || 0),
+        totalHits: Number(row?.total_hits || 0),
+      };
     });
   } catch {
     return { eventsCount: 0, totalHits: 0 };
@@ -670,8 +668,8 @@ export async function updateLatestWafLogStats(
         qParams.push(errorCode);
       }
 
-      const selectSql = `SELECT id, context_json FROM system_error_logs WHERE ${conds.join(' AND ')} ORDER BY id DESC LIMIT 1`;
-      const updateSql = `UPDATE system_error_logs SET context_json = ? WHERE id = ?`;
+      const selectSql = `SELECT id, hit_count, context_json FROM system_error_logs WHERE ${conds.join(' AND ')} ORDER BY id DESC LIMIT 1`;
+      const updateSql = `UPDATE system_error_logs SET context_json = ?, hit_count = ? WHERE id = ?`;
       const mergeOpts = {
         hitIncrement: params.hitDelta && params.hitDelta > 0 ? params.hitDelta : undefined,
         absHitCount: params.hitCount,
@@ -685,18 +683,24 @@ export async function updateLatestWafLogStats(
           const rows = await tx.unsafe(toPostgresSql(selectSql), qParams);
           const row = rows?.[0];
           if (!row?.id) return;
-          const nextJson = buildMergedWafContextJson(row.context_json, mergeOpts);
-          await tx.unsafe(toPostgresSql(updateSql), [nextJson, row.id]);
+          const merged = buildMergedWafContextJson(row.context_json, {
+            ...mergeOpts,
+            prevRowHitCount: row.hit_count,
+          });
+          await tx.unsafe(toPostgresSql(updateSql), [merged.json, merged.hitCount, row.id]);
           updated = true;
         });
         return updated;
       }
 
-      const row = await db.first<{ id: number; context_json: string | null }>(selectSql, qParams);
+      const row = await db.first<{ id: number; hit_count: number | null; context_json: string | null }>(selectSql, qParams);
       if (!row?.id) return false;
 
-      const nextJson = buildMergedWafContextJson(row.context_json, mergeOpts);
-      await db.execute(updateSql, [nextJson, row.id]);
+      const merged = buildMergedWafContextJson(row.context_json, {
+        ...mergeOpts,
+        prevRowHitCount: row.hit_count,
+      });
+      await db.execute(updateSql, [merged.json, merged.hitCount, row.id]);
       return true;
     });
   } catch {
@@ -705,12 +709,16 @@ export async function updateLatestWafLogStats(
 }
 
 /**
- * Clears error logs table.
+ * Clears error logs table (uses TRUNCATE on PostgreSQL to reclaim physical disk & index space immediately).
  */
 export async function clearErrorLogs(customEnv?: any): Promise<boolean> {
   try {
     return await executeWithAutoSchema(async (db: DbClient) => {
-      await db.execute('DELETE FROM system_error_logs');
+      if (db.dialect === 'postgres') {
+        await db.execute('TRUNCATE TABLE system_error_logs');
+      } else {
+        await db.execute('DELETE FROM system_error_logs');
+      }
       logsOverviewCache.clear();
       return true;
     });

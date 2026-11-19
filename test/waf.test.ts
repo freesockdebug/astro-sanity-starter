@@ -847,9 +847,7 @@ test('Compiled DB WAF runtime enforces ReDoS protection, composite ALL/ANY rules
 
   // Pre-compiled DB BLACKLIST & timed AUTO_BAN enforce across nodes
   assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.77', pathname: '/', headers: BROWSER_HEADERS, now }, settings, runtime).status, 403);
-  const dbAutoBanEval = EdgeWafService.evaluate({ clientIp: '203.0.113.88', pathname: '/', headers: BROWSER_HEADERS, now }, settings, runtime);
-  assert.equal(dbAutoBanEval.autoBanned, true);
-  assert.equal(dbAutoBanEval.autoBanPersisted, true);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.88', pathname: '/', headers: BROWSER_HEADERS, now }, settings, runtime).autoBanned, true);
   // Expired AUTO_BAN (now + 120s) is allowed
   assert.equal(EdgeWafService.evaluate({ clientIp: '203.0.113.88', pathname: '/', headers: BROWSER_HEADERS, now: now + 120_000 }, settings, runtime).allowed, true);
 

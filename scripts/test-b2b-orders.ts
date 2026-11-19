@@ -1241,8 +1241,12 @@ async function runSelfCheck() {
   await updateLatestWafLogStats({ clientIp: testWafIp, errorCode: 'WAF_MALICIOUS_IP', hitCount: 1, hitDelta: 3, lastBlockedAt: '2026-11-18T16:40:05.000Z' });
   const wafCoalesced = await listErrorLogs({ source: 'EDGE_WAF', search: testWafIp });
   assert.strictEqual(wafCoalesced.total, 1, 'Cross-isolate EDGE_WAF 403 logs for same IP+code must coalesce into 1 DB row');
+  assert.strictEqual(wafCoalesced.logs[0].hit_count, 7, 'Dedicated hit_count column must match coalesced hits (7)');
   const parsedCoalescedCtx = JSON.parse(wafCoalesced.logs[0].context_json || '{}');
   assert.strictEqual(parsedCoalescedCtx.hitCount, 7, 'Coalesced EDGE_WAF row must accumulate exact hitCount (1 + 1 + 2 + 3 = 7)');
+  const { getWaf24hSummary } = await import('../src/db/logs.repo');
+  const wafSummary24h = await getWaf24hSummary();
+  assert.ok(wafSummary24h.totalHits >= 7, 'SQL SUM(hit_count) 24h summary must reflect coalesced hits');
 
   console.log('✔ [PASS] Database-backed WAF Rules, IP ACL & cross-isolate log coalescing verified');
 

@@ -90,6 +90,7 @@ export const DDL_STATEMENTS = [
   client_ip TEXT,
   country TEXT,
   city TEXT,
+  hit_count INTEGER DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 )`,
   `CREATE TABLE IF NOT EXISTS admin_roles (
@@ -307,7 +308,12 @@ export const DDL_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_email ON admin_audit_logs(admin_email)`,
   `CREATE INDEX IF NOT EXISTS idx_waf_rules_enabled_priority ON waf_rules(is_enabled, priority, id)`,
   `CREATE INDEX IF NOT EXISTS idx_waf_ip_acl_type ON waf_ip_acl(list_type, expires_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_error_logs_waf_dedupe ON system_error_logs(source, client_ip, error_code, created_at)`
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_waf_dedupe ON system_error_logs(source, client_ip, error_code, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_source_created ON system_error_logs(source, created_at, id)`
+];
+
+const MIGRATION_STATEMENTS: string[] = [
+  `ALTER TABLE system_error_logs ADD COLUMN hit_count INTEGER DEFAULT 1`,
 ];
 
 let isSchemaVerifiedInIsolate = false;
@@ -325,7 +331,7 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
 
   // If Postgres DbClient is passed (or resolved from getDb()), execute DDL via its adapter so toPostgresSql() runs
   if (clientOrRaw?.dialect === 'postgres' && typeof clientOrRaw.execute === 'function') {
-    for (const sql of DDL_STATEMENTS) {
+    for (const sql of [...DDL_STATEMENTS, ...MIGRATION_STATEMENTS]) {
       try {
         await clientOrRaw.execute(sql);
       } catch {
@@ -365,6 +371,19 @@ export async function ensureSchema(rawOrClient?: any, force = false): Promise<vo
     }
   }
 
+  // 3. Idempotent additive column migrations (SQLite / D1)
+  for (const sql of MIGRATION_STATEMENTS) {
+    try {
+      if (target.prepare) {
+        await target.prepare(sql).run();
+      } else if (target.exec) {
+        await target.exec(sql);
+      }
+    } catch {
+      // Column already exists
+    }
+  }
+
   // Mark as verified only after all DDL and migrations complete
   isSchemaVerifiedInIsolate = true;
 }
@@ -385,7 +404,8 @@ export async function executeWithAutoSchema<T>(
       errMsg.includes('no such table') ||
       errMsg.includes('no such column') ||
       errMsg.includes('has no column named') ||
-      (errMsg.includes('relation') && errMsg.includes('does not exist'))
+      (errMsg.includes('relation') && errMsg.includes('does not exist')) ||
+      (errMsg.includes('column') && errMsg.includes('does not exist'))
     ) {
       console.warn('[DB] Schema discrepancy detected; triggering lazy schema migration...');
       await ensureSchema(db, true);
