@@ -237,10 +237,21 @@ export interface CatalogCategoryItem {
   count: number;
 }
 
+let knownProductSlugs: Set<string> | null = null;
+
 const productsCache = createCmsCache<Product[]>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`),
   [],
-  { kvKey: 'cms:products:all', scope: 'products', purgeAction: 'refresh' }
+  {
+    kvKey: 'cms:products:all',
+    scope: 'products',
+    purgeAction: 'refresh',
+    onUpdate: (list) => {
+      knownProductSlugs = Array.isArray(list) && list.length > 0
+        ? new Set(list.map((p) => p?.slug).filter(Boolean))
+        : null;
+    },
+  }
 );
 
 const categoriesCache = createCmsCache<any[]>(
@@ -264,7 +275,16 @@ const storySettingsCache = createCmsCache<any | null>(
 const productBySlugCache = createCmsKeyedCache<Product>(
   'cms:product',
   (slug, forceRefresh) => getSanityClient(forceRefresh).fetch<Product | null>(`*[_type == "product" && slug.current == $slug][0] ${PRODUCT_FIELDS}`, { slug }),
-  { name: 'prod:details', scope: 'products' }
+  {
+    name: 'prod:details',
+    scope: 'products',
+    existsGuard: async (slug, customEnv) => {
+      if (!knownProductSlugs) {
+        await productsCache.get(false, customEnv);
+      }
+      return !knownProductSlugs || knownProductSlugs.size === 0 || knownProductSlugs.has(slug);
+    },
+  }
 );
 
 /**
@@ -279,6 +299,7 @@ export class ProductService {
   }
 
   public static seedSlug(slug: string, product: Product): void {
+    if (knownProductSlugs && slug) knownProductSlugs.add(slug);
     productBySlugCache.seed(slug, product);
   }
 
@@ -466,6 +487,7 @@ export class ProductService {
    * Clears in-memory cache if needed
    */
   public static invalidateCache(): void {
+    knownProductSlugs = null;
     productsCache.invalidate();
     categoriesCache.invalidate();
     catalogSettingsCache.invalidate();

@@ -1004,4 +1004,42 @@ test('createKeyedCache zero-copy reads and purgeRegisteredCaches scope dispatch 
   assert.equal(singleCache.peek(), null);
   resetGlobalCacheStats();
   assert.equal(getGlobalCacheStatsSnapshot().edgeHtmlHits, 0);
+
+  // existsGuard blocks random 404 penetration with 0 KV/fetcher calls while refresh() bypasses it
+  const validSet = new Set(['known-item']);
+  let guardedFetches = 0;
+  let guardedKvReads = 0;
+  const mockKvEnv = {
+    CACHE_KV: {
+      get: async () => {
+        guardedKvReads += 1;
+        return null;
+      },
+      put: async () => {},
+      delete: async () => {},
+    },
+  };
+  const guardedCache = createKeyedCache<{ id: string }>(
+    async (k) => {
+      guardedFetches += 1;
+      return k === 'known-item' || k === 'fresh-published' ? { id: k } : null;
+    },
+    {
+      name: 'test_guarded_404',
+      scope: 'test_guard_scope',
+      kvPrefix: 'test:guard',
+      existsGuard: (k) => validSet.has(k),
+    }
+  );
+  assert.equal(await guardedCache.get('random-attack-1', mockKvEnv), null);
+  assert.equal(await guardedCache.get('random-attack-2', mockKvEnv), null);
+  assert.equal(guardedFetches, 0);
+  assert.equal(guardedKvReads, 0);
+  const guardSnap = getGlobalCacheStatsSnapshot().partitions.find((p) => p.name === 'test_guarded_404');
+  assert.equal(guardSnap?.negativeHits, 2);
+  assert.equal(guardSnap?.l1Hits, 2);
+  // forceRefresh via refresh() bypasses existsGuard
+  const forced = await guardedCache.refresh('fresh-published', mockKvEnv);
+  assert.equal(forced?.id, 'fresh-published');
+  assert.equal(guardedFetches, 1);
 });

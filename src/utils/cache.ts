@@ -590,6 +590,7 @@ export interface KeyedCacheOptions {
   negativeTtlMs?: number;
   maxL1Entries?: number;
   cloneOnRead?: boolean;
+  existsGuard?: (key: string, customEnv?: any) => Promise<boolean> | boolean;
 }
 
 export type CmsKeyedCacheOptions = KeyedCacheOptions;
@@ -608,6 +609,7 @@ export function createKeyedCache<T>(
   const negativeTtlMs = options?.negativeTtlMs ?? 30_000;
   const maxEntries = options?.maxL1Entries ?? 500;
   const cloneOnRead = Boolean(options?.cloneOnRead);
+  const existsGuard = options?.existsGuard;
   const l1Map = new Map<string, { data: T | null; timestamp: number }>();
   const stats = {
     l1Hits: 0,
@@ -651,6 +653,17 @@ export function createKeyedCache<T>(
           stats.l1Hits += 1;
           return maybeClone(hit.data);
         }
+      }
+
+      if (existsGuard) {
+        try {
+          const mayExist = await existsGuard(rawKey, customEnv);
+          if (!mayExist) {
+            stats.l1Hits += 1;
+            stats.negativeHits += 1;
+            return null;
+          }
+        } catch {}
       }
     }
 

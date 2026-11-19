@@ -633,14 +633,19 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
           });
         }
 
-        const swr = Math.max(edgeTtl * 10, 3600);
+        const is404 = response.status === 404;
+        const effectiveTtl = is404 ? Math.min(edgeTtl, 60) : edgeTtl;
+        const swr = is404 ? Math.min(Math.max(edgeTtl * 10, 3600), 120) : Math.max(edgeTtl * 10, 3600);
         const cloned = response.clone();
         const edgeHeaders = new Headers(cloned.headers);
 
-        edgeHeaders.set('Cache-Control', `public, max-age=0, s-maxage=${edgeTtl}, stale-while-revalidate=${swr}`);
+        edgeHeaders.set('Cache-Control', `public, max-age=0, s-maxage=${effectiveTtl}, stale-while-revalidate=${swr}`);
         edgeHeaders.delete('Cloudflare-CDN-Cache-Control');
         edgeHeaders.delete('CDN-Cache-Control');
         edgeHeaders.set('X-Edge-Cache', 'MISS');
+        if (is404) {
+          edgeHeaders.set('X-Edge-Cache-Status', '404-NEGATIVE');
+        }
         recordEdgeHtmlCacheResult('MISS', pathname);
 
         const responseToCache = new Response(cloned.body, {

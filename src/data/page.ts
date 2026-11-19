@@ -25,6 +25,8 @@ function normalizePageSlug(slug?: string | null): string {
   return clean || 'home';
 }
 
+let knownPageSlugs: Set<string> | null = null;
+
 const pageBySlugCache = createCmsKeyedCache<Page>(
   'cms:page',
   async (cacheSlug: string, forceRefresh?: boolean) => {
@@ -36,13 +38,38 @@ const pageBySlugCache = createCmsKeyedCache<Page>(
     );
     return data && data.length > 0 ? data[0] : null;
   },
-  { name: 'page:doc', scope: 'pages' }
+  {
+    name: 'page:doc',
+    scope: 'pages',
+    existsGuard: async (key, customEnv) => {
+      if (!knownPageSlugs) {
+        await allPagesCache.get(false, customEnv);
+      }
+      return !knownPageSlugs || knownPageSlugs.size === 0 || knownPageSlugs.has(normalizePageSlug(key));
+    },
+  }
 );
 
 const allPagesCache = createCmsCache<Page[]>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<Page[]>(`*[_type == "page"] ${PAGE_QUERY_OBJ}`),
   [],
-  { kvKey: 'cms:pages:all', scope: 'pages', purgeAction: 'refresh' }
+  {
+    kvKey: 'cms:pages:all',
+    scope: 'pages',
+    purgeAction: 'refresh',
+    onUpdate: (pages) => {
+      if (Array.isArray(pages) && pages.length > 0) {
+        const set = new Set<string>(['home', '']);
+        for (const p of pages) {
+          const raw = typeof p?.slug === 'string' ? p.slug : (p?.slug as any)?.current;
+          if (raw) set.add(normalizePageSlug(raw));
+        }
+        knownPageSlugs = set;
+      } else {
+        knownPageSlugs = null;
+      }
+    },
+  }
 );
 
 /**
@@ -57,6 +84,7 @@ export class PageService {
   }
 
   public static invalidateCache(): void {
+    knownPageSlugs = null;
     pageBySlugCache.invalidate();
     allPagesCache.invalidate();
   }
