@@ -34,6 +34,8 @@ export interface WafShadowMatch {
   mode: WafRuleMode;
   reason: string;
   matchedSample: string;
+  suppressLog?: boolean;
+  hitCount?: number;
 }
 
 export interface WafEvaluationResult {
@@ -129,6 +131,7 @@ export interface CompiledIpAclList {
   exact: Set<string>;
   prefixes: string[];
   cidrs: Array<{ netInt: number; maskInt: number; expiresAtMs: number | null; raw: string; reason: string }>;
+  v6Cidrs: Array<{ netBig: bigint; maskBig: bigint; expiresAtMs: number | null; raw: string; reason: string }>;
   timedExact: Array<{ ip: string; expiresAtMs: number | null; reason: string }>;
   timedPrefixes: Array<{ prefix: string; expiresAtMs: number | null; reason: string }>;
 }
@@ -685,6 +688,70 @@ function ipv4ToInt(ip: string): number | null {
   return num >>> 0;
 }
 
+function ipv6ToBigInt(raw: string): bigint | null {
+  const ip = raw.trim().toLowerCase();
+  if (!ip || !ip.includes(':') || ip.includes('%') || ip.includes('/')) return null;
+
+  const doubleColonIdx = ip.indexOf('::');
+  if (doubleColonIdx !== -1 && ip.indexOf('::', doubleColonIdx + 2) !== -1) return null;
+
+  const parseGroups = (segment: string): number[] | null => {
+    if (!segment) return [];
+    const parts = segment.split(':');
+    const out: number[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (!part) return null;
+      if (part.includes('.')) {
+        if (i !== parts.length - 1) return null;
+        const v4 = ipv4ToInt(part);
+        if (v4 === null) return null;
+        out.push((v4 >>> 16) & 0xffff, v4 & 0xffff);
+      } else {
+        if (!/^[0-9a-f]{1,4}$/.test(part)) return null;
+        out.push(parseInt(part, 16));
+      }
+    }
+    return out;
+  };
+
+  let groups: number[];
+  if (doubleColonIdx !== -1) {
+    const left = parseGroups(ip.slice(0, doubleColonIdx));
+    const right = parseGroups(ip.slice(doubleColonIdx + 2));
+    if (!left || !right || left.length + right.length >= 8) return null;
+    const zeros = new Array<number>(8 - left.length - right.length).fill(0);
+    groups = [...left, ...zeros, ...right];
+  } else {
+    const parsed = parseGroups(ip);
+    if (!parsed || parsed.length !== 8) return null;
+    groups = parsed;
+  }
+
+  let acc = 0n;
+  for (const g of groups) {
+    acc = (acc << 16n) | BigInt(g);
+  }
+  return acc;
+}
+
+function normalizeExactIp(raw: string): string {
+  const r = raw.trim().toLowerCase();
+  if (r.includes(':')) {
+    const v6 = ipv6ToBigInt(r);
+    if (v6 !== null) return `v6:${v6.toString(16).padStart(32, '0')}`;
+  }
+  return r;
+}
+
+const V6_ALL_ONES = (1n << 128n) - 1n;
+
+function ipv6MaskBigInt(prefixLen: number): bigint {
+  if (prefixLen <= 0) return 0n;
+  if (prefixLen >= 128) return V6_ALL_ONES;
+  return (V6_ALL_ONES << BigInt(128 - prefixLen)) & V6_ALL_ONES;
+}
+
 function pruneMapIfNeeded<K, V>(map: Map<K, V>) {
   if (map.size <= MAX_MAP_ENTRIES) return;
   const excess = map.size - MAX_MAP_ENTRIES + 500;
@@ -719,10 +786,23 @@ export function isValidIpRule(rule: string): boolean {
     const mask = Number(cidrMatch[2]);
     return ipv4ToInt(cidrMatch[1]) !== null && mask >= 0 && mask <= 32;
   }
-  // Wildcard prefix (e.g. 185.220.101.* or 185.220.*)
+  // IPv4 Wildcard prefix (e.g. 185.220.101.* or 185.220.*)
   if (/^\d{1,3}(?:\.\d{1,3}){0,2}\.\*$/.test(r)) return true;
-  // Basic IPv6 exact/prefix
-  if (r.includes(':') && /^[0-9a-f:.*\/]+$/.test(r)) return true;
+  // IPv6 exact / CIDR / prefix wildcard
+  if (r.includes(':')) {
+    if (ipv6ToBigInt(r) !== null) return true;
+    const slashIdx = r.indexOf('/');
+    if (slashIdx > 0) {
+      const base = r.slice(0, slashIdx);
+      const maskStr = r.slice(slashIdx + 1);
+      if (/^\d{1,3}$/.test(maskStr)) {
+        const mask = Number(maskStr);
+        return ipv6ToBigInt(base) !== null && mask >= 0 && mask <= 128;
+      }
+      return false;
+    }
+    if (r.endsWith('*') && /^[0-9a-f:]+$/.test(r.slice(0, -1))) return true;
+  }
   return false;
 }
 
@@ -731,9 +811,11 @@ export function matchesIpRule(clientIp: string | undefined, rules: string[]): bo
   const ip = clientIp.trim().toLowerCase();
   if (!ip) return false;
   const ipInt = ipv4ToInt(ip);
+  const ipBig = ipInt === null && ip.includes(':') ? ipv6ToBigInt(ip) : null;
+  const normIp = ipBig !== null ? `v6:${ipBig.toString(16).padStart(32, '0')}` : ip;
 
   for (const rule of rules) {
-    if (ip === rule) return true;
+    if (ip === rule || (ipBig !== null && normIp === normalizeExactIp(rule))) return true;
 
     if (rule.endsWith('*')) {
       const prefix = rule.slice(0, -1);
@@ -746,13 +828,21 @@ export function matchesIpRule(clientIp: string | undefined, rules: string[]): bo
       continue;
     }
 
-    if (rule.includes('/') && ipInt !== null) {
+    if (rule.includes('/')) {
       const [baseIp, maskStr] = rule.split('/');
-      const baseInt = ipv4ToInt(baseIp);
       const prefixLen = Number(maskStr);
-      if (baseInt !== null && Number.isInteger(prefixLen) && prefixLen >= 0 && prefixLen <= 32) {
-        const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
-        if ((ipInt & mask) === (baseInt & mask)) return true;
+      if (ipInt !== null) {
+        const baseInt = ipv4ToInt(baseIp);
+        if (baseInt !== null && Number.isInteger(prefixLen) && prefixLen >= 0 && prefixLen <= 32) {
+          const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
+          if ((ipInt & mask) === (baseInt & mask)) return true;
+        }
+      } else if (ipBig !== null) {
+        const baseBig = ipv6ToBigInt(baseIp);
+        if (baseBig !== null && Number.isInteger(prefixLen) && prefixLen >= 0 && prefixLen <= 128) {
+          const mask = ipv6MaskBigInt(prefixLen);
+          if ((ipBig & mask) === (baseBig & mask)) return true;
+        }
       }
     }
   }
@@ -810,7 +900,7 @@ export function compileSafeRegex(pattern: string, maxLen = 512): RegExp | null {
 }
 
 function emptyCompiledAclList(): CompiledIpAclList {
-  return { exact: new Set<string>(), prefixes: [], cidrs: [], timedExact: [], timedPrefixes: [] };
+  return { exact: new Set<string>(), prefixes: [], cidrs: [], v6Cidrs: [], timedExact: [], timedPrefixes: [] };
 }
 
 function addEntryToCompiledAcl(list: CompiledIpAclList, rawEntry: string, expiresAtMs: number | null, reason: string) {
@@ -828,18 +918,25 @@ function addEntryToCompiledAcl(list: CompiledIpAclList, rawEntry: string, expire
   }
   if (rule.includes('/')) {
     const [baseIp, maskStr] = rule.split('/');
-    const baseInt = ipv4ToInt(baseIp);
     const prefixLen = Number(maskStr);
+    const baseInt = ipv4ToInt(baseIp);
     if (baseInt !== null && Number.isInteger(prefixLen) && prefixLen >= 0 && prefixLen <= 32) {
       const maskInt = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
       list.cidrs.push({ netInt: (baseInt & maskInt) >>> 0, maskInt, expiresAtMs, raw: rule, reason });
+      return;
+    }
+    const baseBig = ipv6ToBigInt(baseIp);
+    if (baseBig !== null && Number.isInteger(prefixLen) && prefixLen >= 0 && prefixLen <= 128) {
+      const maskBig = ipv6MaskBigInt(prefixLen);
+      list.v6Cidrs.push({ netBig: baseBig & maskBig, maskBig, expiresAtMs, raw: rule, reason });
     }
     return;
   }
+  const normalized = normalizeExactIp(rule);
   if (expiresAtMs !== null) {
-    list.timedExact.push({ ip: rule, expiresAtMs, reason });
+    list.timedExact.push({ ip: normalized, expiresAtMs, reason });
   } else {
-    list.exact.add(rule);
+    list.exact.add(normalized);
   }
 }
 
@@ -851,9 +948,10 @@ export function matchesCompiledIpAcl(
   if (!clientIp) return { matched: false };
   const ip = clientIp.trim().toLowerCase();
   if (!ip) return { matched: false };
-  if (list.exact.has(ip)) return { matched: true };
+  const normIp = normalizeExactIp(ip);
+  if (list.exact.has(normIp)) return { matched: true };
   for (const item of list.timedExact) {
-    if (item.ip === ip && now < (item.expiresAtMs ?? Infinity)) {
+    if (item.ip === normIp && now < (item.expiresAtMs ?? Infinity)) {
       return { matched: true, reason: item.reason };
     }
   }
@@ -871,6 +969,17 @@ export function matchesCompiledIpAcl(
       for (const c of list.cidrs) {
         if (c.expiresAtMs !== null && now >= c.expiresAtMs) continue;
         if (((ipInt & c.maskInt) >>> 0) === c.netInt) {
+          return { matched: true, reason: c.reason };
+        }
+      }
+    }
+  }
+  if (list.v6Cidrs.length > 0 && ip.includes(':')) {
+    const ipBig = ipv6ToBigInt(ip);
+    if (ipBig !== null) {
+      for (const c of list.v6Cidrs) {
+        if (c.expiresAtMs !== null && now >= c.expiresAtMs) continue;
+        if ((ipBig & c.maskBig) === c.netBig) {
           return { matched: true, reason: c.reason };
         }
       }
@@ -1730,9 +1839,28 @@ export class EdgeWafService {
         } else {
           const isBlacklisted = runtime.blacklistEnabled && matchesCompiledIpAcl(ipKey, runtime.blacklist, now).matched;
           const isDbAutoBanned = runtime.autoBanEnabled && matchesCompiledIpAcl(ipKey, runtime.autoBans, now).matched;
-          if (!this.isAutoBanned(ipKey, now) && !isDbAutoBanned && !isBlacklisted) {
+        if (!this.isAutoBanned(ipKey, now) && !isDbAutoBanned && !isBlacklisted) {
             this.clearLogSuppressions(ipKey, 'WAF_MALICIOUS_IP');
           }
+        }
+      }
+      if (res.shadowMatch) {
+        const shadowKey = `${ipKey || 'unknown'}:SHADOW:${res.shadowMatch.ruleId}`;
+        const existingShadow = blockLogSuppressions.get(shadowKey);
+        if (existingShadow && existingShadow.suppressedUntil > now) {
+          existingShadow.hitCount += 1;
+          existingShadow.lastHitAt = now;
+          res.shadowMatch.suppressLog = true;
+          res.shadowMatch.hitCount = existingShadow.hitCount;
+        } else {
+          pruneMapIfNeeded(blockLogSuppressions);
+          blockLogSuppressions.set(shadowKey, {
+            ip: ipKey || 'unknown',
+            suppressedUntil: now + DEFAULT_LOG_SUPPRESS_MS,
+            hitCount: 1,
+            lastHitAt: now,
+          });
+          res.shadowMatch.hitCount = 1;
         }
       }
       return res;
@@ -2034,4 +2162,39 @@ export class EdgeWafService {
 
     return firstShadowMatch ? { allowed: true, shadowMatch: firstShadowMatch } : { allowed: true };
   }
+}
+
+export interface ActiveTimedBanItem {
+  ip: string;
+  strikes: number;
+  remainingMinutes: number;
+  bannedUntil: number;
+  source: 'edge' | 'db';
+}
+
+/**
+ * Merges in-isolate auto-bans with DB timed bans (both AUTO_BAN and timed BLACKLIST such as "Ban 24h").
+ */
+export function mergeActiveTimedBans(ipAcl: WafDbIpAcl[], now = Date.now()): ActiveTimedBanItem[] {
+  const map = new Map<string, ActiveTimedBanItem>();
+  for (const ban of EdgeWafService.getActiveBans(now)) {
+    map.set(ban.ip.toLowerCase(), { ...ban, source: 'edge' });
+  }
+  for (const row of ipAcl) {
+    const isTimedBlacklist = row.list_type === 'BLACKLIST' && Boolean(row.expires_at);
+    if (row.list_type !== 'AUTO_BAN' && !isTimedBlacklist) continue;
+    const expMs = parseUtcTimestampMs(row.expires_at);
+    if (expMs !== null && expMs <= now) continue;
+    const key = row.ip_cidr.toLowerCase();
+    if (!map.has(key)) {
+      map.set(key, {
+        ip: row.ip_cidr,
+        strikes: row.list_type === 'AUTO_BAN' ? 3 : 1,
+        remainingMinutes: expMs ? Math.max(1, Math.ceil((expMs - now) / 60_000)) : 999,
+        bannedUntil: expMs ?? now + 86_400_000,
+        source: 'db',
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.bannedUntil - a.bannedUntil);
 }

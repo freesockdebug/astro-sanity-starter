@@ -16,10 +16,10 @@ import {
 } from '@db';
 import {
   EdgeWafService,
+  mergeActiveTimedBans,
   parseIpList,
   normalizeWafRuleConfig,
   DEFAULT_WAF_RULE_CONFIG,
-  parseUtcTimestampMs,
 } from '@utils/waf';
 import { toIsoUtcString, formatUtcFallback } from '@utils/format';
 import { env as cfEnv } from 'cloudflare:workers';
@@ -59,25 +59,7 @@ const blockedCount = parseIpList(blockedIpsStr).length;
 const allowCount = parseIpList(allowIpsStr).length;
 
 const nowMs = Date.now();
-const mergedBanMap = new Map<string, { ip: string; strikes: number; remainingMinutes: number; bannedUntil: number }>();
-for (const ban of EdgeWafService.getActiveBans(nowMs)) {
-  mergedBanMap.set(ban.ip.toLowerCase(), ban);
-}
-for (const row of ipAcl) {
-  if (row.list_type !== 'AUTO_BAN') continue;
-  const expMs = parseUtcTimestampMs(row.expires_at);
-  if (expMs !== null && expMs <= nowMs) continue;
-  const key = row.ip_cidr.toLowerCase();
-  if (!mergedBanMap.has(key)) {
-    mergedBanMap.set(key, {
-      ip: row.ip_cidr,
-      strikes: 3,
-      remainingMinutes: expMs ? Math.max(1, Math.ceil((expMs - nowMs) / 60_000)) : 999,
-      bannedUntil: expMs ?? nowMs + 86_400_000,
-    });
-  }
-}
-const activeBans = Array.from(mergedBanMap.values()).sort((a, b) => b.bannedUntil - a.bannedUntil);
+const activeBans = mergeActiveTimedBans(ipAcl, nowMs);
 const localStats = EdgeWafService.getStrikeStats(nowMs);
 const strikeStats = { activeBans: activeBans.length, trackedIps: Math.max(localStats.trackedIps, activeBans.length) };
 const blocked24hCount = daySummary.totalHits || 0;
@@ -291,7 +273,7 @@ const initialPayload = JSON.stringify({
         ]}
       >
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Active Auto-Banned IPs:</span>
+          <span class="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Active Timed Bans:</span>
           <div id="waf-active-bans-chips" class="flex flex-wrap items-center gap-1.5">
             {activeBans.map((ban) => (
               <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-mono text-[#1d1d1f]">
@@ -765,12 +747,36 @@ const initialPayload = JSON.stringify({
         if (allTab) allTab.textContent = `All (${presetCount + customRows.length})`;
         if (customTab) customTab.textContent = `Custom (${customRows.length})`;
 
-        // Sync preset checkboxes from DB rules state when available
+        // Sync preset checkboxes, opacity, priority & action badges from DB rules state when available
         const sysMap = new Map(dbRulesState.filter((r) => r.is_system === 1).map((r) => [r.id, r]));
-        document.querySelectorAll<HTMLInputElement>('.waf-sub-checkbox[data-sys-rule-id]').forEach((cb) => {
-          const sysRule = sysMap.get(cb.dataset.sysRuleId || '');
-          if (sysRule) {
-            cb.checked = sysRule.is_enabled !== 0;
+        document.querySelectorAll<HTMLElement>('.waf-unified-rule-row[data-sys-rule-id]').forEach((row) => {
+          const sysId = row.dataset.sysRuleId || '';
+          const sysRule = sysMap.get(sysId);
+          if (!sysRule) return;
+          const isEnabled = sysRule.is_enabled !== 0;
+          const cb = row.querySelector<HTMLInputElement>('.waf-sub-checkbox[data-sys-rule-id]');
+          if (cb) {
+            cb.checked = isEnabled;
+            row.classList.toggle('opacity-55', !isEnabled);
+          }
+          const priEl = row.querySelector<HTMLElement>('[data-sys-priority]');
+          if (priEl) priEl.textContent = `P${Number(sysRule.priority ?? 100)}`;
+          const actionEl = row.querySelector<HTMLElement>('[data-sys-action-badge]');
+          if (actionEl) {
+            const act = sysRule.action;
+            actionEl.className = `adm-badge ${
+              act === 'rate_limit_429' ? 'adm-badge-warn' : act === 'allow' ? 'adm-badge-ok' : act === 'log_only' ? 'adm-badge-info' : 'adm-badge-err'
+            }`;
+            actionEl.textContent =
+              act === 'log_only'
+                ? 'Shadow Log'
+                : act === 'allow'
+                  ? 'Allow'
+                  : act === 'rate_limit_429'
+                    ? '429 Throttle'
+                    : act === 'challenge_fingerprint'
+                      ? 'Challenge'
+                      : '403 Block';
           }
         });
 
@@ -1369,6 +1375,8 @@ const initialPayload = JSON.stringify({
       const editPriorityEl = document.getElementById('waf-edit-priority') as HTMLInputElement | null;
       const editMatchModeEl = document.getElementById('waf-edit-match-mode') as HTMLSelectElement | null;
       const editStrikeEl = document.getElementById('waf-edit-strike') as HTMLInputElement | null;
+      const editCategoryEl = document.getElementById('waf-edit-category') as HTMLSelectElement | null;
+      const editExpiresEl = document.getElementById('waf-edit-expires') as HTMLSelectElement | null;
       const editConditionsEl = document.getElementById('waf-edit-conditions') as HTMLTextAreaElement | null;
       const editRateLimitEl = document.getElementById('waf-edit-ratelimit') as HTMLInputElement | null;
 
@@ -1389,6 +1397,15 @@ const initialPayload = JSON.stringify({
         if (editPriorityEl) editPriorityEl.value = String(rule.priority ?? 100);
         if (editMatchModeEl) editMatchModeEl.value = rule.match_mode === 'ANY' ? 'ANY' : 'ALL';
         if (editStrikeEl) editStrikeEl.value = String(rule.strike_weight ?? 0);
+        if (editCategoryEl) {
+          editCategoryEl.value = rule.category || 'custom';
+          editCategoryEl.disabled = rule.is_system === 1;
+        }
+        if (editExpiresEl) {
+          const keepOpt = editExpiresEl.querySelector<HTMLOptionElement>('option[value="__keep__"]');
+          if (keepOpt) keepOpt.classList.toggle('hidden', !rule.expires_at);
+          editExpiresEl.value = rule.expires_at ? '__keep__' : '';
+        }
         if (editConditionsEl) {
           try {
             editConditionsEl.value = JSON.stringify(JSON.parse(rule.conditions_json || '[]'), null, 2);
@@ -1407,12 +1424,19 @@ const initialPayload = JSON.stringify({
         const ruleId = editIdEl.value;
         const prev = dbRulesState.find((r) => r.id === ruleId);
         if (!prev) return;
+        const expVal = editExpiresEl?.value ?? '';
+        const nextExpiresAt =
+          expVal === '__keep__'
+            ? (prev.expires_at ?? null)
+            : Number(expVal) > 0
+              ? new Date(Date.now() + Number(expVal) * 60_000).toISOString().slice(0, 19).replace('T', ' ')
+              : null;
         try {
           const { ok, data } = await postWafAction({
             action: 'upsert_rule',
             rule: {
               id: prev.id,
-              category: prev.category,
+              category: prev.is_system === 1 ? prev.category : (editCategoryEl?.value || prev.category),
               is_system: prev.is_system,
               is_enabled: prev.is_enabled,
               name: editNameEl?.value || prev.name,
@@ -1422,7 +1446,7 @@ const initialPayload = JSON.stringify({
               strike_weight: Number(editStrikeEl?.value ?? prev.strike_weight ?? 0),
               conditions_json: editConditionsEl?.value || '[]',
               rate_limit_json: editRateLimitEl?.value || '{}',
-              expires_at: prev.expires_at ?? null,
+              expires_at: nextExpiresAt,
             },
           });
           if (!ok) {

@@ -12,6 +12,7 @@ import {
   compileSafeRegex,
   compileWafRuntime,
   buildSystemWafRulesSeed,
+  mergeActiveTimedBans,
   WAF_CONDITION_CATALOG,
 } from '../src/utils/waf.js';
 import { createTieredCache } from '../src/utils/cache.js';
@@ -872,4 +873,68 @@ test('Compiled DB WAF runtime enforces ReDoS protection, composite ALL/ANY rules
   const strike3 = EdgeWafService.evaluate({ clientIp: '198.51.100.2', pathname: '/api/submit-quote', method: 'POST', country: 'XX', headers: BROWSER_HEADERS, now }, settings, runtime);
   assert.equal(strike3.status, 403);
   assert.equal(strike3.autoBanned, true);
+});
+
+test('IPv6 exact/CIDR matching, timed Ban 24h visibility, and shadow log memory debounce work cleanly', () => {
+  EdgeWafService.clearAllStrikes();
+  const now = 1_700_000_000_000;
+
+  // 1. IPv6 validation & canonical matching
+  assert.equal(isValidIpRule('2a06:98c0:3600::103'), true);
+  assert.equal(isValidIpRule('2408:8207::/32'), true);
+  assert.equal(isValidIpRule('2001:::1'), false);
+  assert.equal(isValidIpRule('2001:db8::/129'), false);
+  assert.equal(matchesIpRule('2a06:98c0:3600:0000:0000:0000:0000:0103', ['2a06:98c0:3600::103']), true);
+  assert.equal(matchesIpRule('2408:8207:1234::1', ['2408:8207::/32']), true);
+  assert.equal(matchesIpRule('2408:8208::1', ['2408:8207::/32']), false);
+
+  const v6Runtime = compileWafRuntime({
+    rules: [
+      ...buildSystemWafRulesSeed(),
+      {
+        id: 'cr_shadow_v6',
+        category: 'custom',
+        name: 'Shadow /observe',
+        is_system: 0,
+        is_enabled: 1,
+        priority: 30,
+        conditions_json: JSON.stringify([{ field: 'path', op: 'starts_with', value: '/observe' }]),
+        match_mode: 'ALL',
+        action: 'log_only',
+        rate_limit_json: '{}',
+        strike_weight: 0,
+        expires_at: null,
+      },
+    ],
+    ipAcl: [
+      { ip_cidr: '2a06:98c0:3600::103', list_type: 'BLACKLIST', reason: 'Ban 24h IPv6', expires_at: new Date(now + 86_400_000).toISOString().slice(0, 19).replace('T', ' ') },
+      { ip_cidr: '2408:8207::/32', list_type: 'BLACKLIST', reason: 'Permanent v6 CIDR', expires_at: null },
+    ],
+  });
+
+  const settings = { waf_active_modes: ['block_malicious_ips'] as ('block_malicious_ips')[] };
+  assert.equal(EdgeWafService.evaluate({ clientIp: '2a06:98c0:3600:0:0:0:0:103', pathname: '/', headers: BROWSER_HEADERS, now }, settings, v6Runtime).status, 403);
+  assert.equal(EdgeWafService.evaluate({ clientIp: '2408:8207:abcd::9', pathname: '/', headers: BROWSER_HEADERS, now }, settings, v6Runtime).status, 403);
+
+  // 2. mergeActiveTimedBans surfaces timed BLACKLIST (Ban 24h) alongside AUTO_BAN, excluding permanent BLACKLIST
+  const timedBans = mergeActiveTimedBans(
+    [
+      { ip_cidr: '2a06:98c0:3600::103', list_type: 'BLACKLIST', reason: 'Ban 24h IPv6', expires_at: new Date(now + 86_400_000).toISOString().slice(0, 19).replace('T', ' ') },
+      { ip_cidr: '2408:8207::/32', list_type: 'BLACKLIST', reason: 'Permanent', expires_at: null },
+      { ip_cidr: '198.51.100.77', list_type: 'AUTO_BAN', reason: 'Auto-Ban', expires_at: new Date(now + 900_000).toISOString().slice(0, 19).replace('T', ' ') },
+    ],
+    now
+  );
+  assert.equal(timedBans.length, 2);
+  assert.ok(timedBans.some((b) => b.ip === '2a06:98c0:3600::103'));
+  assert.ok(timedBans.some((b) => b.ip === '198.51.100.77'));
+
+  // 3. Shadow (log_only) debounces repeated hits in isolate memory
+  const s1 = EdgeWafService.evaluate({ clientIp: '198.51.100.90', pathname: '/observe/test', headers: BROWSER_HEADERS, now }, settings, v6Runtime);
+  const s2 = EdgeWafService.evaluate({ clientIp: '198.51.100.90', pathname: '/observe/test', headers: BROWSER_HEADERS, now: now + 100 }, settings, v6Runtime);
+  assert.equal(s1.allowed, true);
+  assert.equal(s1.shadowMatch?.suppressLog, undefined);
+  assert.equal(s1.shadowMatch?.hitCount, 1);
+  assert.equal(s2.shadowMatch?.suppressLog, true);
+  assert.equal(s2.shadowMatch?.hitCount, 2);
 });

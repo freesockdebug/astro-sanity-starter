@@ -206,14 +206,12 @@ function prepareLogEntry(input: RecordErrorLogInput, settings: any): PreparedLog
   if (source === 'EDGE_WAF' && clientIp && errorCode) {
     const rawCtx = input.context && typeof input.context === 'object' ? (input.context as any) : null;
     const nested = rawCtx?.context && typeof rawCtx.context === 'object' ? rawCtx.context : rawCtx;
-    if (!nested?.shadow) {
-      wafCoalesce = {
-        key: `${clientIp}:${errorCode}`,
-        hitCount: Math.max(1, Number(nested?.hitCount ?? rawCtx?.hitCount ?? 1)),
-        lastBlockedAt: String(nested?.lastBlockedAt ?? rawCtx?.lastBlockedAt ?? rawCtx?.timestamp ?? new Date().toISOString()),
-        windowMs: errorCode === 'WAF_STRICT_RATE_LIMIT' ? 120_000 : 900_000,
-      };
-    }
+    wafCoalesce = {
+      key: `${clientIp}:${errorCode}`,
+      hitCount: Math.max(1, Number(nested?.hitCount ?? rawCtx?.hitCount ?? 1)),
+      lastBlockedAt: String(nested?.lastBlockedAt ?? rawCtx?.lastBlockedAt ?? rawCtx?.timestamp ?? new Date().toISOString()),
+      windowMs: errorCode === 'WAF_STRICT_RATE_LIMIT' ? 120_000 : 900_000,
+    };
   }
 
   return {

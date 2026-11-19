@@ -359,6 +359,9 @@ export async function deleteWafRule(
   return { success: true };
 }
 
+let lastAutoBanKvRefreshAt = 0;
+const AUTO_BAN_KV_THROTTLE_MS = 3_000;
+
 export async function upsertWafIpAcl(
   entry: {
     ip_cidr: string;
@@ -395,7 +398,22 @@ export async function upsertWafIpAcl(
     );
   });
 
-  await refreshWafRuntimeCache(customEnv);
+  if (listType === 'AUTO_BAN') {
+    // Update L1 immediately and throttle KV writes (max 1 write per 3s) to avoid Cloudflare KV 429s under proxy floods
+    const currentRaw = wafRuntimeCache.peekRaw();
+    if (currentRaw) {
+      const nextAcl = currentRaw.ipAcl.filter((r) => r.ip_cidr.toLowerCase() !== ipCidr);
+      nextAcl.unshift({ ip_cidr: ipCidr, list_type: listType, reason, expires_at: expiresAt, created_by: createdBy });
+      wafRuntimeCache.seed({ rules: currentRaw.rules, ipAcl: nextAcl });
+    }
+    const now = Date.now();
+    if (now - lastAutoBanKvRefreshAt >= AUTO_BAN_KV_THROTTLE_MS) {
+      lastAutoBanKvRefreshAt = now;
+      await refreshWafRuntimeCache(customEnv).catch(() => {});
+    }
+  } else {
+    await refreshWafRuntimeCache(customEnv);
+  }
   return { success: true };
 }
 

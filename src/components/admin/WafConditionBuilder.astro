@@ -516,7 +516,7 @@ const parseRateLimit = (rawJson: string): { limit?: number; window_s?: number } 
                   {group.modeTitle}
                 </span>
                 {dbSys && (
-                  <span class="text-[10px] font-mono text-[#86868b] shrink-0">P{dbSys.priority}</span>
+                  <span data-sys-priority={sysId} class="text-[10px] font-mono text-[#86868b] shrink-0">P{dbSys.priority}</span>
                 )}
                 <div class="flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
                   <span class="font-semibold text-[#1d1d1f]">{cond.fieldExpr}</span>
@@ -550,7 +550,7 @@ const parseRateLimit = (rawJson: string): { limit?: number; window_s?: number } 
                     429 &gt; {rateVal} req/{rlDb.window_s ?? ruleConfig.rateLimit.windowSeconds}s
                   </span>
                 ) : (
-                  <span class:list={['adm-badge', badgeCls]}>
+                  <span data-sys-action-badge={sysId} class:list={['adm-badge', badgeCls]}>
                     {dbSys?.action === 'log_only' ? 'Shadow Log' : cond.actionLabel}
                   </span>
                 )}
@@ -614,6 +614,27 @@ const parseRateLimit = (rawJson: string): { limit?: number; window_s?: number } 
           <label class="block space-y-1">
             <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Strike Weight</span>
             <input id="waf-edit-strike" type="number" min="0" max="50" class="adm-input font-mono text-xs py-1.5" />
+          </label>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <label class="block space-y-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Protection Mode Category</span>
+            <select id="waf-edit-category" class="adm-input text-xs py-1.5">
+              <option value="custom">Custom (Always Active)</option>
+              <option value="malicious">Malicious IP &amp; OWASP</option>
+              <option value="rate_limit">Strict Rate Limit</option>
+              <option value="bot">Bot Challenge</option>
+            </select>
+          </label>
+          <label class="block space-y-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-[#52525b]">Expiration (TTL)</span>
+            <select id="waf-edit-expires" class="adm-input text-xs py-1.5">
+              <option value="">Permanent</option>
+              <option value="__keep__">Keep Existing Expiration</option>
+              <option value="120">2 Hours from now</option>
+              <option value="1440">24 Hours from now</option>
+              <option value="10080">7 Days from now</option>
+            </select>
           </label>
         </div>
         <label class="block space-y-1">

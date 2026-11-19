@@ -218,28 +218,45 @@ export const onRequest = defineMiddleware(async (context, next) => {
       }
 
       if (wafResult.shadowMatch) {
-        logger.warn(
-          {
-            module: 'EDGE_WAF',
-            event: wafResult.shadowMatch.code,
-            message: wafResult.shadowMatch.reason,
-            path: pathname,
-            method: request.method,
-            statusCode: 200,
-            rayId,
-            clientIp: clientMeta.ip,
-            country: clientMeta.country,
-            city: clientMeta.city,
-            context: {
-              shadow: true,
-              mode: wafResult.shadowMatch.mode,
-              ruleId: wafResult.shadowMatch.ruleId,
-              matchedSample: wafResult.shadowMatch.matchedSample,
-              userAgent: request.headers.get('user-agent') || '',
+        const shadowEvent = `WAF_SHADOW_${wafResult.shadowMatch.ruleId}`.slice(0, 50);
+        const shadowAt = new Date().toISOString();
+        if (!wafResult.shadowMatch.suppressLog) {
+          logger.warn(
+            {
+              module: 'EDGE_WAF',
+              event: shadowEvent,
+              message: wafResult.shadowMatch.reason,
+              path: pathname,
+              method: request.method,
+              statusCode: 200,
+              rayId,
+              clientIp: clientMeta.ip,
+              country: clientMeta.country,
+              city: clientMeta.city,
+              context: {
+                shadow: true,
+                mode: wafResult.shadowMatch.mode,
+                ruleId: wafResult.shadowMatch.ruleId,
+                matchedSample: wafResult.shadowMatch.matchedSample,
+                userAgent: request.headers.get('user-agent') || '',
+                hitCount: wafResult.shadowMatch.hitCount ?? 1,
+                lastBlockedAt: shadowAt,
+              },
             },
-          },
-          { cfEnv, ctx: runtimeCtx }
-        );
+            { cfEnv, ctx: runtimeCtx }
+          );
+        } else {
+          syncWafBlockStats(
+            {
+              clientIp: clientMeta.ip,
+              errorCode: shadowEvent,
+              hitCount: wafResult.shadowMatch.hitCount ?? 1,
+              hitDelta: 1,
+              lastBlockedAt: shadowAt,
+            },
+            { cfEnv, ctx: runtimeCtx }
+          );
+        }
       }
 
       const probeEnabled = wafRuntime
