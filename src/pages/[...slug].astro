@@ -4,8 +4,6 @@ import type { Page } from 'types';
 import Layout from '@layouts/Layout.astro';
 import { componentMap, SectionBoundary, NotFoundView } from '@components';
 import { PageService } from '@data/page';
-import { SiteConfigService } from '@data/siteConfig';
-import { RfqSettingsService } from '@data/rfqSettings';
 import { normalizeSections, extractHeroPreload } from '@data/blocks';
 import { getLangFromUrl, getLocalizedValue } from '@i18n';
 
@@ -49,12 +47,9 @@ if (rawSlug && (
 const formattedSlug = !rawSlug || rawSlug === '/' ? '/' : (rawSlug.startsWith('/') ? rawSlug : `/${rawSlug}`);
 const unslashed = formattedSlug.replace(/^\//, '');
 
-// Resolve page first so 404s don't eagerly trigger unrelated settings fetches
+// SiteConfig & RfqSettings & PageSlugs are already pre-hydrated in L1 by middleware preloadEdgeIsolate
 const pages = await PageService.getBySlug(formattedSlug);
 const page = pages && pages.length > 0 ? pages[0] : null;
-if (page) {
-  await Promise.all([SiteConfigService.getConfig(), RfqSettingsService.getSettings()]);
-}
 
 if (!page) {
   Astro.response.status = 404;

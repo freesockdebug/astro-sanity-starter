@@ -15,7 +15,7 @@ import {
   resetGlobalCacheStats,
 } from '@utils/cache';
 import { recordAdminAudit } from '@db/audit.repo';
-import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache } from '@utils/cmsSync';
+import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache, rebuildEdgePreloadBundle } from '@utils/cmsSync';
 
 export const prerender = false;
 
@@ -151,6 +151,8 @@ export const POST: APIRoute = defineAdminApi(
         }
       }
     }
+
+    await rebuildEdgePreloadBundle(cfEnv).catch(() => {});
 
     const durationMs = Date.now() - startTime;
     const routeRevisions = await getRouteRevisions(cfEnv).catch(() => ({}));

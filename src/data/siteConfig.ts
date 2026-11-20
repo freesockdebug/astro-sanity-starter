@@ -45,6 +45,10 @@ export class SiteConfigService {
     configCache.seed(config);
   }
 
+  public static peek(): SiteConfig | null {
+    return configCache.peek();
+  }
+
   public static async getConfig(forceRefresh = false): Promise<SiteConfig | null> {
     return configCache.get(forceRefresh);
   }

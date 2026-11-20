@@ -58,6 +58,10 @@ export class RfqSettingsService {
     rfqCache.seed(merged);
   }
 
+  public static peek(): RfqSettings | null {
+    return rfqCache.peek();
+  }
+
   public static async getSettings(forceRefresh = false): Promise<RfqSettings> {
     return rfqCache.get(forceRefresh);
   }

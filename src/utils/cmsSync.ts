@@ -6,9 +6,19 @@ import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { SecurityService } from '@utils/security';
-import { getSystemSettings, invalidateSettingsCache } from '@db';
+import {
+  DEFAULT_SYSTEM_SETTINGS,
+  settingsCache,
+  wafRuntimeCache,
+  getSystemSettings,
+  getWafRuntime,
+  invalidateSettingsCache,
+  type SystemSettings,
+} from '@db';
 import { getRuntimeEnv } from '@utils/auth';
 import { kvGet, kvPut, runInBackground, ROUTE_REVS_KV_KEY, invalidateRegisteredCachesByScope, registerEpochBumpListener, syncActiveCacheEpochs } from '@utils/cache';
+import { normalizeWafRuleConfig, type CompiledWafRuntime, type WafRuntimeData } from '@utils/waf';
+import type { SiteConfig, RfqSettings } from 'types';
 
 export interface CmsSyncOptions {
   docType?: string;
@@ -22,8 +32,24 @@ export interface CmsSyncOptions {
   cardFieldsChanged?: boolean;
 }
 
+export const EDGE_PRELOAD_KV_KEY = 'edge:preload:v1';
+
+export interface EdgePreloadBundle {
+  updatedAt: number;
+  routeRevs: Record<string, any>;
+  systemSettings: SystemSettings | null;
+  wafRuntime: WafRuntimeData | null;
+  siteConfig: SiteConfig | null;
+  rfqSettings: RfqSettings | null;
+  pageSlugs?: string[];
+  productSlugs?: string[];
+}
+
 let localRouteRevs: Record<string, any> | null = null;
 let localRouteRevsLoadedAt = 0;
+let localPreloadLoadedAt = 0;
+let localPreloadBundleUpdatedAt = 0;
+let isRebuildingPreload = false;
 const ROUTE_REVS_SYNC_INTERVAL_MS = 5_000;
 
 const EPOCH_SCOPE_MAP: Array<[string, string]> = [
@@ -33,9 +59,48 @@ const EPOCH_SCOPE_MAP: Array<[string, string]> = [
   ['__rbac', 'rbac'],
 ];
 
-registerEpochBumpListener((epochKey, ts) => {
+function applyRouteRevisionsUpdate(kvRevs: Record<string, any>, now: number): void {
+  const prevRevs = localRouteRevs;
+  localRouteRevs = kvRevs;
+  syncActiveCacheEpochs(kvRevs);
+
+  if (prevRevs && Object.keys(prevRevs).length > 0) {
+    for (const [epochKey, scope] of EPOCH_SCOPE_MAP) {
+      if (kvRevs[epochKey] !== prevRevs[epochKey]) {
+        invalidateRegisteredCachesByScope(scope);
+      }
+    }
+
+    const epochSet = new Set([...EPOCH_SCOPE_MAP.map(([k]) => k), '__page_slugs']);
+    const allKeys = new Set([...Object.keys(prevRevs), ...Object.keys(kvRevs)]);
+    let cmsChanged = false;
+    for (const k of allKeys) {
+      if (epochSet.has(k)) continue;
+      if (JSON.stringify(prevRevs[k]) !== JSON.stringify(kvRevs[k])) {
+        cmsChanged = true;
+        break;
+      }
+    }
+    if (cmsChanged) {
+      ProductService.invalidateCache();
+      PageService.invalidateCache();
+      SiteConfigService.invalidate();
+      RfqSettingsService.invalidate();
+    }
+  }
+
+  if (Array.isArray(kvRevs.__page_slugs) && kvRevs.__page_slugs.length > 0) {
+    PageService.seedSlugs(kvRevs.__page_slugs);
+  }
+  localRouteRevsLoadedAt = now;
+}
+
+registerEpochBumpListener((epochKey, ts, cfEnv) => {
   if (localRouteRevs) {
     localRouteRevs[epochKey] = ts;
+  }
+  if (!isRebuildingPreload && (epochKey === '__settings' || epochKey === '__waf' || epochKey.startsWith('__cms:'))) {
+    runInBackground(rebuildEdgePreloadBundle(cfEnv));
   }
 });
 
@@ -46,43 +111,150 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
   }
   const kvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
   if (kvRevs && typeof kvRevs === 'object') {
-    const prevRevs = localRouteRevs;
-    localRouteRevs = kvRevs;
-    syncActiveCacheEpochs(kvRevs);
-
-    if (prevRevs && Object.keys(prevRevs).length > 0) {
-      for (const [epochKey, scope] of EPOCH_SCOPE_MAP) {
-        if (kvRevs[epochKey] !== prevRevs[epochKey]) {
-          invalidateRegisteredCachesByScope(scope);
-        }
-      }
-
-      const epochSet = new Set([...EPOCH_SCOPE_MAP.map(([k]) => k), '__page_slugs']);
-      const allKeys = new Set([...Object.keys(prevRevs), ...Object.keys(kvRevs)]);
-      let cmsChanged = false;
-      for (const k of allKeys) {
-        if (epochSet.has(k)) continue;
-        if (JSON.stringify(prevRevs[k]) !== JSON.stringify(kvRevs[k])) {
-          cmsChanged = true;
-          break;
-        }
-      }
-      if (cmsChanged) {
-        ProductService.invalidateCache();
-        PageService.invalidateCache();
-        SiteConfigService.invalidate();
-        RfqSettingsService.invalidate();
-      }
-    }
-
-    if (Array.isArray(kvRevs.__page_slugs) && kvRevs.__page_slugs.length > 0) {
-      PageService.seedSlugs(kvRevs.__page_slugs);
-    }
-  } else if (!localRouteRevs) {
-    localRouteRevs = {};
+    applyRouteRevisionsUpdate(kvRevs, now);
+  } else {
+    if (!localRouteRevs) localRouteRevs = {};
+    localRouteRevsLoadedAt = now;
   }
-  localRouteRevsLoadedAt = now;
-  return localRouteRevs;
+  return localRouteRevs!;
+}
+
+/**
+ * Rebuilds the single aggregated cold-start preload bundle (`edge:preload:v1`) from warm L1 or L2/L3 sources
+ */
+export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreloadBundle | null> {
+  if (isRebuildingPreload) return null;
+  isRebuildingPreload = true;
+  try {
+    const routeRevs = localRouteRevs && Object.keys(localRouteRevs).length > 0
+      ? { ...localRouteRevs }
+      : await getRouteRevisions(cfEnv).catch(() => ({}));
+    const systemSettings = settingsCache.peek() ?? (await getSystemSettings(cfEnv).catch(() => null));
+    let wafRaw = wafRuntimeCache.peekRaw();
+    if (!wafRaw) {
+      await getWafRuntime(cfEnv).catch(() => null);
+      wafRaw = wafRuntimeCache.peekRaw();
+    }
+    const siteConfig = SiteConfigService.peek() ?? (await SiteConfigService.getConfig().catch(() => null));
+    const rfqSettings = RfqSettingsService.peek() ?? (await RfqSettingsService.getSettings().catch(() => null));
+    const pageSlugs = PageService.getCachedSlugs() ?? (await PageService.getSlugs(cfEnv).catch(() => []));
+    const productSlugs = ProductService.getCachedSlugs() ?? (await ProductService.getSlugs(cfEnv).catch(() => []));
+
+    const updatedAt = Date.now();
+    const bundle: EdgePreloadBundle = {
+      updatedAt,
+      routeRevs: routeRevs || {},
+      systemSettings,
+      wafRuntime: wafRaw,
+      siteConfig,
+      rfqSettings,
+      pageSlugs,
+      productSlugs,
+    };
+
+    await kvPut(EDGE_PRELOAD_KV_KEY, bundle, undefined, cfEnv).catch(() => {});
+    localPreloadLoadedAt = updatedAt;
+    localPreloadBundleUpdatedAt = updatedAt;
+    return bundle;
+  } finally {
+    isRebuildingPreload = false;
+  }
+}
+
+export type PreloadStatus = 'L1_HIT' | 'L2_KV_HIT' | 'L3_MISS';
+
+/**
+ * Cold-start single-KV preload: hydrates routeRevs, settings, WAF runtime, siteConfig, rfqSettings & slug guards in 1 KV read
+ */
+export async function preloadEdgeIsolate(
+  cfEnv?: any,
+  force = false
+): Promise<{
+  routeRevisions: Record<string, any>;
+  wafSettings: SystemSettings | null;
+  wafRuntime: CompiledWafRuntime | null;
+  preloadStatus: PreloadStatus;
+}> {
+  const now = Date.now();
+  if (
+    !force &&
+    localRouteRevs &&
+    now - localPreloadLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS &&
+    settingsCache.peek() &&
+    wafRuntimeCache.peek()
+  ) {
+    return {
+      routeRevisions: localRouteRevs,
+      wafSettings: settingsCache.peek(),
+      wafRuntime: wafRuntimeCache.peek(),
+      preloadStatus: 'L1_HIT',
+    };
+  }
+
+  const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
+  if (bundle && typeof bundle === 'object' && bundle.routeRevs && typeof bundle.routeRevs === 'object') {
+    applyRouteRevisionsUpdate(bundle.routeRevs, now);
+
+    const bundleChanged = bundle.updatedAt !== localPreloadBundleUpdatedAt;
+    if (
+      (bundleChanged || !settingsCache.peek()) &&
+      bundle.systemSettings &&
+      typeof bundle.systemSettings === 'object' &&
+      bundle.systemSettings.brand_name
+    ) {
+      settingsCache.seed({
+        ...DEFAULT_SYSTEM_SETTINGS,
+        ...bundle.systemSettings,
+        waf_rule_config: normalizeWafRuleConfig(bundle.systemSettings.waf_rule_config),
+      });
+    }
+    if (
+      (bundleChanged || !wafRuntimeCache.peek()) &&
+      bundle.wafRuntime &&
+      Array.isArray(bundle.wafRuntime.rules) &&
+      Array.isArray(bundle.wafRuntime.ipAcl) &&
+      bundle.wafRuntime.rules.some((r: any) => r?.id === 'sys_legacy_cms_paths')
+    ) {
+      wafRuntimeCache.seed(bundle.wafRuntime);
+    }
+    if ((bundleChanged || !SiteConfigService.peek()) && bundle.siteConfig) {
+      SiteConfigService.seed(bundle.siteConfig);
+    }
+    if ((bundleChanged || !RfqSettingsService.peek()) && bundle.rfqSettings) {
+      RfqSettingsService.seed(bundle.rfqSettings);
+    }
+
+    if (Array.isArray(bundle.pageSlugs) && bundle.pageSlugs.length > 0) {
+      PageService.seedSlugs(bundle.pageSlugs);
+    }
+    if (Array.isArray(bundle.productSlugs) && bundle.productSlugs.length > 0) {
+      ProductService.seedSlugs(bundle.productSlugs);
+    }
+
+    const neededFallback = !settingsCache.peek() || !wafRuntimeCache.peek();
+    const wafSettings = settingsCache.peek() ?? (await getSystemSettings(cfEnv).catch(() => null));
+    const wafRuntime = wafRuntimeCache.peek() ?? (await getWafRuntime(cfEnv).catch(() => null));
+    localPreloadLoadedAt = now;
+    localPreloadBundleUpdatedAt = bundle.updatedAt || now;
+    return {
+      routeRevisions: localRouteRevs || {},
+      wafSettings,
+      wafRuntime,
+      preloadStatus: neededFallback ? 'L3_MISS' : 'L2_KV_HIT',
+    };
+  }
+
+  // Fallback when edge:preload:v1 has not been populated yet
+  const [routeRevisions, wafSettings, wafRuntime] = await Promise.all([
+    getRouteRevisions(cfEnv).catch(() => ({})),
+    getSystemSettings(cfEnv).catch(() => null),
+    getWafRuntime(cfEnv).catch(() => null),
+    SiteConfigService.getConfig().catch(() => null),
+    RfqSettingsService.getSettings().catch(() => null),
+  ]);
+  localPreloadLoadedAt = now;
+  runInBackground(rebuildEdgePreloadBundle(cfEnv));
+  return { routeRevisions, wafSettings, wafRuntime, preloadStatus: 'L3_MISS' };
 }
 
 /**
@@ -110,6 +282,7 @@ export async function bumpRouteRevisions(basePaths: Iterable<string>, bumpGlobal
   localRouteRevsLoadedAt = now;
   syncActiveCacheEpochs(updated);
   await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
+  await rebuildEdgePreloadBundle(cfEnv).catch(() => {});
   return updated;
 }
 

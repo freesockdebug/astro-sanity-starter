@@ -3,14 +3,14 @@ import { defineMiddleware } from 'astro:middleware';
 import { env as cfEnv } from 'cloudflare:workers';
 import { SiteConfigService } from '@data/siteConfig';
 import { NON_DEFAULT_LOCALES } from '@i18n';
-import { getRouteRevisions, resolvePathRevision } from './utils/cmsSync';
+import { getRouteRevisions, resolvePathRevision, preloadEdgeIsolate } from './utils/cmsSync';
 import { SESSION_COOKIE_NAME, checkIsAdmin, getCookieValue, getRuntimeEnv, verifySessionToken } from './utils/auth';
 import { resolveAdminContext } from './utils/rbac';
 import { SecurityService } from './utils/security';
 import { logger, syncWafBlockStats } from './utils/logger';
 import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
 import { getSystemSettings } from './db/settings.repo';
-import { getWafRuntime, upsertWafIpAcl } from './db/waf.repo';
+import { upsertWafIpAcl } from './db/waf.repo';
 import { runInBackground, recordEdgeHtmlCacheResult } from './utils/cache';
 import { EdgeWafService, normalizeWafRuleConfig } from './utils/waf';
 
@@ -72,6 +72,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const startTime = performance.now();
   const profiler = new RequestProfiler();
+  (context.locals as any).requestStartTime = startTime;
   (context.locals as any).profiler = profiler;
 
   return await requestProfilerStorage.run(profiler, async () => {
@@ -99,17 +100,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     };
 
     if (!EdgeWafService.isStaticAsset(pathname)) {
-      if (request.method === 'GET') {
-        const routeRevisions = await getRouteRevisions(cfEnv).catch(() => null);
-        if (routeRevisions) {
-          (context.locals as any).routeRevisions = routeRevisions;
-        }
+      const { routeRevisions, wafSettings, wafRuntime, preloadStatus } = await preloadEdgeIsolate(cfEnv);
+      (context.locals as any).preloadStatus = preloadStatus;
+      if (routeRevisions && request.method === 'GET') {
+        (context.locals as any).routeRevisions = routeRevisions;
       }
-      const [wafSettings, wafRuntime] = await Promise.all([
-        getSystemSettings(cfEnv).catch(() => null),
-        getWafRuntime(cfEnv).catch(() => null),
-        SiteConfigService.getConfig().catch(() => null),
-      ]);
       if (wafSettings) {
         (context.locals as any).systemSettings = wafSettings;
       }
@@ -305,10 +300,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
       let response = await handleRequest(context, next, pathname, url, request);
       const latencyMs = Math.round((performance.now() - startTime) * 10) / 10;
 
-      // Inject Server-Timing & X-Response-Time header for browser DevTools waterfall profiling
+      const perfSpans = profiler.getSpans();
+      const perfSpansHeader = `kv=${perfSpans.kv ?? 0},d1=${perfSpans.d1 ?? 0},sanity=${perfSpans.sanity ?? 0},total=${latencyMs}`;
+      const preloadStatusHeader = String((context.locals as any)?.preloadStatus || 'BYPASS');
+
+      // Inject Server-Timing, X-Response-Time & Preload Diagnostic headers
       response = safeSetHeaders(response, {
         'X-Request-Id': rayId,
         'X-Response-Time': `${latencyMs}ms`,
+        'X-Preload-Status': preloadStatusHeader,
+        'X-Perf-Spans': perfSpansHeader,
         'Server-Timing': profiler.toServerTimingHeader(latencyMs),
       });
 
@@ -344,7 +345,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       if (!isStaticOrLogSelf && !(context.locals as any)?._apiPerfLogged) {
         const settings = (context.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
         const slowThreshold = settings?.slow_request_threshold_ms || 1000;
-        const spans = profiler.getSpans();
+        const spans = perfSpans;
 
         if (latencyMs >= slowThreshold) {
           const sessionUser = await getSessionUser();

@@ -313,6 +313,22 @@ export class ProductService {
     productBySlugCache.seed(slug, product);
   }
 
+  public static seedSlugs(slugs: string[]): void {
+    if (Array.isArray(slugs) && slugs.length > 0) {
+      productSlugsCache.seed(slugs);
+    }
+  }
+
+  public static getCachedSlugs(): string[] | null {
+    const raw = productSlugsCache.peekRaw();
+    return Array.isArray(raw) && raw.length > 0 ? raw : null;
+  }
+
+  public static async getSlugs(customEnv?: any): Promise<string[]> {
+    await productSlugsCache.get(customEnv);
+    return this.getCachedSlugs() || [];
+  }
+
   /**
    * Universal normalizer for product cards, catalogs, and listings
    */

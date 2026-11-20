@@ -185,9 +185,9 @@ export function invalidateRegisteredCachesByScope(scope: string): string[] {
 }
 
 let activeCacheEpochs: Record<string, any> = {};
-let epochBumpListener: ((epochKey: string, ts: number) => void) | null = null;
+let epochBumpListener: ((epochKey: string, ts: number, cfEnv?: any) => void) | null = null;
 
-export function registerEpochBumpListener(fn: (epochKey: string, ts: number) => void): void {
+export function registerEpochBumpListener(fn: (epochKey: string, ts: number, cfEnv?: any) => void): void {
   epochBumpListener = fn;
 }
 
@@ -204,7 +204,7 @@ export function syncActiveCacheEpochs(epochs: Record<string, any>): void {
 export async function bumpCacheEpoch(epochKey: string, cfEnv?: any, explicitTs?: number): Promise<number> {
   const ts = explicitTs ?? Date.now();
   activeCacheEpochs[epochKey] = ts;
-  if (epochBumpListener) epochBumpListener(epochKey, ts);
+  if (epochBumpListener) epochBumpListener(epochKey, ts, cfEnv);
   try {
     const current = (await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null)) || {};
     const updated = { ...current, ...activeCacheEpochs, [epochKey]: ts };

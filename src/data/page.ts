@@ -105,6 +105,11 @@ export class PageService {
     return Array.isArray(raw) && raw.length > 0 ? raw : null;
   }
 
+  public static async getSlugs(customEnv?: any): Promise<string[]> {
+    await pageSlugsCache.get(customEnv);
+    return this.getCachedSlugs() || [];
+  }
+
   public static invalidateCache(): void {
     pageSlugsCache.invalidate();
     pageBySlugCache.invalidate();

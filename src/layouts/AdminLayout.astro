@@ -68,6 +68,24 @@ if (!isShellReq) {
   SanityImageService.setStudioProxyConfig(siteCfg?.enableImageProxy);
 }
 const enableImageProxy = SanityImageService.isProxyEnabled();
+
+const diagPreloadStatus = String((Astro.locals as any)?.preloadStatus || 'L1_HIT');
+const diagProfiler = (Astro.locals as any)?.profiler;
+const diagSpans = diagProfiler && typeof diagProfiler.getSpans === 'function' ? diagProfiler.getSpans() : {};
+const diagKvMs = Math.round(Number(diagSpans.kv || 0) * 10) / 10;
+const diagD1Ms = Math.round(Number(diagSpans.d1 || 0) * 10) / 10;
+const diagSanityMs = Math.round(Number(diagSpans.sanity || 0) * 10) / 10;
+const diagTotalMs = typeof (Astro.locals as any)?.requestStartTime === 'number'
+  ? Math.round((performance.now() - (Astro.locals as any).requestStartTime) * 10) / 10
+  : 0;
+const diagToneMap: Record<string, { cls: string; label: string }> = {
+  L1_HIT: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100/70', label: 'L1 HIT' },
+  L2_KV_HIT: { cls: 'bg-amber-50 text-amber-800 border-amber-200/80 hover:bg-amber-100/70', label: 'L2 KV' },
+  L3_MISS: { cls: 'bg-rose-50 text-rose-700 border-rose-200/80 hover:bg-rose-100/70', label: 'L3 MISS' },
+};
+const diagMeta = diagToneMap[diagPreloadStatus] || { cls: 'bg-[#f5f5f7] text-[#52525b] border-black/10 hover:bg-black/5', label: diagPreloadStatus };
+const diagToneCls = diagMeta.cls;
+const diagLabel = diagMeta.label;
 ---
 
 <Layout
@@ -167,6 +185,22 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
               </div>
 
               <div class="flex items-center gap-3 text-xs">
+                <a
+                  id="admin-diag-hud"
+                  href="/admin/cache"
+                  data-shell-nav="admin"
+                  data-tab-key="cache"
+                  data-tab-title="Edge Cache"
+                  class:list={['inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-mono font-semibold transition-all shadow-2xs select-none', diagToneCls]}
+                  title={`SSR ${Astro.url.pathname} | Preload: ${diagPreloadStatus} | KV: ${diagKvMs}ms | D1: ${diagD1Ms}ms | Sanity: ${diagSanityMs}ms | Total: ${diagTotalMs}ms (Click to open Edge Cache)`}
+                >
+                  <span id="admin-diag-status">⚡ {diagLabel}</span>
+                  <span class="opacity-40">·</span>
+                  <span id="admin-diag-kv">KV {diagKvMs}ms</span>
+                  <span class="opacity-40">·</span>
+                  <span id="admin-diag-total">Total {diagTotalMs}ms</span>
+                </a>
+
                 <button
                   id="cmd-palette-trigger"
                   type="button"
@@ -892,5 +926,55 @@ const enableImageProxy = SanityImageService.isProxyEnabled();
     initAppShellRouter({ scope: 'admin' });
     hydrateAdminTimes();
     document.addEventListener('shell:page-load', () => hydrateAdminTimes());
+
+    if (!(window as any).__adminDiagFetchPatched) {
+      (window as any).__adminDiagFetchPatched = true;
+      const DIAG_BASE_CLS = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-mono font-semibold transition-all shadow-2xs select-none';
+      const DIAG_TONE_CLS: Record<string, [string, string]> = {
+        L1_HIT: ['bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100/70', 'L1 HIT'],
+        L2_KV_HIT: ['bg-amber-50 text-amber-800 border-amber-200/80 hover:bg-amber-100/70', 'L2 KV'],
+        L3_MISS: ['bg-rose-50 text-rose-700 border-rose-200/80 hover:bg-rose-100/70', 'L3 MISS'],
+      };
+      const origFetch = window.fetch.bind(window);
+      window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const res = await origFetch(input, init);
+        try {
+          const rawUrl = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+          const u = new URL(rawUrl, window.location.origin);
+          if (u.origin === window.location.origin && (u.pathname.startsWith('/admin') || u.pathname.startsWith('/api/admin')) && u.pathname !== '/api/client-error') {
+            const preloadStatus = res.headers.get('x-preload-status');
+            const perfSpans = res.headers.get('x-perf-spans');
+            if (preloadStatus || perfSpans) {
+              const hud = document.getElementById('admin-diag-hud');
+              const statusEl = document.getElementById('admin-diag-status');
+              const kvEl = document.getElementById('admin-diag-kv');
+              const totalEl = document.getElementById('admin-diag-total');
+              const parsed: Record<string, number> = {};
+              if (perfSpans) {
+                perfSpans.split(',').forEach((part) => {
+                  const [k, v] = part.split('=');
+                  if (k && v !== undefined) parsed[k.trim()] = Math.round(Number(v) * 10) / 10;
+                });
+              }
+              const kvMs = parsed.kv ?? 0;
+              const d1Ms = parsed.d1 ?? 0;
+              const sanityMs = parsed.sanity ?? 0;
+              const fallbackTotal = parseFloat(res.headers.get('x-response-time') || '0');
+              const totalMs = Number.isFinite(parsed.total) ? parsed.total : (Math.round(fallbackTotal * 10) / 10);
+              const st = preloadStatus || 'L1_HIT';
+              const [toneCls, label] = DIAG_TONE_CLS[st] || ['bg-[#f5f5f7] text-[#52525b] border-black/10 hover:bg-black/5', st];
+              if (hud) {
+                hud.className = `${DIAG_BASE_CLS} ${toneCls}`;
+                hud.title = `${u.pathname} | Preload: ${st} | KV: ${kvMs}ms | D1: ${d1Ms}ms | Sanity: ${sanityMs}ms | Total: ${totalMs}ms (Click to open Edge Cache)`;
+              }
+              if (statusEl) statusEl.textContent = `⚡ ${label}`;
+              if (kvEl) kvEl.textContent = `KV ${kvMs}ms`;
+              if (totalEl) totalEl.textContent = `Total ${totalMs}ms`;
+            }
+          }
+        } catch {}
+        return res;
+      };
+    }
   </script>
 </Layout>

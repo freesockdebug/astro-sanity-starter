@@ -1074,3 +1074,71 @@ test('EdgeWafService sys_legacy_cms_paths returns 404 fast-path without strikes 
     true
   );
 });
+
+test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 KV read and stay warm', async () => {
+  process.env.SANITY_PROJECT_ID = process.env.SANITY_PROJECT_ID || 'xvhhd8u0';
+  const [{ rebuildEdgePreloadBundle, preloadEdgeIsolate, EDGE_PRELOAD_KV_KEY }, { DEFAULT_SYSTEM_SETTINGS, settingsCache }, { wafRuntimeCache }, { SiteConfigService }, { RfqSettingsService }, { PageService }, { ProductService }] = await Promise.all([
+    import('../src/utils/cmsSync.js'),
+    import('../src/db/settings.repo.js'),
+    import('../src/db/waf.repo.js'),
+    import('../src/data/siteConfig.js'),
+    import('../src/data/rfqSettings.js'),
+    import('../src/data/page.js'),
+    import('../src/data/products.js'),
+  ]);
+  const kvStore = new Map<string, string>();
+  let kvReads = 0;
+  const mockEnv = {
+    CACHE_KV: {
+      get: async (k: string) => {
+        kvReads += 1;
+        return kvStore.get(k) ?? null;
+      },
+      put: async (k: string, v: string) => {
+        kvStore.set(k, v);
+      },
+      delete: async (k: string) => {
+        kvStore.delete(k);
+      },
+    },
+  };
+
+  settingsCache.seed({ ...DEFAULT_SYSTEM_SETTINGS, brand_name: 'PRELOAD_BRAND' });
+  wafRuntimeCache.seed({ rules: buildSystemWafRulesSeed(), ipAcl: [] });
+  SiteConfigService.seed({ enableImageProxy: false, edgeCacheTtl: 600 } as any);
+  RfqSettingsService.seed({ showSwatchKitButton: false } as any);
+  PageService.seedSlugs(['home', 'about', 'contact']);
+  ProductService.seedSlugs(['silk-slip-001', 'cotton-robe-002']);
+
+  const built = await rebuildEdgePreloadBundle(mockEnv);
+  assert.ok(built);
+  assert.ok(kvStore.has(EDGE_PRELOAD_KV_KEY));
+
+  // Clear all L1 caches to simulate a fresh cold Cloudflare Isolate
+  settingsCache.invalidate();
+  wafRuntimeCache.invalidate();
+  SiteConfigService.invalidate();
+  RfqSettingsService.invalidate();
+  PageService.invalidateCache();
+  ProductService.invalidateCache();
+  kvReads = 0;
+
+  // Cold preload must perform ONLY 1 KV read (edge:preload:v1) and hydrate all 6 L1 modules
+  const cold = await preloadEdgeIsolate(mockEnv, true);
+  assert.equal(kvReads, 1);
+  assert.equal(cold.preloadStatus, 'L2_KV_HIT');
+  assert.equal(cold.wafSettings?.brand_name, 'PRELOAD_BRAND');
+  assert.ok(cold.wafRuntime);
+  assert.equal(settingsCache.peek()?.brand_name, 'PRELOAD_BRAND');
+  assert.ok(wafRuntimeCache.peek());
+  assert.equal(SiteConfigService.peek()?.edgeCacheTtl, 600);
+  assert.equal(RfqSettingsService.peek()?.showSwatchKitButton, false);
+  assert.deepEqual(PageService.getCachedSlugs(), ['home', 'about', 'contact']);
+  assert.deepEqual(ProductService.getCachedSlugs(), ['silk-slip-001', 'cotton-robe-002']);
+
+  // Warm call within 5s must perform 0 additional KV reads
+  const warm = await preloadEdgeIsolate(mockEnv);
+  assert.equal(kvReads, 1);
+  assert.equal(warm.preloadStatus, 'L1_HIT');
+  assert.equal(warm.wafSettings?.brand_name, 'PRELOAD_BRAND');
+});
