@@ -1,7 +1,7 @@
 // src/pages/api/orders/index.ts
 import type { APIRoute } from 'astro';
 import { defineBuyerApi, jsonNoCache } from '@utils/auth';
-import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders } from '@db';
+import { getOrdersByUserId, claimOrdersByEmail, listAdminOrders, countOrdersByUserId, countAllOrders } from '@db';
 import { resolveOrderItemImage, getOrderItemProductUrl } from '@data/products';
 
 export const prerender = false;
@@ -24,13 +24,23 @@ export const GET: APIRoute = defineBuyerApi({}, async ({ url, user }) => {
   let allOrdersCount = 0;
 
   if (user.isAdmin) {
-    const [myRes, adminRes] = await Promise.all([
-      getOrdersByUserId(user.id, user.email),
-      listAdminOrders({ limit: 100 }),
-    ]);
-    myOrdersCount = myRes.length;
-    allOrdersCount = adminRes.total || adminRes.orders.length;
-    rawOrders = view === 'all' ? adminRes.orders : myRes;
+    if (view === 'all') {
+      const [adminRes, myCnt] = await Promise.all([
+        listAdminOrders({ limit: 100 }),
+        countOrdersByUserId(user.id, user.email),
+      ]);
+      myOrdersCount = myCnt;
+      allOrdersCount = adminRes.total || adminRes.orders.length;
+      rawOrders = adminRes.orders;
+    } else {
+      const [myRes, allCnt] = await Promise.all([
+        getOrdersByUserId(user.id, user.email),
+        countAllOrders(),
+      ]);
+      myOrdersCount = myRes.length;
+      allOrdersCount = allCnt;
+      rawOrders = myRes;
+    }
   } else {
     rawOrders = await getOrdersByUserId(user.id, user.email);
     myOrdersCount = rawOrders.length;

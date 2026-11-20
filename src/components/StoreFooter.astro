@@ -17,7 +17,7 @@ const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 
 const config = Astro.props.config ?? await fetchData();
-const rfqSettings = await fetchRfqSettings();
+const rfqSettings = Astro.props.rfqSettings ?? (await fetchRfqSettings());
 const header = config?.header;
 const footer = config?.footer;
 

@@ -307,6 +307,7 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
   const headers = new Headers();
   headers.append('Set-Cookie', sessionCookie);
   headers.append('Set-Cookie', clearStateCookie);
+  headers.append('Set-Cookie', `auth_hint=1; Path=/; Max-Age=604800; SameSite=Lax${isHttps ? '; Secure' : ''}`);
 
   // 5. Popup postMessage response or standard 302 Redirect
   if (isPopup) {

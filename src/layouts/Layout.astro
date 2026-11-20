@@ -4,6 +4,7 @@ import { StoreNav, StoreFooter, QuoteDrawer, WhatsAppWidget, SEO } from '@compon
 import SectionBoundary from '@components/SectionBoundary.astro';
 import ThemeProvider from '@components/ThemeProvider.astro';
 import { fetchData } from '@data/siteConfig';
+import { fetchRfqSettings } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
 import { getSystemSettings } from '@db';
@@ -52,7 +53,10 @@ const isShellReq = Astro.request.headers.get('x-shell-request') === '1';
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 const hreflangAlternates = isShellReq ? [] : getHreflangAlternates(Astro.url, Astro.site);
-const configData: SiteConfig = (bare || isShellReq) ? ({} as SiteConfig) : ((await fetchData()) || {});
+const [rawConfigData, rfqSettings] = (bare || isShellReq)
+    ? [{} as SiteConfig, null]
+    : await Promise.all([fetchData(), fetchRfqSettings()]);
+const configData: SiteConfig = rawConfigData || ({} as SiteConfig);
 if (!bare && !isShellReq) {
     SanityImageService.setStudioProxyConfig(configData?.enableImageProxy);
 }
@@ -157,7 +161,7 @@ if (!bare && Astro.locals) {
             <ThemeProvider theme={storefrontTheme}>
                 {!isShellReq && (
                     <SectionBoundary sectionName="StoreNav">
-                        <StoreNav config={configData} />
+                        <StoreNav config={configData} rfqSettings={rfqSettings} />
                     </SectionBoundary>
                 )}
                 <main class={mainClass}>
@@ -165,12 +169,12 @@ if (!bare && Astro.locals) {
                 </main>
                 {!isShellReq && (
                     <SectionBoundary sectionName="StoreFooter">
-                        <StoreFooter config={configData} />
+                        <StoreFooter config={configData} rfqSettings={rfqSettings} />
                     </SectionBoundary>
                 )}
                 {!isShellReq && (
                     <SectionBoundary sectionName="QuoteDrawer">
-                        <QuoteDrawer />
+                        <QuoteDrawer settings={rfqSettings} />
                     </SectionBoundary>
                 )}
             </ThemeProvider>

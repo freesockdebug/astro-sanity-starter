@@ -48,12 +48,13 @@ export const ALL: APIRoute = async ({ request, url, cookies }) => {
     targetUrl = postLogoutUrl.toString();
   }
 
+  const headers = new Headers({ Location: targetUrl });
+  headers.append('Set-Cookie', clearCookie);
+  headers.append('Set-Cookie', 'auth_hint=; Path=/; Max-Age=0; SameSite=Lax');
+
   return new Response(null, {
     status: 302,
-    headers: {
-      Location: targetUrl,
-      'Set-Cookie': clearCookie,
-    },
+    headers,
   });
 };
 

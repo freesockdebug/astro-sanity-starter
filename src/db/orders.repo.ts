@@ -212,6 +212,24 @@ export async function getOrdersByUserId(userId: string, buyerEmail?: string): Pr
   });
 }
 
+export async function countOrdersByUserId(userId: string, buyerEmail?: string): Promise<number> {
+  if (!userId && !buyerEmail) return 0;
+  const normalizedEmail = buyerEmail ? buyerEmail.trim().toLowerCase() : null;
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const row = normalizedEmail && userId
+      ? await db.first<{ cnt: number }>('SELECT COUNT(*) as cnt FROM orders WHERE user_id = ? OR buyer_email = ?', [userId, normalizedEmail])
+      : await db.first<{ cnt: number }>('SELECT COUNT(*) as cnt FROM orders WHERE user_id = ?', [userId]);
+    return Number(row?.cnt || 0);
+  });
+}
+
+export async function countAllOrders(): Promise<number> {
+  return executeWithAutoSchema(async (db: DbClient) => {
+    const row = await db.first<{ cnt: number }>('SELECT COUNT(*) as cnt FROM orders');
+    return Number(row?.cnt || 0);
+  });
+}
+
 /**
  * Retrieves a single order by order_no
  */

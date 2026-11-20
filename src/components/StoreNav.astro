@@ -11,7 +11,7 @@ import { getLangFromUrl, getLocalizedPath, useTranslations, getLocalizedValue } 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 const config = Astro.props.config ?? await fetchData();
-const rfqSettings = await fetchRfqSettings();
+const rfqSettings = Astro.props.rfqSettings ?? (await fetchRfqSettings());
 const header = config?.header;
 const brandTitle = header?.title || DEFAULT_BRAND_TITLE;
 const logoImage = header?.logo?.src ? SanityImageService.logo(header.logo.src) : undefined;
@@ -172,23 +172,25 @@ const resolvedBrandTitle = cleanBrandTitle(brandTitle, DEFAULT_BRAND_TITLE);
     window.location.href = `/api/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`;
   };
 
-  // Check auth state on load to light up user dot indicator (TTL: 3 minutes)
-  clientCache.fetchWithCache('auth:me', '/api/auth/me', {
-    mode: 'ttl',
-    ttlMs: 3 * 60 * 1000,
-    onData: (data: any) => {
-      if (data && data.authenticated) {
-        const dot = document.getElementById('nav-user-indicator');
-        if (dot) dot.classList.remove('hidden');
-        const btn = document.getElementById('nav-user-account-btn');
-        if (btn) btn.setAttribute('title', `Signed in as ${data.user?.email || 'User'}`);
-        if (data.user?.isAdmin) {
-          const mobileAdminLink = document.getElementById('nav-mobile-admin-link');
-          if (mobileAdminLink) mobileAdminLink.classList.remove('hidden');
+  // Check auth state on load only when auth_hint=1 cookie is present (eliminates anonymous /api/auth/me polling)
+  if (document.cookie.split('; ').some((c) => c === 'auth_hint=1')) {
+    clientCache.fetchWithCache('auth:me', '/api/auth/me', {
+      mode: 'ttl',
+      ttlMs: 3 * 60 * 1000,
+      onData: (data: any) => {
+        if (data && data.authenticated) {
+          const dot = document.getElementById('nav-user-indicator');
+          if (dot) dot.classList.remove('hidden');
+          const btn = document.getElementById('nav-user-account-btn');
+          if (btn) btn.setAttribute('title', `Signed in as ${data.user?.email || 'User'}`);
+          if (data.user?.isAdmin) {
+            const mobileAdminLink = document.getElementById('nav-mobile-admin-link');
+            if (mobileAdminLink) mobileAdminLink.classList.remove('hidden');
+          }
         }
-      }
-    },
-  }).catch(() => {});
+      },
+    }).catch(() => {});
+  }
 
   // Intercept in-page hash links for fluid cinematic scrolling
   document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((anchor) => {

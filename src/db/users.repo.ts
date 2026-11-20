@@ -246,13 +246,12 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       : '';
 
     const statsSql = `SELECT
-      COUNT(*) as total_all,
-      SUM(CASE WHEN tier = 'VIP' THEN 1 ELSE 0 END) as total_vip,
-      SUM(CASE WHEN tier = 'PARTNER' THEN 1 ELSE 0 END) as total_partner,
-      SUM(CASE WHEN tier = 'STANDARD' THEN 1 ELSE 0 END) as total_standard,
-      SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) as total_blocked,
-      SUM(CASE WHEN (logto_roles LIKE '%admin%'${adminEmailsClause}) THEN 1 ELSE 0 END) as total_admins
-    FROM users ${statsWhereSql}`;
+      UPPER(COALESCE(tier, 'STANDARD')) as tier,
+      status,
+      SUM(CASE WHEN (logto_roles LIKE '%admin%'${adminEmailsClause}) THEN 1 ELSE 0 END) as admin_cnt,
+      COUNT(*) as cnt
+    FROM users ${statsWhereSql}
+    GROUP BY UPPER(COALESCE(tier, 'STANDARD')), status`;
 
     let unclaimedSql = `SELECT COUNT(*) as unclaimed FROM orders WHERE (user_id IS NULL OR user_id = '')`;
     const unclaimedParams: any[] = [];
@@ -261,15 +260,11 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
       unclaimedParams.push(formatUtcCutoff(windowMsMap[timeWindow], db.dialect));
     }
 
-    // Concurrently execute users query, count, tier distribution stats, and unclaimed orders count (1 RTT)
-    const [users, countRow, statsRow, tierRows, unclaimedRow] = await Promise.all([
+    // Concurrently execute users query, count, grouped tier/status stats, and unclaimed orders count
+    const [users, countRow, groupedStatsRows, unclaimedRow] = await Promise.all([
       db.query<UserRecord>(querySql, [...params, limit, offset]),
       db.first<{ cnt: number }>(countSql, params),
-      db.first<any>(statsSql, statsParams),
-      db.query<{ tier: string; cnt: number }>(
-        `SELECT UPPER(COALESCE(tier, 'STANDARD')) as tier, COUNT(*) as cnt FROM users ${statsWhereSql} GROUP BY UPPER(COALESCE(tier, 'STANDARD'))`,
-        statsParams
-      ),
+      db.query<{ tier: string; status: string; admin_cnt: number; cnt: number }>(statsSql, statsParams),
       db.first<{ unclaimed: number }>(unclaimedSql, unclaimedParams),
     ]);
 
@@ -307,18 +302,28 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     const total = Number(countRow?.cnt || 0);
 
     const tierCounts: Record<string, number> = {};
-    for (const r of tierRows || []) {
-      if (r?.tier) tierCounts[String(r.tier).toUpperCase()] = Number(r.cnt || 0);
+    let totalAll = 0;
+    let totalBlocked = 0;
+    let totalAdmins = 0;
+    for (const r of groupedStatsRows || []) {
+      const cnt = Number(r?.cnt || 0);
+      totalAll += cnt;
+      if (r?.status === 'BLOCKED') totalBlocked += cnt;
+      totalAdmins += Number(r?.admin_cnt || 0);
+      if (r?.tier) {
+        const key = String(r.tier).toUpperCase();
+        tierCounts[key] = (tierCounts[key] || 0) + cnt;
+      }
     }
 
     const stats = {
-      all: Number(statsRow?.total_all || 0),
-      vip: Number(statsRow?.total_vip || 0),
-      partner: Number(statsRow?.total_partner || 0),
-      standard: Number(statsRow?.total_standard || 0),
+      all: totalAll,
+      vip: tierCounts.VIP || 0,
+      partner: tierCounts.PARTNER || 0,
+      standard: tierCounts.STANDARD || 0,
       tierCounts,
-      blocked: Number(statsRow?.total_blocked || 0),
-      admins: Number(statsRow?.total_admins || 0),
+      blocked: totalBlocked,
+      admins: totalAdmins,
       unclaimedGuestOrders: Number(unclaimedRow?.unclaimed || 0),
     };
 

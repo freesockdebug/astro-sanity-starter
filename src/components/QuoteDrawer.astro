@@ -308,12 +308,14 @@ if (reqCountryCode) {
         if (rawCache) cachedProfile = JSON.parse(rawCache);
       } catch {}
 
-      const data = await clientCache
-        .fetchWithCache('auth:me', '/api/auth/me', {
-          mode: 'ttl',
-          ttlMs: 3 * 60 * 1000,
-        })
-        .catch(() => null);
+      const data = document.cookie.split('; ').some((c) => c === 'auth_hint=1')
+        ? await clientCache
+            .fetchWithCache('auth:me', '/api/auth/me', {
+              mode: 'ttl',
+              ttlMs: 3 * 60 * 1000,
+            })
+            .catch(() => null)
+        : null;
       const profile = (data && data.authenticated && data.user) ? data.user : cachedProfile;
 
       if (data && data.authenticated && data.user) {
