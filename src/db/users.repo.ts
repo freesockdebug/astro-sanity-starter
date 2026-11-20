@@ -35,6 +35,15 @@ const userStatusCache = createKeyedCache<UserRecord>(
   { name: 'users:status', scope: 'users', ttlMs: 30_000, negativeTtlMs: 0, maxL1Entries: 1000 }
 );
 
+export function seedUserStatusCache(record: UserRecord): void {
+  if (!record?.id) return;
+  const copy = { ...record };
+  userStatusCache.seed(`id:${copy.id}`, copy);
+  if (copy.email) {
+    userStatusCache.seed(`email:${copy.email.toLowerCase()}`, copy);
+  }
+}
+
 export function invalidateUserStatusCache(userId?: string | null, email?: string | null) {
   const normEmail = email ? email.trim().toLowerCase() : null;
   if (userId) userStatusCache.deleteL1(`id:${userId}`);
@@ -67,12 +76,15 @@ export const getUserById = (userId: string) => getUserByIdOrEmail(userId, null);
  * Upserts a user on login, syncing Logto sub, email, name, and roles.
  * Also backfills company, country, and phone from previous orders if empty.
  */
-export async function upsertUserOnLogin(user: {
-  id: string;
-  email: string;
-  name?: string;
-  roles?: string[];
-}): Promise<UserRecord | null> {
+export async function upsertUserOnLogin(
+  user: {
+    id: string;
+    email: string;
+    name?: string;
+    roles?: string[];
+  },
+  options?: { existingUser?: UserRecord | null; skipReturnRead?: boolean }
+): Promise<UserRecord | null> {
   if (!user.id || !user.email) return null;
 
   const normalizedEmail = user.email.trim().toLowerCase();
@@ -80,56 +92,71 @@ export async function upsertUserOnLogin(user: {
   const rolesJson = JSON.stringify(user.roles || []);
 
   return executeWithAutoSchema(async (db: DbClient) => {
-    // 1-3. Atomically migrate ID, sync historical orders/logins, and upsert user record via batch
-    await db.batch([
-      {
-        sql: `UPDATE users SET id = ? WHERE email = ? AND id != ?`,
-        params: [user.id, normalizedEmail, user.id],
-      },
-      {
-        sql: `UPDATE orders
-         SET user_id = ?, updated_at = datetime('now')
-         WHERE buyer_email = ?
-           AND user_id IS NOT NULL AND user_id != '' AND user_id != ?`,
-        params: [user.id, normalizedEmail, user.id],
-      },
-      {
-        sql: `UPDATE user_logins
-         SET user_id = ?
-         WHERE email = ?
-           AND user_id != ?`,
-        params: [user.id, normalizedEmail, user.id],
-      },
-      {
-        sql: `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
-         ON CONFLICT(id) DO UPDATE SET
-           email = excluded.email,
-           name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
-           logto_roles = excluded.logto_roles,
-           last_login_at = datetime('now'),
-           updated_at = datetime('now')`,
-        params: [user.id, normalizedEmail, userName, rolesJson],
-      },
-    ]);
+    const knownExisting = options?.existingUser;
+    const needsIdMigration = !knownExisting || knownExisting.id !== user.id;
+    const needsProfileBackfill =
+      !knownExisting || !knownExisting.company || !knownExisting.country || !knownExisting.phone;
 
-    // 4. Backfill company, country, phone from past orders if blank
-    await db.execute(
-      `UPDATE users
-       SET company = CASE WHEN (company IS NULL OR company = '') THEN
-             COALESCE((SELECT company_name FROM orders WHERE (user_id = ? OR buyer_email = ?) AND company_name IS NOT NULL AND company_name != '' ORDER BY created_at DESC LIMIT 1), '')
-             ELSE company END,
-           country = CASE WHEN (country IS NULL OR country = '') THEN
-             COALESCE((SELECT destination_country FROM orders WHERE (user_id = ? OR buyer_email = ?) AND destination_country IS NOT NULL AND destination_country != '' ORDER BY created_at DESC LIMIT 1), '')
-             ELSE country END,
-           phone = CASE WHEN (phone IS NULL OR phone = '') THEN
-             COALESCE((SELECT whatsapp FROM orders WHERE (user_id = ? OR buyer_email = ?) AND whatsapp IS NOT NULL AND whatsapp != '' ORDER BY created_at DESC LIMIT 1), '')
-             ELSE phone END
-       WHERE id = ?`,
-      [user.id, normalizedEmail, user.id, normalizedEmail, user.id, normalizedEmail, user.id]
-    );
+    const statements: Array<{ sql: string; params: any[] }> = [];
 
+    if (needsIdMigration) {
+      statements.push(
+        {
+          sql: `UPDATE users SET id = ? WHERE email = ? AND id != ?`,
+          params: [user.id, normalizedEmail, user.id],
+        },
+        {
+          sql: `UPDATE orders
+           SET user_id = ?, updated_at = datetime('now')
+           WHERE buyer_email = ?
+             AND user_id IS NOT NULL AND user_id != '' AND user_id != ?`,
+          params: [user.id, normalizedEmail, user.id],
+        },
+        {
+          sql: `UPDATE user_logins
+           SET user_id = ?
+           WHERE email = ?
+             AND user_id != ?`,
+          params: [user.id, normalizedEmail, user.id],
+        }
+      );
+    }
+
+    statements.push({
+      sql: `INSERT INTO users (id, email, name, logto_roles, last_login_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
+       ON CONFLICT(id) DO UPDATE SET
+         email = excluded.email,
+         name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
+         logto_roles = excluded.logto_roles,
+         last_login_at = datetime('now'),
+         updated_at = datetime('now')`,
+      params: [user.id, normalizedEmail, userName, rolesJson],
+    });
+
+    if (needsProfileBackfill) {
+      statements.push({
+        sql: `UPDATE users
+         SET company = CASE WHEN (company IS NULL OR company = '') THEN
+               COALESCE((SELECT company_name FROM orders WHERE (user_id = ? OR buyer_email = ?) AND company_name IS NOT NULL AND company_name != '' ORDER BY created_at DESC LIMIT 1), '')
+               ELSE company END,
+             country = CASE WHEN (country IS NULL OR country = '') THEN
+               COALESCE((SELECT destination_country FROM orders WHERE (user_id = ? OR buyer_email = ?) AND destination_country IS NOT NULL AND destination_country != '' ORDER BY created_at DESC LIMIT 1), '')
+               ELSE country END,
+             phone = CASE WHEN (phone IS NULL OR phone = '') THEN
+               COALESCE((SELECT whatsapp FROM orders WHERE (user_id = ? OR buyer_email = ?) AND whatsapp IS NOT NULL AND whatsapp != '' ORDER BY created_at DESC LIMIT 1), '')
+               ELSE phone END
+         WHERE id = ?`,
+        params: [user.id, normalizedEmail, user.id, normalizedEmail, user.id, normalizedEmail, user.id],
+      });
+    }
+
+    await db.batch(statements);
     invalidateUserStatusCache(user.id, normalizedEmail);
+
+    if (options?.skipReturnRead) {
+      return null;
+    }
     return await getUserByIdOrEmail(user.id, normalizedEmail);
   });
 }

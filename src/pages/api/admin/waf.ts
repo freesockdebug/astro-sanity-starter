@@ -178,7 +178,7 @@ export const POST: APIRoute = defineAdminApi<{
         durationMs: Date.now() - t0,
         cfEnv,
       });
-      return jsonNoCache({ success: true, message: `Saved WAF rule "${name}" to D1 + Edge KV.`, dbRules });
+      return jsonNoCache({ success: true, message: `Saved WAF rule "${name}".`, dbRules });
     }
 
     if (action === 'toggle_rule') {

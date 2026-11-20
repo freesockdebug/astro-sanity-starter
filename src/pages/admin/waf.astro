@@ -1074,7 +1074,7 @@ const initialPayload = JSON.stringify({
               dbRulesState = data.dbRules;
               renderCustomRules();
               syncModeCardsAndKpis();
-              showToast(`Preset rule ${nextChecked ? 'enabled' : 'disabled'} in D1 + KV.`, true);
+              showToast(`Preset rule ${nextChecked ? 'enabled' : 'disabled'}.`, true);
             } else {
               cb.checked = !nextChecked;
               syncModeCardsAndKpis();
@@ -1235,7 +1235,7 @@ const initialPayload = JSON.stringify({
           if (v2El) v2El.value = '';
           renderCustomRules();
           syncModeCardsAndKpis();
-          showToast(data.message || 'Rule persisted to D1 + Edge KV.', true);
+          showToast(data.message || 'Rule saved.', true);
         } catch (err: any) {
           showToast(`Save rule failed: ${err.message}`, false);
         } finally {
@@ -1333,7 +1333,7 @@ const initialPayload = JSON.stringify({
           if (ok && Array.isArray(data.dbRules)) {
             dbRulesState = data.dbRules;
             renderCustomRules();
-            showToast(`Rule ${target.checked ? 'enabled' : 'disabled'} in D1 + KV.`, true);
+            showToast(`Rule ${target.checked ? 'enabled' : 'disabled'}.`, true);
           } else {
             target.checked = !target.checked;
             showToast(data?.error || 'Failed to toggle rule.', false);
@@ -1462,7 +1462,7 @@ const initialPayload = JSON.stringify({
             renderCustomRules();
           }
           editDialog?.close();
-          showToast(data.message || 'Rule updated in D1 + Edge KV.', true);
+          showToast(data.message || 'Rule updated.', true);
         } catch (err: any) {
           showToast(`Save error: ${err.message}`, false);
         }
@@ -1521,7 +1521,7 @@ const initialPayload = JSON.stringify({
                 renderActiveBans(data.activeBans);
               }
               syncModeCardsAndKpis();
-              showToast(ttlMinutes > 0 ? `Blocked ${ip} in D1 + KV for 24h.` : `Permanently blocked ${ip} in D1 + KV.`, true);
+              showToast(ttlMinutes > 0 ? `Blocked ${ip} for 24h.` : `Permanently blocked ${ip}.`, true);
             } catch (err: any) {
               showToast(`Block IP failed: ${err.message}`, false);
             } finally {

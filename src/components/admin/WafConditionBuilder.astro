@@ -145,7 +145,7 @@ const parseRateLimit = (rawJson: string): { limit?: number; window_s?: number } 
   <div class="flex flex-wrap items-center justify-between gap-2.5">
     <div>
       <div class="flex items-center gap-2">
-        <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">WAF Dynamic Rules Engine (D1 + Edge KV)</h2>
+        <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">WAF Dynamic Rules Engine</h2>
         <span id="waf-custom-rules-count" class="adm-badge adm-badge-info" data-preset-count={presetTotalCount}>
           {totalRulesCount} Rules ({presetTotalCount} Preset · {customDbRules.length} Custom)
         </span>
@@ -650,7 +650,7 @@ const parseRateLimit = (rawJson: string): { limit?: number; window_s?: number } 
       </div>
       <div class="p-3.5 border-t border-black/8 bg-[#fafafc] flex justify-end gap-2">
         <button id="waf-edit-cancel-btn" type="button" class="adm-btn-secondary text-xs py-1.5 px-3">Cancel</button>
-        <button id="waf-edit-save-btn" type="button" class="adm-btn text-xs py-1.5 px-4">Save Rule to D1 + KV</button>
+        <button id="waf-edit-save-btn" type="button" class="adm-btn text-xs py-1.5 px-4">Save Rule</button>
       </div>
     </dialog>
   )}

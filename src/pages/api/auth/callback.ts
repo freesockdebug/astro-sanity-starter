@@ -7,10 +7,19 @@ import {
   formatSessionCookie,
   getCookieValue,
   verifyOAuthStateToken,
+  base64UrlDecode,
   SESSION_COOKIE_NAME,
   type AuthUser,
 } from '@utils/auth';
-import { claimOrdersByEmail, upsertUserOnLogin, getUserByIdOrEmail, recordUserLogin, getSystemSettings } from '@db';
+import {
+  claimOrdersByEmail,
+  upsertUserOnLogin,
+  getUserByIdOrEmail,
+  seedUserStatusCache,
+  recordUserLogin,
+  getSystemSettings,
+  type UserRecord,
+} from '@db';
 import { SecurityService } from '@utils/security';
 import { logger } from '@utils/logger';
 import { getActiveProfiler } from '@utils/profiler';
@@ -71,6 +80,8 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
   }
 
   let authUser: AuthUser | null = null;
+  let existingUser: UserRecord | null = null;
+  let checkedExistingInDb = false;
 
   // 1. Live Logto OIDC Authorization Code Exchange
   const endpoint = getRuntimeEnv('LOGTO_ENDPOINT', cfEnv)?.replace(/\/+$/, '');
@@ -111,25 +122,54 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
     const tokenData = (await tokenRes.json()) as any;
     const accessToken = tokenData.access_token;
 
-    // Fast Path: extract user identity directly from id_token to eliminate redundant WAN round-trip
+    // Fast Path: UTF-8 decode id_token.sub first, then check D1 user cache/record to skip /oidc/me for returning users
     let userInfo: any = null;
+    let decodedIdToken: any = null;
     if (tokenData.id_token && typeof tokenData.id_token === 'string') {
       try {
         const parts = tokenData.id_token.split('.');
         if (parts.length >= 2) {
-          let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-          while (b64.length % 4) b64 += '=';
-          const decoded = JSON.parse(atob(b64));
-          if (decoded && decoded.sub && (decoded.email || decoded.username)) {
-            userInfo = decoded;
-          }
+          decodedIdToken = JSON.parse(base64UrlDecode(parts[1]));
         }
       } catch {
         // Fallback to /oidc/me network call below
       }
     }
 
-    // Fallback: Fetch User Info from /oidc/me if id_token was missing or incomplete
+    if (decodedIdToken?.sub) {
+      try {
+        existingUser = await getUserByIdOrEmail(decodedIdToken.sub, decodedIdToken.email);
+        checkedExistingInDb = true;
+      } catch (checkErr) {
+        console.warn('[Auth Callback] Early user status check warning:', checkErr);
+      }
+
+      if (existingUser && existingUser.status === 'BLOCKED') {
+        return new Response(
+          'Your account has been suspended by administration. If you believe this is an error, please contact our B2B support team.',
+          { status: 403 }
+        );
+      }
+
+      if (decodedIdToken.email || decodedIdToken.username || existingUser?.email) {
+        let existingRoles: string[] = [];
+        if (existingUser?.logto_roles) {
+          try {
+            const parsed = JSON.parse(existingUser.logto_roles);
+            if (Array.isArray(parsed)) existingRoles = parsed;
+          } catch {}
+        }
+        userInfo = {
+          sub: decodedIdToken.sub,
+          email: decodedIdToken.email || existingUser?.email,
+          username: decodedIdToken.username,
+          name: decodedIdToken.name || decodedIdToken.username || existingUser?.name,
+          roles: Array.isArray(decodedIdToken.roles) ? decodedIdToken.roles : existingRoles,
+        };
+      }
+    }
+
+    // Fallback: Fetch User Info from /oidc/me only for brand-new users (not yet in D1 & id_token lacks email)
     if (!userInfo) {
       const meFetch = () =>
         fetch(`${endpoint}/oidc/me`, {
@@ -147,7 +187,7 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
 
     const email = userInfo.email || `${userInfo.sub}@logto.user`;
     const roles: string[] = Array.isArray(userInfo.roles) ? userInfo.roles : [];
-    const settings = await getSystemSettings(cfEnv).catch(() => null);
+    const settings = (locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
     const isAdmin = checkIsAdmin(email, roles, cfEnv, settings?.co_admin_emails);
 
     authUser = {
@@ -177,40 +217,68 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
   // Populate locals so middleware logs real user instead of 'Anonymous'
   (locals as any).sessionUser = authUser;
 
-  // 3. Security Risk Guard: Check if account is BLOCKED in D1
-  try {
-    const existing = await getUserByIdOrEmail(authUser.id, authUser.email);
-    if (existing && existing.status === 'BLOCKED') {
-      return new Response(
-        'Your account has been suspended by administration. If you believe this is an error, please contact our B2B support team.',
-        { status: 403 }
-      );
+  // 3. Security Risk Guard: Check if account is BLOCKED in D1 (skip if already checked above)
+  if (!checkedExistingInDb || (existingUser === null && authUser.email)) {
+    try {
+      existingUser = await getUserByIdOrEmail(authUser.id, authUser.email);
+      if (existingUser && existingUser.status === 'BLOCKED') {
+        return new Response(
+          'Your account has been suspended by administration. If you believe this is an error, please contact our B2B support team.',
+          { status: 403 }
+        );
+      }
+    } catch (checkErr) {
+      console.warn('[Auth Callback] User status check warning:', checkErr);
     }
-  } catch (checkErr) {
-    console.warn('[Auth Callback] User status check warning:', checkErr);
   }
 
-  // 4. Upsert User in D1 (Logto sub, email, name, roles sync + backfill company info)
-  try {
-    profiler?.startSpan('d1.user_upsert');
-    await upsertUserOnLogin({
+  // Pre-warm L1 userStatusCache immediately so the post-redirect /orders or /api/auth/me request hits L1 in 0ms
+  seedUserStatusCache({
+    id: authUser.id,
+    email: authUser.email.toLowerCase(),
+    name: authUser.name || existingUser?.name || '',
+    company: existingUser?.company || '',
+    country: existingUser?.country || '',
+    phone: existingUser?.phone || '',
+    tier: existingUser?.tier || 'STANDARD',
+    status: existingUser?.status || 'ACTIVE',
+    admin_notes: existingUser?.admin_notes || '',
+    logto_roles: JSON.stringify(authUser.roles || []),
+    assigned_to: existingUser?.assigned_to ?? null,
+    last_login_at: new Date().toISOString(),
+    created_at: existingUser?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  // 4. Upsert User in D1 (dispatched in background via waitUntil so 302 redirect is never blocked)
+  const upsertPromise = upsertUserOnLogin(
+    {
       id: authUser.id,
       email: authUser.email,
       name: authUser.name,
       roles: authUser.roles,
-    });
-    profiler?.endSpan('d1.user_upsert');
-  } catch (syncErr) {
-    profiler?.endSpan('d1.user_upsert');
+    },
+    { existingUser, skipReturnRead: true }
+  ).catch((syncErr) => {
     logger.warn({
       module: 'auth/callback',
       event: 'USER_SYNC_FAILED',
       message: 'User D1 sync failed',
-      userId: authUser.id,
-      userEmail: authUser.email,
+      userId: authUser?.id,
+      userEmail: authUser?.email,
       path: reqUrl.pathname,
       error: syncErr,
     }, { cfEnv });
+  });
+
+  if (typeof cfWaitUntil === 'function') {
+    try {
+      cfWaitUntil(upsertPromise);
+    } catch {
+      await upsertPromise;
+    }
+  } else {
+    await upsertPromise;
   }
 
   // 4.5. Record Login History (IP, Geo, Device) with 90-day retention

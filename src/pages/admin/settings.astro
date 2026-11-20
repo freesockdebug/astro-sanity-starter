@@ -28,7 +28,7 @@ const hasCloudflareCdn = !!(rawSettings.cloudflare_api_token || getRuntimeEnv('C
 const settings = sanitizeAdminSettings(rawSettings);
 
 const healthProbes = [
-  { label: 'D1 Database', ok: true, on: 'Active', off: 'Inactive', warn: false },
+  { label: 'Database', ok: true, on: 'Active', off: 'Inactive', warn: false },
   { label: 'Logto OIDC', ok: hasLogtoOidc, on: 'Configured', off: 'Missing', warn: true },
   { label: 'Logto M2M', ok: hasLogtoM2m, on: 'Configured', off: 'Optional', warn: true },
   { label: 'Turnstile', ok: hasTurnstile, on: 'Protected', off: 'Unset', warn: true },
@@ -83,18 +83,18 @@ const s4Fields: SettingField[] = [
 ];
 
 const s6Fields: SettingField[] = [
-  { key: 'enable_error_logging', label: 'Enable D1 Error Logging', type: 'checkbox', boxed: true, help: 'Persist runtime errors, unhandled exceptions, and API anomalies into D1 database for in-dashboard diagnostics.' },
+  { key: 'enable_error_logging', label: 'Enable Error Logging', type: 'checkbox', boxed: true, help: 'Persist runtime errors, unhandled exceptions, and API anomalies into database for in-dashboard diagnostics.' },
   { key: 'log_authenticated_users', label: 'Log Authenticated Users', type: 'checkbox', boxed: true, help: 'Control whether activity and error records are logged for signed-in buyers and administrators (GDPR / Privacy).' },
-  { key: 'log_client_errors', label: 'Frontend Client Error Telemetry (前端异常监控)', type: 'checkbox', boxed: true, help: 'Capture unhandled browser exceptions (window.onerror & unhandledrejection) and report to D1 diagnostics. When disabled, client stops reporting and backend rejects telemetry.' },
+  { key: 'log_client_errors', label: 'Frontend Client Error Telemetry (前端异常监控)', type: 'checkbox', boxed: true, help: 'Capture unhandled browser exceptions (window.onerror & unhandledrejection) and report to diagnostics. When disabled, client stops reporting and backend rejects telemetry.' },
   { key: 'log_retention_days', label: 'Error Log Retention (Days)', type: 'number', min: 1, max: 365, boxed: true, mono: true, extraClass: 'font-bold', help: 'Automatic rolling prune threshold (1 to 365 days).' },
   {
     key: 'log_min_level',
-    label: 'Minimum Log Level to D1',
+    label: 'Minimum Log Level',
     type: 'select',
     boxed: true,
     mono: true,
     extraClass: 'font-semibold',
-    help: 'Controls D1 write volume. Info/Debug capture full request profiling.',
+    help: 'Controls log write volume. Info/Debug capture full request profiling.',
     options: [
       { value: 'debug', label: 'debug (Verbose + SQL timings)' },
       { value: 'info', label: 'info (All completed requests & events)' },
@@ -139,7 +139,7 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
   <AdminPageToolbar
     title="Workspace Settings"
     subtitle="Dynamic runtime configurations for brand identity, buyer concierge, RFQ dispatch rules, and access control."
-    badge="Live D1 Sync"
+    badge="Live Sync"
     badgeColor="emerald"
     class="mb-5"
   >
@@ -375,7 +375,7 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
       <div class="border-b border-black/5 pb-3 flex items-center justify-between">
         <div>
           <h2 class="text-sm font-bold text-[#1d1d1f] tracking-tight">6. Diagnostics & Observability Governance</h2>
-          <p class="text-xs text-[#86868b] mt-0.5">Control D1 business error logging, logged-in user tracking, and retention thresholds.</p>
+          <p class="text-xs text-[#86868b] mt-0.5">Control business error logging, logged-in user tracking, and retention thresholds.</p>
         </div>
         <a href="/admin/logs" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold bg-[#f5f5f7] hover:bg-black hover:text-white transition-all text-[#1d1d1f]">
           <span>Open Diagnostics Console</span><span>→</span>
@@ -570,7 +570,7 @@ const inputCls = (f: SettingField, bg = 'bg-[#f5f5f7]') =>
             savedState = updates;
             savedSnapshot = JSON.stringify(updates);
             syncDirtyUI(false);
-            showToast('Settings saved successfully and synced to D1.', true);
+            showToast('Settings saved successfully.', true);
           }
         } catch (err: any) {
           showToast('Network error while saving settings: ' + err.message, false);
