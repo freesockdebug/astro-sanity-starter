@@ -791,8 +791,12 @@ test('EdgeTieredCache avoids @epoch KV duplication and purgeLegacyEpochKvKeys cl
     fetchRaw: async () => ({ data: { ok: true }, persistToKv: true }),
   });
 
-  await epochCache.refresh(mockEnv);
+  await epochCache.get(mockEnv, { syncKv: true });
   assert.equal(kvStore.has('test:no_epoch:v1'), true);
+  assert.equal(kvStore.has('cms:route_revs'), false, 'passive L3 backfill must not bump cms:route_revs');
+
+  await epochCache.refresh(mockEnv);
+  assert.equal(kvStore.has('cms:route_revs'), true, 'explicit refresh must bump cms:route_revs');
   assert.equal(
     Array.from(kvStore.keys()).some((k) => k.startsWith('test:no_epoch:v1@')),
     false,
@@ -1176,9 +1180,13 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
   kvReads = 0;
 
   // Cold preload must perform ONLY 1 KV read (edge:preload:v1) and hydrate all 6 L1 modules
+  const prevSettingsL2 = settingsCache.getMetricsSnapshot('settings').l2Hits;
+  const prevWafL2 = wafRuntimeCache.getMetricsSnapshot('waf').l2Hits;
   const cold = await preloadEdgeIsolate(mockEnv, true);
   assert.equal(kvReads, 1);
   assert.equal(cold.preloadStatus, 'L2_KV_HIT');
+  assert.equal(settingsCache.getMetricsSnapshot('settings').l2Hits, prevSettingsL2 + 1);
+  assert.equal(wafRuntimeCache.getMetricsSnapshot('waf').l2Hits, prevWafL2 + 1);
   assert.equal(cold.wafSettings?.brand_name, 'PRELOAD_BRAND');
   assert.ok(cold.wafRuntime);
   assert.equal(settingsCache.peek()?.brand_name, 'PRELOAD_BRAND');
@@ -1188,9 +1196,13 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
   assert.deepEqual(PageService.getCachedSlugs(), ['home', 'about', 'contact']);
   assert.deepEqual(ProductService.getCachedSlugs(), ['silk-slip-001', 'cotton-robe-002']);
 
-  // Warm call within 5s must perform 0 additional KV reads
+  // Warm call must perform 0 additional KV reads and increment L1 hit counters
+  const prevSettingsL1 = settingsCache.getMetricsSnapshot('settings').l1Hits;
+  const prevWafL1 = wafRuntimeCache.getMetricsSnapshot('waf').l1Hits;
   const warm = await preloadEdgeIsolate(mockEnv);
   assert.equal(kvReads, 1);
   assert.equal(warm.preloadStatus, 'L1_HIT');
+  assert.equal(settingsCache.getMetricsSnapshot('settings').l1Hits, prevSettingsL1 + 1);
+  assert.equal(wafRuntimeCache.getMetricsSnapshot('waf').l1Hits, prevWafL1 + 1);
   assert.equal(warm.wafSettings?.brand_name, 'PRELOAD_BRAND');
 });

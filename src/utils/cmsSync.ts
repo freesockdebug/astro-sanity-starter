@@ -52,7 +52,7 @@ let localPreloadBundleUpdatedAt = 0;
 let isRebuildingPreload = false;
 let preloadRebuildPending = false;
 let preloadRebuildEnv: any = undefined;
-const ROUTE_REVS_SYNC_INTERVAL_MS = 5_000;
+const ROUTE_REVS_SYNC_INTERVAL_MS = Infinity;
 
 const EPOCH_SCOPE_MAP: Array<[string, string]> = [
   ['__settings', 'settings'],
@@ -110,7 +110,7 @@ registerEpochBumpListener((epochKey, ts, cfEnv) => {
 
 export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Record<string, number>> {
   const now = Date.now();
-  if (!force && localRouteRevs && now - localRouteRevsLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
+  if (!force && localRouteRevs && localRouteRevsLoadedAt > 0 && now - localRouteRevsLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
     return localRouteRevs;
   }
   const kvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
@@ -162,6 +162,7 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
 
     await kvPut(EDGE_PRELOAD_KV_KEY, bundle, undefined, cfEnv).catch(() => {});
     localPreloadLoadedAt = updatedAt;
+    localRouteRevsLoadedAt = updatedAt;
     localPreloadBundleUpdatedAt = updatedAt;
     return bundle;
   } finally {
@@ -193,14 +194,15 @@ export async function preloadEdgeIsolate(
   if (
     !force &&
     localRouteRevs &&
+    localPreloadLoadedAt > 0 &&
     now - localPreloadLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS &&
     settingsCache.peek() &&
     wafRuntimeCache.peek()
   ) {
     return {
       routeRevisions: localRouteRevs,
-      wafSettings: settingsCache.peek(),
-      wafRuntime: wafRuntimeCache.peek(),
+      wafSettings: settingsCache.peek(true),
+      wafRuntime: wafRuntimeCache.peek(true),
       preloadStatus: 'L1_HIT',
     };
   }
@@ -220,7 +222,7 @@ export async function preloadEdgeIsolate(
         ...DEFAULT_SYSTEM_SETTINGS,
         ...bundle.systemSettings,
         waf_rule_config: normalizeWafRuleConfig(bundle.systemSettings.waf_rule_config),
-      });
+      }, true);
     }
     if (
       (bundleChanged || !wafRuntimeCache.peek()) &&
@@ -229,20 +231,20 @@ export async function preloadEdgeIsolate(
       Array.isArray(bundle.wafRuntime.ipAcl) &&
       bundle.wafRuntime.rules.some((r: any) => r?.id === 'sys_legacy_cms_paths')
     ) {
-      wafRuntimeCache.seed(bundle.wafRuntime);
+      wafRuntimeCache.seed(bundle.wafRuntime, true);
     }
     if ((bundleChanged || !SiteConfigService.peek()) && bundle.siteConfig) {
-      SiteConfigService.seed(bundle.siteConfig);
+      SiteConfigService.seed(bundle.siteConfig, true);
     }
     if ((bundleChanged || !RfqSettingsService.peek()) && bundle.rfqSettings) {
-      RfqSettingsService.seed(bundle.rfqSettings);
+      RfqSettingsService.seed(bundle.rfqSettings, true);
     }
 
     if (Array.isArray(bundle.pageSlugs) && bundle.pageSlugs.length > 0) {
-      PageService.seedSlugs(bundle.pageSlugs);
+      PageService.seedSlugs(bundle.pageSlugs, true);
     }
     if (Array.isArray(bundle.productSlugs) && bundle.productSlugs.length > 0) {
-      ProductService.seedSlugs(bundle.productSlugs);
+      ProductService.seedSlugs(bundle.productSlugs, true);
     }
 
     const neededFallback = !settingsCache.peek() || !wafRuntimeCache.peek();

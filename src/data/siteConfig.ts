@@ -41,8 +41,8 @@ const configCache = createCmsCache<SiteConfig | null>(
  * Service class handling Global Site Configuration
  */
 export class SiteConfigService {
-  public static seed(config?: SiteConfig | null): void {
-    configCache.seed(config);
+  public static seed(config?: SiteConfig | null, recordL2Hit = false): void {
+    configCache.seed(config, recordL2Hit);
   }
 
   public static peek(): SiteConfig | null {

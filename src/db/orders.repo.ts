@@ -599,7 +599,7 @@ export async function batchUpdateOrderStatus(
 const pendingOrdersCountCache = createTieredCache<number>({
   name: 'orders:pending_count',
   scope: 'orders',
-  ttlMs: 30_000,
+  ttlMs: Infinity,
   fallbackRaw: 0,
   fetchRaw: () =>
     executeWithAutoSchema(async (db: DbClient) => {
@@ -612,7 +612,7 @@ const pendingOrdersCountCache = createTieredCache<number>({
 
 /**
  * Fast indexed lookup for count of pending orders (used for admin badges without executing full list query)
- * Cached for 30s in L1 memory.
+ * Cached indefinitely in L1 memory until invalidated by order mutations.
  */
 export async function getPendingOrdersCount(): Promise<number> {
   return pendingOrdersCountCache.get();
@@ -645,7 +645,7 @@ export interface DashboardStats {
 const dashboardStatsCache = createTieredCache<DashboardStats>({
   name: 'orders:dashboard_stats',
   scope: 'orders',
-  ttlMs: 30_000,
+  ttlMs: Infinity,
   fallbackRaw: EMPTY_DASHBOARD_STATS,
   fetchRaw: () =>
     executeWithAutoSchema(async (db: DbClient) => {

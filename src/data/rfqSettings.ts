@@ -51,11 +51,11 @@ export class RfqSettingsService {
   /**
    * Fetches merged RFQ settings with in-memory caching to prevent duplicate Sanity calls in one page render
    */
-  public static seed(settings?: any): void {
+  public static seed(settings?: any, recordL2Hit = false): void {
     const merged: RfqSettings = settings && typeof settings === 'object'
       ? { ...DEFAULT_RFQ_SETTINGS, ...settings }
       : { ...DEFAULT_RFQ_SETTINGS };
-    rfqCache.seed(merged);
+    rfqCache.seed(merged, recordL2Hit);
   }
 
   public static peek(): RfqSettings | null {

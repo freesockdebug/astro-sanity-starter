@@ -1,6 +1,6 @@
 import { getSanityClient } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
-import { createCmsCache, createCmsKeyedCache, createTieredCache, runInBackground } from '@utils/cache';
+import { createCmsCache, createCmsKeyedCache, createTieredCache } from '@utils/cache';
 import { DEFAULT_CATALOG } from './defaults';
 import { getLocalizedPath } from '@i18n';
 import type { Product } from 'types';
@@ -259,7 +259,7 @@ const productsCache = createCmsCache<Product[]>(
     onUpdate: (list) => {
       if (Array.isArray(list) && list.length > 0) {
         const slugs = list.map((p) => p?.slug).filter(Boolean) as string[];
-        runInBackground(productSlugsCache.set(slugs, undefined, { syncKv: false }));
+        productSlugsCache.seed(slugs);
       }
     },
   }
@@ -313,9 +313,9 @@ export class ProductService {
     productBySlugCache.seed(slug, product);
   }
 
-  public static seedSlugs(slugs: string[]): void {
+  public static seedSlugs(slugs: string[], recordL2Hit = false): void {
     if (Array.isArray(slugs) && slugs.length > 0) {
-      productSlugsCache.seed(slugs);
+      productSlugsCache.seed(slugs, recordL2Hit);
     }
   }
 

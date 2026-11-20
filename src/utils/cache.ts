@@ -488,13 +488,18 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     this.stats = { l1Hits: 0, l2Hits: 0, l3Misses: 0, writes: 0, evictions: 0 };
   }
 
-  public seed(val?: TRaw | null): void {
+  public seed(val?: TRaw | null, recordL2Hit = false): void {
     const raw = val !== undefined && val !== null ? val : this.fallbackRaw;
     this.storeL1(raw);
+    if (recordL2Hit) this.stats.l2Hits += 1;
   }
 
-  public peek(): TCompiled | null {
-    return this.entry ? this.entry.compiled : null;
+  public peek(recordHit = false): TCompiled | null {
+    if (this.entry) {
+      if (recordHit) this.stats.l1Hits += 1;
+      return this.entry.compiled;
+    }
+    return null;
   }
 
   public peekRaw(): TRaw | null {
@@ -514,12 +519,12 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     }
   }
 
-  private async persistToKv(raw: TRaw, customEnv: any, syncKv: boolean): Promise<void> {
+  private async persistToKv(raw: TRaw, customEnv: any, syncKv: boolean, shouldBumpEpoch = true): Promise<void> {
     if (!this.kvKey) return;
     const kvOpts = this.kvTtlSeconds ? { expirationTtl: this.kvTtlSeconds } : undefined;
     const write = async () => {
       await kvPut(this.kvKey!, raw, kvOpts, customEnv).catch(() => { });
-      if (this.epochKey) {
+      if (shouldBumpEpoch && this.epochKey) {
         await bumpCacheEpoch(this.epochKey, customEnv);
       }
     };
@@ -587,7 +592,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
         if (valid) {
           const compiled = this.storeL1(raw);
           if (persistToKv && this.kvKey) {
-            await this.persistToKv(raw, customEnv, Boolean(forceRefresh || options?.syncKv));
+            await this.persistToKv(raw, customEnv, Boolean(forceRefresh || options?.syncKv), forceRefresh);
           }
           return compiled;
         }
@@ -635,12 +640,12 @@ export function createTieredCache<TRaw, TCompiled = TRaw>(
 }
 
 export interface CmsCache<T> {
-  seed(val?: T | null): void;
+  seed(val?: T | null, recordL2Hit?: boolean): void;
   invalidate(): void;
   get(forceRefresh?: boolean, customEnv?: any): Promise<T>;
   refresh(customEnv?: any): Promise<T>;
   evict(customEnv?: any): Promise<void>;
-  peek(): T | null;
+  peek(recordHit?: boolean): T | null;
 }
 
 export interface CmsCacheOptions<T> {
@@ -676,9 +681,9 @@ export function createCmsCache<T>(
   });
 
   return {
-    seed: (val) => tiered.seed(val),
+    seed: (val, recordL2Hit = false) => tiered.seed(val, recordL2Hit),
     invalidate: () => tiered.invalidate(),
-    peek: () => tiered.peek(),
+    peek: (recordHit = false) => tiered.peek(recordHit),
     get: (forceRefresh = false, customEnv?: any) => tiered.get(customEnv, { forceRefresh }),
     refresh: (customEnv?: any) => tiered.refresh(customEnv),
     evict: (customEnv?: any) => tiered.evict(customEnv),
