@@ -277,7 +277,11 @@ export async function preloadEdgeIsolate(
  * Increment revision timestamps for specific base paths (e.g. ['/products/cashmere', '/products'])
  */
 export async function bumpRouteRevisions(basePaths: Iterable<string>, bumpGlobalLayout = false, cfEnv?: any): Promise<Record<string, number>> {
-  const current = await getRouteRevisions(cfEnv, true);
+  const kvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+  const current: Record<string, any> = {
+    ...(kvRevs && typeof kvRevs === 'object' ? kvRevs : {}),
+    ...(localRouteRevs || {}),
+  };
   const now = Date.now();
   const updated: Record<string, any> = { ...current };
 

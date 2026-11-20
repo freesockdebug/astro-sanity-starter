@@ -1205,4 +1205,13 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
   assert.equal(settingsCache.getMetricsSnapshot('settings').l1Hits, prevSettingsL1 + 1);
   assert.equal(wafRuntimeCache.getMetricsSnapshot('waf').l1Hits, prevWafL1 + 1);
   assert.equal(warm.wafSettings?.brand_name, 'PRELOAD_BRAND');
+
+  // bumpRouteRevisions must NOT invalidate just-refreshed L1 caches even when KV route_revs differs
+  const { bumpRouteRevisions } = await import('../src/utils/cmsSync.js');
+  kvStore.set('cms:route_revs', JSON.stringify({ '/': 1, __cms_stale: 1 }));
+  await bumpRouteRevisions(['/'], false, mockEnv);
+  assert.equal(SiteConfigService.peek()?.edgeCacheTtl, 600);
+  assert.equal(RfqSettingsService.peek()?.showSwatchKitButton, false);
+  assert.deepEqual(PageService.getCachedSlugs(), ['home', 'about', 'contact']);
+  assert.deepEqual(ProductService.getCachedSlugs(), ['silk-slip-001', 'cotton-robe-002']);
 });

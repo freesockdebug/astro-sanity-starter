@@ -502,8 +502,12 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     return null;
   }
 
-  public peekRaw(): TRaw | null {
-    return this.entry ? this.entry.raw : null;
+  public peekRaw(recordHit = false): TRaw | null {
+    if (this.entry) {
+      if (recordHit) this.stats.l1Hits += 1;
+      return this.entry.raw;
+    }
+    return null;
   }
 
   public invalidate(): void {

@@ -100,7 +100,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     };
 
     if (!EdgeWafService.isStaticAsset(pathname)) {
-      const { routeRevisions, wafSettings, wafRuntime, preloadStatus } = await preloadEdgeIsolate(cfEnv);
+      const forcePreload = url.searchParams.has('purge') || url.searchParams.has('revalidate');
+      const { routeRevisions, wafSettings, wafRuntime, preloadStatus } = await preloadEdgeIsolate(cfEnv, forcePreload);
       (context.locals as any).preloadStatus = preloadStatus;
       if (routeRevisions && request.method === 'GET') {
         (context.locals as any).routeRevisions = routeRevisions;

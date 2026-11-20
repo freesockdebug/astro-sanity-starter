@@ -57,12 +57,14 @@ export const POST: APIRoute = defineAdminApi(
     }
 
     const purgedItems: string[] = [];
+    let bundleRebuilt = false;
 
     if (scope === 'partition' && targetCacheName) {
       if (targetCacheName === 'edge:html_cache') {
         const corePaths = new Set(['/', '/products', '/about', '/private-label', '/contact']);
         const prevRevs = await getRouteRevisions(cfEnv).catch(() => ({}));
         await bumpRouteRevisions(corePaths, false, cfEnv).catch(() => {});
+        bundleRebuilt = true;
         await purgeEdgeHtmlCache({
           targetPaths: corePaths,
           origin: new URL(request.url).origin,
@@ -136,6 +138,7 @@ export const POST: APIRoute = defineAdminApi(
         const prevRevs = await getRouteRevisions(cfEnv).catch(() => ({}));
         const bumpGlobalLayout = scope === 'all' || scope === 'config' || scope === 'settings';
         await bumpRouteRevisions(edgePaths, bumpGlobalLayout, cfEnv).catch(() => {});
+        bundleRebuilt = true;
 
         const purgeRes = await purgeEdgeHtmlCache({
           targetPaths: edgePaths,
@@ -153,7 +156,9 @@ export const POST: APIRoute = defineAdminApi(
       }
     }
 
-    await rebuildEdgePreloadBundle(cfEnv).catch(() => {});
+    if (!bundleRebuilt) {
+      await rebuildEdgePreloadBundle(cfEnv).catch(() => {});
+    }
 
     if (scope === 'all') {
       const legacyDeleted = await purgeLegacyEpochKvKeys(cfEnv).catch(() => 0);

@@ -22,7 +22,7 @@ const t = useTranslations(currentLang);
 const { slug } = Astro.params;
 
 // Fast L1 slug guard (already pre-hydrated by preloadEdgeIsolate), then fetch product & catalog concurrently
-const cachedProductSlugs = ProductService.getCachedSlugs();
+const cachedProductSlugs = ProductService.getCachedSlugs(true);
 if (!slug || (cachedProductSlugs && cachedProductSlugs.length > 0 && !cachedProductSlugs.includes(slug))) {
   return Astro.redirect(getLocalizedPath('/products', currentLang));
 }

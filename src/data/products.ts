@@ -319,8 +319,8 @@ export class ProductService {
     }
   }
 
-  public static getCachedSlugs(): string[] | null {
-    const raw = productSlugsCache.peekRaw();
+  public static getCachedSlugs(recordHit = false): string[] | null {
+    const raw = productSlugsCache.peekRaw(recordHit);
     return Array.isArray(raw) && raw.length > 0 ? raw : null;
   }
 

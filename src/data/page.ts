@@ -100,8 +100,8 @@ export class PageService {
     }
   }
 
-  public static getCachedSlugs(): string[] | null {
-    const raw = pageSlugsCache.peekRaw();
+  public static getCachedSlugs(recordHit = false): string[] | null {
+    const raw = pageSlugsCache.peekRaw(recordHit);
     return Array.isArray(raw) && raw.length > 0 ? raw : null;
   }
 
