@@ -100,9 +100,9 @@ function applyRouteRevisionsUpdate(kvRevs: Record<string, any>, now: number): vo
 registerEpochBumpListener((epochKey, ts, cfEnv) => {
   if (!localRouteRevs) localRouteRevs = {};
   localRouteRevs[epochKey] = ts;
-  if (!isRebuildingPreload && (epochKey === '__settings' || epochKey === '__waf' || epochKey.startsWith('__cms:'))) {
+  if (!isRebuildingPreload) {
     runInBackground(rebuildEdgePreloadBundle(cfEnv));
-  } else if (isRebuildingPreload && (epochKey === '__settings' || epochKey === '__waf' || epochKey.startsWith('__cms:'))) {
+  } else {
     preloadRebuildPending = true;
     if (cfEnv !== undefined) preloadRebuildEnv = cfEnv;
   }
@@ -198,6 +198,8 @@ export async function preloadEdgeIsolate(
     wafRuntimeCache.peek()
   );
 
+  let heartbeatKvRevs: Record<string, any> | null = null;
+
   if (!force && isL1Populated) {
     if (now - localPreloadLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
       return {
@@ -209,8 +211,19 @@ export async function preloadEdgeIsolate(
     }
 
     // 30s heartbeat: check ~300B cms:route_revs first; if unchanged, extend L1 window with zero bundle reload
-    const kvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
-    if (kvRevs && typeof kvRevs === 'object' && JSON.stringify(kvRevs) === JSON.stringify(localRouteRevs)) {
+    heartbeatKvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+    const effectiveKvRevs = heartbeatKvRevs && typeof heartbeatKvRevs === 'object' ? heartbeatKvRevs : {};
+    const localKeys = Object.keys(localRouteRevs!);
+    const kvKeys = Object.keys(effectiveKvRevs);
+    const revsEqual =
+      (heartbeatKvRevs !== null || localKeys.length === 0) &&
+      localKeys.length === kvKeys.length &&
+      kvKeys.every((k) => {
+        const a = effectiveKvRevs[k];
+        const b = localRouteRevs![k];
+        return a === b || (typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
+      });
+    if (revsEqual) {
       localPreloadLoadedAt = now;
       localRouteRevsLoadedAt = now;
       return {
@@ -224,7 +237,11 @@ export async function preloadEdgeIsolate(
 
   const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
   if (bundle && typeof bundle === 'object' && bundle.routeRevs && typeof bundle.routeRevs === 'object') {
-    applyRouteRevisionsUpdate(bundle.routeRevs, now);
+    const mergedRevs =
+      heartbeatKvRevs && typeof heartbeatKvRevs === 'object'
+        ? { ...bundle.routeRevs, ...heartbeatKvRevs }
+        : bundle.routeRevs;
+    applyRouteRevisionsUpdate(mergedRevs, now);
 
     const bundleChanged = bundle.updatedAt !== localPreloadBundleUpdatedAt;
     if (

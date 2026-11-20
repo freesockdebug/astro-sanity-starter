@@ -592,8 +592,10 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
 
   if (isAuthorizedPurge) {
     const refreshed = await preloadEdgeIsolate(cfEnv, true).catch(() => null);
-    if (refreshed?.routeRevisions) {
-      (context.locals as any).routeRevisions = refreshed.routeRevisions;
+    if (refreshed) {
+      (context.locals as any).preloadStatus = refreshed.preloadStatus;
+      if (refreshed.routeRevisions) (context.locals as any).routeRevisions = refreshed.routeRevisions;
+      if (refreshed.wafSettings) (context.locals as any).systemSettings = refreshed.wafSettings;
     }
   }
 

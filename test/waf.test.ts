@@ -1243,6 +1243,16 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     const hbChanged = await preloadEdgeIsolate(mockEnv);
     assert.equal(hbChanged.preloadStatus, 'L2_KV_HIT');
     assert.equal(hbChanged.wafSettings?.brand_name, 'REMOTE_ISOLATE_BRAND');
+
+    // Even if cms:route_revs had an out-of-band __dicts bump not yet in bundle.routeRevs,
+    // merging heartbeatKvRevs prevents subsequent 30s heartbeats from looping L2_KV_HIT
+    fakeNow += 31_000;
+    kvStore.set('cms:route_revs', JSON.stringify({ ...remoteRevs, __dicts: fakeNow }));
+    const hbDictsSync = await preloadEdgeIsolate(mockEnv);
+    assert.equal(hbDictsSync.preloadStatus, 'L2_KV_HIT');
+    fakeNow += 31_000;
+    const hbDictsSteady = await preloadEdgeIsolate(mockEnv);
+    assert.equal(hbDictsSteady.preloadStatus, 'L1_HIT');
   } finally {
     Date.now = origNow;
   }
