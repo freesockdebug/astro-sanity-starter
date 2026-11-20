@@ -145,84 +145,88 @@ export async function createSessionToken(
   ttlSeconds = DEFAULT_TTL_SECONDS,
   customEnv?: any
 ): Promise<string> {
-  const secret = getCandidateSecrets(customEnv)[0];
-
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   const sessionData: SessionData = { user, exp };
-  const payloadStr = JSON.stringify(sessionData);
-  const encodedPayload = base64UrlEncode(payloadStr);
-
-  const key = await getHmacKey(secret);
-  const signatureBytes = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(encodedPayload)
-  );
-
-  let binarySig = '';
-  const sigView = new Uint8Array(signatureBytes);
-  for (let i = 0; i < sigView.byteLength; i++) {
-    binarySig += String.fromCharCode(sigView[i]);
-  }
-  const encodedSig = btoa(binarySig).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-  return `${encodedPayload}.${encodedSig}`;
+  return signPayload(sessionData, getCandidateSecrets(customEnv)[0]);
 }
 
 /**
  * Verifies and decodes a session token against all candidate secrets
  */
 export async function verifySessionToken(token: string, customEnv?: any): Promise<AuthUser | null> {
-  if (!token || !token.includes('.')) return null;
-  const [encodedPayload, encodedSig] = token.split('.');
-  if (!encodedPayload || !encodedSig) return null;
+  const sessionData = await verifySignedPayload<SessionData>(token, customEnv);
+  return sessionData?.user ?? null;
+}
 
+export interface OAuthStatePayload {
+  nonce: string;
+  returnUrl: string;
+  isPopup: boolean;
+  exp: number;
+}
+
+export async function createOAuthStateToken(
+  params: { returnUrl: string; isPopup: boolean; ttlSeconds?: number },
+  customEnv?: any
+): Promise<string> {
+  const ttl = params.ttlSeconds ?? 3600;
+  const nonce = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+  const payload: OAuthStatePayload = {
+    nonce,
+    returnUrl: params.returnUrl,
+    isPopup: params.isPopup,
+    exp: Math.floor(Date.now() / 1000) + ttl,
+  };
+  return signPayload(payload, getCandidateSecrets(customEnv)[0]);
+}
+
+export async function verifyOAuthStateToken(token: string, customEnv?: any): Promise<OAuthStatePayload | null> {
+  const data = await verifySignedPayload<OAuthStatePayload>(token, customEnv);
+  if (!data || typeof data.nonce !== 'string' || typeof data.returnUrl !== 'string') return null;
+  return data;
+}
+
+export async function buildLogtoAuthRedirect(params: {
+  request: Request;
+  endpoint: string;
+  appId: string;
+  returnUrl: string;
+  isPopup: boolean;
+  firstScreen?: string;
+  loginHint?: string;
+  cfEnv?: any;
+}): Promise<Response> {
+  const reqUrl = new URL(params.request.url);
+  const isHttps = reqUrl.protocol === 'https:';
+  const callbackUrl = `${reqUrl.protocol}//${reqUrl.host}/api/auth/callback`;
+
+  let state: string;
   try {
-    const secrets = getCandidateSecrets(customEnv);
-
-    // Decode provided signature
-    let base64Sig = encodedSig.replace(/-/g, '+').replace(/_/g, '/');
-    while (base64Sig.length % 4) base64Sig += '=';
-    const binarySig = atob(base64Sig);
-    const sigBytes = new Uint8Array(binarySig.length);
-    for (let i = 0; i < binarySig.length; i++) {
-      sigBytes[i] = binarySig.charCodeAt(i);
-    }
-
-    let isValid = false;
-    for (const sec of secrets) {
-      try {
-        const key = await getHmacKey(sec);
-        const valid = await crypto.subtle.verify(
-          'HMAC',
-          key,
-          sigBytes,
-          new TextEncoder().encode(encodedPayload)
-        );
-        if (valid) {
-          isValid = true;
-          break;
-        }
-      } catch {
-        // try next candidate
-      }
-    }
-
-    if (!isValid) return null;
-
-    const payloadJson = base64UrlDecode(encodedPayload);
-    const sessionData: SessionData = JSON.parse(payloadJson);
-
-    // Check expiration
-    const now = Math.floor(Date.now() / 1000);
-    if (sessionData.exp && sessionData.exp < now) {
-      return null;
-    }
-
-    return sessionData.user;
-  } catch (err) {
-    return null;
+    state = await createOAuthStateToken({ returnUrl: params.returnUrl, isPopup: params.isPopup, ttlSeconds: 3600 }, params.cfEnv);
+  } catch {
+    state = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
   }
+
+  const authUrl = new URL(`${params.endpoint}/oidc/auth`);
+  authUrl.searchParams.set('client_id', params.appId);
+  authUrl.searchParams.set('redirect_uri', callbackUrl);
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('scope', 'openid profile email roles');
+  if (params.firstScreen) authUrl.searchParams.set('first_screen', params.firstScreen);
+  if (params.loginHint) authUrl.searchParams.set('login_hint', params.loginHint);
+  authUrl.searchParams.set('state', state);
+
+  const stateCookiePayload = JSON.stringify({ state, returnUrl: params.returnUrl, isPopup: params.isPopup });
+  const sameSiteFlag = isHttps ? 'SameSite=None; Secure' : 'SameSite=Lax';
+  const stateCookie = `logto_oauth_state=${encodeURIComponent(stateCookiePayload)}; Path=/; Max-Age=3600; HttpOnly; ${sameSiteFlag}`;
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: authUrl.toString(),
+      'Set-Cookie': stateCookie,
+    },
+  });
 }
 
 /**

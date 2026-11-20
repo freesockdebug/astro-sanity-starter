@@ -6,6 +6,7 @@ import {
   createSessionToken,
   formatSessionCookie,
   getCookieValue,
+  verifyOAuthStateToken,
   SESSION_COOKIE_NAME,
   type AuthUser,
 } from '@utils/auth';
@@ -29,7 +30,12 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
   let isPopup = url.searchParams.get('popup') === '1';
   let parsedState: { state?: string; returnUrl?: string; isPopup?: boolean } | null = null;
 
-  // Read stored state cookie
+  // Verify stateless HMAC-signed state token first, with Cookie fallback
+  const signedState = returnedState ? await verifyOAuthStateToken(returnedState, cfEnv).catch(() => null) : null;
+  if (signedState?.returnUrl) returnUrl = signedState.returnUrl;
+  if (typeof signedState?.isPopup === 'boolean') isPopup = signedState.isPopup;
+
+  // Read stored state cookie (takes precedence for exact same-tab match)
   const cookieHeader = request.headers.get('cookie');
   const rawStateCookie = getCookieValue(cookieHeader, 'logto_oauth_state');
   if (rawStateCookie) {
@@ -47,13 +53,21 @@ export const GET: APIRoute = async ({ request, url, cookies, locals }) => {
     returnUrl = '/orders';
   }
 
-  // CSRF validation: when returning with an authorization code, state must match
-  if (!code) {
-    return new Response('Missing authorization code in OAuth callback.', { status: 400 });
-  }
-  if (!returnedState || !parsedState?.state || returnedState !== parsedState.state) {
-    console.warn('[Auth Callback] State mismatch or missing CSRF token');
-    return new Response('Invalid OAuth state parameter. Potential CSRF or expired session.', { status: 403 });
+  // CSRF validation: passes if stateless HMAC signature is valid OR state cookie matches
+  const cookieMatched = Boolean(returnedState && parsedState?.state && returnedState === parsedState.state);
+  const hmacMatched = Boolean(signedState);
+  if (!code || (!cookieMatched && !hmacMatched)) {
+    console.warn('[Auth Callback] OAuth state expired/missing or missing code; self-healing redirect to /api/auth/login');
+    const reloginUrl = new URL('/api/auth/login', reqUrl.origin);
+    reloginUrl.searchParams.set('returnUrl', returnUrl);
+    if (isPopup) reloginUrl.searchParams.set('popup', '1');
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: reloginUrl.toString(),
+        'Set-Cookie': 'logto_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+      },
+    });
   }
 
   let authUser: AuthUser | null = null;
