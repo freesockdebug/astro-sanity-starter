@@ -1257,3 +1257,41 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     Date.now = origNow;
   }
 });
+
+test('RequestProfiler + recordUrlCacheStats tracks per-URL L1/L2/L3 triggers accurately', async () => {
+  const { RequestProfiler, requestProfilerStorage } = await import('../src/utils/profiler.js');
+  const { recordUrlCacheStats, getGlobalCacheStatsSnapshot, resetGlobalCacheStats } = await import('../src/utils/cache.js');
+  resetGlobalCacheStats();
+
+  const p1 = new RequestProfiler();
+  await requestProfilerStorage.run(p1, async () => {
+    const c = createTieredCache<{ v: number }>({
+      name: 'test_url_stats',
+      ttlMs: 60_000,
+      fallbackRaw: { v: 0 },
+      fetchRaw: async () => ({ data: { v: 1 }, persistToKv: false }),
+    });
+    await c.get(); // L3 miss
+    await c.get(); // L1 hit
+    recordUrlCacheStats('/products/silk-slip', p1.getCacheTiers());
+  });
+
+  const p2 = new RequestProfiler();
+  await requestProfilerStorage.run(p2, async () => {
+    p2.recordCacheTier('l1');
+    p2.recordCacheTier('l1');
+    p2.recordCacheTier('l2');
+    recordUrlCacheStats('/products/silk-slip', p2.getCacheTiers());
+  });
+
+  const snap = getGlobalCacheStatsSnapshot();
+  const entry = snap.urlStats.find((u) => u.url === '/products/silk-slip');
+  assert.ok(entry);
+  assert.equal(entry.requests, 2);
+  assert.equal(entry.l1Triggers, 3);
+  assert.equal(entry.l2Triggers, 1);
+  assert.equal(entry.l3Triggers, 1);
+
+  resetGlobalCacheStats();
+  assert.equal(getGlobalCacheStatsSnapshot().urlStats.length, 0);
+});

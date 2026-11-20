@@ -10,7 +10,16 @@ export interface SpanBreakdown {
 export class RequestProfiler {
   private spans = new Map<string, number>();
   private activeSpans = new Map<string, number>();
+  private cacheTiers = { l1: 0, l2: 0, l3: 0 };
   public readonly startTotal: number = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+  recordCacheTier(tier: 'l1' | 'l2' | 'l3'): void {
+    this.cacheTiers[tier] += 1;
+  }
+
+  getCacheTiers(): { l1: number; l2: number; l3: number } {
+    return { ...this.cacheTiers };
+  }
 
   startSpan(name: string): void {
     this.activeSpans.set(name, typeof performance !== 'undefined' ? performance.now() : Date.now());

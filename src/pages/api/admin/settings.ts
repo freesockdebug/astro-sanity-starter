@@ -151,13 +151,18 @@ export const POST: APIRoute = async ({ request }) => {
       login_retention_days: [7, 365, 'Login Retention Days must be an integer between 7 and 365.'],
       log_retention_days: [1, 365, 'Log Retention Days must be an integer between 1 and 365.'],
       slow_request_threshold_ms: [50, 30000, 'Slow Request Threshold must be between 50ms and 30000ms.'],
+      edge_html_cache_ttl_sec: [0, 86400, 'Edge HTML Cache TTL must be between 0 and 86400 seconds.'],
       edge_404_cache_ttl_sec: [0, 86400, 'Edge 404 Cache TTL must be between 0 and 86400 seconds.'],
       waf_legacy_404_ttl_sec: [0, 86400, 'WAF Legacy 404 Cache TTL must be between 0 and 86400 seconds.'],
+      l1_heartbeat_interval_sec: [0, 3600, 'L1 Heartbeat Interval must be 0 or between 5 and 3600 seconds.'],
+      user_status_cache_ttl_sec: [5, 600, 'User Status Cache TTL must be between 5 and 600 seconds.'],
+      admin_order_stats_ttl_sec: [5, 300, 'Admin Order Stats TTL must be between 5 and 300 seconds.'],
+      l1_negative_cache_ttl_sec: [10, 600, 'L1 Negative Cache TTL must be between 10 and 600 seconds.'],
     };
     for (const [key, [min, max, errMsg]] of Object.entries(NUMBER_RANGES)) {
       if (rawUpdates[key] !== undefined) {
         const val = parseInt(rawUpdates[key], 10);
-        if (isNaN(val) || val < min || val > max) {
+        if (isNaN(val) || val < min || val > max || (key === 'l1_heartbeat_interval_sec' && val > 0 && val < 5)) {
           return jsonNoCache({ error: errMsg }, 400);
         }
         updates[key] = val;

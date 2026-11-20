@@ -7,6 +7,7 @@ import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import '@db';
+import { getSystemSettings, updateSystemSettings } from '@db';
 import '@utils/dicts';
 import {
   purgeRegisteredCaches,
@@ -20,14 +21,41 @@ import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache, rebuildEdgeP
 
 export const prerender = false;
 
+const CACHE_POLICY_RANGES: Record<string, [number, number, string]> = {
+  edge_html_cache_ttl_sec: [0, 86400, 'Edge HTML Cache TTL must be between 0 and 86400 seconds.'],
+  l1_heartbeat_interval_sec: [0, 3600, 'L1 Heartbeat Interval must be 0 (manual purge only) or 5–3600 seconds.'],
+  user_status_cache_ttl_sec: [5, 600, 'User Status Cache TTL must be between 5 and 600 seconds.'],
+  admin_order_stats_ttl_sec: [5, 300, 'Admin Order Stats TTL must be between 5 and 300 seconds.'],
+  l1_negative_cache_ttl_sec: [10, 600, 'L1 Negative Cache TTL must be between 10 and 600 seconds.'],
+  edge_404_cache_ttl_sec: [0, 86400, 'Edge 404 Cache TTL must be between 0 and 86400 seconds.'],
+  waf_legacy_404_ttl_sec: [0, 86400, 'WAF Legacy 404 Cache TTL must be between 0 and 86400 seconds.'],
+};
+
+function pickCachePolicy(s: any) {
+  return {
+    edge_html_cache_ttl_sec: Number(s?.edge_html_cache_ttl_sec ?? 300),
+    l1_heartbeat_interval_sec: Number(s?.l1_heartbeat_interval_sec ?? 30),
+    user_status_cache_ttl_sec: Number(s?.user_status_cache_ttl_sec ?? 30),
+    admin_order_stats_ttl_sec: Number(s?.admin_order_stats_ttl_sec ?? 30),
+    l1_negative_cache_ttl_sec: Number(s?.l1_negative_cache_ttl_sec ?? 60),
+    edge_404_cache_ttl_sec: Number(s?.edge_404_cache_ttl_sec ?? 300),
+    waf_legacy_404_ttl_sec: Number(s?.waf_legacy_404_ttl_sec ?? 3600),
+    enable_url_cache_stats: Boolean(s?.enable_url_cache_stats ?? true),
+  };
+}
+
 export const GET: APIRoute = defineAdminApi(
   { menu: 'cache' },
   async ({ cfEnv }) => {
-    const routeRevisions = await getRouteRevisions(cfEnv).catch(() => ({}));
+    const [routeRevisions, sysSettings] = await Promise.all([
+      getRouteRevisions(cfEnv).catch(() => ({})),
+      getSystemSettings(cfEnv).catch(() => null),
+    ]);
     return jsonNoCache({
       success: true,
       statsSnapshot: getGlobalCacheStatsSnapshot(),
       routeRevisions,
+      cachePolicy: pickCachePolicy(sysSettings),
     });
   }
 );
@@ -41,6 +69,47 @@ export const POST: APIRoute = defineAdminApi(
     const scope = body.scope || 'all'; // 'all' | 'products' | 'pages' | 'config' | 'dicts' | 'settings' | 'waf' | 'rbac' | 'orders' | 'path' | 'partition' | 'reset_stats'
     const targetPath = body.path ? String(body.path).trim() : null;
     const targetCacheName = body.partition ? String(body.partition).trim() : null;
+
+    if (scope === 'save_policy') {
+      const rawUpdates = body.updates && typeof body.updates === 'object' ? body.updates : {};
+      const updates: Record<string, number | boolean> = {};
+      for (const [key, [min, max, errMsg]] of Object.entries(CACHE_POLICY_RANGES)) {
+        if (rawUpdates[key] === undefined) continue;
+        const val = parseInt(String(rawUpdates[key]), 10);
+        if (isNaN(val) || val < min || val > max || (key === 'l1_heartbeat_interval_sec' && val > 0 && val < 5)) {
+          return jsonNoCache({ error: errMsg }, 400);
+        }
+        updates[key] = val;
+      }
+      if (rawUpdates.enable_url_cache_stats !== undefined) {
+        updates.enable_url_cache_stats = Boolean(rawUpdates.enable_url_cache_stats);
+      }
+      if (Object.keys(updates).length === 0) {
+        return jsonNoCache({ error: 'No valid cache policy fields provided.' }, 400);
+      }
+      const saveRes = await updateSystemSettings(updates, auth.user.email, cfEnv);
+      if (!saveRes.success) {
+        return jsonNoCache({ error: saveRes.error || 'Failed to save cache policy.' }, 500);
+      }
+      const refreshed = await getSystemSettings(cfEnv).catch(() => null);
+      const durationMs = Date.now() - startTime;
+      recordAdminAudit(context, {
+        adminEmail: auth.user.email,
+        action: 'CACHE_POLICY_UPDATE',
+        targetType: 'cache',
+        targetId: 'policy',
+        after: updates,
+        durationMs,
+        cfEnv,
+      });
+      return jsonNoCache({
+        success: true,
+        scope,
+        cachePolicy: pickCachePolicy(refreshed),
+        durationMs,
+        message: 'Cache policy settings saved and synced.',
+      });
+    }
 
     if (scope === 'reset_stats') {
       resetGlobalCacheStats();

@@ -5,6 +5,7 @@ import { getDb, generateOrderNo, generateUuid, formatUtcCutoff, type DbClient } 
 import { executeWithAutoSchema } from './schema';
 import { invalidateUserStatusCache } from './users.repo';
 import { createTieredCache } from '../utils/cache';
+import { settingsCache } from './settings.repo';
 import type { DataScope } from './rbac.repo';
 
 const EMPTY_DASHBOARD_STATS: DashboardStats = {
@@ -599,7 +600,7 @@ export async function batchUpdateOrderStatus(
 const pendingOrdersCountCache = createTieredCache<number>({
   name: 'orders:pending_count',
   scope: 'orders',
-  ttlMs: 30_000,
+  ttlMs: () => Math.max(5, settingsCache.peek()?.admin_order_stats_ttl_sec ?? 30) * 1000,
   fallbackRaw: 0,
   fetchRaw: () =>
     executeWithAutoSchema(async (db: DbClient) => {
@@ -645,7 +646,7 @@ export interface DashboardStats {
 const dashboardStatsCache = createTieredCache<DashboardStats>({
   name: 'orders:dashboard_stats',
   scope: 'orders',
-  ttlMs: 30_000,
+  ttlMs: () => Math.max(5, settingsCache.peek()?.admin_order_stats_ttl_sec ?? 30) * 1000,
   fallbackRaw: EMPTY_DASHBOARD_STATS,
   fetchRaw: () =>
     executeWithAutoSchema(async (db: DbClient) => {

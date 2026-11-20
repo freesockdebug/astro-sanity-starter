@@ -11,7 +11,7 @@ import { logger, syncWafBlockStats } from './utils/logger';
 import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
 import { getSystemSettings } from './db/settings.repo';
 import { upsertWafIpAcl } from './db/waf.repo';
-import { runInBackground, recordEdgeHtmlCacheResult } from './utils/cache';
+import { runInBackground, recordEdgeHtmlCacheResult, recordUrlCacheStats } from './utils/cache';
 import { EdgeWafService, normalizeWafRuleConfig } from './utils/waf';
 
 /**
@@ -76,6 +76,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   (context.locals as any).profiler = profiler;
 
   return await requestProfilerStorage.run(profiler, async () => {
+    try {
     const rayId = request.headers.get('cf-ray') || crypto.randomUUID();
     (context.locals as any).rayId = rayId;
     const clientMeta = SecurityService.resolveClientMeta(request);
@@ -460,6 +461,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
       throw err;
     }
+    } finally {
+      const urlStatsEnabled = (context.locals as any)?.systemSettings?.enable_url_cache_stats ?? true;
+      if (urlStatsEnabled && !EdgeWafService.isStaticAsset(pathname)) {
+        recordUrlCacheStats(pathname, profiler.getCacheTiers());
+      }
+    }
   });
 });
 
@@ -652,25 +659,15 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     // Cache successful or 404 HTML responses without module-level errors
     if (cache && (response.status === 200 || response.status === 404) && !response.headers.has('X-Section-Error') && contentType.includes('text/html')) {
       try {
+        const sysSettings = (context.locals as any)?.systemSettings;
         const siteConfig = await SiteConfigService.getConfig();
-        const edgeTtl = typeof siteConfig?.edgeCacheTtl === 'number' && siteConfig.edgeCacheTtl >= 0
-          ? siteConfig.edgeCacheTtl
-          : 300;
-
-        if (edgeTtl === 0) {
-          recordEdgeHtmlCacheResult('BYPASS', pathname);
-          const bypassHeaders = new Headers(response.headers);
-          bypassHeaders.set('Cache-Control', 'public, max-age=0, no-cache, no-store, must-revalidate');
-          bypassHeaders.set('X-Edge-Cache', 'BYPASS');
-          return new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: bypassHeaders,
-          });
-        }
+        const edgeTtl = typeof sysSettings?.edge_html_cache_ttl_sec === 'number' && sysSettings.edge_html_cache_ttl_sec >= 0
+          ? sysSettings.edge_html_cache_ttl_sec
+          : typeof siteConfig?.edgeCacheTtl === 'number' && siteConfig.edgeCacheTtl >= 0
+            ? siteConfig.edgeCacheTtl
+            : 300;
 
         const is404 = response.status === 404;
-        const sysSettings = (context.locals as any)?.systemSettings;
         const configured404Ttl = typeof sysSettings?.edge_404_cache_ttl_sec === 'number' && sysSettings.edge_404_cache_ttl_sec >= 0
           ? sysSettings.edge_404_cache_ttl_sec
           : 300;

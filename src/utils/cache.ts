@@ -176,6 +176,15 @@ export interface CachePartitionSnapshot {
   hitRatePct: number;
 }
 
+export interface UrlCacheStats {
+  url: string;
+  requests: number;
+  l1Triggers: number;
+  l2Triggers: number;
+  l3Triggers: number;
+  lastAt: number;
+}
+
 export interface GlobalCacheStatsSnapshot {
   generatedAt: number;
   totalRequests: number;
@@ -191,6 +200,7 @@ export interface GlobalCacheStatsSnapshot {
   edgeHtmlTopPaths: Array<{ pathname: string; hits: number; misses: number; hitRatePct: number }>;
   estimatedQueriesSaved: number;
   partitions: CachePartitionSnapshot[];
+  urlStats: UrlCacheStats[];
 }
 
 export interface CacheRegistryEntry {
@@ -269,6 +279,42 @@ const edgeHtmlMetrics = {
   lastLoadedAt: null as number | null,
   paths: new Map<string, { hits: number; misses: number; lastAt: number }>(),
 };
+
+const urlStatsMap = new Map<string, UrlCacheStats>();
+let defaultNegativeTtlMsResolver: (() => number) | null = null;
+
+export function setDefaultNegativeTtlMsResolver(fn: () => number): void {
+  defaultNegativeTtlMsResolver = fn;
+}
+
+/**
+ * Records per-URL L1/L2/L3 cache trigger counts for the current request.
+ */
+export function recordUrlCacheStats(pathname: string, tiers: { l1: number; l2: number; l3: number }): void {
+  const cleanUrl = (pathname || '/').slice(0, 140);
+  const now = Date.now();
+  const existing = urlStatsMap.get(cleanUrl);
+  if (existing) {
+    existing.requests += 1;
+    existing.l1Triggers += tiers.l1;
+    existing.l2Triggers += tiers.l2;
+    existing.l3Triggers += tiers.l3;
+    existing.lastAt = now;
+  } else {
+    if (urlStatsMap.size >= 100) {
+      const oldest = urlStatsMap.keys().next().value;
+      if (oldest !== undefined) urlStatsMap.delete(oldest);
+    }
+    urlStatsMap.set(cleanUrl, {
+      url: cleanUrl,
+      requests: 1,
+      l1Triggers: tiers.l1,
+      l2Triggers: tiers.l2,
+      l3Triggers: tiers.l3,
+      lastAt: now,
+    });
+  }
+}
 
 /**
  * Records Cloudflare Worker caches.default HTML edge cache Hit/Miss/Bypass in O(1) Isolate RAM.
@@ -369,6 +415,7 @@ export function getGlobalCacheStatsSnapshot(): GlobalCacheStatsSnapshot {
     edgeHtmlTopPaths,
     estimatedQueriesSaved: l1Hits + l2Hits + edgeHtmlMetrics.hits,
     partitions,
+    urlStats: Array.from(urlStatsMap.values()).sort((a, b) => b.requests - a.requests || b.lastAt - a.lastAt),
   };
 }
 
@@ -381,6 +428,7 @@ export function resetGlobalCacheStats(): void {
   edgeHtmlMetrics.bypasses = 0;
   edgeHtmlMetrics.lastLoadedAt = null;
   edgeHtmlMetrics.paths.clear();
+  urlStatsMap.clear();
 }
 
 export async function purgeSingleCacheByName(name: string, customEnv?: any): Promise<boolean> {
@@ -408,7 +456,7 @@ export interface TieredCacheOptions<TRaw, TCompiled = TRaw> {
   purgeAction?: 'invalidate' | 'evict' | 'refresh';
   kvKey?: string;
   epochKey?: string;
-  ttlMs?: number;
+  ttlMs?: number | (() => number);
   kvTtlSeconds?: number;
   fallbackRaw: TRaw;
   compile?: (raw: TRaw) => TCompiled;
@@ -430,7 +478,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
   private readonly name: string;
   private readonly kvKey?: string;
   private readonly epochKey?: string;
-  private readonly ttlMs: number;
+  private readonly ttlMsOption: number | (() => number);
   private readonly kvTtlSeconds?: number;
   private readonly fallbackRaw: TRaw;
   private readonly compileFn: (raw: TRaw) => TCompiled;
@@ -443,7 +491,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     this.name = options.name;
     this.kvKey = options.kvKey;
     this.epochKey = options.epochKey;
-    this.ttlMs = options.ttlMs ?? 5_000;
+    this.ttlMsOption = options.ttlMs ?? 5_000;
     this.kvTtlSeconds = options.kvTtlSeconds;
     this.fallbackRaw = options.fallbackRaw;
     this.compileFn = options.compile ?? ((raw: TRaw) => raw as unknown as TCompiled);
@@ -461,16 +509,21 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     return compiled;
   }
 
+  private get effectiveTtlMs(): number {
+    return typeof this.ttlMsOption === 'function' ? this.ttlMsOption() : this.ttlMsOption;
+  }
+
   public getMetricsSnapshot(scope: string): CachePartitionSnapshot {
     const now = Date.now();
-    const isWarm = Boolean(this.entry && now - this.entry.loadedAt < this.ttlMs);
+    const ttlMs = this.effectiveTtlMs;
+    const isWarm = Boolean(this.entry && now - this.entry.loadedAt < ttlMs);
     const total = this.stats.l1Hits + this.stats.l2Hits + this.stats.l3Misses;
     return {
       name: this.name,
       scope,
       kind: 'singleton',
       kvKey: this.kvKey,
-      ttlMs: Number.isFinite(this.ttlMs) ? this.ttlMs : -1,
+      ttlMs: Number.isFinite(ttlMs) ? ttlMs : -1,
       l1State: isWarm ? 'WARM' : 'COLD',
       l1Entries: this.entry ? 1 : 0,
       lastLoadedAt: this.entry?.loadedAt ?? null,
@@ -491,12 +544,18 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
   public seed(val?: TRaw | null, recordL2Hit = false): void {
     const raw = val !== undefined && val !== null ? val : this.fallbackRaw;
     this.storeL1(raw);
-    if (recordL2Hit) this.stats.l2Hits += 1;
+    if (recordL2Hit) {
+      this.stats.l2Hits += 1;
+      getActiveProfiler()?.recordCacheTier('l2');
+    }
   }
 
   public peek(recordHit = false): TCompiled | null {
     if (this.entry) {
-      if (recordHit) this.stats.l1Hits += 1;
+      if (recordHit) {
+        this.stats.l1Hits += 1;
+        getActiveProfiler()?.recordCacheTier('l1');
+      }
       return this.entry.compiled;
     }
     return null;
@@ -504,7 +563,10 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
 
   public peekRaw(recordHit = false): TRaw | null {
     if (this.entry) {
-      if (recordHit) this.stats.l1Hits += 1;
+      if (recordHit) {
+        this.stats.l1Hits += 1;
+        getActiveProfiler()?.recordCacheTier('l1');
+      }
       return this.entry.raw;
     }
     return null;
@@ -557,8 +619,9 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     const now = Date.now();
 
     // L1: Isolate Memory (pre-compiled)
-    if (!forceRefresh && this.entry && now - this.entry.loadedAt < this.ttlMs) {
+    if (!forceRefresh && this.entry && now - this.entry.loadedAt < this.effectiveTtlMs) {
       this.stats.l1Hits += 1;
+      getActiveProfiler()?.recordCacheTier('l1');
       return this.entry.compiled;
     }
 
@@ -570,6 +633,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
           const raw = this.deserializeKv ? this.deserializeKv(kvVal) : (kvVal as TRaw);
           if (raw !== null && raw !== undefined) {
             this.stats.l2Hits += 1;
+            getActiveProfiler()?.recordCacheTier('l2');
             return this.storeL1(raw);
           }
         }
@@ -580,6 +644,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
 
     // L3: Upstream / Database
     this.stats.l3Misses += 1;
+    getActiveProfiler()?.recordCacheTier('l3');
     try {
       const res = await this.fetchRawFn(customEnv, forceRefresh);
       if (res !== null && res !== undefined) {
@@ -658,7 +723,7 @@ export interface CmsCacheOptions<T> {
   purgeAction?: 'invalidate' | 'evict' | 'refresh';
   kvKey?: string;
   epochKey?: string;
-  ttlMs?: number;
+  ttlMs?: number | (() => number);
   onUpdate?: (val: T) => void;
 }
 
@@ -710,8 +775,8 @@ export interface KeyedCacheOptions {
   name?: string;
   scope?: string | string[];
   kvPrefix?: string;
-  ttlMs?: number;
-  negativeTtlMs?: number;
+  ttlMs?: number | (() => number);
+  negativeTtlMs?: number | (() => number);
   maxL1Entries?: number;
   cloneOnRead?: boolean;
   existsGuard?: (key: string, customEnv?: any) => Promise<boolean> | boolean;
@@ -729,8 +794,14 @@ export function createKeyedCache<T>(
 ): KeyedCache<T> {
   const kvPrefix = options?.kvPrefix;
   const label = options?.name || kvPrefix || 'keyed_cache';
-  const ttlMs = options?.ttlMs ?? 300_000;
-  const negativeTtlMs = options?.negativeTtlMs ?? 30_000;
+  const rawTtl = options?.ttlMs;
+  const getTtlMs: () => number = typeof rawTtl === 'function' ? rawTtl : () => (rawTtl ?? 300_000);
+  const getNegativeTtlMs =
+    typeof options?.negativeTtlMs === 'function'
+      ? options.negativeTtlMs
+      : options?.negativeTtlMs !== undefined
+        ? () => options.negativeTtlMs as number
+        : () => (defaultNegativeTtlMsResolver ? defaultNegativeTtlMsResolver() : 60_000);
   const maxEntries = options?.maxL1Entries ?? 500;
   const cloneOnRead = Boolean(options?.cloneOnRead);
   const existsGuard = options?.existsGuard;
@@ -764,6 +835,8 @@ export function createKeyedCache<T>(
     const now = Date.now();
 
     if (!forceRefresh) {
+      const ttlMs = getTtlMs();
+      const negativeTtlMs = getNegativeTtlMs();
       const hit = l1Map.get(rawKey);
       if (hit) {
         const age = now - hit.timestamp;
@@ -771,10 +844,12 @@ export function createKeyedCache<T>(
           if (negativeTtlMs > 0 && age < negativeTtlMs) {
             stats.l1Hits += 1;
             stats.negativeHits += 1;
+            getActiveProfiler()?.recordCacheTier('l1');
             return null;
           }
         } else if (age < ttlMs) {
           stats.l1Hits += 1;
+          getActiveProfiler()?.recordCacheTier('l1');
           return maybeClone(hit.data);
         }
       }
@@ -785,6 +860,7 @@ export function createKeyedCache<T>(
           if (!mayExist) {
             stats.l1Hits += 1;
             stats.negativeHits += 1;
+            getActiveProfiler()?.recordCacheTier('l1');
             return null;
           }
         } catch { }
@@ -798,6 +874,7 @@ export function createKeyedCache<T>(
           const kvHit = await kvGet<any>(cacheKey, customEnv);
           if (kvHit && !kvHit.notFound) {
             stats.l2Hits += 1;
+            getActiveProfiler()?.recordCacheTier('l2');
             setL1(rawKey, kvHit);
             return maybeClone(kvHit);
           }
@@ -805,6 +882,7 @@ export function createKeyedCache<T>(
       }
 
       stats.l3Misses += 1;
+      getActiveProfiler()?.recordCacheTier('l3');
       const data = await fetcher(rawKey, forceRefresh);
       if (data) {
         setL1(rawKey, data);
@@ -817,7 +895,7 @@ export function createKeyedCache<T>(
         }
         return maybeClone(data);
       } else {
-        if (negativeTtlMs > 0) {
+        if (getNegativeTtlMs() > 0) {
           setL1(rawKey, null);
         }
         if (forceRefresh && cacheKey) {
@@ -875,6 +953,7 @@ export function createKeyedCache<T>(
       },
       getSnapshot: () => {
         const total = stats.l1Hits + stats.l2Hits + stats.l3Misses;
+        const ttlMs = getTtlMs();
         return {
           name: label,
           scope: scopes[0],

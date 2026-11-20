@@ -1,6 +1,6 @@
 ---
 // src/pages/admin/cache.astro
-// Edge & KV Cache Manager: Real-Time Hit/Miss Telemetry, Partition Matrix, Route Revisions & Granular Purge
+// Edge & KV Cache Manager: Per-URL L1/L2/L3 Stats, Cache Strategy Policy & Granular Purge
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext } from '@utils/auth';
@@ -8,7 +8,7 @@ import '@data/products';
 import '@data/page';
 import '@data/siteConfig';
 import '@data/rfqSettings';
-import '@db';
+import { getSystemSettings } from '@db';
 import '@utils/dicts';
 import { getGlobalCacheStatsSnapshot } from '@utils/cache';
 import { getRouteRevisions } from '@utils/cmsSync';
@@ -26,25 +26,90 @@ const { sessionUser, adminContext, pendingOrdersCount, redirectResponse } = awai
 if (redirectResponse) return redirectResponse;
 
 const canPurge = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cache:purge'));
-const statsSnapshot = getGlobalCacheStatsSnapshot();
-const routeRevisions = await getRouteRevisions(cfEnv).catch(() => ({} as Record<string, number>));
+const [statsSnapshot, routeRevisions, sysSettings] = await Promise.all([
+  Promise.resolve(getGlobalCacheStatsSnapshot()),
+  getRouteRevisions(cfEnv).catch(() => ({} as Record<string, number>)),
+  getSystemSettings(cfEnv).catch(() => null),
+]);
 const revEntries = Object.entries(routeRevisions).filter(([, ts]) => typeof ts === 'number').sort(([a], [b]) => a.localeCompare(b));
+const urlStats = statsSnapshot.urlStats || [];
+const urlStatsEnabled = sysSettings?.enable_url_cache_stats ?? true;
 
-const formatTtl = (ms: number) => {
-  if (ms >= 3600_000) return `${Math.round(ms / 3600_000)}h`;
-  if (ms >= 60_000) return `${Math.round(ms / 60_000)}m`;
-  return `${Math.round(ms / 1000)}s`;
-};
+const policyFields = [
+  {
+    key: 'edge_html_cache_ttl_sec',
+    label: 'L0 Edge HTML 页面缓存时长 (秒)',
+    value: sysSettings?.edge_html_cache_ttl_sec ?? 300,
+    min: 0,
+    max: 86400,
+    step: 30,
+    hint: '正常 200 HTML 在边缘 caches.default & CDN 的缓存时长，默认 300 秒（0 关闭）。',
+  },
+  {
+    key: 'l1_heartbeat_interval_sec',
+    label: '跨节点 L1 版本心跳间隔 (秒)',
+    value: sysSettings?.l1_heartbeat_interval_sec ?? 30,
+    min: 0,
+    max: 3600,
+    step: 5,
+    hint: '默认 30 秒，范围 5~3600（设 0 表示仅手动 Purge，不轮询）。',
+  },
+  {
+    key: 'user_status_cache_ttl_sec',
+    label: '用户账号状态 L1 缓存 (秒)',
+    value: sysSettings?.user_status_cache_ttl_sec ?? 30,
+    min: 5,
+    max: 600,
+    step: 5,
+    hint: '控制用户封禁/等级状态在 L1 内存的保留时长，默认 30 秒（5~600）。',
+  },
+  {
+    key: 'admin_order_stats_ttl_sec',
+    label: '后台订单角标与统计 L1 缓存 (秒)',
+    value: sysSettings?.admin_order_stats_ttl_sec ?? 30,
+    min: 5,
+    max: 300,
+    step: 5,
+    hint: '控制侧边栏待审角标与仪表盘统计 L1 缓存时长，默认 30 秒（5~300）。',
+  },
+  {
+    key: 'l1_negative_cache_ttl_sec',
+    label: '动态路由 L1 负缓存时长 (秒)',
+    value: sysSettings?.l1_negative_cache_ttl_sec ?? 60,
+    min: 10,
+    max: 600,
+    step: 10,
+    hint: '不存在的商品/页面在 L1 记忆 404 的时长，默认 60 秒（10~600）。',
+  },
+  {
+    key: 'edge_404_cache_ttl_sec',
+    label: 'Edge 404 页面缓存时长 (秒)',
+    value: sysSettings?.edge_404_cache_ttl_sec ?? 300,
+    min: 0,
+    max: 86400,
+    step: 30,
+    hint: '404 HTML 在边缘 caches.default 的缓存时长，默认 300 秒（0 关闭）。',
+  },
+  {
+    key: 'waf_legacy_404_ttl_sec',
+    label: '废弃路径 WAF 404 缓存 (秒)',
+    value: sysSettings?.waf_legacy_404_ttl_sec ?? 3600,
+    min: 0,
+    max: 86400,
+    step: 60,
+    hint: 'WAF 拦截废弃路径（如 /product-tag/*）的 CDN 缓存时长，默认 3600 秒。',
+  },
+];
 
 const QUICK_PARTITIONS: Array<{ scope: string; icon: string; title: string; desc: string; primary?: boolean }> = [
-  { scope: 'all', icon: '⚡', title: 'Purge Everything', desc: 'Invalidates all CMS products, pages, dictionaries, settings, WAF & edge HTML routes.', primary: true },
-  { scope: 'products', icon: '🛍️', title: 'Products & Catalog', desc: 'Clears product lists, category trees, and individual product details (cms:product:*).' },
-  { scope: 'pages', icon: '📄', title: 'Pages & Builder', desc: 'Clears Homepage (cms:page:home), about, contact, and section builder caches.' },
-  { scope: 'dicts', icon: '🏷️', title: 'Data Dictionaries', desc: 'Forces re-aggregation of sys:dicts:all & dict groups from DB into Edge KV.' },
-  { scope: 'waf', icon: '🛡️', title: 'WAF & Security Rules', desc: 'Recompiles waf_rules + waf_ip_acl into waf:compiled_ruleset:v1 across Edge KV.' },
-  { scope: 'settings', icon: '⚙️', title: 'Settings & Config', desc: 'Refreshes sys:settings:v1, SiteConfig & RFQ Settings across L1 and Edge KV.' },
-  { scope: 'rbac', icon: '🔐', title: 'RBAC & Team Roles', desc: 'Clears admin_roles, admin_members & active team member L1 caches.' },
-  { scope: 'orders', icon: '📦', title: 'Orders, Users & Logs', desc: 'Clears pending orders badge count, dashboard stats & log overview caches.' },
+  { scope: 'all', icon: '⚡', title: 'Purge Everything', desc: 'Clears all CMS products, pages, dictionaries, settings, WAF & edge HTML routes.', primary: true },
+  { scope: 'products', icon: '🛍️', title: 'Products & Catalog', desc: 'Clears product lists, category trees, and individual product details.' },
+  { scope: 'pages', icon: '📄', title: 'Pages & Builder', desc: 'Clears Homepage, about, contact, and section builder caches.' },
+  { scope: 'dicts', icon: '🏷️', title: 'Data Dictionaries', desc: 'Re-aggregates sys:dicts:all & dict groups into Edge KV.' },
+  { scope: 'waf', icon: '🛡️', title: 'WAF & Security Rules', desc: 'Recompiles WAF rules & IP ACL into Edge KV.' },
+  { scope: 'settings', icon: '⚙️', title: 'Settings & Config', desc: 'Refreshes system settings, SiteConfig & RFQ Settings.' },
+  { scope: 'rbac', icon: '🔐', title: 'RBAC & Team Roles', desc: 'Clears admin roles, members & permission L1 caches.' },
+  { scope: 'orders', icon: '📦', title: 'Orders, Users & Logs', desc: 'Clears pending orders badge, dashboard stats & log caches.' },
 ];
 
 const QUICK_PATHS = ['/', '/products', '/about', '/contact', '/private-label'];
@@ -67,9 +132,7 @@ const pageTitle = 'Edge & KV Cache Console';
   <div id="cache-workbench-root" data-can-purge={canPurge ? '1' : '0'} class="flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden space-y-3">
     <AdminPageToolbar
       title="Edge & KV Cache Manager"
-      subtitle="Zero-overhead L1/L2/L3 & Edge HTML Hit/Miss telemetry, partition matrix, and route revision invalidation"
-      badge="Registry Active"
-      badgeColor="emerald"
+      subtitle="Per-URL L1/L2/L3 hit statistics, cache duration & sync policy, and route invalidation"
     >
       <div slot="actions" class="flex items-center gap-2">
         <button id="cache-refresh-stats-btn" type="button" class="adm-btn-secondary text-xs py-1.5 px-3">
@@ -84,155 +147,113 @@ const pageTitle = 'Edge & KV Cache Console';
     </AdminPageToolbar>
 
     <div class="flex-1 min-h-0 overflow-y-auto space-y-4 pr-0.5 text-xs">
-      <!-- 1. Top KPI Telemetry Bar -->
-      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div class="adm-card p-3.5 space-y-1.5">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">Overall Hit Ratio</span>
-            <span id="kpi-hit-rate-badge" class="adm-badge adm-badge-ok">{statsSnapshot.overallHitRatePct}% Hit</span>
-          </div>
-          <div class="flex items-baseline gap-2">
-            <strong id="kpi-hit-rate" class="text-2xl font-bold tabular-nums text-[#1d1d1f]">{statsSnapshot.overallHitRatePct}%</strong>
-            <span id="kpi-total-reqs" class="text-[11px] text-[#86868b] tabular-nums">{statsSnapshot.totalRequests} reqs</span>
-          </div>
-          <div class="h-1.5 w-full rounded-full bg-black/8 overflow-hidden">
-            <div id="kpi-hit-rate-bar" class="h-full bg-emerald-500 transition-all" style={`width: ${Math.min(100, statsSnapshot.overallHitRatePct)}%`}></div>
-          </div>
-        </div>
-
-        <div class="adm-card p-3.5 space-y-1">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">L1 Isolate Memory</span>
-            <span class="adm-badge adm-badge-info">~0.01ms</span>
-          </div>
-          <div class="flex items-baseline gap-2">
-            <strong id="kpi-l1-hits" class="text-2xl font-bold tabular-nums text-[#1d1d1f]">{statsSnapshot.l1Hits}</strong>
-            <span class="text-[11px] text-[#86868b]">in-memory hits</span>
-          </div>
-          <p class="text-[11px] text-[#86868b]">Pre-compiled isolate RAM hits (0 network I/O)</p>
-        </div>
-
-        <div class="adm-card p-3.5 space-y-1">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">L2 KV &amp; Edge HTML</span>
-            <span class="adm-badge adm-badge-neutral">1–5ms</span>
-          </div>
-          <div class="flex items-baseline gap-2">
-            <strong id="kpi-l2-hits" class="text-2xl font-bold tabular-nums text-[#1d1d1f]">{statsSnapshot.l2Hits + statsSnapshot.edgeHtmlHits}</strong>
-            <span id="kpi-edge-html-breakdown" class="text-[11px] text-[#86868b] tabular-nums">
-              KV {statsSnapshot.l2Hits} · HTML {statsSnapshot.edgeHtmlHits}
-            </span>
-          </div>
-          <p class="text-[11px] text-[#86868b]">Shared Cloudflare Edge KV + caches.default</p>
-        </div>
-
-        <div class="adm-card p-3.5 space-y-1">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-[#86868b]">Origin Queries Saved</span>
-            <span class="adm-badge adm-badge-warn">L3 Miss: <span id="kpi-l3-misses">{statsSnapshot.l3Misses + statsSnapshot.edgeHtmlMisses}</span></span>
-          </div>
-          <div class="flex items-baseline gap-2">
-            <strong id="kpi-queries-saved" class="text-2xl font-bold tabular-nums text-emerald-700">{statsSnapshot.estimatedQueriesSaved}</strong>
-            <span class="text-[11px] text-[#86868b]">DB / CMS calls avoided</span>
-          </div>
-          <p class="text-[11px] text-[#86868b]">Zero-overhead O(1) isolate counters</p>
-        </div>
-      </section>
-
-      <!-- 2. Live Cache Partitions Matrix -->
+      <!-- 1. Per-URL L1 / L2 / L3 Trigger Statistics -->
       <section class="adm-card overflow-hidden">
         <div class="px-4 py-3 border-b border-black/5 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">Live Cache Partitions Matrix</h2>
-            <p class="text-[11px] text-[#86868b]">
-              Auto-discovered from <code class="font-mono text-[10px]">EDGE_CACHE_REGISTRY</code> ({statsSnapshot.partitions.length} partitions in current isolate).
-            </p>
+            <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">URL 访问 L1 / L2 / L3 触发统计</h2>
+            <p class="text-[11px] text-[#86868b]">统计当前 Isolate 内同一 URL 每次访问累计触发的 L1（内存）、L2（KV）、L3（源站/DB）次数。</p>
           </div>
-          <span id="cache-partitions-count" class="adm-badge adm-badge-info">{statsSnapshot.partitions.length} Partitions</span>
+          <div class="flex items-center gap-2">
+            <span id="url-stats-status-badge" class:list={['adm-badge', urlStatsEnabled ? 'adm-badge-ok' : 'adm-badge-neutral']}>
+              {urlStatsEnabled ? '统计已启用' : '统计已关闭'}
+            </span>
+            <span id="url-stats-count" class="adm-badge adm-badge-neutral">{urlStats.length} URLs</span>
+          </div>
         </div>
 
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead class="bg-[#fafafc] border-b border-black/5 text-[10px] font-bold uppercase tracking-wider text-[#86868b]">
               <tr>
-                <th class="px-4 py-2.5">Partition &amp; KV Key</th>
-                <th class="px-3 py-2.5">Scope / Tier</th>
-                <th class="px-3 py-2.5">L1 Status</th>
-                <th class="px-3 py-2.5">TTL</th>
-                <th class="px-3 py-2.5">Hits (L1 / L2) · Miss (L3)</th>
-                <th class="px-3 py-2.5 w-36">Hit Rate</th>
-                {canPurge && <th class="px-4 py-2.5 text-right">Action</th>}
+                <th class="px-4 py-2.5">URL Path</th>
+                <th class="px-3 py-2.5 text-right">Requests</th>
+                <th class="px-3 py-2.5 text-right text-emerald-700">L1 Triggers</th>
+                <th class="px-3 py-2.5 text-right text-sky-700">L2 Triggers</th>
+                <th class="px-3 py-2.5 text-right text-amber-700">L3 Triggers</th>
+                <th class="px-4 py-2.5 text-right">Last Seen</th>
               </tr>
             </thead>
-            <tbody id="cache-partitions-tbody" class="divide-y divide-black/5 text-[11px]">
-              {statsSnapshot.partitions.map((p) => {
-                const isWarm = p.l1State === 'WARM';
-                const tierLabel = p.kind === 'edge_html' ? 'Edge HTML' : p.kvKey ? 'L1 + L2 KV' : 'L1 Only';
-                const loadedIso = p.lastLoadedAt ? toIsoUtcString(new Date(p.lastLoadedAt).toISOString()) : '';
-                const loadedFallback = p.lastLoadedAt ? formatUtcFallback(new Date(p.lastLoadedAt).toISOString()) : '';
-                return (
-                  <tr class="hover:bg-[#fafafc] transition-colors">
-                    <td class="px-4 py-2.5">
-                      <div class="font-mono font-semibold text-[#1d1d1f]">{p.name}</div>
-                      {p.kvKey && <div class="font-mono text-[10px] text-[#86868b]">{p.kvKey}</div>}
-                    </td>
-                    <td class="px-3 py-2.5 whitespace-nowrap">
-                      <span class="adm-badge adm-badge-neutral mr-1">{p.scope}</span>
-                      <span class="text-[10px] font-mono text-[#52525b]">{tierLabel}</span>
-                    </td>
-                    <td class="px-3 py-2.5 whitespace-nowrap">
-                      <div class="inline-flex items-center gap-1.5">
-                        <span class:list={['w-2 h-2 rounded-full', isWarm ? 'bg-emerald-500' : 'bg-zinc-300']}></span>
-                        <span class:list={['font-mono font-semibold', isWarm ? 'text-emerald-700' : 'text-[#86868b]']}>{p.l1State}</span>
-                        <span class="text-[10px] text-[#86868b]">({p.l1Entries})</span>
-                      </div>
-                      {loadedIso && (
-                        <div class="text-[10px] font-mono text-[#86868b]">
-                          <time data-admin-time={loadedIso} data-admin-time-mode="short" title={loadedFallback}>{loadedFallback}</time>
-                        </div>
-                      )}
-                    </td>
-                    <td class="px-3 py-2.5 font-mono text-[#52525b] whitespace-nowrap">{formatTtl(p.ttlMs)}</td>
-                    <td class="px-3 py-2.5 font-mono whitespace-nowrap">
-                      <span class="text-emerald-700 font-semibold">{p.l1Hits}</span>
-                      <span class="text-[#86868b]"> / </span>
-                      <span class="text-sky-700 font-semibold">{p.l2Hits}</span>
-                      <span class="text-[#86868b]"> · </span>
-                      <span class="text-amber-700">{p.l3Misses}</span>
-                      {p.negativeHits > 0 && (
-                        <span class="ml-1.5 px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200/80 text-[9px] font-semibold">
-                          🛡️ {p.negativeHits} 404-shielded
-                        </span>
-                      )}
-                    </td>
-                    <td class="px-3 py-2.5">
-                      <div class="flex items-center gap-2">
-                        <div class="flex-1 h-1.5 rounded-full bg-black/8 overflow-hidden">
-                          <div class="h-full bg-emerald-500" style={`width: ${Math.min(100, p.hitRatePct)}%`}></div>
-                        </div>
-                        <span class="font-mono text-[10px] font-semibold text-[#1d1d1f] w-10 text-right">{p.hitRatePct}%</span>
-                      </div>
-                    </td>
-                    {canPurge && (
-                      <td class="px-4 py-2.5 text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          data-partition-name={p.name}
-                          class="btn-purge-partition px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-[#f5f5f7] hover:bg-black/10 text-[#1d1d1f] border border-black/10 transition-colors cursor-pointer"
-                        >
-                          {p.kvKey ? 'Refresh' : 'Invalidate'}
-                        </button>
+            <tbody id="url-stats-tbody" class="divide-y divide-black/5 text-[11px]">
+              {urlStats.length === 0 ? (
+                <tr>
+                  <td colspan="6" class="px-4 py-6 text-center text-[#86868b]">
+                    暂无 URL 访问统计，访问前台或后台页面后点击 Refresh Stats 查看。
+                  </td>
+                </tr>
+              ) : (
+                urlStats.map((u) => {
+                  const iso = u.lastAt ? toIsoUtcString(new Date(u.lastAt).toISOString()) : '';
+                  const fb = u.lastAt ? formatUtcFallback(new Date(u.lastAt).toISOString()) : '';
+                  return (
+                    <tr class="hover:bg-[#fafafc] transition-colors">
+                      <td class="px-4 py-2 font-mono font-semibold text-[#1d1d1f]">{u.url}</td>
+                      <td class="px-3 py-2 font-mono text-right text-[#1d1d1f]">{u.requests}</td>
+                      <td class="px-3 py-2 font-mono text-right font-semibold text-emerald-700">{u.l1Triggers}</td>
+                      <td class="px-3 py-2 font-mono text-right font-semibold text-sky-700">{u.l2Triggers}</td>
+                      <td class="px-3 py-2 font-mono text-right font-semibold text-amber-700">{u.l3Triggers}</td>
+                      <td class="px-4 py-2 font-mono text-right text-[#86868b] whitespace-nowrap">
+                        {iso ? <time data-admin-time={iso} data-admin-time-mode="short" title={fb}>{fb}</time> : '—'}
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </section>
 
-      <!-- 3. Targeted Path Purge & Live Route Revisions -->
+      <!-- 2. Cache Duration & Sync Policy -->
+      <section class="adm-card p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 pb-3">
+          <div>
+            <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">缓存时长与同步策略</h2>
+            <p class="text-[11px] text-[#86868b]">统一管理跨节点 L1 心跳间隔、D1 状态缓存时长、负缓存及边缘 404 缓存时长（CMS 内容与配置保持永不过期 + 写穿透同步）。</p>
+          </div>
+          {canPurge && (
+            <button id="save-cache-policy-btn" type="button" class="adm-btn h-auto px-4 py-1.5 text-xs">
+              保存策略
+            </button>
+          )}
+        </div>
+
+        <form id="cache-policy-form" class="space-y-3">
+          <label class="flex items-start gap-3 p-3 rounded-xl bg-[#f5f5f7] border border-black/5 cursor-pointer">
+            <input
+              type="checkbox"
+              name="enable_url_cache_stats"
+              checked={urlStatsEnabled}
+              disabled={!canPurge}
+              class="w-4 h-4 rounded text-black focus:ring-black accent-[#1d1d1f] mt-0.5 shrink-0"
+            />
+            <div>
+              <span class="block text-xs font-bold text-[#1d1d1f]">启用 URL 访问 L1 / L2 / L3 触发统计</span>
+              <span class="block text-[10px] text-[#86868b] mt-0.5">开启后会在每个非静态请求结束时按 URL 累加 L1/L2/L3 触发次数；关闭后跳过统计写入（0 内存开销）。</span>
+            </div>
+          </label>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {policyFields.map((f) => (
+              <label class="block p-3 rounded-xl bg-[#f5f5f7] border border-black/5 space-y-1.5">
+                <span class="block text-xs font-bold text-[#1d1d1f]">{f.label}</span>
+                <input
+                  type="number"
+                  name={f.key}
+                  value={f.value}
+                  min={f.min}
+                  max={f.max}
+                  step={f.step}
+                  disabled={!canPurge}
+                  class="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-black/10 font-mono font-bold text-[#1d1d1f] focus:outline-none focus:border-black"
+                />
+                <span class="block text-[10px] text-[#86868b] leading-snug">{f.hint}</span>
+              </label>
+            ))}
+          </div>
+        </form>
+      </section>
+
+      <!-- 3. Targeted Path Purge & Active Route Revisions -->
       <section class="adm-card p-4 space-y-3">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
           <div class="lg:col-span-6 space-y-2.5">
@@ -268,7 +289,7 @@ const pageTitle = 'Edge & KV Cache Console';
 
           <div class="lg:col-span-6 space-y-2">
             <div class="flex items-center justify-between">
-              <h3 class="font-bold text-xs text-[#1d1d1f]">Active Route Revisions (<code class="font-mono text-[10px]">cms:route_revisions</code>)</h3>
+              <h3 class="font-bold text-xs text-[#1d1d1f]">Active Route Revisions (<code class="font-mono text-[10px]">cms:route_revs</code>)</h3>
               <span id="route-revisions-count" class="adm-badge adm-badge-neutral">{revEntries.length} routes</span>
             </div>
             <div id="route-revisions-list" class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2.5 rounded-xl bg-[#fafafc] border border-black/8">
@@ -287,7 +308,7 @@ const pageTitle = 'Edge & KV Cache Console';
         </div>
       </section>
 
-      <!-- 4. Quick Partition Cards & Event Log -->
+      <!-- 4. Quick Partition Purge -->
       <section class="space-y-3">
         <div>
           <h2 class="text-xs sm:text-sm font-bold text-[#1d1d1f]">One-Click Cache Invalidation Partitions</h2>
@@ -319,13 +340,6 @@ const pageTitle = 'Edge & KV Cache Console';
           ))}
         </div>
       </section>
-
-      <section class="adm-card p-4 space-y-2">
-        <h3 class="font-bold text-xs text-[#1d1d1f]">Recent Invalidation Events</h3>
-        <div id="purge-events-log" class="p-3.5 rounded-xl bg-[#f5f5f7] border border-black/5 font-mono text-[11px] space-y-1 text-[#52525b] max-h-48 overflow-y-auto">
-          <div>Ready. Click any partition or path action above to purge caches and inspect telemetry.</div>
-        </div>
-      </section>
     </div>
   </div>
 </AdminLayout>
@@ -335,98 +349,36 @@ const pageTitle = 'Edge & KV Cache Console';
 
   let cacheAbort: AbortController | null = null;
 
-  function appendLog(text: string, isError = false) {
-    const logContainer = document.getElementById('purge-events-log');
-    if (!logContainer) return;
-    const time = new Date().toLocaleTimeString();
-    const line = document.createElement('div');
-    line.className = isError ? 'text-rose-600 font-semibold' : 'text-emerald-700';
-    line.innerHTML = `<span class="text-[#86868b]">[${time}]</span> ${escapeHtml(text)}`;
-    logContainer.prepend(line);
-  }
+  function renderUrlStats(snapshot: any, routeRevisions?: Record<string, number>) {
+    const urlStats = Array.isArray(snapshot?.urlStats) ? snapshot.urlStats : [];
+    const countEl = document.getElementById('url-stats-count');
+    if (countEl) countEl.textContent = `${urlStats.length} URLs`;
 
-  function formatTtl(ms: number) {
-    if (!Number.isFinite(ms) || ms < 0) return '∞ (Epoch)';
-    if (ms >= 3600_000) return `${Math.round(ms / 3600_000)}h`;
-    if (ms >= 60_000) return `${Math.round(ms / 60_000)}m`;
-    return `${Math.round(ms / 1000)}s`;
-  }
-
-  function renderTelemetry(snapshot: any, routeRevisions?: Record<string, number>) {
-    if (!snapshot) return;
-    const canPurge = document.getElementById('cache-workbench-root')?.getAttribute('data-can-purge') === '1';
-
-    const setText = (id: string, val: string | number) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = String(val);
-    };
-    setText('kpi-hit-rate', `${snapshot.overallHitRatePct ?? 0}%`);
-    setText('kpi-hit-rate-badge', `${snapshot.overallHitRatePct ?? 0}% Hit`);
-    setText('kpi-total-reqs', `${snapshot.totalRequests ?? 0} reqs`);
-    setText('kpi-l1-hits', snapshot.l1Hits ?? 0);
-    setText('kpi-l2-hits', (snapshot.l2Hits ?? 0) + (snapshot.edgeHtmlHits ?? 0));
-    setText('kpi-edge-html-breakdown', `KV ${snapshot.l2Hits ?? 0} · HTML ${snapshot.edgeHtmlHits ?? 0}`);
-    setText('kpi-l3-misses', (snapshot.l3Misses ?? 0) + (snapshot.edgeHtmlMisses ?? 0));
-    setText('kpi-queries-saved', snapshot.estimatedQueriesSaved ?? 0);
-
-    const bar = document.getElementById('kpi-hit-rate-bar');
-    if (bar) bar.style.width = `${Math.min(100, Number(snapshot.overallHitRatePct || 0))}%`;
-
-    const parts = Array.isArray(snapshot.partitions) ? snapshot.partitions : [];
-    setText('cache-partitions-count', `${parts.length} Partitions`);
-    const tbody = document.getElementById('cache-partitions-tbody');
+    const tbody = document.getElementById('url-stats-tbody');
     if (tbody) {
-      tbody.innerHTML = parts.map((p: any) => {
-        const isWarm = p.l1State === 'WARM';
-        const tierLabel = p.kind === 'edge_html' ? 'Edge HTML' : p.kvKey ? 'L1 + L2 KV' : 'L1 Only';
-        const loadedText = p.lastLoadedAt ? formatAdminTime(new Date(p.lastLoadedAt).toISOString(), 'short') : '';
-        const actionTd = canPurge
-          ? `<td class="px-4 py-2.5 text-right whitespace-nowrap"><button type="button" data-partition-name="${escapeHtml(p.name)}" class="btn-purge-partition px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-[#f5f5f7] hover:bg-black/10 text-[#1d1d1f] border border-black/10 transition-colors cursor-pointer">${p.kvKey ? 'Refresh' : 'Invalidate'}</button></td>`
-          : '';
-        return `
-          <tr class="hover:bg-[#fafafc] transition-colors">
-            <td class="px-4 py-2.5">
-              <div class="font-mono font-semibold text-[#1d1d1f]">${escapeHtml(p.name)}</div>
-              ${p.kvKey ? `<div class="font-mono text-[10px] text-[#86868b]">${escapeHtml(p.kvKey)}</div>` : ''}
-            </td>
-            <td class="px-3 py-2.5 whitespace-nowrap">
-              <span class="adm-badge adm-badge-neutral mr-1">${escapeHtml(p.scope)}</span>
-              <span class="text-[10px] font-mono text-[#52525b]">${tierLabel}</span>
-            </td>
-            <td class="px-3 py-2.5 whitespace-nowrap">
-              <div class="inline-flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full ${isWarm ? 'bg-emerald-500' : 'bg-zinc-300'}"></span>
-                <span class="font-mono font-semibold ${isWarm ? 'text-emerald-700' : 'text-[#86868b]'}">${escapeHtml(p.l1State)}</span>
-                <span class="text-[10px] text-[#86868b]">(${Number(p.l1Entries || 0)})</span>
-              </div>
-              ${loadedText ? `<div class="text-[10px] font-mono text-[#86868b]">${escapeHtml(loadedText)}</div>` : ''}
-            </td>
-            <td class="px-3 py-2.5 font-mono text-[#52525b] whitespace-nowrap">${formatTtl(Number(p.ttlMs || 0))}</td>
-            <td class="px-3 py-2.5 font-mono whitespace-nowrap">
-              <span class="text-emerald-700 font-semibold">${Number(p.l1Hits || 0)}</span>
-              <span class="text-[#86868b]"> / </span>
-              <span class="text-sky-700 font-semibold">${Number(p.l2Hits || 0)}</span>
-              <span class="text-[#86868b]"> · </span>
-              <span class="text-amber-700">${Number(p.l3Misses || 0)}</span>
-              ${Number(p.negativeHits || 0) > 0 ? `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200/80 text-[9px] font-semibold">🛡️ ${Number(p.negativeHits)} 404-shielded</span>` : ''}
-            </td>
-            <td class="px-3 py-2.5">
-              <div class="flex items-center gap-2">
-                <div class="flex-1 h-1.5 rounded-full bg-black/8 overflow-hidden">
-                  <div class="h-full bg-emerald-500" style="width: ${Math.min(100, Number(p.hitRatePct || 0))}%"></div>
-                </div>
-                <span class="font-mono text-[10px] font-semibold text-[#1d1d1f] w-10 text-right">${Number(p.hitRatePct || 0)}%</span>
-              </div>
-            </td>
-            ${actionTd}
-          </tr>
-        `;
-      }).join('');
+      if (urlStats.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-[#86868b]">暂无 URL 访问统计，访问前台或后台页面后点击 Refresh Stats 查看。</td></tr>`;
+      } else {
+        tbody.innerHTML = urlStats.map((u: any) => {
+          const lastText = u.lastAt ? formatAdminTime(new Date(u.lastAt).toISOString(), 'short') : '—';
+          return `
+            <tr class="hover:bg-[#fafafc] transition-colors">
+              <td class="px-4 py-2 font-mono font-semibold text-[#1d1d1f]">${escapeHtml(String(u.url || '/'))}</td>
+              <td class="px-3 py-2 font-mono text-right text-[#1d1d1f]">${Number(u.requests || 0)}</td>
+              <td class="px-3 py-2 font-mono text-right font-semibold text-emerald-700">${Number(u.l1Triggers || 0)}</td>
+              <td class="px-3 py-2 font-mono text-right font-semibold text-sky-700">${Number(u.l2Triggers || 0)}</td>
+              <td class="px-3 py-2 font-mono text-right font-semibold text-amber-700">${Number(u.l3Triggers || 0)}</td>
+              <td class="px-4 py-2 font-mono text-right text-[#86868b] whitespace-nowrap">${escapeHtml(lastText)}</td>
+            </tr>
+          `;
+        }).join('');
+      }
     }
 
     if (routeRevisions && typeof routeRevisions === 'object') {
       const entries = Object.entries(routeRevisions).filter(([, ts]) => typeof ts === 'number').sort(([a], [b]) => a.localeCompare(b));
-      setText('route-revisions-count', `${entries.length} routes`);
+      const revCount = document.getElementById('route-revisions-count');
+      if (revCount) revCount.textContent = `${entries.length} routes`;
       const revList = document.getElementById('route-revisions-list');
       if (revList) {
         revList.innerHTML = entries.length === 0
@@ -445,19 +397,15 @@ const pageTitle = 'Edge & KV Cache Console';
     try {
       const res = await fetch('/api/admin/cache/purge');
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load cache telemetry');
-      renderTelemetry(data.statsSnapshot, data.routeRevisions);
-      appendLog('Refreshed live isolate telemetry & route revisions.');
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load cache stats');
+      renderUrlStats(data.statsSnapshot, data.routeRevisions);
+      (window as any).__showToast?.('Refreshed URL cache stats.', 'success');
     } catch (err: any) {
-      appendLog(`✖ Refresh failed: ${err.message}`, true);
+      (window as any).__showToast?.(err.message, 'error');
     }
   }
 
-  async function executePurge(payload: { scope: string; path?: string; partition?: string }) {
-    const label = payload.partition || payload.path || payload.scope;
-    appendLog(`Dispatching cache action: ${payload.scope} (${label})...`);
-    (window as any).__showToast?.('Executing cache operation...', 'info');
-
+  async function executePurge(payload: { scope: string; path?: string; updates?: Record<string, number | boolean> }) {
     try {
       const res = await fetch('/api/admin/cache/purge', {
         method: 'POST',
@@ -465,14 +413,19 @@ const pageTitle = 'Edge & KV Cache Console';
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to purge cache');
-
-      renderTelemetry(data.statsSnapshot, data.routeRevisions);
-      const details = Array.isArray(data.purgedItems) && data.purgedItems.length > 0 ? ` — ${data.purgedItems.join('; ')}` : '';
-      appendLog(`✔ ${data.message} (${data.durationMs}ms)${details}`);
+      if (!res.ok || !data.success) throw new Error(data.error || 'Cache action failed');
+      if (data.statsSnapshot) {
+        renderUrlStats(data.statsSnapshot, data.routeRevisions);
+      }
+      if (data.cachePolicy && typeof data.cachePolicy.enable_url_cache_stats === 'boolean') {
+        const badge = document.getElementById('url-stats-status-badge');
+        if (badge) {
+          badge.className = `adm-badge ${data.cachePolicy.enable_url_cache_stats ? 'adm-badge-ok' : 'adm-badge-neutral'}`;
+          badge.textContent = data.cachePolicy.enable_url_cache_stats ? '统计已启用' : '统计已关闭';
+        }
+      }
       (window as any).__showToast?.(data.message, 'success');
     } catch (err: any) {
-      appendLog(`✖ Error: ${err.message}`, true);
       (window as any).__showToast?.(err.message, 'error');
     }
   }
@@ -488,19 +441,22 @@ const pageTitle = 'Edge & KV Cache Console';
     document.getElementById('cache-refresh-stats-btn')?.addEventListener('click', refreshStats, { signal });
     document.getElementById('cache-reset-stats-btn')?.addEventListener('click', () => executePurge({ scope: 'reset_stats' }), { signal });
 
+    document.getElementById('save-cache-policy-btn')?.addEventListener('click', () => {
+      const form = document.getElementById('cache-policy-form') as HTMLFormElement | null;
+      if (!form) return;
+      const updates: Record<string, number | boolean> = {};
+      form.querySelectorAll<HTMLInputElement>('input[name]').forEach((input) => {
+        updates[input.name] = input.type === 'checkbox' ? input.checked : parseInt(input.value, 10);
+      });
+      void executePurge({ scope: 'save_policy', updates });
+    }, { signal });
+
     document.querySelectorAll('.btn-purge').forEach((btn) => {
       btn.addEventListener('click', () => {
         const scope = btn.getAttribute('data-scope') || 'all';
         void executePurge({ scope });
       }, { signal });
     });
-
-    document.getElementById('cache-partitions-tbody')?.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement | null)?.closest?.('.btn-purge-partition') as HTMLButtonElement | null;
-      if (!btn) return;
-      const partition = btn.dataset.partitionName || '';
-      if (partition) void executePurge({ scope: 'partition', partition });
-    }, { signal });
 
     const pathInput = document.getElementById('target-path-input') as HTMLInputElement | null;
     document.querySelectorAll('.btn-quick-path').forEach((btn) => {

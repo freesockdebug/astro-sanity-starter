@@ -6,6 +6,7 @@ import { executeWithAutoSchema } from './schema';
 import { getOrdersByUserId } from './orders.repo';
 import { getUserLoginHistory } from './logins.repo';
 import { createKeyedCache } from '../utils/cache';
+import { settingsCache } from './settings.repo';
 import type {
   CustomerTier,
   UserStatus,
@@ -32,7 +33,13 @@ const userStatusCache = createKeyedCache<UserRecord>(
       if (!isId && found.id) userStatusCache.seed(`id:${found.id}`, copy);
       return copy;
     }),
-  { name: 'users:status', scope: 'users', ttlMs: 30_000, negativeTtlMs: 0, maxL1Entries: 1000 }
+  {
+    name: 'users:status',
+    scope: 'users',
+    ttlMs: () => Math.max(5, settingsCache.peek()?.user_status_cache_ttl_sec ?? 30) * 1000,
+    negativeTtlMs: 0,
+    maxL1Entries: 1000,
+  }
 );
 
 export function seedUserStatusCache(record: UserRecord): void {

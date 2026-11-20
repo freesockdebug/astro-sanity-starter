@@ -4,7 +4,7 @@
 import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
-import { bumpCacheEpoch, createTieredCache, type TieredCacheFetchResult } from '../utils/cache';
+import { bumpCacheEpoch, createTieredCache, setDefaultNegativeTtlMsResolver, type TieredCacheFetchResult } from '../utils/cache';
 import {
   DEFAULT_BRAND_TITLE,
   DEFAULT_SITE_URL,
@@ -73,12 +73,18 @@ export interface SystemSettings {
   log_min_level: LogMinLevel;
   slow_request_threshold_ms: number;
 
-  // 6. Edge CDN & Cache Invalidation
+  // 6. Edge CDN & Cache Policy
   revalidate_secret: string;
   cloudflare_zone_id: string;
   cloudflare_api_token: string;
+  edge_html_cache_ttl_sec: number;
   edge_404_cache_ttl_sec: number;
   waf_legacy_404_ttl_sec: number;
+  l1_heartbeat_interval_sec: number;
+  user_status_cache_ttl_sec: number;
+  admin_order_stats_ttl_sec: number;
+  l1_negative_cache_ttl_sec: number;
+  enable_url_cache_stats: boolean;
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -117,8 +123,14 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   revalidate_secret: '',
   cloudflare_zone_id: '',
   cloudflare_api_token: '',
+  edge_html_cache_ttl_sec: 300,
   edge_404_cache_ttl_sec: 300,
   waf_legacy_404_ttl_sec: 3600,
+  l1_heartbeat_interval_sec: 30,
+  user_status_cache_ttl_sec: 30,
+  admin_order_stats_ttl_sec: 30,
+  l1_negative_cache_ttl_sec: 60,
+  enable_url_cache_stats: true,
 };
 
 export const KV_SETTINGS_KEY = 'sys:settings:v1';
@@ -172,7 +184,7 @@ async function loadSystemSettingsFromDb(customEnv?: any): Promise<TieredCacheFet
   };
 
   const resolveNum = (key: keyof SystemSettings, envKey: string, fallback: number): number => {
-    const allowZero = key.endsWith('_ttl_sec');
+    const allowZero = key.endsWith('_ttl_sec') || key === 'l1_heartbeat_interval_sec';
     const isValid = (n: number) => !isNaN(n) && (allowZero ? n >= 0 : n > 0);
     if (dbMap.has(key)) {
       const parsed = parseInt((dbMap.get(key) ?? '').trim(), 10);
@@ -264,6 +276,8 @@ export const settingsCache = createTieredCache<SystemSettings>({
   },
   fetchRaw: (customEnv) => loadSystemSettingsFromDb(customEnv),
 });
+
+setDefaultNegativeTtlMsResolver(() => (settingsCache.peek()?.l1_negative_cache_ttl_sec ?? 60) * 1000);
 
 export async function invalidateSettingsCache(customEnv?: any) {
   await settingsCache.refresh(customEnv);

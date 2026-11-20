@@ -201,7 +201,9 @@ export async function preloadEdgeIsolate(
   let heartbeatKvRevs: Record<string, any> | null = null;
 
   if (!force && isL1Populated) {
-    if (now - localPreloadLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
+    const heartbeatSec = settingsCache.peek()?.l1_heartbeat_interval_sec ?? 30;
+    const syncIntervalMs = heartbeatSec <= 0 ? Infinity : Math.max(5, heartbeatSec) * 1000;
+    if (now - localPreloadLoadedAt < syncIntervalMs) {
       return {
         routeRevisions: localRouteRevs!,
         wafSettings: settingsCache.peek(true),
