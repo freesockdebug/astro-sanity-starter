@@ -50,6 +50,8 @@ let localRouteRevsLoadedAt = 0;
 let localPreloadLoadedAt = 0;
 let localPreloadBundleUpdatedAt = 0;
 let isRebuildingPreload = false;
+let preloadRebuildPending = false;
+let preloadRebuildEnv: any = undefined;
 const ROUTE_REVS_SYNC_INTERVAL_MS = 5_000;
 
 const EPOCH_SCOPE_MAP: Array<[string, string]> = [
@@ -96,11 +98,13 @@ function applyRouteRevisionsUpdate(kvRevs: Record<string, any>, now: number): vo
 }
 
 registerEpochBumpListener((epochKey, ts, cfEnv) => {
-  if (localRouteRevs) {
-    localRouteRevs[epochKey] = ts;
-  }
+  if (!localRouteRevs) localRouteRevs = {};
+  localRouteRevs[epochKey] = ts;
   if (!isRebuildingPreload && (epochKey === '__settings' || epochKey === '__waf' || epochKey.startsWith('__cms:'))) {
     runInBackground(rebuildEdgePreloadBundle(cfEnv));
+  } else if (isRebuildingPreload && (epochKey === '__settings' || epochKey === '__waf' || epochKey.startsWith('__cms:'))) {
+    preloadRebuildPending = true;
+    if (cfEnv !== undefined) preloadRebuildEnv = cfEnv;
   }
 });
 
@@ -123,7 +127,11 @@ export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Rec
  * Rebuilds the single aggregated cold-start preload bundle (`edge:preload:v1`) from warm L1 or L2/L3 sources
  */
 export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreloadBundle | null> {
-  if (isRebuildingPreload) return null;
+  if (isRebuildingPreload) {
+    preloadRebuildPending = true;
+    if (cfEnv !== undefined) preloadRebuildEnv = cfEnv;
+    return null;
+  }
   isRebuildingPreload = true;
   try {
     const routeRevs = localRouteRevs && Object.keys(localRouteRevs).length > 0
@@ -158,6 +166,12 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
     return bundle;
   } finally {
     isRebuildingPreload = false;
+    if (preloadRebuildPending) {
+      preloadRebuildPending = false;
+      const nextEnv = preloadRebuildEnv ?? cfEnv;
+      preloadRebuildEnv = undefined;
+      await rebuildEdgePreloadBundle(nextEnv).catch(() => null);
+    }
   }
 }
 
