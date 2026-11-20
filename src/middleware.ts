@@ -66,6 +66,8 @@ const inFlightEdgeRenders = new Map<string, Promise<Response>>();
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const pathname = url.pathname;
+  const safeQuery = sanitizeQuery(url.search);
+  const fullPath = `${pathname}${safeQuery}`.slice(0, 500);
 
 
   const startTime = performance.now();
@@ -169,7 +171,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
               module: 'EDGE_WAF',
               event: wafResult.code || 'WAF_BLOCK',
               message: wafResult.reason || 'Request blocked by Edge WAF',
-              path: pathname,
+              path: fullPath,
               method: request.method,
               statusCode: blockStatus,
               rayId,
@@ -250,7 +252,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
               module: 'EDGE_WAF',
               event: shadowEvent,
               message: wafResult.shadowMatch.reason,
-              path: pathname,
+              path: fullPath,
               method: request.method,
               statusCode: 200,
               rayId,
@@ -351,7 +353,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
               module: 'api/perf',
               event: 'SLOW_REQUEST',
               message: `Slow request detected (${latencyMs}ms >= ${slowThreshold}ms)`,
-              path: pathname,
+              path: fullPath,
               method: request.method,
               statusCode: response.status,
               rayId,
@@ -361,7 +363,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
               clientIp: clientMeta.ip,
               country: clientMeta.country,
               city: clientMeta.city,
-              context: { spans, query: sanitizeQuery(url.search) },
+              context: { spans, query: safeQuery },
             },
             { cfEnv, ctx: runtimeCtx }
           );
@@ -371,8 +373,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
             {
               module: 'api/perf',
               event: 'REQUEST_COMPLETED',
-              message: `${request.method} ${pathname} (${response.status}) in ${latencyMs}ms`,
-              path: pathname,
+              message: `${request.method} ${fullPath} (${response.status}) in ${latencyMs}ms`,
+              path: fullPath,
               method: request.method,
               statusCode: response.status,
               rayId,
@@ -382,7 +384,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
               clientIp: clientMeta.ip,
               country: clientMeta.country,
               city: clientMeta.city,
-              context: { spans, query: sanitizeQuery(url.search) },
+              context: { spans, query: safeQuery },
             },
             { cfEnv, ctx: runtimeCtx }
           );
@@ -395,8 +397,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
           {
             module: 'ssr',
             event: 'SSR_500_RESPONSE',
-            message: `Server returned ${response.status} status on ${pathname}`,
-            path: pathname,
+            message: `Server returned ${response.status} status on ${fullPath}`,
+            path: fullPath,
             method: request.method,
             statusCode: response.status,
             rayId,
@@ -421,7 +423,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
           module: 'middleware',
           event: 'UNHANDLED_EXCEPTION',
           message: err?.message || 'Unhandled server exception',
-          path: pathname,
+          path: fullPath,
           method: request.method,
           statusCode: 500,
           rayId,
