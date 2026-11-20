@@ -13,6 +13,7 @@ import {
   purgeSingleCacheByName,
   getGlobalCacheStatsSnapshot,
   resetGlobalCacheStats,
+  purgeLegacyEpochKvKeys,
 } from '@utils/cache';
 import { recordAdminAudit } from '@db/audit.repo';
 import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache, rebuildEdgePreloadBundle } from '@utils/cmsSync';
@@ -153,6 +154,13 @@ export const POST: APIRoute = defineAdminApi(
     }
 
     await rebuildEdgePreloadBundle(cfEnv).catch(() => {});
+
+    if (scope === 'all') {
+      const legacyDeleted = await purgeLegacyEpochKvKeys(cfEnv).catch(() => 0);
+      if (legacyDeleted > 0) {
+        purgedItems.push(`Legacy @epoch KV keys cleaned (${legacyDeleted} keys)`);
+      }
+    }
 
     const durationMs = Date.now() - startTime;
     const routeRevisions = await getRouteRevisions(cfEnv).catch(() => ({}));

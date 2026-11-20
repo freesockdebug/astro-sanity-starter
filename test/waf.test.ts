@@ -755,6 +755,58 @@ test('EdgeTieredCache provides unified L1 pre-compiled -> L2 KV -> L3 DB lifecyc
   assert.equal(onUpdateCount, 2);
 });
 
+test('EdgeTieredCache avoids @epoch KV duplication and purgeLegacyEpochKvKeys cleans legacy @ keys', async () => {
+  const { purgeLegacyEpochKvKeys } = await import('../src/utils/cache');
+  const kvStore = new Map<string, string>([
+    ['cms:product_slugs:v1@1795118776915', '[]'],
+    ['cms:siteConfig@1795118776916', '{}'],
+    ['cms:siteConfig', '{}'],
+  ]);
+  const mockEnv = {
+    CACHE_KV: {
+      get: async (k: string) => kvStore.get(k) ?? null,
+      put: async (k: string, v: string) => {
+        kvStore.set(k, v);
+      },
+      delete: async (k: string) => {
+        kvStore.delete(k);
+      },
+      list: async (opts?: { cursor?: string }) => {
+        const all = Array.from(kvStore.keys()).map((name) => ({ name }));
+        if (!opts?.cursor) {
+          return { keys: all.slice(0, 2), list_complete: false, cursor: 'p2' };
+        }
+        return { keys: all.slice(2), list_complete: true };
+      },
+    },
+  };
+
+  const epochCache = createTieredCache<{ ok: boolean }, { ok: boolean }>({
+    name: 'test_no_epoch_dup',
+    kvKey: 'test:no_epoch:v1',
+    epochKey: '__test_no_epoch',
+    ttlMs: 5_000,
+    fallbackRaw: { ok: false },
+    compile: (raw) => raw,
+    fetchRaw: async () => ({ data: { ok: true }, persistToKv: true }),
+  });
+
+  await epochCache.refresh(mockEnv);
+  assert.equal(kvStore.has('test:no_epoch:v1'), true);
+  assert.equal(
+    Array.from(kvStore.keys()).some((k) => k.startsWith('test:no_epoch:v1@')),
+    false,
+    'must not write @epoch duplicate key'
+  );
+
+  const deletedCount = await purgeLegacyEpochKvKeys(mockEnv);
+  assert.equal(deletedCount, 2);
+  assert.equal(kvStore.has('cms:product_slugs:v1@1795118776915'), false);
+  assert.equal(kvStore.has('cms:siteConfig@1795118776916'), false);
+  assert.equal(kvStore.has('cms:siteConfig'), true);
+  assert.equal(kvStore.has('test:no_epoch:v1'), true);
+});
+
 test('Compiled DB WAF runtime enforces ReDoS protection, composite ALL/ANY rules, priority allow, shadow log_only, strike_weight & expires_at', () => {
   EdgeWafService.clearAllStrikes();
   const now = 1_700_000_000_000;

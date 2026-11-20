@@ -101,6 +101,48 @@ export async function kvDelete(key: string, customEnv?: any): Promise<boolean> {
   }
 }
 
+/**
+ * Scans Cloudflare KV and deletes legacy `@<epoch>` versioned keys.
+ */
+export async function purgeLegacyEpochKvKeys(customEnv?: any): Promise<number> {
+  try {
+    const kv = await getKvNamespace(customEnv);
+    if (!kv || typeof kv.list !== 'function') return 0;
+
+    const legacyKeys: string[] = [];
+    let cursor: string | undefined;
+    let listComplete = false;
+
+    while (!listComplete) {
+      const page = await kv.list(cursor ? { cursor } : undefined);
+      const keys = Array.isArray(page?.keys) ? page.keys : [];
+      for (const entry of keys) {
+        if (typeof entry?.name === 'string' && entry.name.includes('@')) {
+          legacyKeys.push(entry.name);
+        }
+      }
+      listComplete = Boolean(page?.list_complete);
+      cursor = typeof page?.cursor === 'string' ? page.cursor : undefined;
+      if (!cursor) break;
+    }
+
+    // Batch deletes to stay well within Worker concurrent subrequest limits.
+    const BATCH_SIZE = 20;
+    let deleted = 0;
+    for (let i = 0; i < legacyKeys.length; i += BATCH_SIZE) {
+      const chunk = legacyKeys.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(chunk.map((k) => kv.delete(k)));
+      for (const r of results) {
+        if (r.status === 'fulfilled') deleted += 1;
+      }
+    }
+    return deleted;
+  } catch (err) {
+    console.warn('[KV:PurgeLegacy] Non-fatal cleanup failure:', err);
+    return 0;
+  }
+}
+
 export function runInBackground(promise: Promise<any>) {
   if (typeof cfWaitUntil === 'function') {
     try {
@@ -478,9 +520,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     const write = async () => {
       await kvPut(this.kvKey!, raw, kvOpts, customEnv).catch(() => { });
       if (this.epochKey) {
-        const nextEpoch = Date.now();
-        await kvPut(`${this.kvKey!}@${nextEpoch}`, raw, { expirationTtl: 86400 * 30 }, customEnv).catch(() => { });
-        await bumpCacheEpoch(this.epochKey, customEnv, nextEpoch);
+        await bumpCacheEpoch(this.epochKey, customEnv);
       }
     };
     if (syncKv) {
@@ -513,16 +553,10 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
       return this.entry.compiled;
     }
 
-    // L2: Shared Cloudflare Edge KV (epoch-versioned PoP cache when epochKey is set -> fallback to base kvKey)
+    // L2: Shared Cloudflare Edge KV (base kvKey only; cold starts hydrate via edge:preload:v1)
     if (!forceRefresh && this.kvKey) {
       try {
-        const epoch = this.epochKey ? activeCacheEpochs[this.epochKey] : undefined;
-        let kvVal = epoch
-          ? await kvGet<any>(`${this.kvKey}@${epoch}`, customEnv, { cacheTtl: 86400 })
-          : null;
-        if (kvVal === null || kvVal === undefined) {
-          kvVal = await kvGet<any>(this.kvKey, customEnv);
-        }
+        const kvVal = await kvGet<any>(this.kvKey, customEnv);
         if (kvVal !== null && kvVal !== undefined) {
           const raw = this.deserializeKv ? this.deserializeKv(kvVal) : (kvVal as TRaw);
           if (raw !== null && raw !== undefined) {
