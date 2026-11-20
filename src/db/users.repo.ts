@@ -32,7 +32,7 @@ const userStatusCache = createKeyedCache<UserRecord>(
       if (!isId && found.id) userStatusCache.seed(`id:${found.id}`, copy);
       return copy;
     }),
-  { name: 'users:status', scope: 'users', ttlMs: Infinity, negativeTtlMs: 0, maxL1Entries: 1000 }
+  { name: 'users:status', scope: 'users', ttlMs: 30_000, negativeTtlMs: 0, maxL1Entries: 1000 }
 );
 
 export function seedUserStatusCache(record: UserRecord): void {

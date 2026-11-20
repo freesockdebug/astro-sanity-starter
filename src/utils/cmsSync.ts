@@ -52,7 +52,7 @@ let localPreloadBundleUpdatedAt = 0;
 let isRebuildingPreload = false;
 let preloadRebuildPending = false;
 let preloadRebuildEnv: any = undefined;
-const ROUTE_REVS_SYNC_INTERVAL_MS = Infinity;
+const ROUTE_REVS_SYNC_INTERVAL_MS = 30_000;
 
 const EPOCH_SCOPE_MAP: Array<[string, string]> = [
   ['__settings', 'settings'],
@@ -191,20 +191,35 @@ export async function preloadEdgeIsolate(
   preloadStatus: PreloadStatus;
 }> {
   const now = Date.now();
-  if (
-    !force &&
+  const isL1Populated = Boolean(
     localRouteRevs &&
     localPreloadLoadedAt > 0 &&
-    now - localPreloadLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS &&
     settingsCache.peek() &&
     wafRuntimeCache.peek()
-  ) {
-    return {
-      routeRevisions: localRouteRevs,
-      wafSettings: settingsCache.peek(true),
-      wafRuntime: wafRuntimeCache.peek(true),
-      preloadStatus: 'L1_HIT',
-    };
+  );
+
+  if (!force && isL1Populated) {
+    if (now - localPreloadLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
+      return {
+        routeRevisions: localRouteRevs!,
+        wafSettings: settingsCache.peek(true),
+        wafRuntime: wafRuntimeCache.peek(true),
+        preloadStatus: 'L1_HIT',
+      };
+    }
+
+    // 30s heartbeat: check ~300B cms:route_revs first; if unchanged, extend L1 window with zero bundle reload
+    const kvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+    if (kvRevs && typeof kvRevs === 'object' && JSON.stringify(kvRevs) === JSON.stringify(localRouteRevs)) {
+      localPreloadLoadedAt = now;
+      localRouteRevsLoadedAt = now;
+      return {
+        routeRevisions: localRouteRevs!,
+        wafSettings: settingsCache.peek(true),
+        wafRuntime: wafRuntimeCache.peek(true),
+        preloadStatus: 'L1_HIT',
+      };
+    }
   }
 
   const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);

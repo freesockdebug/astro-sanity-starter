@@ -1214,4 +1214,36 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
   assert.equal(RfqSettingsService.peek()?.showSwatchKitButton, false);
   assert.deepEqual(PageService.getCachedSlugs(), ['home', 'about', 'contact']);
   assert.deepEqual(ProductService.getCachedSlugs(), ['silk-slip-001', 'cotton-robe-002']);
+
+  // 30s heartbeat: unchanged cms:route_revs extends L1 window without reloading edge:preload:v1 or bumping l2Hits;
+  // changed cms:route_revs (simulating another Isolate) triggers L2_KV_HIT reload
+  const origNow = Date.now;
+  let fakeNow = origNow() + 31_000;
+  Date.now = () => fakeNow;
+  try {
+    const l2BeforeHeartbeat = settingsCache.getMetricsSnapshot('settings').l2Hits;
+    const l1BeforeHeartbeat = settingsCache.getMetricsSnapshot('settings').l1Hits;
+    const hbUnchanged = await preloadEdgeIsolate(mockEnv);
+    assert.equal(hbUnchanged.preloadStatus, 'L1_HIT');
+    assert.equal(settingsCache.getMetricsSnapshot('settings').l2Hits, l2BeforeHeartbeat);
+    assert.equal(settingsCache.getMetricsSnapshot('settings').l1Hits, l1BeforeHeartbeat + 1);
+
+    // Simulate another Isolate writing a new routeRev + updated preload bundle to KV
+    fakeNow += 31_000;
+    const currentBundle = JSON.parse(kvStore.get(EDGE_PRELOAD_KV_KEY) || '{}');
+    const remoteRevs = { ...(currentBundle.routeRevs || {}), '/products': fakeNow };
+    kvStore.set('cms:route_revs', JSON.stringify(remoteRevs));
+    kvStore.set(EDGE_PRELOAD_KV_KEY, JSON.stringify({
+      ...currentBundle,
+      updatedAt: fakeNow,
+      routeRevs: remoteRevs,
+      systemSettings: { ...currentBundle.systemSettings, brand_name: 'REMOTE_ISOLATE_BRAND' },
+    }));
+
+    const hbChanged = await preloadEdgeIsolate(mockEnv);
+    assert.equal(hbChanged.preloadStatus, 'L2_KV_HIT');
+    assert.equal(hbChanged.wafSettings?.brand_name, 'REMOTE_ISOLATE_BRAND');
+  } finally {
+    Date.now = origNow;
+  }
 });

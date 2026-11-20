@@ -100,8 +100,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     };
 
     if (!EdgeWafService.isStaticAsset(pathname)) {
-      const forcePreload = url.searchParams.has('purge') || url.searchParams.has('revalidate');
-      const { routeRevisions, wafSettings, wafRuntime, preloadStatus } = await preloadEdgeIsolate(cfEnv, forcePreload);
+      const { routeRevisions, wafSettings, wafRuntime, preloadStatus } = await preloadEdgeIsolate(cfEnv, false);
       (context.locals as any).preloadStatus = preloadStatus;
       if (routeRevisions && request.method === 'GET') {
         (context.locals as any).routeRevisions = routeRevisions;
@@ -571,18 +570,6 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     ? (caches as any).default
     : null;
 
-  // Resolve versioned cache key: binds page route revision to ensure instant global edge invalidation
-  const revs = (context.locals as any)?.routeRevisions ?? (await getRouteRevisions(cfEnv).catch(() => ({})));
-  const pathRev = resolvePathRevision(pathname, revs, NON_DEFAULT_LOCALES);
-
-  const canonicalUrl = new URL(pathname, url.origin);
-  if (pathRev > 0) {
-    canonicalUrl.searchParams.set('__rev', String(pathRev));
-  }
-  const cacheKey = new Request(canonicalUrl.toString(), {
-    method: 'GET',
-  });
-
   const isPurgeParam = url.searchParams.has('purge') || url.searchParams.has('revalidate');
   let isAuthorizedPurge = false;
   if (isPurgeParam) {
@@ -602,6 +589,25 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
       isAuthorizedPurge = true;
     }
   }
+
+  if (isAuthorizedPurge) {
+    const refreshed = await preloadEdgeIsolate(cfEnv, true).catch(() => null);
+    if (refreshed?.routeRevisions) {
+      (context.locals as any).routeRevisions = refreshed.routeRevisions;
+    }
+  }
+
+  // Resolve versioned cache key using (potentially refreshed) routeRevisions
+  const revs = (context.locals as any)?.routeRevisions ?? (await getRouteRevisions(cfEnv).catch(() => ({})));
+  const pathRev = resolvePathRevision(pathname, revs, NON_DEFAULT_LOCALES);
+
+  const canonicalUrl = new URL(pathname, url.origin);
+  if (pathRev > 0) {
+    canonicalUrl.searchParams.set('__rev', String(pathRev));
+  }
+  const cacheKey = new Request(canonicalUrl.toString(), {
+    method: 'GET',
+  });
 
   if (isAuthorizedPurge && cache) {
     try {
