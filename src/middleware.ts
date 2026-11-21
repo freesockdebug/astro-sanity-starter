@@ -59,6 +59,10 @@ function sanitizeQuery(search: string): string {
 
 // Single-Flight Request Coalescing (Collapses edge cache stampedes on isolate)
 const inFlightEdgeRenders = new Map<string, Promise<Response>>();
+const ISOLATE_ID =
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID().slice(0, 8)
+    : Math.random().toString(36).slice(2, 10);
 
 /**
  * Cloudflare Edge Cache Middleware for HTML Pages with Observability & Slow-Request Diagnostics
@@ -304,12 +308,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
       const perfSpans = profiler.getSpans();
       const perfSpansHeader = `kv=${perfSpans.kv ?? 0},d1=${perfSpans.d1 ?? 0},sanity=${perfSpans.sanity ?? 0},total=${latencyMs}`;
       const preloadStatusHeader = String((context.locals as any)?.preloadStatus || 'BYPASS');
+      const colo = (request as any)?.cf?.colo ? String((request as any).cf.colo) : '';
+      const edgeCache = response.headers.get('X-Edge-Cache') || '';
 
       // Inject Server-Timing, X-Response-Time & Preload Diagnostic headers
       response = safeSetHeaders(response, {
         'X-Request-Id': rayId,
         'X-Response-Time': `${latencyMs}ms`,
         'X-Preload-Status': preloadStatusHeader,
+        'X-Edge-Node': colo ? `${colo}:${ISOLATE_ID}` : ISOLATE_ID,
         'X-Perf-Spans': perfSpansHeader,
         'Server-Timing': profiler.toServerTimingHeader(latencyMs),
       });
@@ -365,7 +372,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
               clientIp: clientMeta.ip,
               country: clientMeta.country,
               city: clientMeta.city,
-              context: { spans, query: safeQuery },
+              context: {
+                spans,
+                query: safeQuery,
+                ...(colo ? { colo } : {}),
+                isolateId: ISOLATE_ID,
+                ...(edgeCache ? { edgeCache } : {}),
+              },
             },
             { cfEnv, ctx: runtimeCtx }
           );
@@ -386,7 +399,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
               clientIp: clientMeta.ip,
               country: clientMeta.country,
               city: clientMeta.city,
-              context: { spans, query: safeQuery },
+              context: {
+                spans,
+                query: safeQuery,
+                ...(colo ? { colo } : {}),
+                isolateId: ISOLATE_ID,
+                ...(edgeCache ? { edgeCache } : {}),
+              },
             },
             { cfEnv, ctx: runtimeCtx }
           );
@@ -410,7 +429,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
             clientIp: clientMeta.ip,
             country: clientMeta.country,
             city: clientMeta.city,
-            context: { spans: profiler.getSpans() },
+            context: {
+              spans: profiler.getSpans(),
+              ...(colo ? { colo } : {}),
+              isolateId: ISOLATE_ID,
+              ...(edgeCache ? { edgeCache } : {}),
+            },
           },
           { cfEnv, ctx: runtimeCtx }
         );
