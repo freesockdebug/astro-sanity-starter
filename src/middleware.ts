@@ -59,10 +59,16 @@ function sanitizeQuery(search: string): string {
 
 // Single-Flight Request Coalescing (Collapses edge cache stampedes on isolate)
 const inFlightEdgeRenders = new Map<string, Promise<Response>>();
-const ISOLATE_ID =
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID().slice(0, 8)
-    : Math.random().toString(36).slice(2, 10);
+let isolateId = '';
+function getIsolateId(): string {
+  if (!isolateId) {
+    isolateId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().slice(0, 8)
+        : Math.random().toString(36).slice(2, 10);
+  }
+  return isolateId;
+}
 
 /**
  * Cloudflare Edge Cache Middleware for HTML Pages with Observability & Slow-Request Diagnostics
@@ -310,13 +316,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
       const preloadStatusHeader = String((context.locals as any)?.preloadStatus || 'BYPASS');
       const colo = (request as any)?.cf?.colo ? String((request as any).cf.colo) : '';
       const edgeCache = response.headers.get('X-Edge-Cache') || '';
+      const currentIsolateId = getIsolateId();
 
       // Inject Server-Timing, X-Response-Time & Preload Diagnostic headers
       response = safeSetHeaders(response, {
         'X-Request-Id': rayId,
         'X-Response-Time': `${latencyMs}ms`,
         'X-Preload-Status': preloadStatusHeader,
-        'X-Edge-Node': colo ? `${colo}:${ISOLATE_ID}` : ISOLATE_ID,
+        'X-Edge-Node': colo ? `${colo}:${currentIsolateId}` : currentIsolateId,
         'X-Perf-Spans': perfSpansHeader,
         'Server-Timing': profiler.toServerTimingHeader(latencyMs),
       });
@@ -376,7 +383,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 spans,
                 query: safeQuery,
                 ...(colo ? { colo } : {}),
-                isolateId: ISOLATE_ID,
+                isolateId: currentIsolateId,
                 ...(edgeCache ? { edgeCache } : {}),
               },
             },
@@ -403,7 +410,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 spans,
                 query: safeQuery,
                 ...(colo ? { colo } : {}),
-                isolateId: ISOLATE_ID,
+                isolateId: currentIsolateId,
                 ...(edgeCache ? { edgeCache } : {}),
               },
             },
@@ -432,7 +439,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
             context: {
               spans: profiler.getSpans(),
               ...(colo ? { colo } : {}),
-              isolateId: ISOLATE_ID,
+              isolateId: getIsolateId(),
               ...(edgeCache ? { edgeCache } : {}),
             },
           },
