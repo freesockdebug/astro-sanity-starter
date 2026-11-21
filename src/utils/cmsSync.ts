@@ -34,9 +34,27 @@ export interface CmsSyncOptions {
 
 export const EDGE_PRELOAD_KV_KEY = 'edge:preload:v1';
 
+export type CacheLedgerScope = 'settings' | 'waf' | 'dicts' | 'rbac' | 'config' | 'products' | 'pages';
+
+export const ALL_LEDGER_SCOPES: readonly CacheLedgerScope[] = [
+  'settings',
+  'waf',
+  'dicts',
+  'rbac',
+  'config',
+  'products',
+  'pages',
+];
+
+export interface RouteRevisionsLedger {
+  v: number;
+  scopes: Partial<Record<CacheLedgerScope, number>>;
+  routes: Record<string, number>;
+}
+
 export interface EdgePreloadBundle {
   updatedAt: number;
-  routeRevs: Record<string, any>;
+  routeRevs: RouteRevisionsLedger;
   systemSettings: SystemSettings | null;
   wafRuntime: WafRuntimeData | null;
   siteConfig: SiteConfig | null;
@@ -45,7 +63,7 @@ export interface EdgePreloadBundle {
   productSlugs?: string[];
 }
 
-let localRouteRevs: Record<string, any> | null = null;
+let localRouteRevs: RouteRevisionsLedger | null = null;
 let localRouteRevsLoadedAt = 0;
 let localPreloadLoadedAt = 0;
 let localPreloadBundleUpdatedAt = 0;
@@ -54,70 +72,75 @@ let preloadRebuildPending = false;
 let preloadRebuildEnv: any = undefined;
 const ROUTE_REVS_SYNC_INTERVAL_MS = 30_000;
 
-const EPOCH_SCOPE_MAP: Array<[string, string]> = [
-  ['__settings', 'settings'],
-  ['__waf', 'waf'],
-  ['__dicts', 'dicts'],
-  ['__rbac', 'rbac'],
-];
+function normalizeLedger(raw: any): RouteRevisionsLedger {
+  if (raw && typeof raw === 'object' && typeof raw.v === 'number' && raw.routes && typeof raw.routes === 'object') {
+    return {
+      v: raw.v,
+      scopes: raw.scopes && typeof raw.scopes === 'object' ? { ...raw.scopes } : {},
+      routes: { ...raw.routes },
+    };
+  }
+  const routes: Record<string, number> = {};
+  if (raw && typeof raw === 'object') {
+    for (const [k, val] of Object.entries(raw)) {
+      if (typeof val === 'number' && (k === '__layout' || k.startsWith('/'))) {
+        routes[k] = val;
+      }
+    }
+  }
+  return { v: 0, scopes: {}, routes };
+}
 
-function applyRouteRevisionsUpdate(kvRevs: Record<string, any>, now: number): void {
-  const prevRevs = localRouteRevs;
-  localRouteRevs = kvRevs;
-  syncActiveCacheEpochs(kvRevs);
+function applyRouteRevisionsUpdate(rawRevs: any, now: number): void {
+  const nextLedger = normalizeLedger(rawRevs);
+  const prevLedger = localRouteRevs;
+  localRouteRevs = nextLedger;
+  syncActiveCacheEpochs(nextLedger.scopes);
 
-  if (prevRevs && Object.keys(prevRevs).length > 0) {
-    for (const [epochKey, scope] of EPOCH_SCOPE_MAP) {
-      if (kvRevs[epochKey] !== prevRevs[epochKey]) {
+  if (prevLedger && prevLedger.v > 0) {
+    for (const scope of ALL_LEDGER_SCOPES) {
+      if (nextLedger.scopes[scope] !== prevLedger.scopes[scope]) {
         invalidateRegisteredCachesByScope(scope);
       }
     }
-
-    const epochSet = new Set([...EPOCH_SCOPE_MAP.map(([k]) => k), '__page_slugs']);
-    const allKeys = new Set([...Object.keys(prevRevs), ...Object.keys(kvRevs)]);
-    let cmsChanged = false;
-    for (const k of allKeys) {
-      if (epochSet.has(k)) continue;
-      if (JSON.stringify(prevRevs[k]) !== JSON.stringify(kvRevs[k])) {
-        cmsChanged = true;
-        break;
-      }
-    }
-    if (cmsChanged) {
-      ProductService.invalidateCache();
-      PageService.invalidateCache();
-      SiteConfigService.invalidate();
-      RfqSettingsService.invalidate();
-    }
   }
 
-  if (Array.isArray(kvRevs.__page_slugs) && kvRevs.__page_slugs.length > 0) {
-    PageService.seedSlugs(kvRevs.__page_slugs);
-  }
   localRouteRevsLoadedAt = now;
 }
 
 registerEpochBumpListener((epochKey, ts, cfEnv) => {
-  if (!localRouteRevs) localRouteRevs = {};
-  localRouteRevs[epochKey] = ts;
-  if (!isRebuildingPreload) {
-    runInBackground(rebuildEdgePreloadBundle(cfEnv));
-  } else {
-    preloadRebuildPending = true;
-    if (cfEnv !== undefined) preloadRebuildEnv = cfEnv;
+  const scope = epochKey.replace(/^__/, '') as CacheLedgerScope;
+  if (!localRouteRevs) {
+    localRouteRevs = { v: ts, scopes: {}, routes: {} };
   }
+  localRouteRevs.v = ts;
+  localRouteRevs.scopes[scope] = ts;
+  localRouteRevsLoadedAt = ts;
+
+  runInBackground(
+    (async () => {
+      const kvRaw = await kvGet<any>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+      const merged = normalizeLedger(kvRaw);
+      merged.v = Math.max(merged.v, ts);
+      merged.scopes = { ...merged.scopes, ...localRouteRevs?.scopes, [scope]: ts };
+      merged.routes = { ...merged.routes, ...localRouteRevs?.routes };
+      localRouteRevs = merged;
+      await kvPut(ROUTE_REVS_KV_KEY, merged, undefined, cfEnv).catch(() => {});
+      await rebuildEdgePreloadBundle(cfEnv).catch(() => null);
+    })()
+  );
 });
 
-export async function getRouteRevisions(cfEnv?: any, force = false): Promise<Record<string, number>> {
+export async function getRouteRevisions(cfEnv?: any, force = false): Promise<RouteRevisionsLedger> {
   const now = Date.now();
   if (!force && localRouteRevs && localRouteRevsLoadedAt > 0 && now - localRouteRevsLoadedAt < ROUTE_REVS_SYNC_INTERVAL_MS) {
     return localRouteRevs;
   }
-  const kvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+  const kvRevs = await kvGet<any>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
   if (kvRevs && typeof kvRevs === 'object') {
     applyRouteRevisionsUpdate(kvRevs, now);
   } else {
-    if (!localRouteRevs) localRouteRevs = {};
+    if (!localRouteRevs) localRouteRevs = { v: 0, scopes: {}, routes: {} };
     localRouteRevsLoadedAt = now;
   }
   return localRouteRevs!;
@@ -134,9 +157,9 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
   }
   isRebuildingPreload = true;
   try {
-    const routeRevs = localRouteRevs && Object.keys(localRouteRevs).length > 0
-      ? { ...localRouteRevs }
-      : await getRouteRevisions(cfEnv).catch(() => ({}));
+    const routeRevs = localRouteRevs
+      ? { v: localRouteRevs.v, scopes: { ...localRouteRevs.scopes }, routes: { ...localRouteRevs.routes } }
+      : await getRouteRevisions(cfEnv).catch(() => ({ v: 0, scopes: {}, routes: {} }));
     const systemSettings = settingsCache.peek() ?? (await getSystemSettings(cfEnv).catch(() => null));
     let wafRaw = wafRuntimeCache.peekRaw();
     if (!wafRaw) {
@@ -151,7 +174,7 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
     const updatedAt = Date.now();
     const bundle: EdgePreloadBundle = {
       updatedAt,
-      routeRevs: routeRevs || {},
+      routeRevs: routeRevs && typeof (routeRevs as any).v === 'number' ? (routeRevs as RouteRevisionsLedger) : { v: 0, scopes: {}, routes: {} },
       systemSettings,
       wafRuntime: wafRaw,
       siteConfig,
@@ -185,7 +208,7 @@ export async function preloadEdgeIsolate(
   cfEnv?: any,
   force = false
 ): Promise<{
-  routeRevisions: Record<string, any>;
+  routeRevisions: RouteRevisionsLedger;
   wafSettings: SystemSettings | null;
   wafRuntime: CompiledWafRuntime | null;
   preloadStatus: PreloadStatus;
@@ -198,7 +221,7 @@ export async function preloadEdgeIsolate(
     wafRuntimeCache.peek()
   );
 
-  let heartbeatKvRevs: Record<string, any> | null = null;
+  let heartbeatLedger: RouteRevisionsLedger | null = null;
 
   if (!force && isL1Populated) {
     const heartbeatSec = settingsCache.peek()?.l1_heartbeat_interval_sec ?? 30;
@@ -212,20 +235,13 @@ export async function preloadEdgeIsolate(
       };
     }
 
-    // 30s heartbeat: check ~300B cms:route_revs first; if unchanged, extend L1 window with zero bundle reload
-    heartbeatKvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
-    const effectiveKvRevs = heartbeatKvRevs && typeof heartbeatKvRevs === 'object' ? heartbeatKvRevs : {};
-    const localKeys = Object.keys(localRouteRevs!);
-    const kvKeys = Object.keys(effectiveKvRevs);
-    const revsEqual =
-      (heartbeatKvRevs !== null || localKeys.length === 0) &&
-      localKeys.length === kvKeys.length &&
-      kvKeys.every((k) => {
-        const a = effectiveKvRevs[k];
-        const b = localRouteRevs![k];
-        return a === b || (typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
-      });
-    if (revsEqual) {
+    // 30s heartbeat: O(1) integer comparison on RouteRevisionsLedger.v
+    const kvRaw = await kvGet<any>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+    heartbeatLedger = kvRaw && typeof kvRaw === 'object' ? normalizeLedger(kvRaw) : null;
+    if (
+      (heartbeatLedger !== null && heartbeatLedger.v === localRouteRevs!.v) ||
+      (heartbeatLedger === null && localRouteRevs!.v === 0)
+    ) {
       localPreloadLoadedAt = now;
       localRouteRevsLoadedAt = now;
       return {
@@ -239,11 +255,16 @@ export async function preloadEdgeIsolate(
 
   const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
   if (bundle && typeof bundle === 'object' && bundle.routeRevs && typeof bundle.routeRevs === 'object') {
-    const mergedRevs =
-      heartbeatKvRevs && typeof heartbeatKvRevs === 'object'
-        ? { ...bundle.routeRevs, ...heartbeatKvRevs }
-        : bundle.routeRevs;
-    applyRouteRevisionsUpdate(mergedRevs, now);
+    const bundleLedger = normalizeLedger(bundle.routeRevs);
+    const mergedLedger: RouteRevisionsLedger =
+      heartbeatLedger && heartbeatLedger.v >= bundleLedger.v
+        ? {
+            v: heartbeatLedger.v,
+            scopes: { ...bundleLedger.scopes, ...heartbeatLedger.scopes },
+            routes: { ...bundleLedger.routes, ...heartbeatLedger.routes },
+          }
+        : bundleLedger;
+    applyRouteRevisionsUpdate(mergedLedger, now);
 
     const bundleChanged = bundle.updatedAt !== localPreloadBundleUpdatedAt;
     if (
@@ -287,7 +308,7 @@ export async function preloadEdgeIsolate(
     localPreloadLoadedAt = now;
     localPreloadBundleUpdatedAt = bundle.updatedAt || now;
     return {
-      routeRevisions: localRouteRevs || {},
+      routeRevisions: localRouteRevs || { v: 0, scopes: {}, routes: {} },
       wafSettings,
       wafRuntime,
       preloadStatus: neededFallback ? 'L3_MISS' : 'L2_KV_HIT',
@@ -296,7 +317,7 @@ export async function preloadEdgeIsolate(
 
   // Fallback when edge:preload:v1 has not been populated yet
   const [routeRevisions, wafSettings, wafRuntime] = await Promise.all([
-    getRouteRevisions(cfEnv).catch(() => ({})),
+    getRouteRevisions(cfEnv).catch(() => ({ v: 0, scopes: {}, routes: {} } as RouteRevisionsLedger)),
     getSystemSettings(cfEnv).catch(() => null),
     getWafRuntime(cfEnv).catch(() => null),
     SiteConfigService.getConfig().catch(() => null),
@@ -310,31 +331,49 @@ export async function preloadEdgeIsolate(
 /**
  * Increment revision timestamps for specific base paths (e.g. ['/products/cashmere', '/products'])
  */
-export async function bumpRouteRevisions(basePaths: Iterable<string>, bumpGlobalLayout = false, cfEnv?: any): Promise<Record<string, number>> {
-  const kvRevs = await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
-  const current: Record<string, any> = {
-    ...(kvRevs && typeof kvRevs === 'object' ? kvRevs : {}),
-    ...(localRouteRevs || {}),
-  };
+export async function bumpRouteRevisions(
+  basePaths: Iterable<string>,
+  bumpGlobalLayout = false,
+  cfEnv?: any,
+  affectedScopes?: Iterable<CacheLedgerScope>
+): Promise<RouteRevisionsLedger> {
+  const kvRaw = await kvGet<any>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+  const kvLedger = normalizeLedger(kvRaw);
   const now = Date.now();
-  const updated: Record<string, any> = { ...current };
+
+  const updated: RouteRevisionsLedger = {
+    v: Math.max(kvLedger.v, localRouteRevs?.v || 0, now),
+    scopes: { ...kvLedger.scopes, ...(localRouteRevs?.scopes || {}) },
+    routes: { ...kvLedger.routes, ...(localRouteRevs?.routes || {}) },
+  };
 
   if (bumpGlobalLayout) {
-    updated['__layout'] = now;
+    updated.routes.__layout = now;
   }
   for (const rawPath of basePaths) {
     if (!rawPath) continue;
     const clean = rawPath === '/' ? '/' : `/${rawPath.replace(/^\/+|\/+$/g, '')}`;
-    updated[clean] = now;
+    updated.routes[clean] = now;
   }
-  const cachedPageSlugs = PageService.getCachedSlugs();
-  if (cachedPageSlugs) {
-    updated['__page_slugs'] = cachedPageSlugs;
+  if (affectedScopes) {
+    for (const scope of affectedScopes) {
+      updated.scopes[scope] = now;
+    }
+  }
+
+  // Prune redundant per-route keys older than __layout when route map exceeds 100 entries
+  const layoutRev = updated.routes.__layout || 0;
+  if (layoutRev > 0 && Object.keys(updated.routes).length > 100) {
+    for (const [k, rev] of Object.entries(updated.routes)) {
+      if (k !== '__layout' && rev <= layoutRev) {
+        delete updated.routes[k];
+      }
+    }
   }
 
   localRouteRevs = updated;
   localRouteRevsLoadedAt = now;
-  syncActiveCacheEpochs(updated);
+  syncActiveCacheEpochs(updated.scopes);
   await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
   await rebuildEdgePreloadBundle(cfEnv).catch(() => {});
   return updated;
@@ -343,7 +382,11 @@ export async function bumpRouteRevisions(basePaths: Iterable<string>, bumpGlobal
 /**
  * Resolves the effective route revision timestamp for a given pathname
  */
-export function resolvePathRevision(pathname: string, revs: Record<string, number>, supportedLocales: readonly string[]): number {
+export function resolvePathRevision(
+  pathname: string,
+  revs: RouteRevisionsLedger | Record<string, number> | null | undefined,
+  supportedLocales: readonly string[]
+): number {
   let basePath = pathname.replace(/\/+$/, '') || '/';
   for (const loc of supportedLocales) {
     if (basePath === `/${loc}`) {
@@ -355,8 +398,12 @@ export function resolvePathRevision(pathname: string, revs: Record<string, numbe
       break;
     }
   }
-  const routeRev = revs[basePath] || 0;
-  const layoutRev = revs['__layout'] || 0;
+  const routes: Record<string, number> =
+    revs && 'routes' in revs && revs.routes && typeof revs.routes === 'object'
+      ? (revs.routes as Record<string, number>)
+      : ((revs as Record<string, number>) || {});
+  const routeRev = routes[basePath] || 0;
+  const layoutRev = routes.__layout || 0;
   return Math.max(routeRev, layoutRev);
 }
 
@@ -521,7 +568,7 @@ export async function purgeEdgeHtmlCache(params: {
   origin: string;
   cfEnv?: any;
   isDebug?: boolean;
-  prevRevs?: Record<string, number>;
+  prevRevs?: RouteRevisionsLedger | Record<string, number>;
   purgeEverything?: boolean;
 }): Promise<CmsPurgeResult> {
   const { targetPaths, origin, cfEnv, isDebug, prevRevs, purgeEverything = false } = params;
@@ -844,7 +891,7 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
         }
 
         if (isDelete) {
-          // On page delete: evict from KV, do NOT query Sanity!
+          // On page delete: evict from KV and refresh page slugs list
           refreshTasks.push(PageService.evictSlug(cleanSlug, cfEnv));
           taskDescriptions.push(`evictPageSlug(${cleanSlug})`);
         } else {
@@ -860,6 +907,8 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
             taskDescriptions.push(`refreshPageSlug(${cleanSlug})`);
           }
         }
+        refreshTasks.push(PageService.refreshSlugs(cfEnv));
+        taskDescriptions.push('refreshPageSlugs()');
         break;
       }
 
@@ -872,16 +921,15 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
         collectedPaths.add('/private-label');
         collectedPaths.add('/contact');
         // Include all product detail pages and dynamic custom CMS pages
-        const [allProds, allPages] = await Promise.all([
+        const [allProds, allPageSlugs] = await Promise.all([
           ProductService.getAll(false, cfEnv).catch(() => []),
-          PageService.getAll(false, cfEnv).catch(() => []),
+          PageService.getSlugs(cfEnv).catch(() => []),
         ]);
         for (const p of allProds) {
           if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
         }
-        for (const pg of allPages) {
-          const pgSlug = pg.slug?.current || (typeof pg.slug === 'string' ? pg.slug : '');
-          const clean = pgSlug.replace(/^\/+/, '').replace(/\/+$/, '');
+        for (const pgSlug of allPageSlugs) {
+          const clean = String(pgSlug || '').replace(/^\/+/, '').replace(/\/+$/, '');
           if (clean && clean !== 'home' && clean !== 'index') {
             collectedPaths.add(`/${clean}`);
           }
@@ -956,16 +1004,15 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
     collectedPaths.add('/private-label');
     collectedPaths.add('/contact');
 
-    const [allProds, allPages] = await Promise.all([
+    const [allProds, allPageSlugs] = await Promise.all([
       ProductService.getAll(false, cfEnv).catch(() => []),
-      PageService.getAll(false, cfEnv).catch(() => []),
+      PageService.getSlugs(cfEnv).catch(() => []),
     ]);
     for (const p of allProds) {
       if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
     }
-    for (const pg of allPages) {
-      const pgSlug = pg.slug?.current || (typeof pg.slug === 'string' ? pg.slug : '');
-      const clean = pgSlug.replace(/^\/+/, '').replace(/\/+$/, '');
+    for (const pgSlug of allPageSlugs) {
+      const clean = String(pgSlug || '').replace(/^\/+/, '').replace(/\/+$/, '');
       if (clean && clean !== 'home' && clean !== 'index') {
         collectedPaths.add(`/${clean}`);
       }
@@ -978,7 +1025,7 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
       ProductService.getCatalogSettings(true, cfEnv),
       ProductService.getProductStorySettings(true, cfEnv),
       PageService.getHomePage(true, cfEnv),
-      PageService.refreshAll(cfEnv)
+      PageService.refreshSlugs(cfEnv)
     );
     taskDescriptions.push('refreshAllCoreServices()');
   }
@@ -986,9 +1033,17 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
   // Execute KV sync
   await Promise.allSettled(refreshTasks);
 
-  // Bump route revisions for all affected paths in KV so global edge PoPs transition to the new cacheKey version instantly
+  // Bump route revisions & affected L1 scopes in KV so global edge PoPs invalidate only what changed
   const isGlobalLayout = docType === 'siteConfig' || docType === 'header' || docType === 'footer' || !docType;
-  await bumpRouteRevisions(collectedPaths, isGlobalLayout, cfEnv).catch(() => {});
+  const affectedScopes: CacheLedgerScope[] =
+    docType === 'siteConfig' || docType === 'header' || docType === 'footer' || docType === 'rfqSettings'
+      ? ['config']
+      : docType === 'product' || docType === 'category' || docType === 'catalogSettings' || docType === 'productStorySettings'
+        ? ['products']
+        : docType === 'page'
+          ? ['pages']
+          : ['config', 'products', 'pages'];
+  await bumpRouteRevisions(collectedPaths, isGlobalLayout, cfEnv, affectedScopes).catch(() => {});
 
   // Execute Edge HTML Cache & Cloudflare CDN purge
   const purgeResult = await purgeEdgeHtmlCache({

@@ -240,13 +240,13 @@ export interface CatalogCategoryItem {
 const productSlugsCache = createTieredCache<string[], Set<string>>({
   name: 'prod:slugs',
   scope: 'products',
-  purgeAction: 'refresh',
-  kvKey: 'cms:product_slugs:v1',
-  epochKey: '__cms:cms:product_slugs:v1',
   ttlMs: Infinity,
   fallbackRaw: [],
   compile: (slugs) => (Array.isArray(slugs) && slugs.length > 0 ? new Set(slugs.filter(Boolean)) : new Set<string>()),
-  fetchRaw: () => getSanityClient().fetch<string[]>(`*[_type == "product" && defined(slug.current)].slug.current`),
+  fetchRaw: async (customEnv) => {
+    const list = await productsCache.get(false, customEnv);
+    return Array.isArray(list) ? (list.map((p) => p?.slug).filter(Boolean) as string[]) : [];
+  },
 });
 
 const productsCache = createCmsCache<Product[]>(

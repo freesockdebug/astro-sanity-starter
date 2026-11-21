@@ -260,14 +260,15 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     const querySql = `
       SELECT 
         u.*,
-        COUNT(DISTINCT o.id) as total_orders,
-        COUNT(DISTINCT CASE WHEN o.status = 'PENDING_APPROVAL' THEN o.id END) as pending_orders,
-        COUNT(DISTINCT CASE WHEN o.status = 'SHIPPED' THEN o.id END) as shipped_orders,
-        MAX(o.created_at) as latest_order_date
+        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id UNION SELECT id FROM orders WHERE buyer_email = u.email)) as total_orders,
+        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id AND status = 'PENDING_APPROVAL' UNION SELECT id FROM orders WHERE buyer_email = u.email AND status = 'PENDING_APPROVAL')) as pending_orders,
+        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id AND status = 'SHIPPED' UNION SELECT id FROM orders WHERE buyer_email = u.email AND status = 'SHIPPED')) as shipped_orders,
+        NULLIF(MAX(
+          COALESCE((SELECT MAX(created_at) FROM orders WHERE user_id = u.id), ''),
+          COALESCE((SELECT MAX(created_at) FROM orders WHERE buyer_email = u.email), '')
+        ), '') as latest_order_date
       FROM users u
-      LEFT JOIN orders o ON (o.user_id = u.id OR o.buyer_email = u.email)
       ${whereSql}
-      GROUP BY u.id
       ORDER BY u.last_login_at DESC, u.created_at DESC
       LIMIT ? OFFSET ?
     `;

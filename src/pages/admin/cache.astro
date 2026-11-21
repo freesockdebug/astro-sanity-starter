@@ -28,10 +28,11 @@ if (redirectResponse) return redirectResponse;
 const canPurge = Boolean(adminContext?.isRootAdmin || adminContext?.permissions?.includes('*') || adminContext?.permissions?.includes('cache:purge'));
 const [statsSnapshot, routeRevisions, sysSettings] = await Promise.all([
   Promise.resolve(getGlobalCacheStatsSnapshot()),
-  getRouteRevisions(cfEnv).catch(() => ({} as Record<string, number>)),
+  getRouteRevisions(cfEnv).catch(() => null),
   getSystemSettings(cfEnv).catch(() => null),
 ]);
-const revEntries = Object.entries(routeRevisions).filter(([, ts]) => typeof ts === 'number').sort(([a], [b]) => a.localeCompare(b));
+const rawRoutes = routeRevisions?.routes ?? {};
+const revEntries = Object.entries(rawRoutes).filter(([, ts]) => typeof ts === 'number').sort(([a], [b]) => a.localeCompare(b));
 const urlStats = statsSnapshot.urlStats || [];
 const urlStatsEnabled = sysSettings?.enable_url_cache_stats ?? true;
 
@@ -376,7 +377,8 @@ const pageTitle = 'Edge & KV Cache Console';
     }
 
     if (routeRevisions && typeof routeRevisions === 'object') {
-      const entries = Object.entries(routeRevisions).filter(([, ts]) => typeof ts === 'number').sort(([a], [b]) => a.localeCompare(b));
+      const routeMap = routeRevisions.routes && typeof routeRevisions.routes === 'object' ? routeRevisions.routes : routeRevisions;
+      const entries = Object.entries(routeMap).filter(([, ts]) => typeof ts === 'number').sort(([a], [b]) => a.localeCompare(b));
       const revCount = document.getElementById('route-revisions-count');
       if (revCount) revCount.textContent = `${entries.length} routes`;
       const revList = document.getElementById('route-revisions-list');

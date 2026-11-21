@@ -17,7 +17,7 @@ import {
   purgeLegacyEpochKvKeys,
 } from '@utils/cache';
 import { recordAdminAudit } from '@db/audit.repo';
-import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache, rebuildEdgePreloadBundle } from '@utils/cmsSync';
+import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache, rebuildEdgePreloadBundle, type CacheLedgerScope } from '@utils/cmsSync';
 
 export const prerender = false;
 
@@ -206,7 +206,21 @@ export const POST: APIRoute = defineAdminApi(
       if (edgePaths.size > 0) {
         const prevRevs = await getRouteRevisions(cfEnv).catch(() => ({}));
         const bumpGlobalLayout = scope === 'all' || scope === 'config' || scope === 'settings';
-        await bumpRouteRevisions(edgePaths, bumpGlobalLayout, cfEnv).catch(() => {});
+        const affectedScopes: CacheLedgerScope[] =
+          scope === 'all'
+            ? ['products', 'pages', 'config', 'settings', 'waf', 'dicts', 'rbac']
+            : scope === 'products'
+              ? ['products']
+              : scope === 'pages'
+                ? ['pages']
+                : scope === 'config'
+                  ? ['config']
+                  : scope === 'settings'
+                    ? ['settings', 'waf']
+                    : targetPath?.startsWith('/products/')
+                      ? ['products']
+                      : ['pages'];
+        await bumpRouteRevisions(edgePaths, bumpGlobalLayout, cfEnv, affectedScopes).catch(() => {});
         bundleRebuilt = true;
 
         const purgeRes = await purgeEdgeHtmlCache({

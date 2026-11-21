@@ -76,7 +76,6 @@ export async function invalidateDictCache(cfEnv?: any): Promise<void> {
   } catch {
     await dictsCache.evict(cfEnv);
   }
-  await bumpCacheEpoch('__dicts', cfEnv);
 }
 
 /**

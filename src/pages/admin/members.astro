@@ -4,7 +4,7 @@
 import AdminLayout from '@layouts/AdminLayout.astro';
 import AdminPageToolbar from '@components/admin/AdminPageToolbar.astro';
 import { requireAdminContext, getRuntimeEnv } from '@utils/auth';
-import { listAdminMembers, listAdminRoles } from '@db';
+import { listAdminMembersWithStats, listAdminRoles } from '@db';
 import { toIsoUtcString, formatUtcFallback } from '@utils/format';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -22,7 +22,7 @@ const rootAdminEmailsRaw = getRuntimeEnv('ADMIN_EMAILS', cfEnv) || 'forhaisome@g
 const rootAdminEmails = rootAdminEmailsRaw.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
 
 const [members, roles] = await Promise.all([
-  listAdminMembers().catch(() => []),
+  listAdminMembersWithStats().catch(() => []),
   listAdminRoles().catch(() => []),
 ]);
 ---

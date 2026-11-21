@@ -1,7 +1,7 @@
 // src/db/rbac.repo.ts
 // Repository for RBAC Roles and Admin Members Management
 import { executeWithAutoSchema } from './schema';
-import { bumpCacheEpoch, createTieredCache, runInBackground } from '../utils/cache';
+import { createTieredCache, runInBackground } from '../utils/cache';
 import type { DbClient } from './client';
 import { ALL_MENU_KEYS } from '../config/adminNavigation';
 
@@ -135,33 +135,56 @@ export interface ActiveTeamMemberLite {
   roleName: string;
 }
 
-const activeMembersLiteCache = createTieredCache<ActiveTeamMemberLite[]>({
-  name: 'rbac_active_members_lite',
+interface MemberRuntimeStats {
+  is_logto_synced: boolean;
+  assigned_orders: number;
+  assigned_customers: number;
+  last_login_at: string;
+  last_ip: string;
+  last_location: string;
+}
+
+const memberStatsCache = createTieredCache<Record<string, MemberRuntimeStats>>({
+  name: 'rbac_member_stats',
   scope: 'rbac',
-  ttlMs: Infinity,
-  fallbackRaw: [],
+  ttlMs: 30_000,
+  fallbackRaw: {},
   fetchRaw: () =>
     executeWithAutoSchema(async (db: DbClient) => {
       try {
         const rows = await db.query<any>(
-          `SELECT m.email, m.name, COALESCE(r.name, m.role_code) as role_name
+          `SELECT 
+             m.email,
+             u.id as user_id, u.last_login_at,
+             (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email) as assigned_orders,
+             (SELECT COUNT(*) FROM users cu WHERE cu.assigned_to = m.email) as assigned_customers,
+             (SELECT ul.ip || '|' || COALESCE(ul.city, '') || '|' || COALESCE(ul.country, '')
+              FROM user_logins ul WHERE ul.email = m.email ORDER BY ul.created_at DESC LIMIT 1) as last_login_meta
            FROM admin_members m
-           LEFT JOIN admin_roles r ON m.role_code = r.code
-           WHERE m.status = 'ACTIVE'
-           ORDER BY m.created_at ASC`
+           LEFT JOIN users u ON m.email = u.email`
         );
-        return (rows || []).map((r) => ({
-          email: r.email.toLowerCase(),
-          name: r.name || r.email.split('@')[0],
-          roleName: r.role_name || '',
-        }));
+        const map: Record<string, MemberRuntimeStats> = {};
+        for (const row of rows || []) {
+          const email = String(row.email || '').toLowerCase();
+          if (!email) continue;
+          const [lastIp = '', lastCity = '', lastCountry = ''] = (row.last_login_meta || '').split('|');
+          map[email] = {
+            is_logto_synced: Boolean(row.user_id),
+            assigned_orders: Number(row.assigned_orders || 0),
+            assigned_customers: Number(row.assigned_customers || 0),
+            last_login_at: row.last_login_at || '',
+            last_ip: lastIp,
+            last_location: [lastCity, lastCountry].filter(Boolean).join(', ') || '',
+          };
+        }
+        return map;
       } catch (e: any) {
         const msg = (e?.message || String(e)).toLowerCase();
         if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
           throw e;
         }
-        console.error('[RBAC] listActiveTeamMembersLite failed:', e);
-        return null;
+        console.error('[RBAC] memberStatsCache failed:', e);
+        return {};
       }
     }),
 });
@@ -195,7 +218,6 @@ const adminMembersCache = createTieredCache<AdminMemberWithRole[]>({
   scope: 'rbac',
   purgeAction: 'refresh',
   kvKey: 'rbac:members:v1',
-  epochKey: '__rbac',
   ttlMs: Infinity,
   fallbackRaw: [],
   fetchRaw: () =>
@@ -204,48 +226,38 @@ const adminMembersCache = createTieredCache<AdminMemberWithRole[]>({
         const rows = await db.query<any>(
           `SELECT 
              m.*,
-             r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system,
-             u.id as user_id, u.last_login_at,
-             (SELECT COUNT(*) FROM orders o WHERE o.assigned_to = m.email) as assigned_orders,
-             (SELECT COUNT(*) FROM users cu WHERE cu.assigned_to = m.email) as assigned_customers,
-             (SELECT ul.ip || '|' || COALESCE(ul.city, '') || '|' || COALESCE(ul.country, '')
-              FROM user_logins ul WHERE ul.email = m.email ORDER BY ul.created_at DESC LIMIT 1) as last_login_meta
+             r.name as role_name, r.data_scope, r.menus_json, r.permissions_json, r.description as role_desc, r.is_system
            FROM admin_members m
            LEFT JOIN admin_roles r ON m.role_code = r.code
-           LEFT JOIN users u ON m.email = u.email
            ORDER BY m.created_at ASC`
         );
 
-        return (rows || []).map((row) => {
-          const [lastIp = '', lastCity = '', lastCountry = ''] = (row.last_login_meta || '').split('|');
-          const loc = [lastCity, lastCountry].filter(Boolean).join(', ') || '';
-          return {
-            email: row.email.toLowerCase(),
-            name: row.name || row.email.split('@')[0],
-            role_code: row.role_code,
-            status: (row.status as 'ACTIVE' | 'DISABLED') || 'ACTIVE',
-            created_by: row.created_by || '',
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            is_logto_synced: Boolean(row.user_id),
-            assigned_orders: Number(row.assigned_orders || 0),
-            assigned_customers: Number(row.assigned_customers || 0),
-            last_login_at: row.last_login_at || '',
-            last_ip: lastIp,
-            last_location: loc,
-            role: row.role_name
-              ? parseRoleRow({
-                  code: row.role_code,
-                  name: row.role_name,
-                  data_scope: row.data_scope,
-                  menus_json: row.menus_json,
-                  permissions_json: row.permissions_json,
-                  description: row.role_desc,
-                  is_system: row.is_system,
-                })
-              : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
-          };
-        });
+        return (rows || []).map((row) => ({
+          email: row.email.toLowerCase(),
+          name: row.name || row.email.split('@')[0],
+          role_code: row.role_code,
+          status: (row.status as 'ACTIVE' | 'DISABLED') || 'ACTIVE',
+          created_by: row.created_by || '',
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          is_logto_synced: false,
+          assigned_orders: 0,
+          assigned_customers: 0,
+          last_login_at: '',
+          last_ip: '',
+          last_location: '',
+          role: row.role_name
+            ? parseRoleRow({
+                code: row.role_code,
+                name: row.role_name,
+                data_scope: row.data_scope,
+                menus_json: row.menus_json,
+                permissions_json: row.permissions_json,
+                description: row.role_desc,
+                is_system: row.is_system,
+              })
+            : SYSTEM_ROLES[row.role_code] || SYSTEM_ROLES.sales_rep,
+        }));
       } catch (e: any) {
         const msg = (e?.message || String(e)).toLowerCase();
         if (msg.includes('no such table') || msg.includes('no such column') || msg.includes('has no column named')) {
@@ -260,22 +272,27 @@ const adminMembersCache = createTieredCache<AdminMemberWithRole[]>({
 export function invalidateRbacCache(): void {
   adminRolesCache.invalidate();
   adminMembersCache.invalidate();
-  activeMembersLiteCache.invalidate();
+  memberStatsCache.invalidate();
   runInBackground(
     Promise.all([
       adminRolesCache.refresh().catch(() => {}),
       adminMembersCache.refresh().catch(() => {}),
-      activeMembersLiteCache.refresh().catch(() => {}),
-    ]).then(() => bumpCacheEpoch('__rbac'))
+    ])
   );
 }
 
 /**
- * Lightweight active team member lookup for dropdown filters (orders, users).
- * Cached in L1 memory for 60s; avoids running 5 correlated subqueries.
+ * Lightweight active team member lookup derived in-memory from adminMembersCache.
  */
 export async function listActiveTeamMembersLite(): Promise<ActiveTeamMemberLite[]> {
-  return activeMembersLiteCache.get();
+  const members = await listAdminMembers();
+  return members
+    .filter((m) => m.status === 'ACTIVE')
+    .map((m) => ({
+      email: m.email,
+      name: m.name,
+      roleName: m.role?.name || m.role_code,
+    }));
 }
 
 export async function listAdminRoles(): Promise<AdminRole[]> {
@@ -299,6 +316,14 @@ export async function getAdminRole(code: string): Promise<AdminRole> {
 
 export async function listAdminMembers(): Promise<AdminMemberWithRole[]> {
   return adminMembersCache.get();
+}
+
+export async function listAdminMembersWithStats(): Promise<AdminMemberWithRole[]> {
+  const [members, statsMap] = await Promise.all([adminMembersCache.get(), memberStatsCache.get()]);
+  return members.map((m) => {
+    const s = statsMap[m.email];
+    return s ? { ...m, ...s } : m;
+  });
 }
 
 export async function getAdminMember(email: string): Promise<AdminMemberWithRole | null> {

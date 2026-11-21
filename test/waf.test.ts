@@ -761,6 +761,7 @@ test('EdgeTieredCache avoids @epoch KV duplication and purgeLegacyEpochKvKeys cl
     ['cms:product_slugs:v1@1795118776915', '[]'],
     ['cms:siteConfig@1795118776916', '{}'],
     ['cms:siteConfig', '{}'],
+    ['admin:table_pref:forhaisome@gmail.com:orders', '{}'],
   ]);
   const mockEnv = {
     CACHE_KV: {
@@ -808,6 +809,7 @@ test('EdgeTieredCache avoids @epoch KV duplication and purgeLegacyEpochKvKeys cl
   assert.equal(kvStore.has('cms:product_slugs:v1@1795118776915'), false);
   assert.equal(kvStore.has('cms:siteConfig@1795118776916'), false);
   assert.equal(kvStore.has('cms:siteConfig'), true);
+  assert.equal(kvStore.has('admin:table_pref:forhaisome@gmail.com:orders'), true, 'must NOT delete admin email table_pref keys');
   assert.equal(kvStore.has('test:no_epoch:v1'), true);
 });
 
@@ -1231,12 +1233,17 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     // Simulate another Isolate writing a new routeRev + updated preload bundle to KV
     fakeNow += 31_000;
     const currentBundle = JSON.parse(kvStore.get(EDGE_PRELOAD_KV_KEY) || '{}');
-    const remoteRevs = { ...(currentBundle.routeRevs || {}), '/products': fakeNow };
-    kvStore.set('cms:route_revs', JSON.stringify(remoteRevs));
+    const prevLedger = currentBundle.routeRevs || { v: 0, scopes: {}, routes: {} };
+    const remoteLedger = {
+      v: fakeNow,
+      scopes: { ...(prevLedger.scopes || {}), settings: fakeNow },
+      routes: { ...(prevLedger.routes || {}), '/products': fakeNow },
+    };
+    kvStore.set('cms:route_revs', JSON.stringify(remoteLedger));
     kvStore.set(EDGE_PRELOAD_KV_KEY, JSON.stringify({
       ...currentBundle,
       updatedAt: fakeNow,
-      routeRevs: remoteRevs,
+      routeRevs: remoteLedger,
       systemSettings: { ...currentBundle.systemSettings, brand_name: 'REMOTE_ISOLATE_BRAND' },
     }));
 
@@ -1244,12 +1251,20 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     assert.equal(hbChanged.preloadStatus, 'L2_KV_HIT');
     assert.equal(hbChanged.wafSettings?.brand_name, 'REMOTE_ISOLATE_BRAND');
 
-    // Even if cms:route_revs had an out-of-band __dicts bump not yet in bundle.routeRevs,
-    // merging heartbeatKvRevs prevents subsequent 30s heartbeats from looping L2_KV_HIT
+    // Targeted scope invalidation: bumping ONLY `pages` scope must invalidate PageService, NOT ProductService or SiteConfigService
     fakeNow += 31_000;
-    kvStore.set('cms:route_revs', JSON.stringify({ ...remoteRevs, __dicts: fakeNow }));
-    const hbDictsSync = await preloadEdgeIsolate(mockEnv);
-    assert.equal(hbDictsSync.preloadStatus, 'L2_KV_HIT');
+    const pagesOnlyLedger = {
+      v: fakeNow,
+      scopes: { ...remoteLedger.scopes, pages: fakeNow },
+      routes: { ...remoteLedger.routes, '/about': fakeNow },
+    };
+    kvStore.set('cms:route_revs', JSON.stringify(pagesOnlyLedger));
+    const hbPagesOnly = await preloadEdgeIsolate(mockEnv);
+    assert.equal(hbPagesOnly.preloadStatus, 'L2_KV_HIT');
+    assert.equal(SiteConfigService.peek()?.edgeCacheTtl, 600);
+    assert.deepEqual(ProductService.getCachedSlugs(), ['silk-slip-001', 'cotton-robe-002']);
+
+    // Steady heartbeat after ledger sync stays L1_HIT
     fakeNow += 31_000;
     const hbDictsSteady = await preloadEdgeIsolate(mockEnv);
     assert.equal(hbDictsSteady.preloadStatus, 'L1_HIT');

@@ -65,7 +65,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ orderId: s
       );
       if (existingUser?.assigned_to) {
         assignedTo = existingUser.assigned_to.trim().toLowerCase();
-        assignedAt = new Date().toISOString();
+        assignedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
       }
     } catch {}
 

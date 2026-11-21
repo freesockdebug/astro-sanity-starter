@@ -1,5 +1,5 @@
 import { client, getSanityClient } from '@utils/sanity-client';
-import { createCmsCache, createCmsKeyedCache, createTieredCache } from '@utils/cache';
+import { createCmsKeyedCache, createTieredCache } from '@utils/cache';
 import { SECTIONS } from './blocks';
 import type { Page } from 'types';
 
@@ -30,7 +30,6 @@ const pageSlugsCache = createTieredCache<string[], Set<string>>({
   scope: 'pages',
   purgeAction: 'refresh',
   kvKey: 'cms:page_slugs:v1',
-  epochKey: '__cms:cms:page_slugs:v1',
   ttlMs: Infinity,
   fallbackRaw: [],
   compile: (slugs) => {
@@ -65,30 +64,12 @@ const pageBySlugCache = createCmsKeyedCache<Page>(
   }
 );
 
-const allPagesCache = createCmsCache<Page[]>(
-  (forceRefresh) => getSanityClient(forceRefresh).fetch<Page[]>(`*[_type == "page"] ${PAGE_QUERY_OBJ}`),
-  [],
-  {
-    kvKey: 'cms:pages:all',
-    scope: 'pages',
-    purgeAction: 'refresh',
-    onUpdate: (pages) => {
-      if (Array.isArray(pages) && pages.length > 0) {
-        const slugs = pages
-          .map((p) => (typeof p?.slug === 'string' ? p.slug : (p?.slug as any)?.current))
-          .filter(Boolean) as string[];
-        pageSlugsCache.seed(slugs);
-      }
-    },
-  }
-);
-
 /**
  * Service for fetching and resolving CMS Pages from Sanity
  */
 export class PageService {
   /**
-   * Multi-tier cached retrieval of the homepage content (L1 Memory 5m -> L2 Permanent KV -> L3 Sanity)
+   * Multi-tier cached retrieval of the homepage content (L1 Memory -> L2 Permanent KV -> L3 Sanity)
    */
   public static async getHomePage(forceRefresh = false, customEnv?: any): Promise<Page | null> {
     return pageBySlugCache.get('home', customEnv, forceRefresh);
@@ -110,10 +91,14 @@ export class PageService {
     return this.getCachedSlugs() || [];
   }
 
+  public static async refreshSlugs(customEnv?: any): Promise<string[]> {
+    await pageSlugsCache.refresh(customEnv);
+    return this.getCachedSlugs() || [];
+  }
+
   public static invalidateCache(): void {
     pageSlugsCache.invalidate();
     pageBySlugCache.invalidate();
-    allPagesCache.invalidate();
   }
 
   public static invalidateAll(): void {
@@ -121,14 +106,14 @@ export class PageService {
   }
 
   /**
-   * Fetch all pages (L1 Memory 5m -> L2 Permanent KV -> L3 Sanity)
+   * Fetch all pages directly from Sanity (used by studio/export tooling)
    */
   public static async getAll(forceRefresh = false, customEnv?: any): Promise<Page[]> {
-    return allPagesCache.get(forceRefresh, customEnv);
+    return getSanityClient(forceRefresh).fetch<Page[]>(`*[_type == "page"] ${PAGE_QUERY_OBJ}`);
   }
 
-  public static async refreshAll(customEnv?: any): Promise<Page[]> {
-    return allPagesCache.refresh(customEnv);
+  public static async refreshAll(customEnv?: any): Promise<string[]> {
+    return this.refreshSlugs(customEnv);
   }
 
   /**

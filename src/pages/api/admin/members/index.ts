@@ -3,7 +3,7 @@
 import type { APIRoute } from 'astro';
 import { defineAdminApi, jsonNoCache } from '@utils/auth';
 import { invalidateAdminRbacCache } from '@utils/rbac';
-import { listAdminMembers, listAdminRoles, upsertAdminMember, getAdminMember, listCandidateLogtoUsers } from '@db';
+import { listAdminMembersWithStats, listAdminRoles, upsertAdminMember, getAdminMember, listCandidateLogtoUsers } from '@db';
 import { recordAdminAudit } from '@db/audit.repo';
 
 export const prerender = false;
@@ -16,7 +16,7 @@ export const GET: APIRoute = defineAdminApi({}, async ({ url }) => {
   }
 
   const [members, roles] = await Promise.all([
-    listAdminMembers(),
+    listAdminMembersWithStats(),
     listAdminRoles(),
   ]);
 

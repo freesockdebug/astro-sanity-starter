@@ -216,9 +216,7 @@ export async function getWafRuntime(customEnv?: any, forceRefresh = false): Prom
 }
 
 export async function refreshWafRuntimeCache(customEnv?: any): Promise<CompiledWafRuntime> {
-  const compiled = await wafRuntimeCache.refresh(customEnv);
-  await bumpCacheEpoch('__waf', customEnv);
-  return compiled;
+  return wafRuntimeCache.refresh(customEnv);
 }
 
 export async function listWafRules(customEnv?: any): Promise<WafDbRule[]> {

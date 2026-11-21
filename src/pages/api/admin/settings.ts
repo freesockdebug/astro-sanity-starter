@@ -209,7 +209,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (storefrontKeys.some((k) => k in updates)) {
       const targetPaths = ['/', '/products', '/about', '/private-label', '/contact'];
       const prevRevs = await getRouteRevisions(cfEnv).catch(() => ({}));
-      await bumpRouteRevisions(targetPaths, true, cfEnv).catch(() => {});
+      await bumpRouteRevisions(targetPaths, true, cfEnv, ['settings', 'config']).catch(() => {});
       await purgeEdgeHtmlCache({
         targetPaths,
         origin: new URL(request.url).origin,

@@ -141,7 +141,7 @@ async function loadSystemSettingsFromDb(customEnv?: any): Promise<TieredCacheFet
   try {
     dbRecords = await executeWithAutoSchema(async (db: DbClient) => {
       return db.query<{ key: string; value: string }>(
-        'SELECT key, value FROM system_settings'
+        "SELECT key, value FROM system_settings WHERE key NOT LIKE 'table_pref:%'"
       );
     });
     d1QuerySucceeded = true;
@@ -281,7 +281,6 @@ setDefaultNegativeTtlMsResolver(() => (settingsCache.peek()?.l1_negative_cache_t
 
 export async function invalidateSettingsCache(customEnv?: any) {
   await settingsCache.refresh(customEnv);
-  await bumpCacheEpoch('__settings', customEnv);
 }
 
 /**
@@ -333,7 +332,6 @@ export async function updateSystemSettings(
     });
 
     await settingsCache.refresh(customEnv);
-    await bumpCacheEpoch('__settings', customEnv);
     return { success: true };
   } catch (err: any) {
     console.error('[SettingsRepo] Failed to update settings:', err);

@@ -113,11 +113,12 @@ export async function purgeLegacyEpochKvKeys(customEnv?: any): Promise<number> {
     let cursor: string | undefined;
     let listComplete = false;
 
+    const LEGACY_EPOCH_KEY_RE = /@\d{10,}$/;
     while (!listComplete) {
       const page = await kv.list(cursor ? { cursor } : undefined);
       const keys = Array.isArray(page?.keys) ? page.keys : [];
       for (const entry of keys) {
-        if (typeof entry?.name === 'string' && entry.name.includes('@')) {
+        if (typeof entry?.name === 'string' && LEGACY_EPOCH_KEY_RE.test(entry.name)) {
           legacyKeys.push(entry.name);
         }
       }
@@ -255,12 +256,18 @@ export function syncActiveCacheEpochs(epochs: Record<string, any>): void {
  */
 export async function bumpCacheEpoch(epochKey: string, cfEnv?: any, explicitTs?: number): Promise<number> {
   const ts = explicitTs ?? Date.now();
-  activeCacheEpochs[epochKey] = ts;
-  if (epochBumpListener) epochBumpListener(epochKey, ts, cfEnv);
+  const scope = epochKey.replace(/^__/, '');
+  activeCacheEpochs[scope] = ts;
+  if (epochBumpListener) {
+    epochBumpListener(scope, ts, cfEnv);
+    return ts;
+  }
   try {
-    const current = (await kvGet<Record<string, any>>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null)) || {};
-    const updated = { ...current, ...activeCacheEpochs, [epochKey]: ts };
-    await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => { });
+    const raw = await kvGet<any>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+    const ledger = raw && typeof raw === 'object' && typeof raw.v === 'number'
+      ? { v: ts, scopes: { ...(raw.scopes || {}), [scope]: ts }, routes: raw.routes || {} }
+      : { v: ts, scopes: { [scope]: ts }, routes: {} };
+    await kvPut(ROUTE_REVS_KV_KEY, ledger, undefined, cfEnv).catch(() => { });
   } catch {
     // Non-fatal epoch bump
   }
@@ -740,7 +747,7 @@ export function createCmsCache<T>(
     scope: options?.scope,
     purgeAction: options?.purgeAction,
     kvKey: options?.kvKey,
-    epochKey: options?.epochKey ?? (options?.kvKey && (options?.ttlMs === undefined || !Number.isFinite(options.ttlMs)) ? `__cms:${options.kvKey}` : undefined),
+    epochKey: options?.epochKey,
     ttlMs: options?.ttlMs ?? Infinity,
     fallbackRaw: fallback,
     onUpdate: options?.onUpdate,
