@@ -2,7 +2,7 @@
 // Universal High-Speed Data Dictionary SDK (L1 Pre-Indexed Map -> L2 Edge KV -> L3 DB)
 
 import { listDictItems, type SysDictItem, type DictBadgeColor } from '../db/dicts.repo';
-import { bumpCacheEpoch, createTieredCache } from './cache';
+import { createTieredCache } from './cache';
 
 export type { SysDictItem, DictBadgeColor };
 

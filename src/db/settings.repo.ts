@@ -4,7 +4,7 @@
 import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
 import { getRuntimeEnv } from '../utils/auth';
-import { bumpCacheEpoch, createTieredCache, setDefaultNegativeTtlMsResolver, type TieredCacheFetchResult } from '../utils/cache';
+import { createTieredCache, setDefaultNegativeTtlMsResolver, type TieredCacheFetchResult } from '../utils/cache';
 import {
   DEFAULT_BRAND_TITLE,
   DEFAULT_SITE_URL,

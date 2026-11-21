@@ -3,7 +3,7 @@
 
 import { type DbClient } from './client';
 import { executeWithAutoSchema } from './schema';
-import { bumpCacheEpoch, createTieredCache, type TieredCacheFetchResult } from '../utils/cache';
+import { createTieredCache, type TieredCacheFetchResult } from '../utils/cache';
 import {
   buildSystemWafRulesSeed,
   compileWafRuntime,

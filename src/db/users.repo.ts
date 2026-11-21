@@ -260,13 +260,10 @@ export async function listAdminUsers(filter: ListAdminUsersFilter = {}): Promise
     const querySql = `
       SELECT 
         u.*,
-        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id UNION SELECT id FROM orders WHERE buyer_email = u.email)) as total_orders,
-        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id AND status = 'PENDING_APPROVAL' UNION SELECT id FROM orders WHERE buyer_email = u.email AND status = 'PENDING_APPROVAL')) as pending_orders,
-        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id AND status = 'SHIPPED' UNION SELECT id FROM orders WHERE buyer_email = u.email AND status = 'SHIPPED')) as shipped_orders,
-        NULLIF(MAX(
-          COALESCE((SELECT MAX(created_at) FROM orders WHERE user_id = u.id), ''),
-          COALESCE((SELECT MAX(created_at) FROM orders WHERE buyer_email = u.email), '')
-        ), '') as latest_order_date
+        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id UNION SELECT id FROM orders WHERE buyer_email = u.email) AS o_all) as total_orders,
+        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id AND status = 'PENDING_APPROVAL' UNION SELECT id FROM orders WHERE buyer_email = u.email AND status = 'PENDING_APPROVAL') AS o_pending) as pending_orders,
+        (SELECT COUNT(*) FROM (SELECT id FROM orders WHERE user_id = u.id AND status = 'SHIPPED' UNION SELECT id FROM orders WHERE buyer_email = u.email AND status = 'SHIPPED') AS o_shipped) as shipped_orders,
+        (SELECT MAX(created_at) FROM (SELECT created_at FROM orders WHERE user_id = u.id UNION ALL SELECT created_at FROM orders WHERE buyer_email = u.email) AS o_dates) as latest_order_date
       FROM users u
       ${whereSql}
       ORDER BY u.last_login_at DESC, u.created_at DESC
