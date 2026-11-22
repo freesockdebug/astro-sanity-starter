@@ -125,7 +125,7 @@ registerEpochBumpListener((epochKey, ts, cfEnv) => {
       merged.scopes = { ...merged.scopes, ...localRouteRevs?.scopes, [scope]: ts };
       merged.routes = { ...merged.routes, ...localRouteRevs?.routes };
       localRouteRevs = merged;
-      await kvPut(ROUTE_REVS_KV_KEY, merged, undefined, cfEnv).catch(() => {});
+      await kvPut(ROUTE_REVS_KV_KEY, merged, undefined, cfEnv).catch(() => { });
       await rebuildEdgePreloadBundle(cfEnv).catch(() => null);
     })()
   );
@@ -183,7 +183,7 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
       productSlugs,
     };
 
-    await kvPut(EDGE_PRELOAD_KV_KEY, bundle, undefined, cfEnv).catch(() => {});
+    await kvPut(EDGE_PRELOAD_KV_KEY, bundle, undefined, cfEnv).catch(() => { });
     localPreloadLoadedAt = updatedAt;
     localRouteRevsLoadedAt = updatedAt;
     localPreloadBundleUpdatedAt = updatedAt;
@@ -200,6 +200,100 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
 }
 
 export type PreloadStatus = 'L1_HIT' | 'L2_KV_HIT' | 'L3_MISS';
+
+let isHeartbeatInFlight = false;
+
+function hydrateFromPreloadBundle(
+  bundle: EdgePreloadBundle,
+  now: number,
+  heartbeatLedger: RouteRevisionsLedger | null = null
+): void {
+  const bundleLedger = normalizeLedger(bundle.routeRevs);
+  const mergedLedger: RouteRevisionsLedger =
+    heartbeatLedger && heartbeatLedger.v >= bundleLedger.v
+      ? {
+          v: heartbeatLedger.v,
+          scopes: { ...bundleLedger.scopes, ...heartbeatLedger.scopes },
+          routes: { ...bundleLedger.routes, ...heartbeatLedger.routes },
+        }
+      : bundleLedger;
+  applyRouteRevisionsUpdate(mergedLedger, now);
+
+  const bundleChanged = bundle.updatedAt !== localPreloadBundleUpdatedAt;
+  if (
+    (bundleChanged || !settingsCache.peek()) &&
+    bundle.systemSettings &&
+    typeof bundle.systemSettings === 'object' &&
+    bundle.systemSettings.brand_name
+  ) {
+    settingsCache.seed({
+      ...DEFAULT_SYSTEM_SETTINGS,
+      ...bundle.systemSettings,
+      waf_rule_config: normalizeWafRuleConfig(bundle.systemSettings.waf_rule_config),
+    }, true);
+  }
+  if (
+    (bundleChanged || !wafRuntimeCache.peek()) &&
+    bundle.wafRuntime &&
+    Array.isArray(bundle.wafRuntime.rules) &&
+    Array.isArray(bundle.wafRuntime.ipAcl) &&
+    bundle.wafRuntime.rules.some((r: any) => r?.id === 'sys_legacy_cms_paths')
+  ) {
+    wafRuntimeCache.seed(bundle.wafRuntime, true);
+  }
+  if ((bundleChanged || !SiteConfigService.peek()) && bundle.siteConfig) {
+    SiteConfigService.seed(bundle.siteConfig, true);
+  }
+  if ((bundleChanged || !RfqSettingsService.peek()) && bundle.rfqSettings) {
+    RfqSettingsService.seed(bundle.rfqSettings, true);
+  }
+  if (Array.isArray(bundle.pageSlugs) && bundle.pageSlugs.length > 0) {
+    PageService.seedSlugs(bundle.pageSlugs, true);
+  }
+  if (Array.isArray(bundle.productSlugs) && bundle.productSlugs.length > 0) {
+    ProductService.seedSlugs(bundle.productSlugs, true);
+  }
+
+  localPreloadLoadedAt = now;
+  localPreloadBundleUpdatedAt = bundle.updatedAt || now;
+}
+
+/**
+ * Non-blocking SWR Background Heartbeat:
+ * Checks `cms:route_revs` (v integer) in the background via waitUntil.
+ * If remote ledger version changed, pulls `edge:preload:v1` and hot-swaps L1 caches without stalling user response.
+ */
+async function runHeartbeatSync(cfEnv?: any): Promise<void> {
+  if (isHeartbeatInFlight) return;
+  isHeartbeatInFlight = true;
+  const now = Date.now();
+  try {
+    const kvRaw = await kvGet<any>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
+    const heartbeatLedger = kvRaw && typeof kvRaw === 'object' ? normalizeLedger(kvRaw) : null;
+
+    if (
+      localRouteRevs &&
+      ((heartbeatLedger !== null && heartbeatLedger.v === localRouteRevs.v) ||
+        (heartbeatLedger === null && localRouteRevs.v === 0))
+    ) {
+      localPreloadLoadedAt = Date.now();
+      localRouteRevsLoadedAt = Date.now();
+      return;
+    }
+
+    const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
+    if (bundle && typeof bundle === 'object' && bundle.routeRevs && typeof bundle.routeRevs === 'object') {
+      hydrateFromPreloadBundle(bundle, now, heartbeatLedger);
+    } else if (heartbeatLedger) {
+      applyRouteRevisionsUpdate(heartbeatLedger, now);
+      localPreloadLoadedAt = Date.now();
+    }
+  } catch {
+    // Non-fatal background heartbeat error
+  } finally {
+    isHeartbeatInFlight = false;
+  }
+}
 
 /**
  * Cold-start single-KV preload: hydrates routeRevs, settings, WAF runtime, siteConfig, rfqSettings & slug guards in 1 KV read
@@ -221,92 +315,28 @@ export async function preloadEdgeIsolate(
     wafRuntimeCache.peek()
   );
 
-  let heartbeatLedger: RouteRevisionsLedger | null = null;
-
   if (!force && isL1Populated) {
     const heartbeatSec = settingsCache.peek()?.l1_heartbeat_interval_sec ?? 30;
     const syncIntervalMs = heartbeatSec <= 0 ? Infinity : Math.max(5, heartbeatSec) * 1000;
-    if (now - localPreloadLoadedAt < syncIntervalMs) {
-      return {
-        routeRevisions: localRouteRevs!,
-        wafSettings: settingsCache.peek(true),
-        wafRuntime: wafRuntimeCache.peek(true),
-        preloadStatus: 'L1_HIT',
-      };
-    }
-
-    // 30s heartbeat: O(1) integer comparison on RouteRevisionsLedger.v
-    const kvRaw = await kvGet<any>(ROUTE_REVS_KV_KEY, cfEnv).catch(() => null);
-    heartbeatLedger = kvRaw && typeof kvRaw === 'object' ? normalizeLedger(kvRaw) : null;
-    if (
-      (heartbeatLedger !== null && heartbeatLedger.v === localRouteRevs!.v) ||
-      (heartbeatLedger === null && localRouteRevs!.v === 0)
-    ) {
+    if (now - localPreloadLoadedAt >= syncIntervalMs) {
       localPreloadLoadedAt = now;
-      localRouteRevsLoadedAt = now;
-      return {
-        routeRevisions: localRouteRevs!,
-        wafSettings: settingsCache.peek(true),
-        wafRuntime: wafRuntimeCache.peek(true),
-        preloadStatus: 'L1_HIT',
-      };
+      runInBackground(runHeartbeatSync(cfEnv));
     }
+    return {
+      routeRevisions: localRouteRevs!,
+      wafSettings: settingsCache.peek(true),
+      wafRuntime: wafRuntimeCache.peek(true),
+      preloadStatus: 'L1_HIT',
+    };
   }
 
   const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
   if (bundle && typeof bundle === 'object' && bundle.routeRevs && typeof bundle.routeRevs === 'object') {
-    const bundleLedger = normalizeLedger(bundle.routeRevs);
-    const mergedLedger: RouteRevisionsLedger =
-      heartbeatLedger && heartbeatLedger.v >= bundleLedger.v
-        ? {
-            v: heartbeatLedger.v,
-            scopes: { ...bundleLedger.scopes, ...heartbeatLedger.scopes },
-            routes: { ...bundleLedger.routes, ...heartbeatLedger.routes },
-          }
-        : bundleLedger;
-    applyRouteRevisionsUpdate(mergedLedger, now);
-
-    const bundleChanged = bundle.updatedAt !== localPreloadBundleUpdatedAt;
-    if (
-      (bundleChanged || !settingsCache.peek()) &&
-      bundle.systemSettings &&
-      typeof bundle.systemSettings === 'object' &&
-      bundle.systemSettings.brand_name
-    ) {
-      settingsCache.seed({
-        ...DEFAULT_SYSTEM_SETTINGS,
-        ...bundle.systemSettings,
-        waf_rule_config: normalizeWafRuleConfig(bundle.systemSettings.waf_rule_config),
-      }, true);
-    }
-    if (
-      (bundleChanged || !wafRuntimeCache.peek()) &&
-      bundle.wafRuntime &&
-      Array.isArray(bundle.wafRuntime.rules) &&
-      Array.isArray(bundle.wafRuntime.ipAcl) &&
-      bundle.wafRuntime.rules.some((r: any) => r?.id === 'sys_legacy_cms_paths')
-    ) {
-      wafRuntimeCache.seed(bundle.wafRuntime, true);
-    }
-    if ((bundleChanged || !SiteConfigService.peek()) && bundle.siteConfig) {
-      SiteConfigService.seed(bundle.siteConfig, true);
-    }
-    if ((bundleChanged || !RfqSettingsService.peek()) && bundle.rfqSettings) {
-      RfqSettingsService.seed(bundle.rfqSettings, true);
-    }
-
-    if (Array.isArray(bundle.pageSlugs) && bundle.pageSlugs.length > 0) {
-      PageService.seedSlugs(bundle.pageSlugs, true);
-    }
-    if (Array.isArray(bundle.productSlugs) && bundle.productSlugs.length > 0) {
-      ProductService.seedSlugs(bundle.productSlugs, true);
-    }
+    hydrateFromPreloadBundle(bundle, now, null);
 
     const neededFallback = !settingsCache.peek() || !wafRuntimeCache.peek();
     const wafSettings = settingsCache.peek() ?? (await getSystemSettings(cfEnv).catch(() => null));
     const wafRuntime = wafRuntimeCache.peek() ?? (await getWafRuntime(cfEnv).catch(() => null));
-    localPreloadLoadedAt = now;
-    localPreloadBundleUpdatedAt = bundle.updatedAt || now;
     return {
       routeRevisions: localRouteRevs || { v: 0, scopes: {}, routes: {} },
       wafSettings,
@@ -374,8 +404,8 @@ export async function bumpRouteRevisions(
   localRouteRevs = updated;
   localRouteRevsLoadedAt = now;
   syncActiveCacheEpochs(updated.scopes);
-  await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => {});
-  await rebuildEdgePreloadBundle(cfEnv).catch(() => {});
+  await kvPut(ROUTE_REVS_KV_KEY, updated, undefined, cfEnv).catch(() => { });
+  await rebuildEdgePreloadBundle(cfEnv).catch(() => { });
   return updated;
 }
 
@@ -445,6 +475,7 @@ export interface CmsSyncResult extends CmsPurgeResult {
   docType?: string;
   slug?: string;
   refreshedTasks: string[];
+  warmedPaths?: string[];
 }
 
 /**
@@ -684,7 +715,7 @@ export async function purgeEdgeHtmlCache(params: {
             const zoneData: any = await zoneRes.json();
             if (zoneData?.result?.[0]?.id) {
               cfZoneId = zoneData.result[0].id;
-              await kvPut(zoneKey, cfZoneId, { expirationTtl: 604800 }, cfEnv).catch(() => {});
+              await kvPut(zoneKey, cfZoneId, { expirationTtl: 604800 }, cfEnv).catch(() => { });
             }
           }
         }
@@ -756,6 +787,65 @@ export async function purgeEdgeHtmlCache(params: {
     cloudflareMessage: cfMessage,
     diagnostics: cfDiagnostics,
   };
+}
+
+export const CRITICAL_WARMUP_ROUTES = ['/', '/products', '/about', '/private-label', '/contact'] as const;
+
+/**
+ * Automated background worker function that pre-warms critical application routes
+ * (L1/L2 core data + L0 Edge HTML Cache) via waitUntil / runInBackground.
+ */
+export function prewarmEdgeRoutes(params: {
+  targetPaths?: Iterable<string>;
+  origin: string;
+  cfEnv?: any;
+  includeCriticalRoutes?: boolean;
+  maxRoutes?: number;
+}): string[] {
+  const { targetPaths = [], origin, cfEnv, includeCriticalRoutes = true, maxRoutes = 8 } = params;
+  if (!origin || origin === 'null') return [];
+
+  const queue = new Set<string>();
+  if (includeCriticalRoutes) {
+    queue.add('/');
+    queue.add('/products');
+  }
+  for (const raw of targetPaths) {
+    if (!raw) continue;
+    const clean = raw.startsWith('/') ? raw : `/${raw}`;
+    queue.add(clean);
+  }
+  if (includeCriticalRoutes) {
+    for (const critical of CRITICAL_WARMUP_ROUTES) {
+      queue.add(critical);
+    }
+  }
+
+  const warmPaths = Array.from(queue).slice(0, maxRoutes);
+  if (warmPaths.length === 0) return [];
+
+  runInBackground(
+    (async () => {
+      await Promise.allSettled([
+        PageService.getHomePage(false, cfEnv),
+        ProductService.getAll(false, cfEnv),
+      ]);
+      await Promise.allSettled(
+        warmPaths.map((p) =>
+          fetch(`${origin}${p}`, {
+            method: 'GET',
+            headers: {
+              'User-Agent': 'Cloudflare-Edge-Warmup/1.0',
+              'Accept': 'text/html',
+            },
+            signal: AbortSignal.timeout(6000),
+          })
+        )
+      );
+    })()
+  );
+
+  return warmPaths;
 }
 
 /**
@@ -1043,7 +1133,7 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
         : docType === 'page'
           ? ['pages']
           : ['config', 'products', 'pages'];
-  await bumpRouteRevisions(collectedPaths, isGlobalLayout, cfEnv, affectedScopes).catch(() => {});
+  await bumpRouteRevisions(collectedPaths, isGlobalLayout, cfEnv, affectedScopes).catch(() => { });
 
   // Execute Edge HTML Cache & Cloudflare CDN purge
   const purgeResult = await purgeEdgeHtmlCache({
@@ -1068,6 +1158,10 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
       )
     );
   }
+  // Background Edge Warmup (Purge & Instant Re-warm via waitUntil / runInBackground)
+  const warmedPaths = !isDelete
+    ? prewarmEdgeRoutes({ targetPaths: collectedPaths, origin, cfEnv })
+    : [];
 
   return {
     success: true,
@@ -1075,6 +1169,7 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
     docType,
     slug: slug || undefined,
     refreshedTasks: taskDescriptions,
+    warmedPaths,
     ...purgeResult,
   };
 }

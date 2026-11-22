@@ -6,7 +6,7 @@ import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, updateSystemSettings } from
 import { SecurityService, sanitizeAdminSettings, isMaskedSecret, SECRET_SETTING_KEYS } from '@utils/security';
 import { dispatchWebhookMessage } from '@utils/webhook';
 import { isValidStorefrontTheme, VALID_STOREFRONT_THEMES } from '@config/storefrontThemes';
-import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache } from '@utils/cmsSync';
+import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache, prewarmEdgeRoutes } from '@utils/cmsSync';
 import { env as cfEnv } from 'cloudflare:workers';
 
 export const prerender = false;
@@ -210,13 +210,15 @@ export const POST: APIRoute = async ({ request }) => {
       const targetPaths = ['/', '/products', '/about', '/private-label', '/contact'];
       const prevRevs = await getRouteRevisions(cfEnv).catch(() => ({}));
       await bumpRouteRevisions(targetPaths, true, cfEnv, ['settings', 'config']).catch(() => {});
+      const origin = new URL(request.url).origin;
       await purgeEdgeHtmlCache({
         targetPaths,
-        origin: new URL(request.url).origin,
+        origin,
         cfEnv,
         prevRevs,
         purgeEverything: 'storefront_theme' in updates,
       }).catch(() => {});
+      prewarmEdgeRoutes({ targetPaths, origin, cfEnv });
     }
 
     const refreshedSettings = await getSystemSettings(cfEnv);

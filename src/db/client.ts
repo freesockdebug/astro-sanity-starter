@@ -463,6 +463,81 @@ function getLocalSQLiteAdapter(rawDb: any): SQLiteClientAdapter {
   return localSQLiteAdapterInstance;
 }
 
+const READ_ONLY_SELECT_RE = /^\s*SELECT\b/i;
+
+function buildSqlDedupKey(op: 'query' | 'first', sql: string, params?: any[]): string {
+  if (!params || params.length === 0) return `${op}:${sql}`;
+  try {
+    return `${op}:${sql}\0${JSON.stringify(params)}`;
+  } catch {
+    return `${op}:${sql}\0${String(params)}`;
+  }
+}
+
+/**
+ * Request-scoped database client wrapper that collapses concurrent identical
+ * read-only SELECT queries within the same Request context into a single pending Promise.
+ */
+export class RequestDeduplicatingDbClient implements DbClient {
+  private readonly inFlightReads = new Map<string, Promise<any>>();
+
+  constructor(private readonly inner: DbClient) {}
+
+  get isD1(): boolean {
+    return this.inner.isD1;
+  }
+
+  get dialect(): DbDialect {
+    return this.inner.dialect;
+  }
+
+  get raw(): any {
+    return this.inner.raw;
+  }
+
+  async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+    if (!READ_ONLY_SELECT_RE.test(sql)) {
+      return this.inner.query<T>(sql, params);
+    }
+    const key = buildSqlDedupKey('query', sql, params);
+    let pending = this.inFlightReads.get(key) as Promise<T[]> | undefined;
+    if (!pending) {
+      pending = this.inner.query<T>(sql, params).finally(() => {
+        this.inFlightReads.delete(key);
+      });
+      this.inFlightReads.set(key, pending);
+    }
+    const rows = await pending;
+    return Array.isArray(rows) ? rows.slice() : rows;
+  }
+
+  async first<T = any>(sql: string, params: any[] = []): Promise<T | null> {
+    if (!READ_ONLY_SELECT_RE.test(sql)) {
+      return this.inner.first<T>(sql, params);
+    }
+    const key = buildSqlDedupKey('first', sql, params);
+    let pending = this.inFlightReads.get(key) as Promise<T | null> | undefined;
+    if (!pending) {
+      pending = this.inner.first<T>(sql, params).finally(() => {
+        this.inFlightReads.delete(key);
+      });
+      this.inFlightReads.set(key, pending);
+    }
+    const row = await pending;
+    return row && typeof row === 'object' ? { ...row } : row;
+  }
+
+  async execute(sql: string, params: any[] = []): Promise<{ changes: number; lastInsertId?: number | string }> {
+    this.inFlightReads.clear();
+    return this.inner.execute(sql, params);
+  }
+
+  async batch(operations: { sql: string; params?: any[] }[]): Promise<void> {
+    this.inFlightReads.clear();
+    return this.inner.batch(operations);
+  }
+}
+
 export async function getDb(): Promise<DbClient> {
   const cfEnv = await getCfEnv();
   const mode = resolveDbProviderMode(cfEnv);
@@ -475,7 +550,9 @@ export async function getDb(): Promise<DbClient> {
     if (pgUrl) {
       if (activeProfiler) {
         if (!activeProfiler._pgClient) {
-          activeProfiler._pgClient = createPostgresAdapter(pgUrl, isWorkerRuntime);
+          activeProfiler._pgClient = new RequestDeduplicatingDbClient(
+            createPostgresAdapter(pgUrl, isWorkerRuntime)
+          );
         }
         return activeProfiler._pgClient;
       }
@@ -488,13 +565,22 @@ export async function getDb(): Promise<DbClient> {
     // If running in an active request with Profiler context, reuse the D1ClientAdapter so all queries in the same request share the same D1 session bookmark (Read-Your-Writes)
     if (activeProfiler) {
       if (!activeProfiler._d1Client) {
-        activeProfiler._d1Client = new D1ClientAdapter(runtimeD1);
+        activeProfiler._d1Client = new RequestDeduplicatingDbClient(
+          new D1ClientAdapter(runtimeD1)
+        );
       }
       return activeProfiler._d1Client;
     }
     return new D1ClientAdapter(runtimeD1);
   }
   const localDb = getLocalNodeDb();
-  return getLocalSQLiteAdapter(localDb);
+  const adapter = getLocalSQLiteAdapter(localDb);
+  if (activeProfiler) {
+    if (!activeProfiler._sqliteClient) {
+      activeProfiler._sqliteClient = new RequestDeduplicatingDbClient(adapter);
+    }
+    return activeProfiler._sqliteClient;
+  }
+  return adapter;
 }
 

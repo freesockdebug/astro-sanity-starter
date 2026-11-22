@@ -1229,6 +1229,7 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     assert.equal(hbUnchanged.preloadStatus, 'L1_HIT');
     assert.equal(settingsCache.getMetricsSnapshot('settings').l2Hits, l2BeforeHeartbeat);
     assert.equal(settingsCache.getMetricsSnapshot('settings').l1Hits, l1BeforeHeartbeat + 1);
+    await new Promise((r) => setTimeout(r, 20));
 
     // Simulate another Isolate writing a new routeRev + updated preload bundle to KV
     fakeNow += 31_000;
@@ -1248,8 +1249,11 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     }));
 
     const hbChanged = await preloadEdgeIsolate(mockEnv);
-    assert.equal(hbChanged.preloadStatus, 'L2_KV_HIT');
-    assert.equal(hbChanged.wafSettings?.brand_name, 'REMOTE_ISOLATE_BRAND');
+    assert.equal(hbChanged.preloadStatus, 'L1_HIT');
+    await new Promise((r) => setTimeout(r, 20));
+    const hbAfterSwr = await preloadEdgeIsolate(mockEnv);
+    assert.equal(hbAfterSwr.preloadStatus, 'L1_HIT');
+    assert.equal(hbAfterSwr.wafSettings?.brand_name, 'REMOTE_ISOLATE_BRAND');
 
     // Targeted scope invalidation: bumping ONLY `pages` scope must invalidate PageService, NOT ProductService or SiteConfigService
     fakeNow += 31_000;
@@ -1260,7 +1264,8 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     };
     kvStore.set('cms:route_revs', JSON.stringify(pagesOnlyLedger));
     const hbPagesOnly = await preloadEdgeIsolate(mockEnv);
-    assert.equal(hbPagesOnly.preloadStatus, 'L2_KV_HIT');
+    assert.equal(hbPagesOnly.preloadStatus, 'L1_HIT');
+    await new Promise((r) => setTimeout(r, 20));
     assert.equal(SiteConfigService.peek()?.edgeCacheTtl, 600);
     assert.deepEqual(ProductService.getCachedSlugs(), ['silk-slip-001', 'cotton-robe-002']);
 
@@ -1309,4 +1314,78 @@ test('RequestProfiler + recordUrlCacheStats tracks per-URL L1/L2/L3 triggers acc
 
   resetGlobalCacheStats();
   assert.equal(getGlobalCacheStatsSnapshot().urlStats.length, 0);
+});
+
+test('prewarmEdgeRoutes prioritizes critical routes and respects maxRoutes', async () => {
+  const { prewarmEdgeRoutes } = await import('../src/utils/cmsSync.js');
+  const origFetch = globalThis.fetch;
+  const fetched: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    fetched.push(String(input));
+    return new Response('ok', { status: 200 });
+  }) as any;
+  try {
+    const paths = Array.from({ length: 10 }, (_, i) => `/products/item-${i}`);
+    const warmed = prewarmEdgeRoutes({ targetPaths: paths, origin: 'https://example.com', maxRoutes: 6 });
+    assert.equal(warmed.length, 6);
+    assert.equal(warmed[0], '/');
+    assert.equal(warmed[1], '/products');
+    assert.equal(warmed[2], '/products/item-0');
+  } finally {
+    await new Promise((r) => setTimeout(r, 20));
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('RequestDeduplicatingDbClient collapses concurrent SELECTs and preserves Read-Your-Writes', async () => {
+  const { RequestDeduplicatingDbClient } = await import('../src/db/client.js');
+  let queryCalls = 0;
+  let firstCalls = 0;
+  let version = 1;
+
+  const client = new RequestDeduplicatingDbClient({
+    isD1: false,
+    dialect: 'sqlite',
+    raw: null,
+    query: async <T>() => {
+      queryCalls += 1;
+      await new Promise((r) => setTimeout(r, 10));
+      return [{ id: 2 }, { id: 1 }] as unknown as T[];
+    },
+    first: async <T>() => {
+      firstCalls += 1;
+      await new Promise((r) => setTimeout(r, 10));
+      return { v: version } as unknown as T;
+    },
+    execute: async () => {
+      version += 1;
+      return { changes: 1 };
+    },
+    batch: async () => {
+      version += 1;
+    },
+  });
+
+  // Concurrent identical SELECTs collapse into 1 DB call and isolate array mutations
+  const [a, b] = await Promise.all([
+    client.query<{ id: number }>('SELECT id FROM orders WHERE status = ?', ['PENDING']),
+    client.query<{ id: number }>('SELECT id FROM orders WHERE status = ?', ['PENDING']),
+  ]);
+  assert.equal(queryCalls, 1);
+  a.pop();
+  assert.equal(a.length, 1);
+  assert.equal(b.length, 2);
+
+  // Concurrent first() collapses and preserves Read-Your-Writes across execute()
+  const p1 = client.first<{ v: number }>('SELECT v FROM settings WHERE id = ?', [1]);
+  const p2 = client.first<{ v: number }>('SELECT v FROM settings WHERE id = ?', [1]);
+  const [r1, r2] = await Promise.all([p1, p2]);
+  assert.equal(firstCalls, 1);
+  assert.equal(r1?.v, 1);
+  assert.equal(r2?.v, 1);
+
+  await client.execute('UPDATE settings SET v = 2 WHERE id = ?', [1]);
+  const r3 = await client.first<{ v: number }>('SELECT v FROM settings WHERE id = ?', [1]);
+  assert.equal(firstCalls, 2);
+  assert.equal(r3?.v, 2);
 });

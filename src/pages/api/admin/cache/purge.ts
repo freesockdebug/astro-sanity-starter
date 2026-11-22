@@ -17,7 +17,7 @@ import {
   purgeLegacyEpochKvKeys,
 } from '@utils/cache';
 import { recordAdminAudit } from '@db/audit.repo';
-import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache, rebuildEdgePreloadBundle, type CacheLedgerScope } from '@utils/cmsSync';
+import { getRouteRevisions, bumpRouteRevisions, purgeEdgeHtmlCache, rebuildEdgePreloadBundle, prewarmEdgeRoutes, type CacheLedgerScope } from '@utils/cmsSync';
 
 export const prerender = false;
 
@@ -140,7 +140,8 @@ export const POST: APIRoute = defineAdminApi(
           cfEnv,
           prevRevs,
         }).catch(() => null);
-        purgedItems.push('Worker Edge HTML Cache (core routes bumped)');
+        const warmed = prewarmEdgeRoutes({ targetPaths: corePaths, origin: new URL(request.url).origin, cfEnv });
+        purgedItems.push(`Worker Edge HTML Cache (core routes bumped, prewarmed ${warmed.length} routes)`);
       } else {
         const ok = await purgeSingleCacheByName(targetCacheName, cfEnv);
         if (!ok) {
@@ -235,6 +236,14 @@ export const POST: APIRoute = defineAdminApi(
         }
         if (purgeRes?.cdnPurged) {
           purgedItems.push('Cloudflare Global CDN Zone Cache purged');
+        }
+        const warmed = prewarmEdgeRoutes({
+          targetPaths: edgePaths,
+          origin: new URL(request.url).origin,
+          cfEnv,
+        });
+        if (warmed.length > 0) {
+          purgedItems.push(`Background prewarmed ${warmed.length} routes (${warmed.slice(0, 3).join(', ')}...)`);
         }
       }
     }
