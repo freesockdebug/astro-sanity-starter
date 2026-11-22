@@ -94,6 +94,29 @@ body {
   }
 }
 
+/* Pin StoreNav & Breadcrumbs above view-transition stages so they never flicker or disappear */
+header.apple-nav {
+  view-transition-name: site-header;
+}
+
+nav.breadcrumbs-bar {
+  view-transition-name: site-breadcrumbs;
+}
+
+::view-transition-group(site-header),
+::view-transition-group(site-breadcrumbs) {
+  z-index: 100;
+  animation: none;
+}
+
+::view-transition-old(site-header),
+::view-transition-new(site-header),
+::view-transition-old(site-breadcrumbs),
+::view-transition-new(site-breadcrumbs) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 #shell-main-canvas {
   view-transition-name: shell-canvas;
 }

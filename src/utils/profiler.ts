@@ -11,6 +11,7 @@ export class RequestProfiler {
   private spans = new Map<string, number>();
   private activeSpans = new Map<string, number>();
   private cacheTiers = { l1: 0, l2: 0, l3: 0 };
+  public readonly requestMemo = new Map<string, Promise<any>>();
   public readonly startTotal: number = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
   recordCacheTier(tier: 'l1' | 'l2' | 'l3'): void {

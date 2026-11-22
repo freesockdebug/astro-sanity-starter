@@ -59,6 +59,21 @@ function scheduleIdle(task: () => void, timeout = 600): void {
   }
 }
 
+function hydrateLazyImage(el: Element): void {
+  const img = (
+    el.tagName === 'IMG' ? el : el.querySelector('img[data-src], img[data-srcset]')
+  ) as HTMLImageElement | null;
+  if (!img) return;
+  if (img.dataset.srcset) {
+    img.srcset = img.dataset.srcset;
+    delete img.dataset.srcset;
+  }
+  if (img.dataset.src) {
+    img.src = img.dataset.src;
+    delete img.dataset.src;
+  }
+}
+
 function getSharedObserver(
   rootMargin: string,
   threshold: number,
@@ -86,9 +101,10 @@ function getSharedObserver(
           continue;
         }
 
-        // 进入视口激活流光，离开视口立即移除以卸载离屏 GPU 图层
+        // 进入视口激活流光并触发 data-src/data-srcset 懒加载，离开视口立即移除以卸载离屏 GPU 图层
         if (entry.isIntersecting) {
           el.classList.add(activeClass);
+          hydrateLazyImage(el);
         } else {
           el.classList.remove(activeClass);
         }
@@ -163,8 +179,9 @@ export function useIntersectionShimmer(
       if (observer) {
         observer.observe(el);
       } else {
-        // 不支持 IntersectionObserver 的旧环境降级直接激活
+        // 不支持 IntersectionObserver 的旧环境降级直接激活并加载图片
         el.classList.add(activeClass);
+        hydrateLazyImage(el);
       }
     }
   };
@@ -212,3 +229,5 @@ export function useIntersectionShimmer(
     disconnect,
   };
 }
+
+export { useIntersectionShimmer as useIntersectionObserver };

@@ -1,6 +1,7 @@
 import { getSanityClient } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
 import { createCmsCache } from '@utils/cache';
+import { getActiveProfiler } from '@utils/profiler';
 import { IMAGE } from './blocks';
 import type { SiteConfig } from 'types';
 
@@ -50,6 +51,17 @@ export class SiteConfigService {
   }
 
   public static async getConfig(forceRefresh = false): Promise<SiteConfig | null> {
+    if (!forceRefresh) {
+      const profiler = getActiveProfiler();
+      if (profiler) {
+        let pending = profiler.requestMemo.get('siteConfig');
+        if (!pending) {
+          pending = configCache.get(false);
+          profiler.requestMemo.set('siteConfig', pending);
+        }
+        return pending;
+      }
+    }
     return configCache.get(forceRefresh);
   }
 

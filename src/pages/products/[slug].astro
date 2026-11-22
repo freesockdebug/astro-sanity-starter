@@ -907,7 +907,6 @@ const productStructuredData: Record<string, any> = {
           if (mouseEvent.metaKey || mouseEvent.ctrlKey || mouseEvent.shiftKey || mouseEvent.altKey) return;
           const dir = link.getAttribute('data-pdp-dir') || 'next';
           document.documentElement.setAttribute('data-pdp-nav-dir', dir);
-          pdpLiveContent?.classList.add('pdp-is-transitioning');
         });
       });
 

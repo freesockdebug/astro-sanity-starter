@@ -1143,21 +1143,6 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
     isDebug,
   });
 
-  // Background Edge Warmup (Purge & Warm via waitUntil / runInBackground)
-  if (!isDelete && collectedPaths.size > 0) {
-    const warmPaths = Array.from(collectedPaths).slice(0, 5);
-    runInBackground(
-      Promise.allSettled(
-        warmPaths.map((p) =>
-          fetch(`${origin}${p.startsWith('/') ? p : `/${p}`}`, {
-            method: 'GET',
-            headers: { 'User-Agent': 'Cloudflare-Edge-Warmup/1.0' },
-            signal: AbortSignal.timeout(6000),
-          })
-        )
-      )
-    );
-  }
   // Background Edge Warmup (Purge & Instant Re-warm via waitUntil / runInBackground)
   const warmedPaths = !isDelete
     ? prewarmEdgeRoutes({ targetPaths: collectedPaths, origin, cfEnv })

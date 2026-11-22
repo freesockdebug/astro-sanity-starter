@@ -1,5 +1,6 @@
 import { getSanityClient } from '@utils/sanity-client';
 import { createCmsCache } from '@utils/cache';
+import { getActiveProfiler } from '@utils/profiler';
 import { DEFAULT_RFQ } from './defaults';
 import type { RfqSettings } from 'types';
 
@@ -63,6 +64,17 @@ export class RfqSettingsService {
   }
 
   public static async getSettings(forceRefresh = false): Promise<RfqSettings> {
+    if (!forceRefresh) {
+      const profiler = getActiveProfiler();
+      if (profiler) {
+        let pending = profiler.requestMemo.get('rfqSettings');
+        if (!pending) {
+          pending = rfqCache.get(false);
+          profiler.requestMemo.set('rfqSettings', pending);
+        }
+        return pending;
+      }
+    }
     return rfqCache.get(forceRefresh);
   }
 
