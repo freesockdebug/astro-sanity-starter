@@ -271,14 +271,15 @@ const legalLinks = rawLegalLinks.map((l: any) => {
   /* Back-to-Top Dock Button - Perfectly aligned on the right flank with StageNavigator */
   .btn-back-to-top-dock {
     position: fixed;
-    bottom: max(1.25rem, env(safe-area-inset-bottom));
+    bottom: var(--apple-dock-bottom);
     right: max(0.75rem, env(safe-area-inset-right)); /* Safe dock on mobile/narrow screens */
+    transition: bottom 300ms ease-out;
   }
 
   /* Desktop Screens (1024px+): Default fallback right margin (exact center axis) before JS dynamic centering */
   @media (min-width: 1024px) {
     .btn-back-to-top-dock {
-      right: max(1rem, calc((100vw - 1360px) / 4 - 22px));
+      right: max(0.5rem, calc((100vw - 1360px) / 4 - 22px));
       left: auto;
     }
   }

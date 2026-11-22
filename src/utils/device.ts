@@ -83,14 +83,13 @@ export function getClientScreenInfo(): ClientScreenInfo {
 
   const remainingRight = clientWidth - blockRight;
 
-  // On desktop (width >= 1024px) with reasonable gutter (>= 48px)
-  if (isDesktop && remainingRight >= 48) {
+  // On desktop (width >= 1024px) with at least 28px right gutter
+  if (isDesktop && remainingRight >= 28) {
     const naturalCenterX = Math.round(blockRight + remainingRight / 2);
 
-    // Safe edge clamping: ensure the widest component (Top button, 44px width)
-    // always retains at least 16px clearance from viewport right edge
+    // Fluid edge clamping: scales margin smoothly from 6px on 1280px laptops up to 16px on wide monitors
     const maxCompHalfWidth = 22; // 44px / 2
-    const minRightMargin = 16;
+    const minRightMargin = Math.min(16, Math.max(6, Math.floor((remainingRight - 24) / 2)));
     const maxAllowedCenterX = clientWidth - minRightMargin - maxCompHalfWidth;
     const safeCenterX = Math.min(naturalCenterX, maxAllowedCenterX);
 

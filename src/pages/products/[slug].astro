@@ -405,7 +405,7 @@ const productStructuredData: Record<string, any> = {
                 </div>
 
                 <!-- Minimal Counter Badge -->
-                <div class="absolute bottom-3 right-3 sm:bottom-3.5 sm:right-3.5 z-20 px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-widest bg-stone-900/55 backdrop-blur-md text-stone-100">
+                <div class={`${currentProduct.gallery.length > 1 ? 'hidden sm:block ' : ''}absolute bottom-3 right-3 sm:bottom-3.5 sm:right-3.5 z-20 px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-widest bg-stone-900/55 backdrop-blur-md text-stone-100`}>
                   <span id="carousel-counter-curr">1</span> / <span id="carousel-counter-total">{currentProduct.gallery.length}</span>
                 </div>
 

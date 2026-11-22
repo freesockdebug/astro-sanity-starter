@@ -40,6 +40,7 @@
   --apple-header-offset: calc(var(--apple-nav-h) + var(--apple-breadcrumbs-h));
   --apple-flow-buffer: clamp(0.625rem, min(0.65rem + 1vw, 2.4svh), 2rem);
   --apple-page-top: calc(var(--apple-header-offset) + var(--apple-flow-buffer));
+  --apple-dock-bottom: max(1.25rem, env(safe-area-inset-bottom));
 
   /* Fluid Rails */
   --rail-gutter: clamp(1rem, 0.25rem + 2.25vw, 3.5rem);
@@ -58,6 +59,12 @@
 
 html:has(.breadcrumbs-bar) {
   --apple-breadcrumbs-h: 36px;
+}
+
+@media (max-width: 767px) {
+  html:has(#pdp-mobile-sticky-bar.translate-y-0) {
+    --apple-dock-bottom: calc(max(1.25rem, env(safe-area-inset-bottom)) + 4rem);
+  }
 }
 
 .page-top-clearance,

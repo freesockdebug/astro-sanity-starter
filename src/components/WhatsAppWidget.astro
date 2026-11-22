@@ -25,7 +25,7 @@ const chatUrl = cleanPhone
 {cleanPhone && (
   <aside 
     id="whatsapp-chat-widget" 
-    class="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-[max(1.25rem,env(safe-area-inset-left))] sm:bottom-6 sm:left-6 z-40 group select-none"
+    class="fixed bottom-[var(--apple-dock-bottom)] sm:bottom-6 left-[max(1.25rem,env(safe-area-inset-left))] sm:left-6 z-40 group select-none transition-[bottom] duration-300 ease-out"
     aria-label="WhatsApp Instant Communication"
   >
     <a

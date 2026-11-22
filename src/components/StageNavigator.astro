@@ -125,7 +125,7 @@ const { stages = defaultStages } = Astro.props;
   /* Desktop Screens (1024px+): Default fallback right margin (exact center axis) before JS dynamic centering */
   @media (min-width: 1024px) {
     .apple-stage-nav-dock {
-      right: max(1rem, calc((100vw - 1360px) / 4 - 14px));
+      right: max(0.5rem, calc((100vw - 1360px) / 4 - 14px));
       left: auto;
     }
   }
