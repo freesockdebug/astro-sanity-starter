@@ -479,6 +479,7 @@ export interface ListErrorLogsOptions {
   sort?: 'newest' | 'slowest';
   limit?: number;
   page?: number;
+  includeOverview?: boolean;
 }
 
 /**
@@ -577,6 +578,7 @@ export async function listErrorLogs(
         ? '30d'
         : '7d';
 
+      const needOverview = options.includeOverview !== false;
       const [logs, countRes, overviewRes] = await Promise.all([
         db.query<ErrorLogRecord>(
           `SELECT id, level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, hit_count, created_at
@@ -586,17 +588,19 @@ export async function listErrorLogs(
            LIMIT ? OFFSET ?`,
           [...params, limit, offset]
         ),
-        db.first<{ count: number }>(
-          `SELECT COUNT(*) as count FROM system_error_logs ${whereClause}`,
-          params
-        ),
-        logsOverviewCache.get(bottleneckWindowKey),
+        needOverview
+          ? db.first<{ count: number }>(
+              `SELECT COUNT(*) as count FROM system_error_logs ${whereClause}`,
+              params
+            )
+          : Promise.resolve(null),
+        needOverview ? logsOverviewCache.get(bottleneckWindowKey) : Promise.resolve(null),
       ]);
       const overview = overviewRes || EMPTY_LOGS_OVERVIEW;
 
       return {
         logs: logs || [],
-        total: countRes?.count || 0,
+        total: countRes?.count ?? (logs?.length || 0),
         stats: overview.stats,
         bottlenecks: overview.bottlenecks,
       };

@@ -44,6 +44,8 @@ function parseJsonSafe<T>(jsonStr: any, fallback: T): T {
 const dictGroupsCache = createTieredCache<SysDictGroup[]>({
   name: 'dict_groups',
   scope: 'dicts',
+  kvKey: 'dicts:groups:v1',
+  epochKey: '__dicts',
   ttlMs: Infinity,
   fallbackRaw: [],
   fetchRaw: () =>
@@ -80,7 +82,7 @@ const dictGroupsCache = createTieredCache<SysDictGroup[]>({
 });
 
 export function invalidateDictGroupsCache(): void {
-  dictGroupsCache.invalidate();
+  void dictGroupsCache.evict();
 }
 
 /**

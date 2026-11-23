@@ -38,7 +38,7 @@ const canManage = hasPermission(adminContext, 'waf:manage');
 const settings = systemSettings || (await getSystemSettings(cfEnv));
 
 const [recentLogsRes, daySummary, dbRules, ipAcl] = await Promise.all([
-  listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1 }, cfEnv).catch(() => ({
+  listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1, includeOverview: false }, cfEnv).catch(() => ({
     logs: [],
     total: 0,
     stats: { total: 0, debug: 0, info: 0, warns: 0, errors: 0, critical: 0, slow: 0 },

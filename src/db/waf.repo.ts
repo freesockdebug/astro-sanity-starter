@@ -230,6 +230,14 @@ export async function listWafRules(customEnv?: any): Promise<WafDbRule[]> {
 }
 
 export async function listWafIpAcl(customEnv?: any, includeExpired = false): Promise<WafDbIpAcl[]> {
+  if (!includeExpired) {
+    await getWafRuntime(customEnv);
+    const raw = wafRuntimeCache.peekRaw();
+    if (raw?.ipAcl) {
+      const nowSql = formatUtcSqlTimestamp(Date.now());
+      return raw.ipAcl.filter((r) => !r.expires_at || r.expires_at > nowSql);
+    }
+  }
   return executeWithAutoSchema(async (db: DbClient) => {
     await ensureWafSeededAndMigrated(db);
     if (includeExpired) {
