@@ -1226,7 +1226,7 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     const l2BeforeHeartbeat = settingsCache.getMetricsSnapshot('settings').l2Hits;
     const l1BeforeHeartbeat = settingsCache.getMetricsSnapshot('settings').l1Hits;
     const hbUnchanged = await preloadEdgeIsolate(mockEnv);
-    assert.equal(hbUnchanged.preloadStatus, 'L1_HIT');
+    assert.equal(hbUnchanged.preloadStatus, 'L1_HIT_SWR');
     assert.equal(settingsCache.getMetricsSnapshot('settings').l2Hits, l2BeforeHeartbeat);
     assert.equal(settingsCache.getMetricsSnapshot('settings').l1Hits, l1BeforeHeartbeat + 1);
     await new Promise((r) => setTimeout(r, 20));
@@ -1249,7 +1249,7 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     }));
 
     const hbChanged = await preloadEdgeIsolate(mockEnv);
-    assert.equal(hbChanged.preloadStatus, 'L1_HIT');
+    assert.equal(hbChanged.preloadStatus, 'L1_HIT_SWR');
     await new Promise((r) => setTimeout(r, 20));
     const hbAfterSwr = await preloadEdgeIsolate(mockEnv);
     assert.equal(hbAfterSwr.preloadStatus, 'L1_HIT');
@@ -1264,15 +1264,15 @@ test('rebuildEdgePreloadBundle & preloadEdgeIsolate hydrate all L1 caches in 1 K
     };
     kvStore.set('cms:route_revs', JSON.stringify(pagesOnlyLedger));
     const hbPagesOnly = await preloadEdgeIsolate(mockEnv);
-    assert.equal(hbPagesOnly.preloadStatus, 'L1_HIT');
+    assert.equal(hbPagesOnly.preloadStatus, 'L1_HIT_SWR');
     await new Promise((r) => setTimeout(r, 20));
     assert.equal(SiteConfigService.peek()?.edgeCacheTtl, 600);
     assert.deepEqual(ProductService.getCachedSlugs(), ['silk-slip-001', 'cotton-robe-002']);
 
-    // Steady heartbeat after ledger sync stays L1_HIT
+    // Steady heartbeat after ledger sync stays L1_HIT_SWR
     fakeNow += 31_000;
     const hbDictsSteady = await preloadEdgeIsolate(mockEnv);
-    assert.equal(hbDictsSteady.preloadStatus, 'L1_HIT');
+    assert.equal(hbDictsSteady.preloadStatus, 'L1_HIT_SWR');
   } finally {
     Date.now = origNow;
   }
@@ -1447,7 +1447,7 @@ test('preloadEdgeIsolate hydrates cold Isolate from colo-shared L0 cache with 0 
     settingsCache.invalidate();
     wafRuntimeCache.invalidate();
     const res2 = await preloadEdgeIsolate(mockEnv, false);
-    assert.equal(res2.preloadStatus, 'L1_HIT');
+    assert.equal(res2.preloadStatus, 'L0_PRELOAD_HIT');
     assert.equal(res2.wafSettings?.brand_name, 'L0_SHARED_BRAND');
     assert.equal(preloadKvGets, 1);
 

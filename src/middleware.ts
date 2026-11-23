@@ -387,6 +387,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 query: safeQuery,
                 ...(colo ? { colo } : {}),
                 isolateId: currentIsolateId,
+                preload: preloadStatusHeader,
                 ...(edgeCache ? { edgeCache } : {}),
               },
             },
@@ -414,6 +415,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 query: safeQuery,
                 ...(colo ? { colo } : {}),
                 isolateId: currentIsolateId,
+                preload: preloadStatusHeader,
                 ...(edgeCache ? { edgeCache } : {}),
               },
             },
@@ -697,8 +699,9 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
         recordEdgeHtmlCacheResult('HIT', pathname);
+        const hitLabel = (context.locals as any)?.preloadStatus === 'OPTIMISTIC_SWR' ? 'HIT_OPTIMISTIC' : 'HIT';
         let hitResponse = new Response(cachedResponse.body, cachedResponse);
-        hitResponse = safeSetHeader(hitResponse, 'X-Edge-Cache', 'HIT');
+        hitResponse = safeSetHeader(hitResponse, 'X-Edge-Cache', hitLabel);
         return hitResponse;
       }
     } catch (err) {

@@ -250,7 +250,13 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
   }
 }
 
-export type PreloadStatus = 'L1_HIT' | 'L2_KV_HIT' | 'L3_MISS' | 'OPTIMISTIC_SWR';
+export type PreloadStatus =
+  | 'L1_HIT'
+  | 'L1_HIT_SWR'
+  | 'L0_PRELOAD_HIT'
+  | 'OPTIMISTIC_SWR'
+  | 'L2_KV_HIT'
+  | 'L3_MISS';
 
 let isHeartbeatInFlight = false;
 
@@ -409,7 +415,8 @@ export async function preloadEdgeIsolate(
   if (!force && isL1Populated) {
     const heartbeatSec = settingsCache.peek()?.l1_heartbeat_interval_sec ?? 30;
     const syncIntervalMs = heartbeatSec <= 0 ? Infinity : Math.max(5, heartbeatSec) * 1000;
-    if (now - localPreloadLoadedAt >= syncIntervalMs) {
+    const needsSync = now - localPreloadLoadedAt >= syncIntervalMs;
+    if (needsSync) {
       localPreloadLoadedAt = now;
       runInBackground(runHeartbeatSync(cfEnv));
     }
@@ -417,7 +424,7 @@ export async function preloadEdgeIsolate(
       routeRevisions: localRouteRevs!,
       wafSettings: settingsCache.peek(true),
       wafRuntime: wafRuntimeCache.peek(true),
-      preloadStatus: 'L1_HIT',
+      preloadStatus: needsSync ? 'L1_HIT_SWR' : 'L1_HIT',
     };
   }
 
@@ -434,7 +441,7 @@ export async function preloadEdgeIsolate(
           routeRevisions: localRouteRevs || { v: 0, scopes: {}, routes: {} },
           wafSettings,
           wafRuntime,
-          preloadStatus: 'L1_HIT',
+          preloadStatus: 'L0_PRELOAD_HIT',
         };
       }
     }
