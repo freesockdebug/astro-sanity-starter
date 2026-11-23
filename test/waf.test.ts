@@ -1458,7 +1458,7 @@ test('preloadEdgeIsolate hydrates cold Isolate from colo-shared L0 cache with 0 
     l0Store.clear();
     const res3 = await preloadEdgeIsolate(mockEnv, false, true);
     assert.equal(res3.preloadStatus, 'OPTIMISTIC_SWR');
-    assert.equal(res3.wafSettings, null);
+    assert.equal(res3.wafSettings?.brand_name, DEFAULT_SYSTEM_SETTINGS.brand_name);
     await new Promise((r) => setTimeout(r, 20));
     assert.equal(preloadKvGets, 2);
     assert.equal(settingsCache.peek()?.brand_name, 'L0_SHARED_BRAND');

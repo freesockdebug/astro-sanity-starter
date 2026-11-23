@@ -353,7 +353,14 @@ async function runHeartbeatSync(cfEnv?: any): Promise<void> {
   }
 }
 
-async function hydratePreloadFromKv(
+let inFlightHydratePromise: Promise<{
+  routeRevisions: RouteRevisionsLedger;
+  wafSettings: SystemSettings | null;
+  wafRuntime: CompiledWafRuntime | null;
+  preloadStatus: PreloadStatus;
+}> | null = null;
+
+function hydratePreloadFromKv(
   cfEnv: any,
   now: number
 ): Promise<{
@@ -362,33 +369,41 @@ async function hydratePreloadFromKv(
   wafRuntime: CompiledWafRuntime | null;
   preloadStatus: PreloadStatus;
 }> {
-  const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
-  if (isValidPreloadBundle(bundle)) {
-    hydrateFromPreloadBundle(bundle, now, null);
-    runInBackground(writePreloadBundleToL0(bundle));
+  if (inFlightHydratePromise) return inFlightHydratePromise;
+  inFlightHydratePromise = (async () => {
+    try {
+      const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
+      if (isValidPreloadBundle(bundle)) {
+        hydrateFromPreloadBundle(bundle, now, null);
+        runInBackground(writePreloadBundleToL0(bundle));
 
-    const neededFallback = !settingsCache.peek() || !wafRuntimeCache.peek();
-    const wafSettings = settingsCache.peek() ?? (await getSystemSettings(cfEnv).catch(() => null));
-    const wafRuntime = wafRuntimeCache.peek() ?? (await getWafRuntime(cfEnv).catch(() => null));
-    return {
-      routeRevisions: localRouteRevs || { v: 0, scopes: {}, routes: {} },
-      wafSettings,
-      wafRuntime,
-      preloadStatus: neededFallback ? 'L3_MISS' : 'L2_KV_HIT',
-    };
-  }
+        const neededFallback = !settingsCache.peek() || !wafRuntimeCache.peek();
+        const wafSettings = settingsCache.peek() ?? (await getSystemSettings(cfEnv).catch(() => null));
+        const wafRuntime = wafRuntimeCache.peek() ?? (await getWafRuntime(cfEnv).catch(() => null));
+        return {
+          routeRevisions: localRouteRevs || { v: 0, scopes: {}, routes: {} },
+          wafSettings,
+          wafRuntime,
+          preloadStatus: neededFallback ? ('L3_MISS' as const) : ('L2_KV_HIT' as const),
+        };
+      }
 
-  // Fallback when edge:preload:v1 has not been populated yet
-  const [routeRevisions, wafSettings, wafRuntime] = await Promise.all([
-    getRouteRevisions(cfEnv).catch(() => ({ v: 0, scopes: {}, routes: {} } as RouteRevisionsLedger)),
-    getSystemSettings(cfEnv).catch(() => null),
-    getWafRuntime(cfEnv).catch(() => null),
-    SiteConfigService.getConfig().catch(() => null),
-    RfqSettingsService.getSettings().catch(() => null),
-  ]);
-  localPreloadLoadedAt = now;
-  runInBackground(rebuildEdgePreloadBundle(cfEnv));
-  return { routeRevisions, wafSettings, wafRuntime, preloadStatus: 'L3_MISS' };
+      // Fallback when edge:preload:v1 has not been populated yet
+      const [routeRevisions, wafSettings, wafRuntime] = await Promise.all([
+        getRouteRevisions(cfEnv).catch(() => ({ v: 0, scopes: {}, routes: {} } as RouteRevisionsLedger)),
+        getSystemSettings(cfEnv).catch(() => null),
+        getWafRuntime(cfEnv).catch(() => null),
+        SiteConfigService.getConfig().catch(() => null),
+        RfqSettingsService.getSettings().catch(() => null),
+      ]);
+      localPreloadLoadedAt = now;
+      runInBackground(rebuildEdgePreloadBundle(cfEnv));
+      return { routeRevisions, wafSettings, wafRuntime, preloadStatus: 'L3_MISS' as const };
+    } finally {
+      inFlightHydratePromise = null;
+    }
+  })();
+  return inFlightHydratePromise;
 }
 
 /**
@@ -447,12 +462,12 @@ export async function preloadEdgeIsolate(
     }
 
     // 2. Optimistic SWR fast-path for public cacheable GETs when both L1 & L0 preload are cold:
-    //    proceed immediately with static WAF + unversioned L0 HTML alias while hydrating KV in background.
+    //    proceed immediately with static DEFAULT_SYSTEM_SETTINGS WAF + unversioned L0 HTML alias while hydrating KV in background.
     if (allowOptimistic) {
       runInBackground(hydratePreloadFromKv(cfEnv, now));
       return {
         routeRevisions: { v: 0, scopes: {}, routes: {} },
-        wafSettings: null,
+        wafSettings: DEFAULT_SYSTEM_SETTINGS,
         wafRuntime: null,
         preloadStatus: 'OPTIMISTIC_SWR',
       };
@@ -746,6 +761,7 @@ export async function purgeEdgeHtmlCache(params: {
   }
 
   // 2. Layer 1: Worker Edge HTML Cache (caches.default in middleware.ts)
+  await deletePreloadBundleFromL0();
   let workerPurgedCount = 0;
   const workerCache = typeof caches !== 'undefined' && (caches as any).default
     ? (caches as any).default

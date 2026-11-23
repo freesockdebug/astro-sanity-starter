@@ -675,20 +675,24 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
   }
 
   // Resolve versioned cache key using (potentially refreshed) routeRevisions
-  const revs = (context.locals as any)?.routeRevisions ?? (await getRouteRevisions(cfEnv).catch(() => ({})));
-  const pathRev = resolvePathRevision(pathname, revs, NON_DEFAULT_LOCALES);
+  let revs = (context.locals as any)?.routeRevisions ?? (await getRouteRevisions(cfEnv).catch(() => ({})));
+  let pathRev = resolvePathRevision(pathname, revs, NON_DEFAULT_LOCALES);
 
-  const canonicalUrl = new URL(pathname, url.origin);
+  let canonicalUrl = new URL(pathname, url.origin);
   if (pathRev > 0) {
     canonicalUrl.searchParams.set('__rev', String(pathRev));
   }
-  const cacheKey = new Request(canonicalUrl.toString(), {
+  let cacheKey = new Request(canonicalUrl.toString(), {
     method: 'GET',
   });
 
   if (isAuthorizedPurge && cache) {
     try {
-      await cache.delete(cacheKey);
+      const unversionedKey = new Request(new URL(pathname, url.origin).toString(), { method: 'GET' });
+      await Promise.allSettled([
+        cache.delete(cacheKey),
+        ...(pathRev > 0 ? [cache.delete(unversionedKey)] : []),
+      ]);
     } catch (e) {
       logger.warn({ module: 'middleware', event: 'CACHE_PURGE_ERROR', message: 'Error purging cache', error: e });
     }
@@ -707,6 +711,22 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     } catch (err) {
       logger.warn({ module: 'middleware', event: 'CACHE_READ_ERROR', message: 'Error reading cache', error: err });
     }
+  }
+
+  // If OPTIMISTIC_SWR missed L0 HTML cache, join the in-flight KV preload before running SSR
+  // so SSR components read warm L1 and cache.put writes the true versioned __rev key.
+  if ((context.locals as any)?.preloadStatus === 'OPTIMISTIC_SWR') {
+    const hydrated = await preloadEdgeIsolate(cfEnv, false, false);
+    (context.locals as any).preloadStatus = hydrated.preloadStatus;
+    if (hydrated.routeRevisions) (context.locals as any).routeRevisions = hydrated.routeRevisions;
+    if (hydrated.wafSettings) (context.locals as any).systemSettings = hydrated.wafSettings;
+    revs = hydrated.routeRevisions;
+    pathRev = resolvePathRevision(pathname, revs, NON_DEFAULT_LOCALES);
+    canonicalUrl = new URL(pathname, url.origin);
+    if (pathRev > 0) {
+      canonicalUrl.searchParams.set('__rev', String(pathRev));
+    }
+    cacheKey = new Request(canonicalUrl.toString(), { method: 'GET' });
   }
 
   // 5. Cache MISS: Single-Flight Request Coalescing (collapses concurrent cache-miss bursts into 1 render)
