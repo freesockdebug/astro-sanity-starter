@@ -770,11 +770,13 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
         });
 
         const cfCtx = (context.locals as any)?.cfContext;
+        // Clone BEFORE calling cache.put(), because cache.put() immediately locks responseToCache.body
+        const responseToCacheAlias = pathRev > 0 ? responseToCache.clone() : null;
         const putCacheOps: Promise<any>[] = [cache.put(cacheKey, responseToCache)];
-        if (pathRev > 0) {
+        if (responseToCacheAlias) {
           // Also populate the unversioned optimistic alias key so cold-start OPTIMISTIC_SWR hits L0 HTML immediately
           const unversionedKey = new Request(new URL(pathname, url.origin).toString(), { method: 'GET' });
-          putCacheOps.push(cache.put(unversionedKey, responseToCache.clone()));
+          putCacheOps.push(cache.put(unversionedKey, responseToCacheAlias));
         }
         const putPromise = Promise.allSettled(putCacheOps);
         if (cfCtx?.waitUntil) {
