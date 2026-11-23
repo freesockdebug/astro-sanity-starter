@@ -81,15 +81,15 @@ const dictGroupsCache = createTieredCache<SysDictGroup[]>({
     }),
 });
 
-export function invalidateDictGroupsCache(): void {
-  void dictGroupsCache.evict();
+export function invalidateDictGroupsCache(customEnv?: any): void {
+  void dictGroupsCache.refresh(customEnv);
 }
 
 /**
- * Lists all dictionary groups with item counts (L1 memory cached for 60s)
+ * Lists all dictionary groups with item counts (L1 memory + L2 KV cached)
  */
-export async function listDictGroups(): Promise<SysDictGroup[]> {
-  return dictGroupsCache.get();
+export async function listDictGroups(customEnv?: any): Promise<SysDictGroup[]> {
+  return dictGroupsCache.get(customEnv);
 }
 
 /**

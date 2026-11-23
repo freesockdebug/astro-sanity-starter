@@ -56,7 +56,7 @@ export const GET: APIRoute = defineAdminApi(
   async ({ cfEnv }) => {
     const [settings, recentRes, daySummary, dbRules, ipAcl] = await Promise.all([
       getSystemSettings(cfEnv),
-      listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1 }, cfEnv),
+      listErrorLogs({ source: 'EDGE_WAF', limit: 30, page: 1, includeOverview: false }, cfEnv),
       getWaf24hSummary(cfEnv),
       listWafRules(cfEnv),
       listWafIpAcl(cfEnv),
