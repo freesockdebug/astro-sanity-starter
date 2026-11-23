@@ -111,7 +111,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     };
 
     if (!EdgeWafService.isStaticAsset(pathname)) {
-      const { routeRevisions, wafSettings, wafRuntime, preloadStatus } = await preloadEdgeIsolate(cfEnv, false);
+      const allowOptimistic = isPublicCacheablePageGet(request, pathname, url);
+      const { routeRevisions, wafSettings, wafRuntime, preloadStatus } = await preloadEdgeIsolate(cfEnv, false, allowOptimistic);
       (context.locals as any).preloadStatus = preloadStatus;
       if (routeRevisions && request.method === 'GET') {
         (context.locals as any).routeRevisions = routeRevisions;
@@ -358,7 +359,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
         pathname.endsWith('.txt');
 
       if (!isStaticOrLogSelf && !(context.locals as any)?._apiPerfLogged) {
-        const settings = (context.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
+        const settings =
+          (context.locals as any)?.systemSettings ||
+          (preloadStatusHeader === 'OPTIMISTIC_SWR' ? null : await getSystemSettings(cfEnv).catch(() => null));
         const slowThreshold = settings?.slow_request_threshold_ms || 1000;
         const spans = perfSpans;
 
@@ -500,6 +503,38 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   });
 });
+
+function isPublicCacheablePageGet(request: Request, pathname: string, url: URL): boolean {
+  if (request.method !== 'GET' || import.meta.env.DEV || EdgeWafService.isStaticAsset(pathname)) {
+    return false;
+  }
+  const isOrdersPath = /^\/(?:(?:en|de|fr|es)\/)?orders(?:\/|$)/.test(pathname);
+  const isAccountPath = /^\/(?:(?:en|de|fr|es)\/)?account(?:\/|$)/.test(pathname);
+  const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/');
+  if (
+    isOrdersPath ||
+    isAccountPath ||
+    isAdminPath ||
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/studio') ||
+    pathname.startsWith('/cdn-image/') ||
+    pathname === '/favicon.ico' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap-index.xml'
+  ) {
+    return false;
+  }
+  if (
+    url.searchParams.has('preview') ||
+    url.searchParams.has('draft') ||
+    url.searchParams.has('purge') ||
+    url.searchParams.has('revalidate') ||
+    request.headers.get('authorization')
+  ) {
+    return false;
+  }
+  return true;
+}
 
 async function handleRequest(context: any, next: any, pathname: string, url: URL, request: Request): Promise<Response> {
   // Fast canonical redirect for root admin path to primary orders console
@@ -735,10 +770,17 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
         });
 
         const cfCtx = (context.locals as any)?.cfContext;
+        const putCacheOps: Promise<any>[] = [cache.put(cacheKey, responseToCache)];
+        if (pathRev > 0) {
+          // Also populate the unversioned optimistic alias key so cold-start OPTIMISTIC_SWR hits L0 HTML immediately
+          const unversionedKey = new Request(new URL(pathname, url.origin).toString(), { method: 'GET' });
+          putCacheOps.push(cache.put(unversionedKey, responseToCache.clone()));
+        }
+        const putPromise = Promise.allSettled(putCacheOps);
         if (cfCtx?.waitUntil) {
-          cfCtx.waitUntil(cache.put(cacheKey, responseToCache));
+          cfCtx.waitUntil(putPromise);
         } else {
-          cache.put(cacheKey, responseToCache).catch((err: any) => {
+          putPromise.catch((err: any) => {
             logger.warn({ module: 'middleware', event: 'ASYNC_CACHE_PUT_ERROR', message: 'Async cache put error', error: err });
           });
         }

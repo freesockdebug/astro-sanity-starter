@@ -1389,3 +1389,85 @@ test('RequestDeduplicatingDbClient collapses concurrent SELECTs and preserves Re
   assert.equal(firstCalls, 2);
   assert.equal(r3?.v, 2);
 });
+
+test('preloadEdgeIsolate hydrates cold Isolate from colo-shared L0 cache with 0 KV reads', async () => {
+  const { preloadEdgeIsolate } = await import('../src/utils/cmsSync.js');
+  const { settingsCache, DEFAULT_SYSTEM_SETTINGS } = await import('../src/db/settings.repo.js');
+  const { wafRuntimeCache } = await import('../src/db/waf.repo.js');
+
+  const l0Store = new Map<string, Response>();
+  const prevCaches = (globalThis as any).caches;
+  (globalThis as any).caches = {
+    default: {
+      match: async (req: Request) => {
+        const hit = l0Store.get(req.url);
+        return hit ? hit.clone() : undefined;
+      },
+      put: async (req: Request, res: Response) => {
+        l0Store.set(req.url, res.clone());
+      },
+      delete: async (req: Request) => l0Store.delete(req.url),
+    },
+  };
+
+  let preloadKvGets = 0;
+  const mockBundle = {
+    updatedAt: Date.now(),
+    routeRevs: { v: 123456, scopes: { settings: 123456 }, routes: { '/products': 123456 } },
+    systemSettings: { ...DEFAULT_SYSTEM_SETTINGS, brand_name: 'L0_SHARED_BRAND' },
+    wafRuntime: {
+      rules: [{ id: 'sys_legacy_cms_paths', isEnabled: true, mode: 'block' }],
+      ipAcl: [],
+    },
+    siteConfig: null,
+    rfqSettings: null,
+  };
+  const mockEnv = {
+    CACHE_KV: {
+      get: async (k: string, type?: string) => {
+        if (k === 'edge:preload:v1') preloadKvGets += 1;
+        const val = k === 'cms:route_revs' ? mockBundle.routeRevs : mockBundle;
+        return type === 'json' ? val : JSON.stringify(val);
+      },
+      put: async () => {},
+    },
+  };
+
+  try {
+    // 1. Simulate cold Isolate 1: L0 empty -> reads edge:preload:v1 once & populates L0 in background
+    settingsCache.invalidate();
+    wafRuntimeCache.invalidate();
+    const res1 = await preloadEdgeIsolate(mockEnv, true);
+    assert.equal(res1.preloadStatus, 'L2_KV_HIT');
+    assert.equal(preloadKvGets, 1);
+    await new Promise((r) => setTimeout(r, 20));
+    assert.ok(l0Store.has('https://edge-preload.internal/edge-preload-v1'));
+
+    // 2. Simulate cold Isolate 2 in same colo: L1 cleared, L0 warm -> 0 edge:preload:v1 KV reads!
+    settingsCache.invalidate();
+    wafRuntimeCache.invalidate();
+    const res2 = await preloadEdgeIsolate(mockEnv, false);
+    assert.equal(res2.preloadStatus, 'L1_HIT');
+    assert.equal(res2.wafSettings?.brand_name, 'L0_SHARED_BRAND');
+    assert.equal(preloadKvGets, 1);
+
+    // 3. Simulate cold Isolate 1 with BOTH L1 & L0 empty and allowOptimistic=true:
+    //    returns OPTIMISTIC_SWR immediately (0ms wait) and hydrates L1 + L0 in background
+    settingsCache.invalidate();
+    wafRuntimeCache.invalidate();
+    l0Store.clear();
+    const res3 = await preloadEdgeIsolate(mockEnv, false, true);
+    assert.equal(res3.preloadStatus, 'OPTIMISTIC_SWR');
+    assert.equal(res3.wafSettings, null);
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(preloadKvGets, 2);
+    assert.equal(settingsCache.peek()?.brand_name, 'L0_SHARED_BRAND');
+    assert.ok(l0Store.has('https://edge-preload.internal/edge-preload-v1'));
+  } finally {
+    if (prevCaches === undefined) {
+      delete (globalThis as any).caches;
+    } else {
+      (globalThis as any).caches = prevCaches;
+    }
+  }
+});

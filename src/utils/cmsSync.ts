@@ -33,6 +33,56 @@ export interface CmsSyncOptions {
 }
 
 export const EDGE_PRELOAD_KV_KEY = 'edge:preload:v1';
+const EDGE_PRELOAD_L0_URL = 'https://edge-preload.internal/edge-preload-v1';
+const EDGE_PRELOAD_L0_TTL_SEC = 30;
+
+function getEdgeDefaultCache(): any | null {
+  return typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
+}
+
+function isValidPreloadBundle(bundle: any): bundle is EdgePreloadBundle {
+  return Boolean(bundle && typeof bundle === 'object' && bundle.routeRevs && typeof bundle.routeRevs === 'object');
+}
+
+async function readPreloadBundleFromL0(): Promise<EdgePreloadBundle | null> {
+  const cache = getEdgeDefaultCache();
+  if (!cache) return null;
+  try {
+    const res = await cache.match(new Request(EDGE_PRELOAD_L0_URL, { method: 'GET' }));
+    if (!res) return null;
+    const parsed = await res.json();
+    return isValidPreloadBundle(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writePreloadBundleToL0(bundle: EdgePreloadBundle): Promise<void> {
+  const cache = getEdgeDefaultCache();
+  if (!cache) return;
+  try {
+    const res = new Response(JSON.stringify(bundle), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': `public, max-age=${EDGE_PRELOAD_L0_TTL_SEC}, s-maxage=${EDGE_PRELOAD_L0_TTL_SEC}`,
+      },
+    });
+    await cache.put(new Request(EDGE_PRELOAD_L0_URL, { method: 'GET' }), res);
+  } catch {
+    // Non-blocking L0 cache write failure
+  }
+}
+
+async function deletePreloadBundleFromL0(): Promise<void> {
+  const cache = getEdgeDefaultCache();
+  if (!cache) return;
+  try {
+    await cache.delete(new Request(EDGE_PRELOAD_L0_URL, { method: 'GET' }));
+  } catch {
+    // Non-blocking L0 cache delete failure
+  }
+}
 
 export type CacheLedgerScope = 'settings' | 'waf' | 'dicts' | 'rbac' | 'config' | 'products' | 'pages';
 
@@ -184,6 +234,7 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
     };
 
     await kvPut(EDGE_PRELOAD_KV_KEY, bundle, undefined, cfEnv).catch(() => { });
+    await writePreloadBundleToL0(bundle);
     localPreloadLoadedAt = updatedAt;
     localRouteRevsLoadedAt = updatedAt;
     localPreloadBundleUpdatedAt = updatedAt;
@@ -199,7 +250,7 @@ export async function rebuildEdgePreloadBundle(cfEnv?: any): Promise<EdgePreload
   }
 }
 
-export type PreloadStatus = 'L1_HIT' | 'L2_KV_HIT' | 'L3_MISS';
+export type PreloadStatus = 'L1_HIT' | 'L2_KV_HIT' | 'L3_MISS' | 'OPTIMISTIC_SWR';
 
 let isHeartbeatInFlight = false;
 
@@ -282,8 +333,9 @@ async function runHeartbeatSync(cfEnv?: any): Promise<void> {
     }
 
     const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
-    if (bundle && typeof bundle === 'object' && bundle.routeRevs && typeof bundle.routeRevs === 'object') {
+    if (isValidPreloadBundle(bundle)) {
       hydrateFromPreloadBundle(bundle, now, heartbeatLedger);
+      runInBackground(writePreloadBundleToL0(bundle));
     } else if (heartbeatLedger) {
       applyRouteRevisionsUpdate(heartbeatLedger, now);
       localPreloadLoadedAt = Date.now();
@@ -295,12 +347,51 @@ async function runHeartbeatSync(cfEnv?: any): Promise<void> {
   }
 }
 
+async function hydratePreloadFromKv(
+  cfEnv: any,
+  now: number
+): Promise<{
+  routeRevisions: RouteRevisionsLedger;
+  wafSettings: SystemSettings | null;
+  wafRuntime: CompiledWafRuntime | null;
+  preloadStatus: PreloadStatus;
+}> {
+  const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
+  if (isValidPreloadBundle(bundle)) {
+    hydrateFromPreloadBundle(bundle, now, null);
+    runInBackground(writePreloadBundleToL0(bundle));
+
+    const neededFallback = !settingsCache.peek() || !wafRuntimeCache.peek();
+    const wafSettings = settingsCache.peek() ?? (await getSystemSettings(cfEnv).catch(() => null));
+    const wafRuntime = wafRuntimeCache.peek() ?? (await getWafRuntime(cfEnv).catch(() => null));
+    return {
+      routeRevisions: localRouteRevs || { v: 0, scopes: {}, routes: {} },
+      wafSettings,
+      wafRuntime,
+      preloadStatus: neededFallback ? 'L3_MISS' : 'L2_KV_HIT',
+    };
+  }
+
+  // Fallback when edge:preload:v1 has not been populated yet
+  const [routeRevisions, wafSettings, wafRuntime] = await Promise.all([
+    getRouteRevisions(cfEnv).catch(() => ({ v: 0, scopes: {}, routes: {} } as RouteRevisionsLedger)),
+    getSystemSettings(cfEnv).catch(() => null),
+    getWafRuntime(cfEnv).catch(() => null),
+    SiteConfigService.getConfig().catch(() => null),
+    RfqSettingsService.getSettings().catch(() => null),
+  ]);
+  localPreloadLoadedAt = now;
+  runInBackground(rebuildEdgePreloadBundle(cfEnv));
+  return { routeRevisions, wafSettings, wafRuntime, preloadStatus: 'L3_MISS' };
+}
+
 /**
  * Cold-start single-KV preload: hydrates routeRevs, settings, WAF runtime, siteConfig, rfqSettings & slug guards in 1 KV read
  */
 export async function preloadEdgeIsolate(
   cfEnv?: any,
-  force = false
+  force = false,
+  allowOptimistic = false
 ): Promise<{
   routeRevisions: RouteRevisionsLedger;
   wafSettings: SystemSettings | null;
@@ -330,32 +421,40 @@ export async function preloadEdgeIsolate(
     };
   }
 
-  const bundle = await kvGet<EdgePreloadBundle>(EDGE_PRELOAD_KV_KEY, cfEnv).catch(() => null);
-  if (bundle && typeof bundle === 'object' && bundle.routeRevs && typeof bundle.routeRevs === 'object') {
-    hydrateFromPreloadBundle(bundle, now, null);
+  // 1. Cold Isolate fast-path: share colo-wide L0 (caches.default) preload envelope (~1ms, 0 KV reads)
+  if (!force) {
+    const l0Bundle = await readPreloadBundleFromL0();
+    if (l0Bundle) {
+      hydrateFromPreloadBundle(l0Bundle, now, null);
+      const wafSettings = settingsCache.peek(true);
+      const wafRuntime = wafRuntimeCache.peek(true);
+      if (wafSettings && wafRuntime) {
+        runInBackground(runHeartbeatSync(cfEnv));
+        return {
+          routeRevisions: localRouteRevs || { v: 0, scopes: {}, routes: {} },
+          wafSettings,
+          wafRuntime,
+          preloadStatus: 'L1_HIT',
+        };
+      }
+    }
 
-    const neededFallback = !settingsCache.peek() || !wafRuntimeCache.peek();
-    const wafSettings = settingsCache.peek() ?? (await getSystemSettings(cfEnv).catch(() => null));
-    const wafRuntime = wafRuntimeCache.peek() ?? (await getWafRuntime(cfEnv).catch(() => null));
-    return {
-      routeRevisions: localRouteRevs || { v: 0, scopes: {}, routes: {} },
-      wafSettings,
-      wafRuntime,
-      preloadStatus: neededFallback ? 'L3_MISS' : 'L2_KV_HIT',
-    };
+    // 2. Optimistic SWR fast-path for public cacheable GETs when both L1 & L0 preload are cold:
+    //    proceed immediately with static WAF + unversioned L0 HTML alias while hydrating KV in background.
+    if (allowOptimistic) {
+      runInBackground(hydratePreloadFromKv(cfEnv, now));
+      return {
+        routeRevisions: { v: 0, scopes: {}, routes: {} },
+        wafSettings: null,
+        wafRuntime: null,
+        preloadStatus: 'OPTIMISTIC_SWR',
+      };
+    }
+  } else {
+    await deletePreloadBundleFromL0();
   }
 
-  // Fallback when edge:preload:v1 has not been populated yet
-  const [routeRevisions, wafSettings, wafRuntime] = await Promise.all([
-    getRouteRevisions(cfEnv).catch(() => ({ v: 0, scopes: {}, routes: {} } as RouteRevisionsLedger)),
-    getSystemSettings(cfEnv).catch(() => null),
-    getWafRuntime(cfEnv).catch(() => null),
-    SiteConfigService.getConfig().catch(() => null),
-    RfqSettingsService.getSettings().catch(() => null),
-  ]);
-  localPreloadLoadedAt = now;
-  runInBackground(rebuildEdgePreloadBundle(cfEnv));
-  return { routeRevisions, wafSettings, wafRuntime, preloadStatus: 'L3_MISS' };
+  return hydratePreloadFromKv(cfEnv, now);
 }
 
 /**
