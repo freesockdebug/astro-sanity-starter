@@ -1,4 +1,4 @@
-# 全局第一性原理架构红线与对抗自演进路由 (`agent.md`)
+# 全局第一性原理架构红线与对抗自演进路由 (`agents.md`)
 
 > **核心技术栈**：Astro v6 SSR (Cloudflare Workers) + Sanity v3 (Read-Only CMS) + D1 / Supabase Postgres (Transactional DB) + Cloudflare KV (`CACHE_KV`) + Tailwind v4 + Nanostores
 
