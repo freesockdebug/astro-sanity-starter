@@ -121,7 +121,7 @@ function checkRuleDocumentationSync(
 ): AuditViolation[] {
   const violations: AuditViolation[] = [];
   const protectedFiles = [
-    'agent.md',
+    'AGENTS.md',
     'tech.md',
     'docs/00-module-template.md',
     'docs/01-edge-cache.md',
@@ -138,7 +138,7 @@ function checkRuleDocumentationSync(
       violations.push({
         ruleId: 'DOC-ANTI-DELETE-GUARD',
         domain: '05-waf-rfq-and-ops',
-        docPath: 'agent.md',
+        docPath: 'AGENTS.md',
         title: `核心架构文档或历史公理巡检文件 [${pf}] 被删除或被异常清空！`,
         historicalContext:
           '架构红线第 8 条 (只增不擅删公理)：严禁未经用户明确确认擅自删除既有架构文档、章节表格或历史 Pitfall 巡检模块。',

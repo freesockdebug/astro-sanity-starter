@@ -27,9 +27,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Adversarial Preflight, TypeScript & Unit Tests
-        run: npm run check
-
       - name: Build Astro SSR
         env:
           NODE_ENV: production
@@ -39,8 +36,11 @@ jobs:
           REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
           PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFXbqPn5Jkh6bMhV' }}
           TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
-          TURNSTILE_HOSTNAMES: ${{ secrets.TURNSTILE_HOSTNAMES || 'localhost,127.0.0.1,gwenvenni.com' }}
+          TURNSTILE_HOSTNAMES: ${{ secrets.TURNSTILE_HOSTNAMES || 'localhost,127.0.0.1' }}
         run: npm run build
+
+      - name: Run Adversarial Preflight, TypeScript, Dist Closure & Unit Tests
+        run: npm run check
 
       - name: Sync D1 Database Schema
         env:

@@ -104,4 +104,5 @@
 | **`OPS-ADV-02`** | Workers 模块顶层全局作用域严禁调用 `crypto.randomUUID()` | 模块顶层（`braceDepth === 0`）调用 `crypto.randomUUID()` 会导致 Cloudflare Workers 启动崩溃，必须放入请求期惰性函数内。 |
 | **`OPS-ADV-03`** | 外部网络 `fetch` 刚性 6000ms 超时熔断守卫 | 出站通信模块（`rfqNotify.ts`、`webhook.ts`、`sanity-client.ts`、`/cdn-image/*`、`submit-quote.ts`）必须挂载 `AbortSignal.timeout(6000)`。 |
 | **`OPS-ADV-04`** | `EdgeWafService` ReDoS 安全正则防线与旧站 `FAST-404` 免 Strike | 自定义正则必须经 `validateRegexSafety` 校验，旧站路径 `/product-tag/*` 必须走 `FAST-404` 免计 Strike 防误封搜索引擎。 |
+| **`OPS-ADV-05`** | `package.json` 与 `package-lock.json` 依赖树同步锁挑刺 (防 GitHub Actions `npm ci` `EUSAGE` 崩溃) | 校验 `package.json` 中声明的所有 `dependencies` 与 `devDependencies`（含 `postgres`、`rollup-plugin-visualizer`、`web-vitals`、`tsx`）在 `package-lock.json` 根节点及 `node_modules/*` 中 100% 同步锁定，杜绝推送 GitHub 后 `npm ci` 报错 `Missing from lock file`。 |
 | **`05-waf-rfq-and-ops:runtime-consistency-verify`** | 内存级 `PreflightTest.verify()`（ReDoS 灾难回溯正则拦截 + SSRF 内网地址阻断） | 向 `validateRegexSafety` 注入嵌套量词 `(a+)+$` 断言预编译阶段拒绝；向 `SecurityService.isSafeWebhookUrl` 注入云主机元数据内网地址 `169.254.169.254` 断言拦截。 |

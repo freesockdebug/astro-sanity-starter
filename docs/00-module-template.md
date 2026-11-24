@@ -15,7 +15,7 @@
    - 每个 `rules[]` 探针必须分配唯一 ID（如 `<PREFIX>-ADV-01`），且该 ID **必须** 出现在对应 `docs/<NN>-<domain>.md` 的索引表中（否则 `DOC-SYNC-GUARD` 立即阻断）；
    - 实现 `verify: async (ctx) => AuditViolation[]` 内存级故障注入钩子（动态加载 `src/` 真实模块并注入并发惊群、读写交织、畸形输入等极端边界，严禁将 `verify()` 直接塞入生产 `src/` 代码以免污染 Cloudflare Worker 打包体积）。
 3. **编写/更新运行时对抗单测 (`test/<domain>.test.ts`)**：针对核心状态机、边界降级或历史回归场景编写 `node:test` 对抗断言。
-4. **注册至总控路由 (`scripts/check-preflight.ts` & `agent.md` & `tech.md`)**：若为全新领域 `06+`，将其挂载至 `ALL_SUITES` 与路由索引表。
+4. **注册至总控路由 (`scripts/check-preflight.ts` & `AGENTS.md` & `tech.md`)**：若为全新领域 `06+`，将其挂载至 `ALL_SUITES` 与路由索引表。
 5. **只增不擅删红线 (Mandatory Deletion Confirmation)**：修改文档或巡检脚本时，严禁擅自删除任何原有的历史踩坑记录 (`Pitfall 1~24` / `*-ADV-*`)、数据表格或旧文档文件；若评估某项确需废弃或合并移除，必须先向用户列出原因并获得明确确认后方可删除。
 
 ---
