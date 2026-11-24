@@ -514,6 +514,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       throw err;
     }
     } finally {
+      runInBackground(profiler.cleanup());
       const urlStatsEnabled = (context.locals as any)?.systemSettings?.enable_url_cache_stats ?? true;
       if (urlStatsEnabled && !EdgeWafService.isStaticAsset(pathname)) {
         recordUrlCacheStats(pathname, profiler.getCacheTiers());
@@ -546,8 +547,6 @@ function isPublicCacheablePageGet(request: Request, pathname: string, url: URL):
     url.searchParams.has('preview') ||
     url.searchParams.has('preview_theme') ||
     url.searchParams.has('draft') ||
-    url.searchParams.has('purge') ||
-    url.searchParams.has('revalidate') ||
     request.headers.get('authorization')
   ) {
     return false;
@@ -667,36 +666,7 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     ? (caches as any).default
     : null;
 
-  const isPurgeParam = url.searchParams.has('purge') || url.searchParams.has('revalidate');
-  let isAuthorizedPurge = false;
-  if (isPurgeParam) {
-    const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    const isDev = Boolean(import.meta.env?.DEV);
-    const sysSettings = (context.locals as any)?.systemSettings || await getSystemSettings(cfEnv).catch(() => null);
-    const configuredSecret = sysSettings?.revalidate_secret || getRuntimeEnv('REVALIDATE_SECRET', cfEnv) || getRuntimeEnv('SANITY_REVALIDATE_SECRET', cfEnv);
-    const purgeSecret = configuredSecret || (isDev || isLocalhost ? 'itsasecret' : '');
-    const providedKey =
-      url.searchParams.get('key') ||
-      url.searchParams.get('secret') ||
-      url.searchParams.get('token') ||
-      request.headers.get('x-revalidate-secret') ||
-      request.headers.get('x-webhook-secret') ||
-      '';
-    if (isLocalhost || (purgeSecret && providedKey && SecurityService.timingSafeEqual(providedKey, purgeSecret))) {
-      isAuthorizedPurge = true;
-    }
-  }
-
-  if (isAuthorizedPurge) {
-    const refreshed = await preloadEdgeIsolate(cfEnv, true).catch(() => null);
-    if (refreshed) {
-      (context.locals as any).preloadStatus = refreshed.preloadStatus;
-      if (refreshed.routeRevisions) (context.locals as any).routeRevisions = refreshed.routeRevisions;
-      if (refreshed.wafSettings) (context.locals as any).systemSettings = refreshed.wafSettings;
-    }
-  }
-
-  // Resolve versioned cache key using (potentially refreshed) routeRevisions
+  // Resolve versioned cache key using routeRevisions
   let revs = (context.locals as any)?.routeRevisions ?? (await getRouteRevisions(cfEnv).catch(() => ({})));
   let pathRev = resolvePathRevision(pathname, revs, NON_DEFAULT_LOCALES);
 
@@ -708,24 +678,31 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
     method: 'GET',
   });
 
-  if (isAuthorizedPurge && cache) {
-    try {
-      const unversionedKey = new Request(new URL(pathname, url.origin).toString(), { method: 'GET' });
-      await Promise.allSettled([
-        cache.delete(cacheKey),
-        ...(pathRev > 0 ? [cache.delete(unversionedKey)] : []),
-      ]);
-    } catch (e) {
-      logger.warn({ module: 'middleware', event: 'CACHE_PURGE_ERROR', message: 'Error purging cache', error: e });
-    }
-  }
-
-  if (cache && !isAuthorizedPurge) {
+  if (cache) {
     try {
       const cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
         recordEdgeHtmlCacheResult('HIT', pathname);
-        const hitLabel = (context.locals as any)?.preloadStatus === 'OPTIMISTIC_SWR' ? 'HIT_OPTIMISTIC' : 'HIT';
+        const isOptimisticHit = (context.locals as any)?.preloadStatus === 'OPTIMISTIC_SWR';
+        const hitLabel = isOptimisticHit ? 'HIT_OPTIMISTIC' : 'HIT';
+        if (isOptimisticHit) {
+          const hitCacheKey = cacheKey;
+          runInBackground(
+            (async () => {
+              const hydrated = await preloadEdgeIsolate(cfEnv, false, false).catch(() => null);
+              if (!hydrated?.routeRevisions) return;
+              const trueRev = resolvePathRevision(pathname, hydrated.routeRevisions, NON_DEFAULT_LOCALES);
+              if (trueRev > 0 && trueRev !== pathRev) {
+                const versionedUrl = new URL(pathname, url.origin);
+                versionedUrl.searchParams.set('__rev', String(trueRev));
+                const versionedMatch = await cache.match(new Request(versionedUrl.toString(), { method: 'GET' }));
+                if (!versionedMatch) {
+                  await cache.delete(hitCacheKey).catch(() => {});
+                }
+              }
+            })()
+          );
+        }
         let hitResponse = new Response(cachedResponse.body, cachedResponse);
         hitResponse = safeSetHeader(hitResponse, 'X-Edge-Cache', hitLabel);
         return hitResponse;

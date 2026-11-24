@@ -148,11 +148,11 @@ export const cmsI18nSeoAuditSuite: DomainAuditSuite = {
       id: 'CMS-ADV-04',
       domain: DOMAIN,
       docPath: DOC_PATH,
-      title: '第一方图片边缘代理 (/cdn-image/*) 路径穿越防护与 cf_fmt=webp 防缓存投毒挑刺',
+      title: '第一方图片边缘代理 (/cdn-image/*) 路径白名单、ALLOWED_IMAGE_PARAMS 查询参数白名单与 cf_fmt=webp 防缓存投毒挑刺',
       historicalContext:
-        '/cdn-image/[...path].ts 若直接向 Sanity 透传 auto=format 而不按 Accept 头分离缓存键并锁定 fm=webp，会导致 Cloudflare 子请求缓存被首个访问者的图片格式污染；且必须严格限制 /^images\\// 路径防 SSRF。',
+        '/cdn-image/[...path].ts 若直接向 Sanity 透传 auto=format 而不按 Accept 头分离缓存键并锁定 fm=webp，会导致 Cloudflare 子请求缓存被首个访问者的图片格式污染；若不限制查询参数白名单或开放匿名 ?purge=1，攻击者可通过随机 query 绕过 L0 缓存打穿边缘流量。',
       remediation:
-        '在 src/pages/cdn-image/[...path].ts 中保持 /^images\\/[a-z0-9_-]+\\/[a-z0-9_-]+\\//i 路径白名单、cf_fmt=webp 缓存键隔离以及 AbortSignal.timeout(6000)。',
+        '在 src/pages/cdn-image/[...path].ts 中保持 /^images\\/[a-z0-9_-]+\\/[a-z0-9_-]+\\//i 路径白名单、ALLOWED_IMAGE_PARAMS 查询参数白名单、cf_fmt=webp 缓存键隔离以及 AbortSignal.timeout(6000)。',
       check: (ctx) => {
         const violations: AuditViolation[] = [];
         const proxyCode = ctx.readFile('src/pages/cdn-image/[...path].ts');
@@ -167,6 +167,17 @@ export const cmsI18nSeoAuditSuite: DomainAuditSuite = {
             historicalContext: '直接透传 auto=format 会引发 Cloudflare 子请求跨客户端格式缓存投毒。',
             file: 'src/pages/cdn-image/[...path].ts',
             remediation: '根据 Accept 头设置 cf_fmt=webp，并向上游显式传递 fm=webp。',
+          });
+        }
+        if (!proxyCode.includes('ALLOWED_IMAGE_PARAMS') || proxyCode.includes("searchParams.get('purge')")) {
+          violations.push({
+            ruleId: 'CMS-ADV-04',
+            domain: DOMAIN,
+            docPath: DOC_PATH,
+            title: '/cdn-image/[...path].ts 缺失 ALLOWED_IMAGE_PARAMS 参数白名单或残留了匿名 ?purge 参数逻辑',
+            historicalContext: '任意未知 query 参数若进入 cacheUrl 会导致 L0 缓存键碎片化被恶意穿透。',
+            file: 'src/pages/cdn-image/[...path].ts',
+            remediation: '使用 ALLOWED_IMAGE_PARAMS 过滤非白名单 query 参数，并彻底移除 ?purge URL 参数分支。',
           });
         }
         if (!proxyCode.includes('AbortSignal.timeout')) {

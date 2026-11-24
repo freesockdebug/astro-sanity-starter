@@ -179,7 +179,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
           deviceType: clientMeta.deviceType || undefined,
         },
       },
-      { cfEnv }
+      { cfEnv, ctx: (locals as any)?.cfContext }
     );
 
     return jsonNoCache({ ok: true, rayId, level: 'info' }, 200);
@@ -211,7 +211,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
           deviceType: clientMeta.deviceType || undefined,
         },
       },
-      { cfEnv }
+      { cfEnv, ctx: (locals as any)?.cfContext }
     );
 
     return jsonNoCache({ ok: true, rayId, level: 'info' }, 200);
@@ -245,7 +245,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         breadcrumbs: sanitizedBreadcrumbs,
       },
     },
-    { cfEnv }
+    { cfEnv, ctx: (locals as any)?.cfContext }
   );
 
   return jsonNoCache({ ok: true, rayId }, 200);

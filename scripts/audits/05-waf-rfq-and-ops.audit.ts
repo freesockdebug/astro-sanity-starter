@@ -322,6 +322,36 @@ export const wafRfqAndOpsAuditSuite: DomainAuditSuite = {
         return violations;
       },
     },
+    {
+      id: 'OPS-ADV-07',
+      domain: DOMAIN,
+      docPath: DOC_PATH,
+      title: 'B2B 询盘 (/api/submit-quote) 主库落盘强优先与通知后台异步解耦契约挑刺',
+      historicalContext:
+        '历史架构隐患：若将 createOrder 数据库写入与 Resend 邮件/IM Webhook 放在 Promise.all 中并行等待，不仅会让买手端响应时间被第三方 SMTP 拖慢至 1.5~6 秒，还会出现数据库写入失败返回 500 但业务员已收到幽灵订单通知的严重数据不一致。',
+      remediation:
+        '在 src/pages/api/submit-quote.ts 中必须先 await d1WriteTask 并校验 orderId 落盘成功，随后再通过 runInBackground(dispatchRfqNotifications(...)) 异步派发邮件与 Webhook。',
+      check: (ctx) => {
+        const violations: AuditViolation[] = [];
+        const quoteCode = ctx.readFile('src/pages/api/submit-quote.ts');
+        if (!quoteCode) return violations;
+
+        const d1AwaitIdx = quoteCode.indexOf('await d1WriteTask');
+        const notifyIdx = quoteCode.indexOf('dispatchRfqNotifications(');
+        if (d1AwaitIdx === -1 || notifyIdx === -1 || d1AwaitIdx > notifyIdx || !quoteCode.includes('runInBackground(\n      dispatchRfqNotifications')) {
+          violations.push({
+            ruleId: 'OPS-ADV-07',
+            domain: DOMAIN,
+            docPath: DOC_PATH,
+            title: 'src/pages/api/submit-quote.ts 未遵守“先 await 数据库落盘、后 runInBackground 异步派发通知”的事务一致性顺序',
+            historicalContext: '并行等待 DB 与外部通知会导致幽灵订单通知及 1.5s+ 的前台提交卡顿。',
+            file: 'src/pages/api/submit-quote.ts',
+            remediation: '确保 await d1WriteTask 与 if (!orderId) 校验在 runInBackground(dispatchRfqNotifications(...)) 之前执行。',
+          });
+        }
+        return violations;
+      },
+    },
   ],
   verify: async () => {
     const violations: AuditViolation[] = [];

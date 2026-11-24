@@ -212,6 +212,49 @@ export const dbAuthRbacAuditSuite: DomainAuditSuite = {
         return violations;
       },
     },
+    {
+      id: 'DB-ADV-06',
+      domain: DOMAIN,
+      docPath: DOC_PATH,
+      title: '边缘 Worker 请求级 Postgres 连接主动回收与禁止顶层静态引入 node:fs/node:path 挑刺',
+      historicalContext:
+        '1) Cloudflare Workers 下每次请求创建的 postgres.js 实例若未在请求结束时通过 profiler.cleanup() 调用 sqlClient.end({ timeout: 0 })，高并发下会导致 Supavisor / Hyperdrive 挂起连接池耗尽；2) src/db/client.ts 若在模块顶层静态 import node:fs 或 node:path，会把 Node.js 磁盘垫片打入边缘 Worker 包体。',
+      remediation:
+        '在 src/db/client.ts 中通过 getLocalNodeDb() 按需惰性加载 node:fs/node:path/node:sqlite，并在 activeProfiler.registerCleanup 中注册 Worker 级 Postgres 连接 close()，由 src/middleware.ts finally 块统一调用 profiler.cleanup() 回收。',
+      check: (ctx) => {
+        const violations: AuditViolation[] = [];
+        const clientCode = ctx.readFile('src/db/client.ts');
+        if (!clientCode) return violations;
+
+        const topLevelNodeFs = findLineMatches(clientCode, /^import\s+.*from\s+['"]node:(fs|path|sqlite)['"]/);
+        for (const m of topLevelNodeFs) {
+          violations.push({
+            ruleId: 'DB-ADV-06',
+            domain: DOMAIN,
+            docPath: DOC_PATH,
+            title: 'src/db/client.ts 存在顶层静态 import node:fs / node:path / node:sqlite',
+            historicalContext: '顶层静态引入 Node.js 磁盘模块会污染 Cloudflare Workers 边缘构建产物。',
+            file: 'src/db/client.ts',
+            line: m.line,
+            snippet: m.snippet,
+            remediation: '移入 getLocalNodeDb() 函数内部通过 process.getBuiltinModule / require 按需惰性加载。',
+          });
+        }
+
+        if (!clientCode.includes('sqlClient.end') || !clientCode.includes('registerCleanup')) {
+          violations.push({
+            ruleId: 'DB-ADV-06',
+            domain: DOMAIN,
+            docPath: DOC_PATH,
+            title: 'src/db/client.ts 缺失 Worker 请求级 Postgres 连接主动关闭钩子 (registerCleanup -> sqlClient.end)',
+            historicalContext: 'Serverless 边缘请求结束后不主动释放 TCP 连接会导致上游连接池在高并发下被占满。',
+            file: 'src/db/client.ts',
+            remediation: '在 PostgresClientAdapter.close() 中调用 this.sqlClient.end({ timeout: 0 }) 并注册到 activeProfiler.registerCleanup。',
+          });
+        }
+        return violations;
+      },
+    },
   ],
   verify: async () => {
     const violations: AuditViolation[] = [];

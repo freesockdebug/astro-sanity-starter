@@ -38,31 +38,39 @@ export const GET: APIRoute = async ({ params, request, url }) => {
   }
 
   // Construct format-aware cache key so WebP and legacy clients don't cross-contaminate.
-  // Note: Sanity CDN supports "jpg", "pjpg", "png", "webp", "gif" (does not support "avif").
+  // Whitelist valid Sanity Image Transformation parameters to prevent random query cache-busting.
+  const ALLOWED_IMAGE_PARAMS = new Set([
+    'w', 'h', 'q', 'fm', 'auto', 'fit', 'crop', 'rect', 'dpr', 'bg', 'blur', 'sharpen', 'fp-x', 'fp-y',
+  ]);
+  const sanitizedParams = new URLSearchParams();
+  for (const [k, v] of url.searchParams.entries()) {
+    if (ALLOWED_IMAGE_PARAMS.has(k)) {
+      sanitizedParams.set(k, v);
+    }
+  }
+
   const acceptHeader = request.headers.get('Accept') || '';
   let formatVariant = 'orig';
-  if (url.searchParams.get('auto')?.includes('format')) {
+  if (sanitizedParams.get('auto')?.includes('format')) {
     if (acceptHeader.includes('image/webp') || acceptHeader.includes('image/avif')) {
       formatVariant = 'webp';
     }
   }
 
-  const cache = typeof caches !== 'undefined' && (caches as any).default 
-    ? (caches as any).default 
+  const cache = typeof caches !== 'undefined' && (caches as any).default
+    ? (caches as any).default
     : null;
 
-  const cacheUrl = new URL(url.toString());
+  const cacheUrl = new URL(url.pathname, url.origin);
+  for (const [k, v] of sanitizedParams.entries()) {
+    cacheUrl.searchParams.set(k, v);
+  }
   if (formatVariant !== 'orig') {
     cacheUrl.searchParams.set('cf_fmt', formatVariant);
   }
   const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
 
-  // Optional cache purge via ?purge=true or ?revalidate=true
-  if (url.searchParams.has('purge') || url.searchParams.has('revalidate')) {
-    if (cache) {
-      await cache.delete(cacheKey).catch(() => {});
-    }
-  } else if (cache) {
+  if (cache) {
     try {
       const cachedRes = await cache.match(cacheKey);
       if (cachedRes) {
@@ -77,7 +85,7 @@ export const GET: APIRoute = async ({ params, request, url }) => {
 
   // Avoid Cloudflare subrequest cache poisoning by locking the upstream format (fm=webp)
   // instead of auto=format when client supports modern WebP encoding
-  const targetParams = new URLSearchParams(url.searchParams);
+  const targetParams = new URLSearchParams(sanitizedParams);
   if (formatVariant === 'webp') {
     targetParams.delete('auto');
     targetParams.set('fm', 'webp');

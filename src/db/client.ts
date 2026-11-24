@@ -2,8 +2,6 @@
 // Unified Database Client: abstracts Cloudflare D1, Supabase (PostgreSQL), and Node.js SQLite (DatabaseSync)
 // Allows all repositories to write SQL once using standard ? positional placeholders.
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import postgres from 'postgres';
 import { getMergedAdminEmails } from '../utils/auth';
 import { getActiveProfiler } from '../utils/profiler';
@@ -46,6 +44,7 @@ export interface DbClient {
   first<T = any>(sql: string, params?: any[]): Promise<T | null>;
   execute(sql: string, params?: any[]): Promise<{ changes: number; lastInsertId?: number | string }>;
   batch(operations: { sql: string; params?: any[] }[]): Promise<void>;
+  close?(): Promise<void>;
   raw: any;
 }
 
@@ -96,8 +95,15 @@ let localNodeDbInstance: any = null;
 function getLocalNodeDb(): any {
   if (localNodeDbInstance) return localNodeDbInstance;
   try {
-    // @ts-ignore
-    const { DatabaseSync } = require('node:sqlite');
+    const loadBuiltin = (id: string) =>
+      (typeof process !== 'undefined' && typeof (process as any).getBuiltinModule === 'function'
+        ? (process as any).getBuiltinModule(id)
+        : null) ||
+      // @ts-ignore
+      require(id);
+    const { DatabaseSync } = loadBuiltin('node:sqlite');
+    const fs = loadBuiltin('node:fs');
+    const path = loadBuiltin('node:path');
     const dbDir = path.resolve(process.cwd(), '.wrangler', 'state', 'v3', 'd1');
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
@@ -297,8 +303,17 @@ class PostgresClientAdapter implements DbClient {
   readonly dialect: DbDialect = 'postgres';
   readonly raw: any;
 
-  constructor(private readonly sqlClient: ReturnType<typeof postgres>) {
+  constructor(
+    private readonly sqlClient: ReturnType<typeof postgres>,
+    private readonly isWorkerScoped: boolean = false
+  ) {
     this.raw = sqlClient;
+  }
+
+  async close(): Promise<void> {
+    if (this.isWorkerScoped) {
+      await this.sqlClient.end({ timeout: 0 }).catch(() => {});
+    }
   }
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
@@ -414,7 +429,7 @@ function createPostgresAdapter(connStr: string, isWorkerRuntime: boolean): Postg
       },
     },
   });
-  const adapter = new PostgresClientAdapter(client);
+  const adapter = new PostgresClientAdapter(client, isWorkerRuntime);
   if (!isWorkerRuntime) {
     nodePgPoolCache = { connStr: sanitizedConnStr, adapter };
   }
@@ -536,6 +551,11 @@ export class RequestDeduplicatingDbClient implements DbClient {
     this.inFlightReads.clear();
     return this.inner.batch(operations);
   }
+
+  async close(): Promise<void> {
+    this.inFlightReads.clear();
+    await this.inner.close?.();
+  }
 }
 
 export async function getDb(): Promise<DbClient> {
@@ -550,9 +570,13 @@ export async function getDb(): Promise<DbClient> {
     if (pgUrl) {
       if (activeProfiler) {
         if (!activeProfiler._pgClient) {
-          activeProfiler._pgClient = new RequestDeduplicatingDbClient(
+          const pgClient = new RequestDeduplicatingDbClient(
             createPostgresAdapter(pgUrl, isWorkerRuntime)
           );
+          activeProfiler._pgClient = pgClient;
+          if (isWorkerRuntime && typeof activeProfiler.registerCleanup === 'function') {
+            activeProfiler.registerCleanup(() => pgClient.close());
+          }
         }
         return activeProfiler._pgClient;
       }

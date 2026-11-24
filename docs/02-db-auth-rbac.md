@@ -128,5 +128,6 @@ sequenceDiagram
 | **`DB-ADV-03`** | `/api/admin/*` 零信任鉴权守卫全覆盖 | 所有 `/src/pages/api/admin/**/*.ts` 路由必须调用 `authGuards.ts` / `auth.ts` 鉴权守卫，严禁裸奔。 |
 | **`DB-ADV-04`** | RBAC 静态角色权限严禁被冷启动 DDL `UPDATE` 覆盖 | `rbac.repo.ts` 初始化仅允许 `INSERT OR IGNORE`，严禁在启动时 `UPDATE admin_roles SET permissions = ...` 抹除后台自定义角色权限。 |
 | **`DB-ADV-05`** | 三方 Schema 表与索引集合一致性 (`src/db/schema.ts` ↔ `db/schema.sql` ↔ `db/schema.postgres.sql`) | 自动提取并比对三份 Schema 文件中的 `CREATE TABLE`（13 张表）与 `CREATE INDEX`（25 个核心索引），杜绝单边修改引发 D1 与 Postgres 结构漂移。 |
+| **`DB-ADV-06`** | 边缘 Worker 请求级 Postgres 连接主动回收与禁止顶层静态引入 `node:fs`/`node:path` | `src/db/client.ts` 必须在 `getLocalNodeDb()` 中按需惰性加载 `node:fs`/`node:path`/`node:sqlite`，并在 `activeProfiler.registerCleanup` 中注册 Worker 级 `sqlClient.end({ timeout: 0 })`，由 `middleware.ts` `finally` 块统一回收连接。 |
 | **`02-db-auth-rbac:runtime-consistency-verify`** | 内存级 `PreflightTest.verify()`（方言转换 + 并发读折叠 + Read-Your-Writes 屏障） | 在内存中检验 `toPostgresSql` 对单引号字符串字面量内 `?` 的免疫转换、`formatUtcCutoff` 字典序时间戳格式，以及 `RequestDeduplicatingDbClient` 10 并发读单次折叠与 `execute()` 写后立即清空 `inFlightReads` 屏障。 |
 

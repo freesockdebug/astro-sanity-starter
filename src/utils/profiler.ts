@@ -11,8 +11,24 @@ export class RequestProfiler {
   private spans = new Map<string, number>();
   private activeSpans = new Map<string, number>();
   private cacheTiers = { l1: 0, l2: 0, l3: 0 };
+  private cleanups: Array<() => Promise<void> | void> = [];
   public readonly requestMemo = new Map<string, Promise<any>>();
   public readonly startTotal: number = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+  registerCleanup(fn: () => Promise<void> | void): void {
+    this.cleanups.push(fn);
+  }
+
+  async cleanup(): Promise<void> {
+    const fns = this.cleanups.splice(0, this.cleanups.length);
+    for (const fn of fns) {
+      try {
+        await fn();
+      } catch {
+        // non-blocking cleanup
+      }
+    }
+  }
 
   recordCacheTier(tier: 'l1' | 'l2' | 'l3'): void {
     this.cacheTiers[tier] += 1;

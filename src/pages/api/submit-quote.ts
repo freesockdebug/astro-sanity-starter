@@ -15,7 +15,7 @@ import {
 } from '@utils/auth';
 import { createOrder, generateOrderNo, getUserByIdOrEmail, updateUserProfile, getSystemSettings } from '@db';
 import { getDictItems } from '@utils/dicts';
-import { kvGet, kvPut, kvDelete } from '@utils/cache';
+import { kvGet, kvPut, kvDelete, runInBackground } from '@utils/cache';
 import { logger } from '@utils/logger';
 import { env as cfEnv } from 'cloudflare:workers';
 
@@ -148,7 +148,8 @@ function validateQuotePayload(body: any, allowedInquiryTypes: Set<string>): Vali
   };
 }
 
-export const POST: APIRoute = async ({ request, clientAddress }) => {
+export const POST: APIRoute = async ({ request, clientAddress, locals }) => {
+  const cfCtx = (locals as any)?.cfContext;
   let idempKey = '';
   try {
     let rawBody: any;
@@ -244,7 +245,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          signal: AbortSignal.timeout(10_000), // 10s strict timeout
+          signal: AbortSignal.timeout(6000), // 6s strict timeout aligned with AGENTS.md invariant
           body: new URLSearchParams({
             secret: turnstileSecret,
             response: turnstileToken,
@@ -264,7 +265,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           path: '/api/submit-quote',
           rayId: request.headers.get('cf-ray') || undefined,
           error: err,
-        }, { cfEnv });
+        }, { cfEnv, ctx: cfCtx });
         return new Response(
           JSON.stringify({ error: 'Verification service error. Please try again.' }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -387,29 +388,12 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           userId: sessionUser?.id,
           userEmail: normalizedEmail,
           error: err,
-        }, { cfEnv });
+        }, { cfEnv, ctx: cfCtx });
         d1WriteError = err?.message || 'D1 create failed';
       }
     })();
 
-    // 4. Execute Resend email and Webhook notification concurrently with D1 write
-    const notifyTask = dispatchRfqNotifications({
-      orderNo,
-      effectiveBrand,
-      buyerInfo,
-      items,
-      resolvedDestination,
-      visitorIp,
-      detectedCountry,
-      inquiryType,
-      locale,
-      reqHostname: reqUrl.hostname,
-      systemSettings,
-      siteConfig,
-      getVal,
-    });
-
-    await Promise.allSettled([d1WriteTask, notifyTask]);
+    await d1WriteTask;
 
     if (!orderId) {
       if (idempKey) {
@@ -424,7 +408,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         userId: sessionUser?.id,
         userEmail: normalizedEmail,
         context: { d1WriteError, orderNo },
-      }, { cfEnv });
+      }, { cfEnv, ctx: cfCtx });
       return new Response(
         JSON.stringify({
           error: `Order could not be saved to primary database: ${d1WriteError || 'Database write failed'}.`,
@@ -434,9 +418,27 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       );
     }
 
+    // 4. After primary DB persistence succeeds, record idempotency key and dispatch Resend email & Webhook notifications asynchronously in background
     if (idempKey) {
-      await kvPut(idempKey, { orderNo, email: normalizedEmail }, { expirationTtl: 60 }, cfEnv).catch(() => {});
+      runInBackground(kvPut(idempKey, { orderNo, email: normalizedEmail }, { expirationTtl: 60 }, cfEnv));
     }
+    runInBackground(
+      dispatchRfqNotifications({
+        orderNo,
+        effectiveBrand,
+        buyerInfo,
+        items,
+        resolvedDestination,
+        visitorIp,
+        detectedCountry,
+        inquiryType,
+        locale,
+        reqHostname: reqUrl.hostname,
+        systemSettings,
+        siteConfig,
+        getVal,
+      })
+    );
 
     const resHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
     let turnstilePassUntil: number | undefined;
@@ -469,7 +471,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       path: '/api/submit-quote',
       rayId: request.headers.get('cf-ray') || undefined,
       error,
-    }, { cfEnv });
+    }, { cfEnv, ctx: cfCtx });
     return new Response(
       JSON.stringify({ error: error?.message || 'Internal Server Error' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

@@ -99,5 +99,5 @@
 | **`CMS-ADV-01`** | `src/`、`studio/` 与 `adminPageSchemas.ts` Section 强联动 | 6 大核心 Section 积木必须在 `studio/schemaTypes/page.ts`、`src/data/blocks.ts` 与 `src/utils/adminPageSchemas.ts` 中三方同步对齐。 |
 | **`CMS-ADV-02`** | `PRODUCT_CARD_FIELDS` 最小特权投影守卫 | 商品列表卡片投影严禁包含全量 `gallery[]`，且 `specifications` 必须切片为 `specifications[0..1]`。 |
 | **`CMS-ADV-03`** | Sanity 写后主动刷新强制走 `liveClient` (`useCdn: false`) | 防止 `apicdn.sanity.io` 缓存延迟导致主动刷新时读回旧数据覆写 Cloudflare KV。 |
-| **`CMS-ADV-04`** | `/cdn-image/*` 路径白名单、`cf_fmt=webp` 防缓存投毒与 6s 超时 | 必须锁定上游 `fm=webp` 并按 `cf_fmt=webp` 隔离缓存键，同时挂载 `AbortSignal.timeout(6000)`。 |
+| **`CMS-ADV-04`** | `/cdn-image/*` 路径白名单、`ALLOWED_IMAGE_PARAMS` 查询参数白名单、`cf_fmt=webp` 防缓存投毒与 6s 超时 | 必须通过 `ALLOWED_IMAGE_PARAMS` 过滤未知查询参数并禁用 `?purge` URL 参数，锁定上游 `fm=webp` 并按 `cf_fmt=webp` 隔离缓存键，同时挂载 `AbortSignal.timeout(6000)`。 |
 | **`03-cms-i18n-seo:runtime-consistency-verify`** | 内存级 `PreflightTest.verify()`（写前引用净化 + 三级多语言回退 + 最小影响面判定） | 注入携带非法 `url`/`mainImageUrl` 的 Sanity 引用对象检验 `sanitizeSanityDocument`；检验 `normalizeSections` 缺失小语种时的纺织词典回退解包；检验 `hasProductCardFieldsChanged` 修改 `specifications[2]` 时不误判为卡片级变更。 |
