@@ -506,15 +506,15 @@ html.apple-snap-active {
   }
 
   .adm-thead {
-    @apply sticky top-0 z-10 border-b border-black/5 bg-apple-gray/90 text-[11px] tracking-wider text-apple-muted uppercase backdrop-blur-xs;
+    @apply sticky top-0 z-10 border-b border-black/5 bg-apple-gray/90 text-[10px] sm:text-[11px] tracking-wider text-apple-muted uppercase backdrop-blur-xs;
   }
 
   .adm-th {
-    @apply px-3.5 py-2.5 text-[11px] font-semibold tracking-wider text-apple-muted uppercase;
+    @apply px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 text-[10px] sm:text-[11px] font-semibold tracking-wider text-apple-muted uppercase;
   }
 
   .adm-td {
-    @apply px-3.5 py-2.5 align-middle;
+    @apply px-2.5 py-2 sm:px-3.5 sm:py-2.5 align-middle text-xs leading-snug;
   }
 
   .adm-badge {
@@ -539,5 +539,31 @@ html.apple-snap-active {
 
   .adm-badge-neutral {
     @apply border-black/10 bg-apple-gray text-apple-muted;
+  }
+}
+
+/* Mobile Admin Workbench: Auto-collapse top toolbars when scrolling down inside data tables */
+@media (max-width: 1023px) {
+  [data-admin-toolbar="true"] {
+    max-height: 160px;
+    overflow: hidden;
+    transition:
+      max-height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms ease,
+      padding 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-width 220ms ease;
+  }
+
+  #shell-root.is-table-scrolled-down [data-admin-toolbar="true"] {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top-width: 0 !important;
+    border-bottom-width: 0 !important;
+    pointer-events: none !important;
   }
 }

@@ -224,6 +224,59 @@ export const storefrontAndShellsAuditSuite: DomainAuditSuite = {
         return violations;
       },
     },
+    {
+      id: 'UI-ADV-06',
+      domain: DOMAIN,
+      docPath: DOC_PATH,
+      title: 'Admin 移动端单一滚动视口 (严禁 min-h-[420px] 双滚动冲突) 与上滑自动折叠顶部工具栏挑刺',
+      historicalContext:
+        '历史移动端体验缺陷：1) AdminLayout.astro 的 #shell-main-canvas 与 AdminWorkbenchTableShell.astro 若设置 min-h-[420px] lg:min-h-0，在小屏手机上会撑破 100dvh 导致“表内 + 表外浏览器”两个滑动区互相抢手势；2) 顶部工具栏若在表格向下滚动时不自动折叠退让，会吃掉近 40% 的垂直可视面积。',
+      remediation:
+        '在 AdminLayout.astro 与 AdminWorkbenchTableShell.astro 中保持 strict min-h-0 + overscroll-contain 单一滚动源，并保持 is-table-scrolled-down 驱动 [data-admin-toolbar="true"] 平滑收起。',
+      check: (ctx) => {
+        const violations: AuditViolation[] = [];
+        const adminLayout = ctx.readFile('src/layouts/AdminLayout.astro');
+        const tableShell = ctx.readFile('src/components/admin/AdminWorkbenchTableShell.astro');
+        const globalsCss = ctx.readFile('src/styles/globals.css');
+
+        if (adminLayout && (adminLayout.includes('min-h-[420px]') || !adminLayout.includes('is-table-scrolled-down'))) {
+          violations.push({
+            ruleId: 'UI-ADV-06',
+            domain: DOMAIN,
+            docPath: DOC_PATH,
+            title: 'AdminLayout.astro 存在 min-h-[420px] 双滚动区溢出或缺失 is-table-scrolled-down 顶部折叠控制器',
+            historicalContext: '会导致移动端出现表内表外双滚动条，且数据表滚动时顶部筛选区无法自动退让。',
+            file: 'src/layouts/AdminLayout.astro',
+            remediation: '将 #shell-main-canvas 保持为 min-h-0，并保留捕获阶段 scroll 监听器驱动 is-table-scrolled-down。',
+          });
+        }
+
+        if (tableShell && (tableShell.includes('min-h-[420px]') || !tableShell.includes('overscroll-contain'))) {
+          violations.push({
+            ruleId: 'UI-ADV-06',
+            domain: DOMAIN,
+            docPath: DOC_PATH,
+            title: 'AdminWorkbenchTableShell.astro 存在 min-h-[420px] 或滚动区缺失 overscroll-contain 边界锁定',
+            historicalContext: '缺失 overscroll-contain 会导致表内滑动触顶/触底时触发外层浏览器滚动回弹。',
+            file: 'src/components/admin/AdminWorkbenchTableShell.astro',
+            remediation: '将外壳保持为 flex-1 min-h-0，并在滚动区挂载 data-admin-table-scroll="true" 与 overscroll-contain。',
+          });
+        }
+
+        if (globalsCss && !globalsCss.includes('#shell-root.is-table-scrolled-down [data-admin-toolbar="true"]')) {
+          violations.push({
+            ruleId: 'UI-ADV-06',
+            domain: DOMAIN,
+            docPath: DOC_PATH,
+            title: 'src/styles/globals.css 缺失 #shell-root.is-table-scrolled-down 顶部工具栏折叠样式',
+            historicalContext: '缺失该规则会导致移动端上滑浏览数据表时顶部工具栏无法自动收起让出可视空间。',
+            file: 'src/styles/globals.css',
+            remediation: '在 globals.css 中保留 @media (max-width: 1023px) 下 [data-admin-toolbar="true"] 的 max-height 折叠过渡。',
+          });
+        }
+        return violations;
+      },
+    },
   ],
   verify: async () => {
     const violations: AuditViolation[] = [];

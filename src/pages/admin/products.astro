@@ -82,19 +82,19 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
     </AdminPageToolbar>
 
     <!-- Products View -->
-    <div id="view-products" class="flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden">
-      <div class="p-3 border-b border-black/5 flex flex-wrap items-center justify-between gap-3 bg-[#fafafc]">
-        <div class="relative flex-1 min-w-[200px] max-w-md">
-          <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div id="view-products" class="flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-xl sm:rounded-2xl shadow-2xs overflow-hidden">
+      <div data-admin-toolbar="true" class="adm-toolbar p-2 sm:p-3 border-b border-black/5 flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-[#fafafc] shrink-0">
+        <div class="relative flex-1 min-w-[160px] max-w-md">
+          <svg class="w-3.5 h-3.5 text-[#86868b] absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <input type="text" id="search-input" placeholder="Search product title, SKU, or category..." class="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs" />
+          <input type="text" id="search-input" placeholder="Search product title, SKU, or category..." class="w-full pl-8 pr-2.5 py-1 sm:py-1.5 rounded-xl bg-white border border-black/10 focus:outline-none focus:border-black text-xs" />
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <select id="category-filter" class="h-8 px-2.5 rounded-xl bg-white border border-black/10 text-xs focus:outline-none focus:border-black cursor-pointer">
+        <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <select id="category-filter" class="h-7 sm:h-8 px-2 sm:px-2.5 rounded-xl bg-white border border-black/10 text-xs focus:outline-none focus:border-black cursor-pointer">
             <option value="ALL">All Categories</option>
           </select>
-          <select id="status-filter" class="h-8 px-2.5 rounded-xl bg-white border border-black/10 text-xs focus:outline-none focus:border-black cursor-pointer">
+          <select id="status-filter" class="h-7 sm:h-8 px-2 sm:px-2.5 rounded-xl bg-white border border-black/10 text-xs focus:outline-none focus:border-black cursor-pointer">
             <option value="ALL">All Statuses</option>
             <option value="LIVE">Live Published</option>
             <option value="DRAFT">Drafts</option>
@@ -103,17 +103,17 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
         </div>
       </div>
 
-      <div class="flex-1 overflow-auto">
+      <div data-admin-table-scroll="true" class="flex-1 min-h-0 overflow-auto overscroll-contain scrollbar-thin">
         <table class="w-full text-left text-xs border-collapse">
-          <thead class="bg-[#f5f5f7]/80 text-[#86868b] text-[11px] uppercase tracking-wider sticky top-0 backdrop-blur-xs z-10 border-b border-black/5">
+          <thead class="bg-[#f5f5f7]/80 text-[#86868b] text-[10px] sm:text-[11px] uppercase tracking-wider sticky top-0 backdrop-blur-xs z-10 border-b border-black/5">
             <tr>
-              <th class="py-2.5 px-3.5 w-16">Image</th>
-              <th class="py-2.5 px-3.5">Product Title / SKU</th>
-              <th class="py-2.5 px-3.5">Category</th>
-              <th class="py-2.5 px-3.5">Pricing Tiers & MOQ</th>
-              <th class="py-2.5 px-3.5">Colors</th>
-              <th class="py-2.5 px-3.5">Status</th>
-              <th class="py-2.5 px-3.5 text-right">Actions</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5 w-14 sm:w-16">Image</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5">Product Title / SKU</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5">Category</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5">Pricing Tiers & MOQ</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5">Colors</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5">Status</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody id="products-table-body" class="divide-y divide-black/5">
@@ -124,24 +124,24 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
     </div>
 
     <!-- Categories View -->
-    <div id="view-categories" class="hidden flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-2xl shadow-2xs overflow-hidden">
-      <div class="p-3 border-b border-black/5 bg-[#fafafc] flex items-center justify-between">
-        <p class="text-xs text-[#52525b]">Categories drive the main navigation, product hall filtering, and catalog organization.</p>
+    <div id="view-categories" class="hidden flex-1 min-h-0 flex flex-col bg-white border border-black/5 rounded-xl sm:rounded-2xl shadow-2xs overflow-hidden">
+      <div data-admin-toolbar="true" class="adm-toolbar p-2 sm:p-3 border-b border-black/5 bg-[#fafafc] flex items-center justify-between shrink-0">
+        <p class="text-xs text-[#52525b] truncate">Categories drive navigation & catalog organization.</p>
         {canWrite && (
-          <button type="button" id="btn-add-category" class="h-7 px-3 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] shadow-2xs cursor-pointer">
+          <button type="button" id="btn-add-category" class="h-7 px-3 rounded-lg text-xs font-semibold bg-white border border-black/10 hover:border-black text-[#1d1d1f] shadow-2xs cursor-pointer shrink-0">
             ＋ Add Category
           </button>
         )}
       </div>
-      <div class="flex-1 overflow-auto">
+      <div data-admin-table-scroll="true" class="flex-1 min-h-0 overflow-auto overscroll-contain scrollbar-thin">
         <table class="w-full text-left text-xs border-collapse">
-          <thead class="bg-[#f5f5f7]/80 text-[#86868b] text-[11px] uppercase tracking-wider sticky top-0 backdrop-blur-xs z-10 border-b border-black/5">
+          <thead class="bg-[#f5f5f7]/80 text-[#86868b] text-[10px] sm:text-[11px] uppercase tracking-wider sticky top-0 backdrop-blur-xs z-10 border-b border-black/5">
             <tr>
-              <th class="py-2.5 px-3.5 w-20">Order</th>
-              <th class="py-2.5 px-3.5">Slug</th>
-              <th class="py-2.5 px-3.5">Title (EN / DE / FR / ES)</th>
-              <th class="py-2.5 px-3.5">Description</th>
-              <th class="py-2.5 px-3.5 text-right">Actions</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5 w-16 sm:w-20">Order</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5">Slug</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5">Title (EN / DE / FR / ES)</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5">Description</th>
+              <th class="py-1.5 px-2.5 sm:py-2.5 sm:px-3.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody id="categories-table-body" class="divide-y divide-black/5">
