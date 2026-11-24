@@ -37,7 +37,7 @@ export const STOREFRONT_THEMES = [
   },
   {
     value: 'luxury-atelier',
-    name: 'Luxury Atelier（GWENVENNI 建筑高定）',
+    name: 'Luxury Atelier（建筑高定）',
     badge: 'New · 品牌重塑',
     desc: '原纱宣纸暖调 + Cormorant 衬线字阶 + 解除一屏锁高与 Snap 放大建筑留白 + 4:5 无框画廊陈列（清除橙色/绿徽章杂讯）。',
     swatches: ['#fcfbf9', '#f4f0ea', '#3f3228'],

@@ -30,7 +30,7 @@
 | **内容管理系统** | **Sanity CMS (`@sanity/client`) + 自建后台 CMS** | 云端 Headless CMS + `/admin/*` | 商品目录、分类、模块化动态页面（6 大 Section 积木）、全局配置、云端媒体库 |
 | **身份与单点登录** | **Logto OIDC + Web Crypto HMAC-SHA256** | OIDC 云端 + 边缘无状态 Cookie | 买手注册/登录、社交登录、M2M 管理接口密码重置、`b2b_session` 零 I/O 签名校验 |
 | **事务通知系统** | **Resend Email API + 多平台 IM Webhook** | `waitUntil` 异步并行调度 | 询盘提交、订单审批、发货单号通知（企微/钉钉/飞书/Slack/Discord，6s 刚性超时熔断） |
-| **前端状态与样式** | **Tailwind CSS v4 + DaisyUI + Nanostores** | 零 CLS 服务端骨架 + 客户端水合 | 4 套动态主题 (`apple-minimal` / `luxury-editorial` / `atelier-warm` / `industrial-tech`)、响应式几何对齐 |
+| **前端状态与样式** | **Tailwind CSS v4 + DaisyUI + Nanostores** | 零 CLS 服务端骨架 + 客户端水合 | 4 套动态主题 (`apple-minimal` / `warm-atelier` / `editorial-gallery` / `luxury-atelier`)、响应式几何对齐 |
 
 ---
 

@@ -19,14 +19,14 @@
 
 ## 2. 前台多主题引擎与物理几何系统
 
-### 2.1 四套动态视觉主题 (`src/config/storefrontThemes.ts` & `ThemeProvider.astro`)
-- **支持主题**：
-  1. `apple-minimal`（默认：苹果极简纯白高对比工业风）
-  2. `luxury-editorial`（高定画报风：衬线标题、自动隐藏卡片上的工业针数 `gauge` 标签以保持视觉留白）
-  3. `atelier-warm`（暖调工坊风：羊绒米白暖色基底）
-  4. `industrial-tech`（精密制造风：高密度技术参数展示）
+### 2.1 四套动态视觉主题与「1 基准 + 3 覆写补丁」架构 (`src/config/storefrontThemes.ts` & `src/styles/themes/*.css`)
+- **单一事实源 (`STOREFRONT_THEMES` in `src/config/storefrontThemes.ts`) 定义的 4 套主题**：
+  1. `apple-minimal`（**默认基准主题** · Apple Minimal 极简冷灰）：纯白画布 `#ffffff` + `#f5f5f7` 冷灰展台 + 系统无衬线 + 高密度 7 列商品货架。**直接定义在 `src/styles/globals.css` 的 `:root` / `@theme` 基准变量与 `THEME_CLASS_MAP['apple-minimal']` 中，因此无需单独的 `src/styles/themes/apple-minimal.css` 覆写文件**。
+  2. `warm-atelier`（**覆写主题 1** · `src/styles/themes/warm-atelier.css`）：原纱暖调画册风，通过 `[data-storefront-theme="warm-atelier"]` 将全局色阶覆写为暖石宣纸色（`#fcfbf9` / `#f6f3ee`）与浓缩咖啡墨色（`#1c1917`）。
+  3. `editorial-gallery`（**覆写主题 2** · `src/styles/themes/editorial-gallery.css`）：高定衬线画廊风，按需加载 `Cormorant Garamond` 展示衬线体（`loadDisplaySerif: true`），采用无框画廊 4~5 列大图陈列并隐藏图片遮挡角标。
+  4. `luxury-atelier`（**覆写主题 3** · `src/styles/themes/luxury-atelier.css`）：建筑高定风，原纱宣纸暖调 + `Cormorant` 衬线字阶 + 解除一屏锁高与 Snap 放大建筑留白 + 4:5 无框画廊陈列。
 - **SSR 零闪烁解析 (`resolveThemeContext` & `useStorefrontTheme`)**：
-  - 在 SSR 阶段读取 `SiteConfig` 或 URL 预览参数，将解析结果缓存在 `Astro.locals.__themeContext` 中，直接在 `<html>` / `<body>` 根节点注入 `data-storefront-theme` 属性与按需主题 CSS，彻底杜绝客户端主题切换闪烁 (FOUC)。
+  - 在 SSR 阶段读取 `SiteConfig` 或 URL 预览参数 (`?preview_theme=`)，将解析结果缓存在 `Astro.locals.__themeContext` 中，直接在 `<html>` / `<body>` 根节点注入 `data-storefront-theme="<theme>"` 属性与 `THEME_CLASS_MAP` 语义类名，彻底杜绝客户端主题切换闪烁 (FOUC)。
 
 ### 2.2 View Transitions 导航栏零闪烁固定 (`src/styles/globals.css`)
 - 顶部导航栏 `header.apple-nav` (`view-transition-name: site-header`) 与面包屑 `nav.breadcrumbs-bar` (`view-transition-name: site-breadcrumbs`) 拥有独立合成层：
@@ -103,4 +103,5 @@
 | **`UI-ADV-02`** | AppShell (PJAX) 子页面脚本严禁仅依赖 `DOMContentLoaded` | `/admin/*`、`/orders/*`、`/account` 采用 PJAX 局部替换画布，切页不触发 `DOMContentLoaded`，必须监听 `shell:page-load` 或使用 `document` 事件委托。 |
 | **`UI-ADV-03`** | View Transitions 顶部导航锁定与 `--apple-dock-bottom` 几何基准线 | `globals.css` 必须保留 `site-header` 的 View Transition 零闪烁锁定与 `--apple-dock-bottom` 底部动态避让变量。 |
 | **`UI-ADV-04`** | AppShell (PJAX) 写操作自动清空快照缓存 (`prefetchCache` / `snapshotCache`) | `appShellRouter.ts` 拦截到非 GET 写请求成功后必须立即调用 `prefetchCache.clear()` 与 `snapshotCache.clear()`，保障后台写后即读一致性。 |
+| **`UI-ADV-05`** | 多主题注册表 (`STOREFRONT_THEMES`) 与 `src/styles/themes/*.css` 覆写样式表对齐校验 | `apple-minimal` 作为 `:root` 基准定义在 `globals.css`，其余在 `STOREFRONT_THEMES` 注册的扩展主题必须 1:1 存在 `src/styles/themes/<id>.css` 且被 `globals.css` `@import`，防止设置界面可选但样式缺失。 |
 | **`04-storefront-and-shells:runtime-consistency-verify`** | 内存级 `PreflightTest.verify()`（空 `src` 懒加载容器自愈故障注入） | 在内存中构造 `complete: true, naturalWidth: 0, dataset.src: '...'` 且被预置 `apple-img-loaded` 的虚拟 DOM 容器注入 `useIntersectionShimmer`，断言自动剥离误标类名并挂载 `IntersectionObserver`。 |

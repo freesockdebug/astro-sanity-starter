@@ -178,6 +178,52 @@ export const storefrontAndShellsAuditSuite: DomainAuditSuite = {
         return violations;
       },
     },
+    {
+      id: 'UI-ADV-05',
+      domain: DOMAIN,
+      docPath: DOC_PATH,
+      title: '多主题注册表 (STOREFRONT_THEMES) 与 src/styles/themes/*.css 覆写样式表对齐挑刺',
+      historicalContext:
+        '前台采用「1 套默认基准主题 (apple-minimal 定义于 globals.css :root) + N 套增量覆写主题 (src/styles/themes/<id>.css)」架构。若在 storefrontThemes.ts 新增了非默认主题却漏建 src/styles/themes/<id>.css 或漏在 globals.css 中 @import，会导致后台设置界面可选但前台切换后无样式生效。',
+      remediation:
+        '确保 STOREFRONT_THEMES 中除默认基准主题 apple-minimal 外的每个主题都在 src/styles/themes/<id>.css 存在对应覆写文件，并在 src/styles/globals.css 顶部 @import。',
+      check: (ctx) => {
+        const violations: AuditViolation[] = [];
+        const themesTs = ctx.readFile('src/config/storefrontThemes.ts');
+        const globalsCss = ctx.readFile('src/styles/globals.css');
+        if (!themesTs || !globalsCss) return violations;
+
+        const matches = [...themesTs.matchAll(/value:\s*'([a-z0-9-]+)'/g)].map((m) => m[1]);
+        const uniqueThemes = Array.from(new Set(matches));
+
+        for (const themeId of uniqueThemes) {
+          if (themeId === 'apple-minimal') continue; // baseline in globals.css :root
+          const cssPath = `src/styles/themes/${themeId}.css`;
+          if (!ctx.fileExists(cssPath)) {
+            violations.push({
+              ruleId: 'UI-ADV-05',
+              domain: DOMAIN,
+              docPath: DOC_PATH,
+              title: `主题 "${themeId}" 已在 storefrontThemes.ts 注册，但缺失覆写样式文件 ${cssPath}`,
+              historicalContext: '会导致后台主题设置界面可选该主题，但前台切换后缺失 CSS 变量覆写。',
+              file: 'src/config/storefrontThemes.ts',
+              remediation: `创建 ${cssPath} 并在 src/styles/globals.css 中添加 @import "./themes/${themeId}.css";`,
+            });
+          } else if (!globalsCss.includes(`./themes/${themeId}.css`)) {
+            violations.push({
+              ruleId: 'UI-ADV-05',
+              domain: DOMAIN,
+              docPath: DOC_PATH,
+              title: `主题样式文件 ${cssPath} 未在 src/styles/globals.css 中 @import`,
+              historicalContext: '未在 globals.css 引入的主题覆写文件不会被打包到主样式表中。',
+              file: 'src/styles/globals.css',
+              remediation: `在 src/styles/globals.css 顶部添加 @import "./themes/${themeId}.css";`,
+            });
+          }
+        }
+        return violations;
+      },
+    },
   ],
   verify: async () => {
     const violations: AuditViolation[] = [];
