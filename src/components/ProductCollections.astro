@@ -258,7 +258,7 @@ const { isLuxury } = useStorefrontTheme(Astro.locals);
   const syncShelfLoadedImages = () => {
     document.querySelectorAll('.shelf-card-img').forEach((img) => {
       const htmlImg = img as HTMLImageElement;
-      if (htmlImg.complete && htmlImg.parentElement) {
+      if (htmlImg.complete && htmlImg.naturalWidth > 0 && !htmlImg.dataset.src && !htmlImg.dataset.srcset && htmlImg.parentElement) {
         htmlImg.parentElement.classList.add('apple-img-loaded');
         htmlImg.parentElement.classList.remove('is-shimmer-active');
         shelfShimmer.unobserve(htmlImg.parentElement);
@@ -376,14 +376,5 @@ const { isLuxury } = useStorefrontTheme(Astro.locals);
         (window as any).openQuoteDrawer();
       }
     });
-  });
-  document.querySelectorAll<HTMLImageElement>('.shelf-card-img').forEach((img) => {
-    if (img.complete && img.naturalWidth > 0 && img.parentElement) {
-      img.parentElement.classList.add('apple-img-loaded');
-      img.parentElement.classList.remove('is-shimmer-active');
-      if ((window as any).__unobserveAppleShimmer) {
-        (window as any).__unobserveAppleShimmer(img.parentElement);
-      }
-    }
   });
 </script>

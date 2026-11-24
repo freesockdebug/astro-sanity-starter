@@ -279,3 +279,139 @@ test('hydrateAdminTimes converts SSR time[data-admin-time] elements to local for
     (globalThis as any).document = prevDoc;
   }
 });
+
+test('useIntersectionShimmer restores pending data-src images even if apple-img-loaded was prematurely set', async () => {
+  const { useIntersectionShimmer } = await import('../src/utils/useIntersectionShimmer.js');
+
+  const prevWindow = (globalThis as any).window;
+  const prevDoc = (globalThis as any).document;
+  const prevElement = (globalThis as any).Element;
+
+  let ioCallback: ((entries: any[], obs: any) => void) | null = null;
+  const observed = new Set<any>();
+  const unobserved = new Set<any>();
+
+  class FakeElement {
+    tagName = 'DIV';
+    private classes: Set<string>;
+    classList: {
+      add: (c: string) => void;
+      remove: (c: string) => void;
+      contains: (c: string) => boolean;
+    };
+    private img: any;
+
+    constructor(img: any, initialClasses: string[] = []) {
+      this.img = img;
+      this.classes = new Set(initialClasses);
+      this.classList = {
+        add: (c: string) => {
+          this.classes.add(c);
+        },
+        remove: (c: string) => {
+          this.classes.delete(c);
+        },
+        contains: (c: string) => this.classes.has(c),
+      };
+    }
+
+    matches() {
+      return false;
+    }
+
+    querySelector(sel: string) {
+      if (sel === 'img') return this.img;
+      if (sel === 'img[data-src], img[data-srcset]') {
+        return this.img && (this.img.dataset?.src || this.img.dataset?.srcset) ? this.img : null;
+      }
+      return null;
+    }
+
+    querySelectorAll() {
+      return [];
+    }
+  }
+
+  class FakeIntersectionObserver {
+    constructor(cb: (entries: any[], obs: any) => void) {
+      ioCallback = cb;
+    }
+    observe(el: any) {
+      observed.add(el);
+    }
+    unobserve(el: any) {
+      observed.delete(el);
+      unobserved.add(el);
+    }
+  }
+
+  (globalThis as any).Element = FakeElement;
+  (globalThis as any).document = { readyState: 'complete' };
+  (globalThis as any).window = { IntersectionObserver: FakeIntersectionObserver };
+
+  try {
+    const lazyImg = {
+      tagName: 'IMG',
+      complete: true,
+      naturalWidth: 0,
+      src: '',
+      srcset: '',
+      dataset: {
+        src: 'https://cdn.example/a.webp',
+        srcset: 'https://cdn.example/a.webp 480w',
+      } as Record<string, string>,
+    };
+    const cachedImg = {
+      tagName: 'IMG',
+      complete: true,
+      naturalWidth: 480,
+      src: 'https://cdn.example/b.webp',
+      srcset: '',
+      dataset: {} as Record<string, string>,
+    };
+
+    const lazyBox = new FakeElement(lazyImg, ['apple-img-loaded']);
+    const cachedBox = new FakeElement(cachedImg);
+
+    const observerRef = new FakeIntersectionObserver(() => {});
+    ioCallback = null;
+
+    useIntersectionShimmer([lazyBox as unknown as Element, cachedBox as unknown as Element], {
+      rootMargin: '99px 99px',
+      deferUntilIdle: false,
+    });
+
+    assert.equal(lazyBox.classList.contains('apple-img-loaded'), false);
+    assert.equal(observed.has(lazyBox), true);
+    assert.equal(cachedBox.classList.contains('apple-img-loaded'), true);
+    assert.equal(observed.has(cachedBox), false);
+    assert.ok(ioCallback);
+
+    ioCallback!([{ target: lazyBox, isIntersecting: true }], {
+      unobserve: (el: any) => observerRef.unobserve(el),
+    });
+
+    assert.equal(lazyImg.src, 'https://cdn.example/a.webp');
+    assert.equal(lazyImg.srcset, 'https://cdn.example/a.webp 480w');
+    assert.equal('src' in lazyImg.dataset, false);
+    assert.equal('srcset' in lazyImg.dataset, false);
+    assert.equal(lazyBox.classList.contains('is-shimmer-active'), true);
+
+    lazyBox.classList.add('apple-img-loaded');
+    ioCallback!([{ target: lazyBox, isIntersecting: true }], {
+      unobserve: (el: any) => observerRef.unobserve(el),
+    });
+
+    assert.equal(lazyBox.classList.contains('is-shimmer-active'), false);
+    assert.equal(unobserved.has(lazyBox), true);
+  } finally {
+    if (prevWindow === undefined) delete (globalThis as any).window;
+    else (globalThis as any).window = prevWindow;
+
+    if (prevDoc === undefined) delete (globalThis as any).document;
+    else (globalThis as any).document = prevDoc;
+
+    if (prevElement === undefined) delete (globalThis as any).Element;
+    else (globalThis as any).Element = prevElement;
+  }
+});
