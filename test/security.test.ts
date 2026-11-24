@@ -30,14 +30,14 @@ test('maskSecret, isMaskedSecret, and sanitizeAdminSettings redact secret keys s
   assert.equal(isMaskedSecret('re_1234567890abcdef'), false);
 
   const sanitized = sanitizeAdminSettings({
-    brand_name: 'GWENVENNI',
+    brand_name: 'ATELIER',
     resend_api_key: 're_live_secret_token_9988',
     turnstile_secret_key: '0x4AAAAAA_secret_key_1234',
     revalidate_secret: 'my-secret',
     cloudflare_api_token: '',
   });
 
-  assert.equal(sanitized.brand_name, 'GWENVENNI');
+  assert.equal(sanitized.brand_name, 'ATELIER');
   assert.equal(sanitized.resend_api_key, 're_l••••9988');
   assert.equal(sanitized.turnstile_secret_key, '0x4A••••1234');
   assert.equal(sanitized.revalidate_secret, 'my-s••••cret');
@@ -63,8 +63,8 @@ test('Stateless HMAC OAuth state token signs, verifies, rejects tampering/expiry
 
   // buildLogtoAuthRedirect sets SameSite=None; Secure on HTTPS and Max-Age=3600
   const res = await buildLogtoAuthRedirect({
-    request: new Request('https://gwenvenni.com/api/auth/login?returnUrl=/orders'),
-    endpoint: 'https://auth.gwenvenni.com',
+    request: new Request('https://example.com/api/auth/login?returnUrl=/orders'),
+    endpoint: 'https://auth.example.com',
     appId: 'app_123',
     returnUrl: '/orders',
     isPopup: false,

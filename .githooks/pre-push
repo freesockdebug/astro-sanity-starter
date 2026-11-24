@@ -73,4 +73,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 done
 
 echo "✔ [PASS] Pre-push 凭据安全扫描通过，未发现敏感密钥泄露。"
+echo "🛡️ 正在执行对抗性历史故障巡检与架构文档同步门禁 (npm run check:fast)..."
+npm run check:fast
 exit 0

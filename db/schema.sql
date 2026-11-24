@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS system_error_logs (
   client_ip TEXT,
   country TEXT,
   city TEXT,
+  hit_count INTEGER DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS admin_roles (
@@ -139,6 +140,30 @@ CREATE TABLE IF NOT EXISTS sys_dict_items (
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(group_code, item_key)
 );
+CREATE TABLE IF NOT EXISTS waf_rules (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL DEFAULT 'custom',
+  name TEXT NOT NULL,
+  is_system INTEGER DEFAULT 0,
+  is_enabled INTEGER DEFAULT 1,
+  priority INTEGER DEFAULT 100,
+  conditions_json TEXT NOT NULL DEFAULT '[]',
+  match_mode TEXT DEFAULT 'ALL',
+  action TEXT NOT NULL DEFAULT 'block_403',
+  rate_limit_json TEXT DEFAULT '{}',
+  strike_weight INTEGER DEFAULT 0,
+  expires_at TEXT DEFAULT NULL,
+  updated_by TEXT DEFAULT '',
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS waf_ip_acl (
+  ip_cidr TEXT PRIMARY KEY,
+  list_type TEXT NOT NULL,
+  reason TEXT DEFAULT '',
+  expires_at TEXT DEFAULT NULL,
+  created_by TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
 INSERT OR IGNORE INTO admin_roles (code, name, data_scope, menus_json, permissions_json, description, is_system) VALUES
   ('super_admin', '超级管理员', 'ALL', '["dashboard","orders","users","products","pages","cms_config","cache","members","roles","dicts","waf","logins","logs","settings"]', '["*"]', '全局最高权限，拥有全站所有操作及系统设置能力', 1),
   ('content_editor', '内容与美工运营', 'ALL', '["products","pages","cms_config","cache"]', '["cms:read","cms:write","cache:purge"]', '负责商品管理、分类维护、页面积木编排与边缘缓存刷新', 1),
@@ -146,8 +171,6 @@ INSERT OR IGNORE INTO admin_roles (code, name, data_scope, menus_json, permissio
   ('sales_rep', '跟单业务员', 'SELF_AND_POOL', '["orders","users"]', '["orders:read","orders:claim","orders:approve","orders:ship","users:read"]', '负责跟单、询盘公海认领与常规发货审批', 1),
   ('auditor', '运维审计员', 'ALL', '["dashboard","waf","logins","logs"]', '["dashboard:read","waf:read","logins:read","logs:read"]', '只读查看登录轨迹与系统诊断日志，保障系统安全', 1);
 UPDATE admin_roles SET menus_json = '["dashboard","orders","users","products","pages","cms_config","cache","members","roles","dicts","waf","logins","logs","settings"]' WHERE code = 'super_admin' AND is_system = 1;
-UPDATE admin_roles SET menus_json = '["dashboard","orders","users","products","members","logins"]' WHERE code = 'sales_manager' AND is_system = 1;
-UPDATE admin_roles SET menus_json = '["dashboard","waf","logins","logs"]', permissions_json = '["dashboard:read","waf:read","logins:read","logs:read"]' WHERE code = 'auditor' AND is_system = 1;
 INSERT OR IGNORE INTO system_settings (key, value, updated_by) VALUES ('co_admin_emails', '', 'system_init');
 INSERT OR IGNORE INTO sys_dict_groups (code, name, description, meta_schema_json, is_system) VALUES
   ('shipping_carriers', 'Shipping Carriers', 'Logistics couriers & tracking URL templates', '[{"key":"tracking_url","label":"Tracking URL Template","type":"text","placeholder":"https://...{tracking}"}]', 1),
@@ -244,19 +267,25 @@ INSERT OR IGNORE INTO sys_dict_items (group_code, item_key, item_label, badge_co
   ('product_units', 'Pcs', 'Pieces (件/条)', 'slate', '{}', 20),
   ('product_units', 'Sets', 'Sets (套/盒)', 'slate', '{}', 30),
   ('product_units', 'Dozens', 'Dozens (打/12双)', 'slate', '{}', 40);
+DROP INDEX IF EXISTS idx_orders_order_no;
+DROP INDEX IF EXISTS idx_users_email;
+DROP INDEX IF EXISTS idx_orders_status;
+DROP INDEX IF EXISTS idx_orders_assigned_to;
+DROP INDEX IF EXISTS idx_user_logins_user_id;
+DROP INDEX IF EXISTS idx_dict_items_group;
+DROP INDEX IF EXISTS idx_dict_items_enabled;
+DROP INDEX IF EXISTS idx_users_lower_email;
+DROP INDEX IF EXISTS idx_orders_lower_email;
+DROP INDEX IF EXISTS idx_orders_assigned_status;
+DROP INDEX IF EXISTS idx_error_logs_waf_dedupe;
 CREATE INDEX IF NOT EXISTS idx_orders_unclaimed_email ON orders(buyer_email, user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON orders(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_lower_email ON users(LOWER(email));
 CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_users_assigned_to ON users(assigned_to);
-CREATE INDEX IF NOT EXISTS idx_orders_lower_email ON orders(LOWER(buyer_email));
-CREATE INDEX IF NOT EXISTS idx_user_logins_user_id ON user_logins(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_login_created ON users(last_login_at DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_logins_created_at ON user_logins(created_at);
 CREATE INDEX IF NOT EXISTS idx_error_logs_ray_id ON system_error_logs(ray_id);
 CREATE INDEX IF NOT EXISTS idx_error_logs_bottlenecks ON system_error_logs(created_at, path, method, latency_ms, error_code) WHERE latency_ms > 0 AND path IS NOT NULL AND path != '' AND (method IS NULL OR method != 'CLIENT') AND (error_code IS NULL OR error_code NOT IN ('WEB_VITALS', 'CLIENT_NAVIGATION'));
@@ -266,12 +295,14 @@ CREATE INDEX IF NOT EXISTS idx_admin_members_status ON admin_members(status);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON admin_audit_logs(action);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON admin_audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON admin_audit_logs(target_type, target_id);
-CREATE INDEX IF NOT EXISTS idx_dict_items_group ON sys_dict_items(group_code);
-CREATE INDEX IF NOT EXISTS idx_dict_items_enabled ON sys_dict_items(is_enabled);
 CREATE INDEX IF NOT EXISTS idx_dict_items_group_sort ON sys_dict_items(group_code, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_dict_items_sort ON sys_dict_items(sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_user_logins_user_created ON user_logins(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_logins_email_created ON user_logins(email, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_orders_assigned_status ON orders(assigned_to, status);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_email ON admin_audit_logs(admin_email)
+CREATE INDEX IF NOT EXISTS idx_orders_assigned_status_created ON orders(assigned_to, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_email ON admin_audit_logs(admin_email);
+CREATE INDEX IF NOT EXISTS idx_waf_rules_enabled_priority ON waf_rules(is_enabled, priority, id);
+CREATE INDEX IF NOT EXISTS idx_waf_ip_acl_type ON waf_ip_acl(list_type, expires_at);
+CREATE INDEX IF NOT EXISTS idx_error_logs_waf_dedupe_v2 ON system_error_logs(source, client_ip, error_code, id DESC);
+CREATE INDEX IF NOT EXISTS idx_error_logs_source_created ON system_error_logs(source, created_at, id);

@@ -579,14 +579,20 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     return null;
   }
 
+  private get memoKey(): string {
+    return `__tiered_inflight:${this.name}`;
+  }
+
   public invalidate(): void {
     this.entry = null;
     this.stats.evictions += 1;
+    getActiveProfiler()?.requestMemo.delete(this.memoKey);
   }
 
   public async evict(customEnv?: any): Promise<void> {
     this.entry = null;
     this.stats.evictions += 1;
+    getActiveProfiler()?.requestMemo.delete(this.memoKey);
     if (this.kvKey) {
       await kvDelete(this.kvKey, customEnv).catch(() => { });
     }
@@ -613,6 +619,7 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
     customEnv?: any,
     options?: { syncKv?: boolean }
   ): Promise<TCompiled> {
+    getActiveProfiler()?.requestMemo.delete(this.memoKey);
     const compiled = this.storeL1(raw);
     await this.persistToKv(raw, customEnv, options?.syncKv !== false);
     return compiled;
@@ -624,63 +631,87 @@ export class EdgeTieredCache<TRaw, TCompiled = TRaw> {
   ): Promise<TCompiled> {
     const forceRefresh = Boolean(options?.forceRefresh);
     const now = Date.now();
+    const profiler = getActiveProfiler();
 
     // L1: Isolate Memory (pre-compiled)
     if (!forceRefresh && this.entry && now - this.entry.loadedAt < this.effectiveTtlMs) {
       this.stats.l1Hits += 1;
-      getActiveProfiler()?.recordCacheTier('l1');
+      profiler?.recordCacheTier('l1');
       return this.entry.compiled;
     }
 
-    // L2: Shared Cloudflare Edge KV (base kvKey only; cold starts hydrate via edge:preload:v1)
-    if (!forceRefresh && this.kvKey) {
+    // Request-scoped Single-Flight deduplication (100% Cloudflare Workers safe via AsyncLocalStorage)
+    if (!forceRefresh && profiler) {
+      const existingInFlight = profiler.requestMemo.get(this.memoKey);
+      if (existingInFlight) {
+        this.stats.l1Hits += 1;
+        profiler.recordCacheTier('l1');
+        return existingInFlight as Promise<TCompiled>;
+      }
+    }
+
+    const loadTask = (async (): Promise<TCompiled> => {
+      // L2: Shared Cloudflare Edge KV (base kvKey only; cold starts hydrate via edge:preload:v1)
+      if (!forceRefresh && this.kvKey) {
+        try {
+          const kvVal = await kvGet<any>(this.kvKey, customEnv);
+          if (kvVal !== null && kvVal !== undefined) {
+            const raw = this.deserializeKv ? this.deserializeKv(kvVal) : (kvVal as TRaw);
+            if (raw !== null && raw !== undefined) {
+              this.stats.l2Hits += 1;
+              getActiveProfiler()?.recordCacheTier('l2');
+              return this.storeL1(raw);
+            }
+          }
+        } catch (err) {
+          console.warn(`[TieredCache:${this.name}] L2 KV read failed:`, err);
+        }
+      }
+
+      // L3: Upstream / Database
+      this.stats.l3Misses += 1;
+      getActiveProfiler()?.recordCacheTier('l3');
       try {
-        const kvVal = await kvGet<any>(this.kvKey, customEnv);
-        if (kvVal !== null && kvVal !== undefined) {
-          const raw = this.deserializeKv ? this.deserializeKv(kvVal) : (kvVal as TRaw);
-          if (raw !== null && raw !== undefined) {
-            this.stats.l2Hits += 1;
-            getActiveProfiler()?.recordCacheTier('l2');
-            return this.storeL1(raw);
+        const res = await this.fetchRawFn(customEnv, forceRefresh);
+        if (res !== null && res !== undefined) {
+          const isWrapped =
+            typeof res === 'object' &&
+            res !== null &&
+            'data' in res &&
+            'persistToKv' in res &&
+            typeof (res as any).persistToKv === 'boolean';
+          const raw = isWrapped ? (res as TieredCacheFetchResult<TRaw>).data : (res as TRaw);
+          const persistToKv = isWrapped ? (res as TieredCacheFetchResult<TRaw>).persistToKv !== false : true;
+          const valid = this.isValidRawFn ? this.isValidRawFn(raw, forceRefresh) : true;
+
+          if (valid) {
+            const compiled = this.storeL1(raw);
+            if (persistToKv && this.kvKey) {
+              await this.persistToKv(raw, customEnv, Boolean(forceRefresh || options?.syncKv), forceRefresh);
+            }
+            return compiled;
           }
         }
       } catch (err) {
-        console.warn(`[TieredCache:${this.name}] L2 KV read failed:`, err);
+        console.error(`[TieredCache:${this.name}] L3 fetch failed:`, err);
       }
-    }
 
-    // L3: Upstream / Database
-    this.stats.l3Misses += 1;
-    getActiveProfiler()?.recordCacheTier('l3');
-    try {
-      const res = await this.fetchRawFn(customEnv, forceRefresh);
-      if (res !== null && res !== undefined) {
-        const isWrapped =
-          typeof res === 'object' &&
-          res !== null &&
-          'data' in res &&
-          'persistToKv' in res &&
-          typeof (res as any).persistToKv === 'boolean';
-        const raw = isWrapped ? (res as TieredCacheFetchResult<TRaw>).data : (res as TRaw);
-        const persistToKv = isWrapped ? (res as TieredCacheFetchResult<TRaw>).persistToKv !== false : true;
-        const valid = this.isValidRawFn ? this.isValidRawFn(raw, forceRefresh) : true;
+      if (this.entry) {
+        return this.entry.compiled;
+      }
+      return this.storeL1(this.fallbackRaw);
+    })();
 
-        if (valid) {
-          const compiled = this.storeL1(raw);
-          if (persistToKv && this.kvKey) {
-            await this.persistToKv(raw, customEnv, Boolean(forceRefresh || options?.syncKv), forceRefresh);
-          }
-          return compiled;
+    if (!forceRefresh && profiler) {
+      profiler.requestMemo.set(this.memoKey, loadTask);
+      loadTask.finally(() => {
+        if (profiler.requestMemo.get(this.memoKey) === loadTask) {
+          profiler.requestMemo.delete(this.memoKey);
         }
-      }
-    } catch (err) {
-      console.error(`[TieredCache:${this.name}] L3 fetch failed:`, err);
+      });
     }
 
-    if (this.entry) {
-      return this.entry.compiled;
-    }
-    return this.storeL1(this.fallbackRaw);
+    return loadTask;
   }
 
   public async refresh(customEnv?: any): Promise<TCompiled> {

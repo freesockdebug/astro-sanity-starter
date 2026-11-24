@@ -510,7 +510,7 @@ test('EdgeWafService P0/P1/P2: anti-lockout, well-known, double-encoding, header
     waf_active_modes: [],
     waf_rule_config: normalizeWafRuleConfig({
       customRules: [
-        { id: 'c_origin', enabled: true, field: 'header_contains', headerName: 'origin', operator: 'not_contains', value: 'gwenvenni.com', action: 'block_403' },
+        { id: 'c_origin', enabled: true, field: 'header_contains', headerName: 'origin', operator: 'not_contains', value: 'example.com', action: 'block_403' },
         { id: 'c_country', enabled: true, field: 'country_equals', operator: 'equals', value: 'XX', action: 'block_403' },
         { id: 'c_ua_limit', enabled: true, field: 'ua_contains', operator: 'contains', value: 'TestBot', action: 'rate_limit_429', limit: 2 },
       ],
@@ -522,17 +522,17 @@ test('EdgeWafService P0/P1/P2: anti-lockout, well-known, double-encoding, header
     403
   );
   assert.equal(
-    EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/api/x', headers: new Headers({ origin: 'https://gwenvenni.com' }), country: 'XX', now }, advSettings).status,
+    EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/api/x', headers: new Headers({ origin: 'https://example.com' }), country: 'XX', now }, advSettings).status,
     403
   );
   for (let i = 0; i < 2; i++) {
     assert.equal(
-      EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/products', headers: new Headers({ origin: 'https://gwenvenni.com' }), country: 'US', userAgent: 'TestBot/1.0', now: now + i * 10 }, advSettings).allowed,
+      EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/products', headers: new Headers({ origin: 'https://example.com' }), country: 'US', userAgent: 'TestBot/1.0', now: now + i * 10 }, advSettings).allowed,
       true
     );
   }
   assert.equal(
-    EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/products', headers: new Headers({ origin: 'https://gwenvenni.com' }), country: 'US', userAgent: 'TestBot/1.0', now: now + 30 }, advSettings).status,
+    EdgeWafService.evaluate({ clientIp: '198.51.100.50', pathname: '/products', headers: new Headers({ origin: 'https://example.com' }), country: 'US', userAgent: 'TestBot/1.0', now: now + 30 }, advSettings).status,
     429
   );
 
