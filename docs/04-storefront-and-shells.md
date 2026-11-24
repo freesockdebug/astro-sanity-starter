@@ -20,13 +20,14 @@
 ## 2. 前台多主题引擎与物理几何系统
 
 ### 2.1 四套动态视觉主题与「1 基准 + 3 覆写补丁」架构 (`src/config/storefrontThemes.ts` & `src/styles/themes/*.css`)
-- **单一事实源 (`STOREFRONT_THEMES` in `src/config/storefrontThemes.ts`) 定义的 4 套主题**：
-  1. `apple-minimal`（**默认基准主题** · Apple Minimal 极简冷灰）：纯白画布 `#ffffff` + `#f5f5f7` 冷灰展台 + 系统无衬线 + 高密度 7 列商品货架。**直接定义在 `src/styles/globals.css` 的 `:root` / `@theme` 基准变量与 `THEME_CLASS_MAP['apple-minimal']` 中，因此无需单独的 `src/styles/themes/apple-minimal.css` 覆写文件**。
-  2. `warm-atelier`（**覆写主题 1** · `src/styles/themes/warm-atelier.css`）：原纱暖调画册风，通过 `[data-storefront-theme="warm-atelier"]` 将全局色阶覆写为暖石宣纸色（`#fcfbf9` / `#f6f3ee`）与浓缩咖啡墨色（`#1c1917`）。
-  3. `editorial-gallery`（**覆写主题 2** · `src/styles/themes/editorial-gallery.css`）：高定衬线画廊风，按需加载 `Cormorant Garamond` 展示衬线体（`loadDisplaySerif: true`），采用无框画廊 4~5 列大图陈列并隐藏图片遮挡角标。
-  4. `luxury-atelier`（**覆写主题 3** · `src/styles/themes/luxury-atelier.css`）：建筑高定风，原纱宣纸暖调 + `Cormorant` 衬线字阶 + 解除一屏锁高与 Snap 放大建筑留白 + 4:5 无框画廊陈列。
-- **SSR 零闪烁解析 (`resolveThemeContext` & `useStorefrontTheme`)**：
-  - 在 SSR 阶段读取 `SiteConfig` 或 URL 预览参数 (`?preview_theme=`)，将解析结果缓存在 `Astro.locals.__themeContext` 中，直接在 `<html>` / `<body>` 根节点注入 `data-storefront-theme="<theme>"` 属性与 `THEME_CLASS_MAP` 语义类名，彻底杜绝客户端主题切换闪烁 (FOUC)。
+- **单一事实源 (`STOREFRONT_THEMES` in `src/config/storefrontThemes.ts`) 定义的 4 套正交差异化主题**：
+  1. `apple-minimal`（**默认基准主题** · Apple Minimal 极简冷灰）：纯白画布 `#ffffff` + `#f5f5f7` 冷灰展台 + 系统无衬线 + 高密度 7 列 `1:1` 商品货架 + `100svh` 整屏 Snap。**直接定义在 `src/styles/globals.css` 的 `:root` / `@theme` 基准变量与 `THEME_CLASS_MAP['apple-minimal']` 中，因此无需单独的 `src/styles/themes/apple-minimal.css` 覆写文件**。
+  2. `warm-atelier`（**覆写主题 1** · `src/styles/themes/warm-atelier.css` · 原纱暖调画册）：保持 7 列高密度工业货架与无衬线结构不变，通过 `[data-storefront-theme="warm-atelier"]` 将全局色阶覆写为羊绒暖石色（`#fcfbf9` / `#f6f3ee`）与浓缩咖啡墨色（`#2b2118`）。
+  3. `editorial-gallery`（**覆写主题 2** · `src/styles/themes/editorial-gallery.css` · 墨韵策展画廊）：北欧冷冽矿物岩灰画布（`#f3f4f6` / `#e5e8ec`）+ 曜石黑（`#0f1419`）+ `Cormorant Garamond` 展示衬线体 + `2px` 锋利建筑黑框线 + 解除 `100svh` 锁高的 4 列无角标艺术馆级策展陈列。
+  4. `luxury-atelier`（**覆写主题 3** · `src/styles/themes/luxury-atelier.css` · 建筑高定画册）：原纱宣纸暖调（`#fcfbf9` / `#e8dfd1`）+ 深咖墨色（`#3f3228`）+ `Cormorant` 衬线字阶 + 解除一屏锁高与 Snap 放大建筑留白 + `4:5` 竖幅时尚画册大图陈列。
+- **后台可视化微缩骨架选择器与免保存实时预览 (`?preview_theme=`)**：
+  - 后台 `/admin/settings` 的 `Storefront Visual Theme` 面板通过 `opt.wireframe` 与 `opt.specs` 渲染 1:1 真实色温、字体签名 (`Aa 衬线` / `Aa 无衬线`)、列数密度 (`7列 · 1:1` / `4列 · 1:1` / `4列 · 4:5`) 的微缩版面骨架与 4 维参数对比矩阵。
+  - 当 URL 携带 `?preview_theme=<theme_id>` 时，`src/middleware.ts` 自动旁路 L0 公共 HTML 缓存并向 `Astro.locals.themeContext` 注入预览主题，前台左下角浮动渲染**主题实时预览切换栏**，支持免保存一键对比 4 套主题。
 
 ### 2.2 View Transitions 导航栏零闪烁固定 (`src/styles/globals.css`)
 - 顶部导航栏 `header.apple-nav` (`view-transition-name: site-header`) 与面包屑 `nav.breadcrumbs-bar` (`view-transition-name: site-breadcrumbs`) 拥有独立合成层：

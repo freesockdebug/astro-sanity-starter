@@ -8,7 +8,7 @@ import { fetchRfqSettings } from '@data/rfqSettings';
 import { SanityImageService } from '@utils/image';
 import { getHreflangAlternates, getLangFromUrl, getLocalizedValue, useTranslations } from '@i18n';
 import { getSystemSettings } from '@db';
-import { needsDisplaySerifFont, resolveThemeContext } from '@config/storefrontThemes';
+import { STOREFRONT_THEMES, isValidStorefrontTheme, needsDisplaySerifFont, resolveThemeContext } from '@config/storefrontThemes';
 import { env as cfEnv } from 'cloudflare:workers';
 
 import '../styles/globals.css';
@@ -76,7 +76,11 @@ if (!isShellReq && Astro.locals && !(Astro.locals as any).systemSettings) {
 }
 const enableClientLogs = systemSettings ? Boolean(systemSettings.log_client_errors) : true;
 const clientLogMinLevel = systemSettings ? (systemSettings.log_min_level || 'warn') : 'warn';
-const storefrontTheme = systemSettings?.storefront_theme || 'apple-minimal';
+const rawPreviewTheme = Astro.url.searchParams.get('preview_theme') || (Astro.locals as any)?.previewTheme;
+const isPreviewThemeActive = isValidStorefrontTheme(rawPreviewTheme);
+const storefrontTheme = isPreviewThemeActive
+  ? rawPreviewTheme
+  : (systemSettings?.storefront_theme || 'apple-minimal');
 if (!bare && Astro.locals) {
   (Astro.locals as any).themeContext = resolveThemeContext(storefrontTheme);
 }
@@ -88,7 +92,7 @@ if (!bare && Astro.locals) {
         <!-- High Priority Global Metadata -->
         <meta charset="utf-8" />
         {isShellReq ? (
-            <title>{title ? `${title}${addTitleSuffix ? ' | GWENVENNI' : ''}` : 'GWENVENNI'}</title>
+            <title>{title || ''}</title>
         ) : (
             <>
                 <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -178,6 +182,38 @@ if (!bare && Astro.locals) {
                     </SectionBoundary>
                 )}
             </ThemeProvider>
+        )}
+
+        {isPreviewThemeActive && !isShellReq && !bare && (
+            <div class="fixed bottom-4 left-4 z-50 max-w-[calc(100vw-2rem)] bg-[#111315]/95 text-white backdrop-blur-md border border-white/15 rounded-xl px-3.5 py-2.5 shadow-2xl flex flex-wrap items-center gap-2 text-xs">
+                <span class="font-semibold text-white/80 whitespace-nowrap">主题实时预览:</span>
+                <div class="flex flex-wrap items-center gap-1">
+                    {STOREFRONT_THEMES.map((tOpt) => {
+                        const active = tOpt.value === storefrontTheme;
+                        const nextUrl = new URL(Astro.url);
+                        nextUrl.searchParams.set('preview_theme', tOpt.value);
+                        return (
+                            <a
+                                href={`${nextUrl.pathname}${nextUrl.search}`}
+                                class:list={[
+                                    'px-2 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap',
+                                    active
+                                        ? 'bg-white text-[#111315] font-semibold'
+                                        : 'text-white/75 hover:text-white hover:bg-white/10',
+                                ]}
+                            >
+                                {tOpt.name.split('（')[0]}
+                            </a>
+                        );
+                    })}
+                </div>
+                <a
+                    href={Astro.url.pathname}
+                    class="ml-1 px-2 py-1 rounded-md text-[11px] text-white/60 hover:text-white hover:bg-white/10 transition-colors whitespace-nowrap"
+                >
+                    退出预览 ✕
+                </a>
+            </div>
         )}
 
         <!-- 1. WhatsApp Instant Live Chat Widget (Controlled from Sanity Studio) -->

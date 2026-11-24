@@ -13,6 +13,7 @@ import { getSystemSettings } from './db/settings.repo';
 import { upsertWafIpAcl } from './db/waf.repo';
 import { runInBackground, recordEdgeHtmlCacheResult, recordUrlCacheStats } from './utils/cache';
 import { EdgeWafService, normalizeWafRuleConfig } from './utils/waf';
+import { isValidStorefrontTheme, resolveThemeContext } from './config/storefrontThemes';
 
 /**
  * Safely mutates headers on a Response, cloning into a new Response if headers are immutable
@@ -119,6 +120,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
       }
       if (wafSettings) {
         (context.locals as any).systemSettings = wafSettings;
+      }
+      const previewThemeParam = url.searchParams.get('preview_theme');
+      if (isValidStorefrontTheme(previewThemeParam)) {
+        (context.locals as any).previewTheme = previewThemeParam;
+        (context.locals as any).themeContext = resolveThemeContext(previewThemeParam);
+      } else if (wafSettings?.storefront_theme) {
+        (context.locals as any).themeContext = resolveThemeContext(wafSettings.storefront_theme);
       }
 
       let isAuthenticatedAdmin = false;
@@ -528,6 +536,7 @@ function isPublicCacheablePageGet(request: Request, pathname: string, url: URL):
   }
   if (
     url.searchParams.has('preview') ||
+    url.searchParams.has('preview_theme') ||
     url.searchParams.has('draft') ||
     url.searchParams.has('purge') ||
     url.searchParams.has('revalidate') ||
@@ -636,7 +645,12 @@ async function handleRequest(context: any, next: any, pathname: string, url: URL
   }
 
   // 3. Bypass cache if client explicitly requests preview or draft mode
-  if (url.searchParams.has('preview') || url.searchParams.has('draft') || request.headers.get('authorization')) {
+  if (
+    url.searchParams.has('preview') ||
+    url.searchParams.has('preview_theme') ||
+    url.searchParams.has('draft') ||
+    request.headers.get('authorization')
+  ) {
     return next();
   }
 

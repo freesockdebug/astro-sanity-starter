@@ -1,83 +1,137 @@
 /* ==========================================================================
    Theme: Editorial Gallery (html[data-storefront-theme="editorial-gallery"])
-   Self-contained warm stone canvas, Cormorant serif display & borderless gallery grid.
+   Nordic Mineral Slate canvas, Cormorant serif display & sharp architectural
+   2px monochrome gallery framing (contrasts with warm cashmere themes).
    ========================================================================== */
 html[data-storefront-theme="editorial-gallery"] {
-  --apple-bg-white: #faf8f4;
-  --apple-bg-gray: #f2ede4;
-  --apple-text-primary: #1a1816;
-  --apple-text-secondary: #6e685f;
-  --apple-border: rgba(28, 25, 23, 0.08);
-  --color-apple-white: #faf8f4;
-  --color-apple-gray: #f2ede4;
-  --color-apple-surface: #faf7f2;
-  --color-apple-ink: #1a1816;
-  --color-apple-muted: #6e685f;
+  --ed-canvas: #f3f4f6;
+  --ed-surface: #e5e8ec;
+  --ed-elevated: #ffffff;
+  --ed-ink: #0f1419;
+  --ed-muted: #525b66;
+  --ed-border: rgba(15, 20, 25, 0.16);
+  --ed-border-strong: rgba(15, 20, 25, 0.45);
+  --ed-accent: #1e293b;
+  --ed-radius: 2px;
   --font-editorial: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+
+  --apple-bg-white: var(--ed-canvas);
+  --apple-bg-gray: var(--ed-surface);
+  --apple-text-primary: var(--ed-ink);
+  --apple-text-secondary: var(--ed-muted);
+  --apple-border: var(--ed-border);
+  --color-apple-white: var(--ed-canvas);
+  --color-apple-gray: var(--ed-surface);
+  --color-apple-surface: #eef0f3;
+  --color-apple-ink: var(--ed-ink);
+  --color-apple-muted: var(--ed-muted);
+}
+
+/* Cancel rigid Scroll-Snap for curatorial exhibition scrolling */
+html[data-storefront-theme="editorial-gallery"].apple-snap-active {
+  scroll-snap-type: none !important;
 }
 
 html[data-storefront-theme="editorial-gallery"] body {
-  background-color: var(--apple-bg-white);
-  color: var(--apple-text-primary);
+  background-color: var(--ed-canvas);
+  color: var(--ed-ink);
 }
 
 html[data-storefront-theme="editorial-gallery"] .apple-nav {
-  background: rgba(252, 251, 249, 0.88);
-  border-bottom-color: rgba(28, 25, 23, 0.08);
+  background: rgba(243, 244, 246, 0.92);
+  border-bottom: 1px solid var(--ed-border);
 }
 
 html[data-storefront-theme="editorial-gallery"] .apple-skeleton-surface {
-  --skeleton-bg: #f6f3ee;
+  --skeleton-bg: var(--ed-surface);
 }
 
 html[data-storefront-theme="editorial-gallery"] :is(main, footer) .bg-white {
-  background-color: #fdfcfb;
+  background-color: var(--ed-elevated);
 }
 
 html[data-storefront-theme="editorial-gallery"] :is(main, footer, header.apple-nav) .bg-\[\#f5f5f7\] {
-  background-color: #f6f3ee;
+  background-color: var(--ed-surface);
 }
 
 html[data-storefront-theme="editorial-gallery"] :is(main, footer, header.apple-nav) .text-\[\#1d1d1f\] {
-  color: #1c1917;
+  color: var(--ed-ink);
 }
 
-html[data-storefront-theme="editorial-gallery"] :is(main, footer, header.apple-nav) .text-\[\#86868b\] {
-  color: #6b665f;
+html[data-storefront-theme="editorial-gallery"] :is(main, footer, header.apple-nav) :is(.text-\[\#86868b\], .text-\[\#52525b\], .text-\[\#6e6e73\]) {
+  color: var(--ed-muted);
 }
 
-html[data-storefront-theme="editorial-gallery"] :is(main, footer) .border-black\/5,
-html[data-storefront-theme="editorial-gallery"] :is(main, footer) .border-black\/8 {
-  border-color: rgba(28, 25, 23, 0.09);
+html[data-storefront-theme="editorial-gallery"] :is(main, footer) :is(.border-black\/5, .border-black\/8, .border-black\/10) {
+  border-color: var(--ed-border);
 }
 
-html[data-storefront-theme="editorial-gallery"] :is(.fluid-hero-title, .fluid-section-title, .product-info-col h1, #collections h2, #specs h2, #manufacturing h2, #inquiry h2, header.apple-nav a > span.font-semibold) {
+/* Editorial Display Serif Typography */
+html[data-storefront-theme="editorial-gallery"] :is(
+  .fluid-hero-title,
+  .fluid-section-title,
+  .product-info-col h1,
+  #collections h2,
+  #specs h2,
+  #manufacturing h2,
+  #inquiry h2,
+  header.apple-nav a > span.font-semibold
+) {
   font-family: var(--font-editorial);
-  font-weight: 500;
-  letter-spacing: -0.015em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 html[data-storefront-theme="editorial-gallery"] .fluid-hero-title {
   line-height: 1.02;
 }
 
-html[data-storefront-theme="editorial-gallery"] :is(.hero-showcase-box, .specs-section .rounded-3xl, .specs-section .rounded-2xl, #collections .rounded-3xl, #collections .rounded-2xl) {
-  border-radius: 0.5rem;
-  box-shadow: none;
-  border-color: rgba(26, 24, 22, 0.1);
+/* Unlock 100svh Height Lock for Exhibition Flow */
+html[data-storefront-theme="editorial-gallery"] :is(.hero-section, .specs-section, #collections) {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+html[data-storefront-theme="editorial-gallery"] :is(.specs-section, #collections, #manufacturing, #inquiry) {
+  padding-top: clamp(4.5rem, 6.5vw, 7rem) !important;
+  padding-bottom: clamp(4.5rem, 6.5vw, 7rem) !important;
+}
+
+/* Sharp Architectural 2px Radii & Monochrome Hairline Framing */
+html[data-storefront-theme="editorial-gallery"] :is(
+  .hero-showcase-box,
+  .specs-section .rounded-3xl,
+  .specs-section .rounded-2xl,
+  #collections .rounded-3xl,
+  #collections .rounded-2xl,
+  #inquiry .rounded-3xl
+) {
+  border-radius: var(--ed-radius) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--ed-border) !important;
+}
+
+html[data-storefront-theme="editorial-gallery"] :is(.specs-section, #inquiry) .bg-emerald-50 {
+  background-color: var(--ed-surface) !important;
+  color: var(--ed-ink) !important;
+  border-color: var(--ed-border) !important;
+  border-radius: var(--ed-radius) !important;
 }
 
 html[data-storefront-theme="editorial-gallery"] #collections-shelf > div {
-  background-color: #fdfcfa;
-  border: 1px solid rgba(26, 24, 22, 0.10);
-  border-radius: 0.75rem;
+  background-color: var(--ed-elevated);
+  border: 1px solid var(--ed-border);
+  border-radius: var(--ed-radius) !important;
   padding: 1rem;
   box-shadow: none;
+  max-height: none !important;
+  transition: border-color 180ms ease, transform 180ms ease;
 }
 
 html[data-storefront-theme="editorial-gallery"] #collections-shelf > div:hover {
-  box-shadow: 0 8px 24px -16px rgba(26, 24, 22, 0.16);
-  border-color: rgba(26, 24, 22, 0.22);
+  border-color: var(--ed-ink);
+  box-shadow: 4px 4px 0 0 rgba(15, 20, 25, 0.08);
 }
 
 @media (min-width: 1024px) {
@@ -89,36 +143,49 @@ html[data-storefront-theme="editorial-gallery"] #collections-shelf > div:hover {
 
 @media (min-width: 1760px) {
   html[data-storefront-theme="editorial-gallery"] #products-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     gap: 1.75rem 1.5rem;
   }
 }
 
 html[data-storefront-theme="editorial-gallery"] #products-grid > div {
-  background-color: #fdfcfa;
-  border: 1px solid rgba(26, 24, 22, 0.10);
-  border-radius: 0.625rem;
-  padding: 0.75rem;
+  background-color: var(--ed-elevated);
+  border: 1px solid var(--ed-border);
+  border-radius: var(--ed-radius) !important;
+  padding: 0.875rem;
   box-shadow: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 html[data-storefront-theme="editorial-gallery"] #products-grid > div:hover {
-  box-shadow: 0 8px 24px -16px rgba(26, 24, 22, 0.16);
-  border-color: rgba(26, 24, 22, 0.22);
+  border-color: var(--ed-ink);
+  box-shadow: 4px 4px 0 0 rgba(15, 20, 25, 0.08);
 }
 
-html[data-storefront-theme="editorial-gallery"] #products-grid a.apple-img-wrapper {
-  border-radius: 0.375rem;
-  background-color: #f2ede4;
+html[data-storefront-theme="editorial-gallery"] :is(#collections-shelf, #products-grid) a.apple-img-wrapper {
+  border-radius: 0 !important;
+  background-color: var(--ed-surface);
+  box-shadow: none !important;
 }
 
 html[data-storefront-theme="editorial-gallery"] #products-grid a.apple-img-wrapper > div.absolute {
   display: none;
 }
 
-html[data-storefront-theme="editorial-gallery"] #products-grid h3 {
+html[data-storefront-theme="editorial-gallery"] :is(#collections-shelf, #products-grid) h3 {
   font-family: var(--font-editorial);
-  font-size: 1rem;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ed-ink);
+}
+
+html[data-storefront-theme="editorial-gallery"] :is(#collections-shelf .btn-card-add-quote, #products-grid .btn-catalog-quote) {
+  background-color: var(--ed-ink) !important;
+  color: var(--ed-elevated) !important;
+  border-radius: var(--ed-radius) !important;
+}
+
+html[data-storefront-theme="editorial-gallery"] :is(#collections-shelf .btn-card-add-quote:hover, #products-grid .btn-catalog-quote:hover) {
+  background-color: var(--ed-accent) !important;
 }
