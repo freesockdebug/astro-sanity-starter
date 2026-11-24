@@ -3,7 +3,7 @@
 
 import { waitUntil as cfWaitUntil, env as cfWorkerEnv } from 'cloudflare:workers';
 import type { APIRoute, APIContext } from 'astro';
-import { recordErrorLog, recordErrorLogsBatch, updateLatestWafLogStats, type RecordErrorLogInput } from '../db/logs.repo';
+import { isLocalLoopbackIp, recordErrorLog, recordErrorLogsBatch, updateLatestWafLogStats, type RecordErrorLogInput } from '../db/logs.repo';
 import { getActiveProfiler } from './profiler';
 import { SecurityService } from './security';
 
@@ -141,6 +141,7 @@ export function syncWafBlockStats(
   options: { cfEnv?: any; ctx?: any } = {}
 ) {
   const clientIp = (params.clientIp || '').trim();
+  if (isLocalLoopbackIp(clientIp)) return;
   const errorCode = (params.errorCode || 'WAF_BLOCK').trim();
   const delta = Math.max(0, Number(params.hitDelta ?? 0));
   const env = options.cfEnv || cfWorkerEnv || (typeof globalThis !== 'undefined' ? (globalThis as any).__CF_ENV__ : undefined);
@@ -238,6 +239,10 @@ function persistToD1Async(input: RecordErrorLogInput, customEnv?: any, ctx?: any
 }
 
 function emit(level: LogLevel, context: LogContext, options: { cfEnv?: any; ctx?: any } = {}) {
+  // Skip logging for 127.0.0.1 / loopback local debugging & testing
+  if (isLocalLoopbackIp(context.clientIp)) {
+    return;
+  }
   const timestamp = new Date().toISOString();
 
   let formattedError: any = undefined;

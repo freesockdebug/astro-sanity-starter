@@ -336,7 +336,7 @@ export const WAF_CONDITION_CATALOG = {
       label: 'Public Write / Auth Endpoints',
       fieldExpr: 'If Route',
       operatorExpr: 'matches',
-      condition: 'POST /api/submit-quote, POST /api/client-error, POST /api/auth/*',
+      condition: 'POST /api/submit-quote, POST /api/auth/*',
       actionLabel: '429 Throttle',
       actionTone: 'warn',
     },
@@ -1149,7 +1149,7 @@ export function buildSystemWafRulesSeed(legacyCfg?: WafRuleConfig): WafDbRule[] 
       100,
       [
         { field: 'method', op: 'equals', value: 'POST' },
-        { field: 'path', op: 'in_list', value: '/api/submit-quote,/api/client-error,/api/auth/login,/api/auth/callback,/api/auth/logout,/api/auth/session' },
+        { field: 'path', op: 'in_list', value: '/api/submit-quote,/api/auth/login,/api/auth/callback,/api/auth/logout,/api/auth/session' },
       ],
       'ALL',
       'rate_limit_429',

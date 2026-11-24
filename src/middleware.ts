@@ -10,6 +10,7 @@ import { SecurityService } from './utils/security';
 import { logger, syncWafBlockStats } from './utils/logger';
 import { RequestProfiler, requestProfilerStorage } from './utils/profiler';
 import { getSystemSettings } from './db/settings.repo';
+import { isLocalLoopbackIp } from './db/logs.repo';
 import { upsertWafIpAcl } from './db/waf.repo';
 import { runInBackground, recordEdgeHtmlCacheResult, recordUrlCacheStats } from './utils/cache';
 import { EdgeWafService, normalizeWafRuleConfig } from './utils/waf';
@@ -350,10 +351,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
         });
       }
 
-      // Filter out static assets and internal logging workbench to avoid loops
+      // Filter out static assets, telemetry endpoints, and 127.0.0.1 local debugging to avoid log noise
       const isStaticOrLogSelf =
+        isLocalLoopbackIp(clientMeta.ip) ||
         pathname.startsWith('/_astro/') ||
         pathname.startsWith('/api/admin/logs') ||
+        pathname.startsWith('/api/telemetry') ||
         pathname.startsWith('/api/client-error') ||
         pathname.startsWith('/admin/logs') ||
         pathname.startsWith('/favicon') ||
@@ -432,7 +435,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
         }
       }
 
-      if (response.status >= 500 && !pathname.startsWith('/api/') && !response.headers.has('X-Logged-Error')) {
+      if (
+        response.status >= 500 &&
+        !isLocalLoopbackIp(clientMeta.ip) &&
+        !pathname.startsWith('/api/') &&
+        !response.headers.has('X-Logged-Error')
+      ) {
         const sessionUser = await getSessionUser();
         logger.error(
           {

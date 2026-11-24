@@ -16,6 +16,9 @@ if (process.argv.includes('dev') && !process.env.CLOUDFLARE_ENV) {
 export default defineConfig({
     output: 'server',
     session: false,
+    security: {
+        checkOrigin: false
+    },
     build: {
         inlineStylesheets: 'auto'
     },

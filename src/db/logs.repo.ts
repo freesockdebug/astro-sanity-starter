@@ -138,8 +138,24 @@ const INSERT_ERROR_LOG_SQL = `INSERT INTO system_error_logs (
   level, source, error_code, message, context_json, user_id, user_email, ray_id, path, latency_ms, method, status_code, client_ip, country, city, hit_count, created_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
 
-const IGNORED_LOG_PATH_PREFIXES = ['/api/admin/logs', '/admin/logs', '/_astro/', '/favicon'];
+const IGNORED_LOG_PATH_PREFIXES = ['/api/admin/logs', '/api/telemetry', '/api/client-error', '/admin/logs', '/_astro/', '/favicon'];
 const IGNORED_LOG_PATH_EXTS = ['.css', '.js', '.png', '.jpg', '.svg', '.ico'];
+
+/**
+ * Identifies local loopback / debugging client IPs (127.0.0.1, ::1, localhost)
+ * which must be excluded from persisting diagnostic logs.
+ */
+export function isLocalLoopbackIp(ip?: string | null): boolean {
+  if (!ip) return false;
+  const normalized = ip.trim().toLowerCase();
+  return (
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized === '::ffff:127.0.0.1' ||
+    normalized === 'localhost' ||
+    normalized.startsWith('127.')
+  );
+}
 
 interface PreparedLogEntry {
   level: DiagnosticLogLevel;
@@ -203,6 +219,11 @@ function buildMergedWafContextJson(
 
 function prepareLogEntry(input: RecordErrorLogInput, settings: any): PreparedLogEntry | null {
   if (!input?.message || !input?.source) return null;
+
+  // Skip writing logs for 127.0.0.1 / loopback local debugging & testing
+  if (isLocalLoopbackIp(input.clientIp)) {
+    return null;
+  }
 
   // Prevent infinite recursive logging loops on diagnostics workbench and static assets
   if (input.path) {

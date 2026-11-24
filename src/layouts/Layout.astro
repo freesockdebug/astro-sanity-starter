@@ -385,14 +385,15 @@ if (!bare && Astro.locals) {
             // Low-level Beacon / Fetch dispatcher
             function dispatchBeacon(payload) {
               if (!isTelemetryEnabled) return;
+              if (location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname === '[::1]') return;
               if (location.pathname.indexOf('/admin/logs') === 0) return;
               try {
                 var json = JSON.stringify(payload);
                 if (navigator.sendBeacon) {
                   var blob = new Blob([json], { type: 'application/json' });
-                  navigator.sendBeacon('/api/client-error', blob);
+                  navigator.sendBeacon('/api/telemetry', blob);
                 } else if (window.fetch) {
-                  fetch('/api/client-error', {
+                  fetch('/api/telemetry', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: json,
@@ -700,12 +701,13 @@ if (!bare && Astro.locals) {
                 viewport: `${window.innerWidth}x${window.innerHeight}`,
               };
 
+              if (location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname === '[::1]') return;
               const json = JSON.stringify(payload);
               if (navigator.sendBeacon) {
                 const blob = new Blob([json], { type: 'application/json' });
-                navigator.sendBeacon('/api/client-error', blob);
+                navigator.sendBeacon('/api/telemetry', blob);
               } else if (window.fetch) {
-                fetch('/api/client-error', {
+                fetch('/api/telemetry', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: json,
