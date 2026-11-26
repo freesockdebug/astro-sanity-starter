@@ -459,7 +459,9 @@ if (!bare && Astro.locals) {
               if (
                 msgStr.indexOf('ResizeObserver') !== -1 ||
                 msgStr === 'Script error.' ||
-                msgStr.indexOf('AbortError') !== -1
+                msgStr.indexOf('AbortError') !== -1 ||
+                msgStr.indexOf('Transition was aborted') !== -1 ||
+                msgStr.indexOf('ViewTransition') !== -1
               ) {
                 return true;
               }
@@ -592,11 +594,26 @@ if (!bare && Astro.locals) {
               return false;
             };
 
+            // Swallow benign browser-aborted cross-document ViewTransition promises
+            ['pageswap', 'pagereveal'].forEach(function (evtName) {
+              window.addEventListener(evtName, function (evt) {
+                var vt = evt && evt.viewTransition;
+                if (vt) {
+                  if (vt.ready && typeof vt.ready.catch === 'function') vt.ready.catch(function () {});
+                  if (vt.finished && typeof vt.finished.catch === 'function') vt.finished.catch(function () {});
+                }
+              });
+            });
+
             // 6. Global unhandledrejection
             window.addEventListener('unhandledrejection', function (event) {
               var reason = event.reason;
-              var msg = reason && (reason.message || String(reason));
+              var msg = String((reason && (reason.message || reason)) || '');
               var errObj = reason instanceof Error ? reason : null;
+              if ((errObj && errObj.name === 'AbortError') || shouldIgnore(msg, location.pathname)) {
+                event.preventDefault();
+                return;
+              }
               handleRuntimeError('unhandledrejection', msg, location.pathname, undefined, undefined, errObj);
             });
 

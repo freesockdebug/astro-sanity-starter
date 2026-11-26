@@ -335,6 +335,8 @@ async function runCanvasTransition(updateDom: () => void): Promise<void> {
         executed = true;
         updateDom();
       });
+      transition.ready?.catch(() => {});
+      transition.finished?.catch(() => {});
       await transition.updateCallbackDone;
       return;
     } catch {
