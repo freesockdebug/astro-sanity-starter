@@ -40,6 +40,8 @@ const minimalProducts = mergedProducts.map((p: any) => {
   return {
     id: p.id,
     slug: p.slug,
+    canonicalKey: p.canonicalKey,
+    amazonRating: p.amazonRating,
     title: locTitle,
     shortTitle: locShortTitle,
     category: p.category,
@@ -203,7 +205,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
             <div class="flex-1 min-h-0 flex flex-col">
               <!-- 1. Catalog Shelf Image Box: 1:1 Aspect Ratio on top with Apple Progressive Skeleton Shimmer -->
               <a
-                href={getLocalizedPath(`/products/${item.slug}`, currentLang)}
+                href={getLocalizedPath(`/products/${item.canonicalKey || item.slug}`, currentLang)}
                 class="apple-img-wrapper block relative w-full aspect-square rounded-xl overflow-hidden bg-[#f5f5f7] apple-skeleton-surface my-0 group-hover:opacity-95 transition-all shrink-0"
               >
                 <img
@@ -240,7 +242,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
 
               <!-- 3. Merged Title & Composition Block (Dynamic Typography Metric) -->
               <div class="shrink-0 text-xs leading-tight min-h-[calc(2lh+1.2em)] mt-0.5 px-0.5 flex flex-col justify-start gap-0.5">
-                <a href={getLocalizedPath(`/products/${item.slug}`, currentLang)} class="block">
+                <a href={getLocalizedPath(`/products/${item.canonicalKey || item.slug}`, currentLang)} class="block">
                   <h3 class="text-xs font-medium text-[#1d1d1f] group-hover:text-[#ff5000] transition-colors line-clamp-2 leading-tight" title={getLocalizedValue(item.title, currentLang)}>
                     {getLocalizedValue(item.shortTitle || item.title, currentLang)}
                   </h3>
@@ -257,7 +259,14 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                   <span class="text-sm font-mono tracking-tight font-bold">{item.price}</span>
                   <span class="text-[9px] text-[#52525b] font-normal ml-0.5">/{item.unit && item.unit.toLowerCase() !== 'pairs' ? item.unit : unitPairLabel}</span>
                 </div>
-                <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq}</span>
+                {item.amazonRating ? (
+                  <span class="text-[9px] text-[#52525b] font-mono mt-0.5 inline-flex items-center gap-0.5" title="Amazon Rating">
+                    <span class="text-amber-500" aria-hidden="true">★</span>
+                    <span>{Number(item.amazonRating).toFixed(1)}</span>
+                  </span>
+                ) : (
+                  <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq}</span>
+                )}
               </div>
 
               <button
@@ -499,7 +508,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
   function createCardElement(item: any) {
     const tpl = document.getElementById('catalog-card-tpl') as HTMLTemplateElement | null;
     const card = tpl?.content.firstElementChild?.cloneNode(true) as HTMLElement;
-    const productUrl = `${cfgProductUrlPrefix}${item.slug}`;
+    const productUrl = `${cfgProductUrlPrefix}${item.canonicalKey || item.slug}`;
 
     card.dataset.productId = item.id;
 
@@ -543,7 +552,13 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
       const rawUnit = String(item.unit || '').trim();
       unitEl.textContent = `/${rawUnit && rawUnit.toLowerCase() !== 'pairs' ? rawUnit : cfgUnitPairLabel}`;
     }
-    if (moq) moq.textContent = `${cfgMoqPrefix} ${item.moq}`;
+    if (moq) {
+      if (item.amazonRating) {
+        moq.textContent = `★ ${Number(item.amazonRating).toFixed(1)}`;
+      } else {
+        moq.textContent = `${cfgMoqPrefix} ${item.moq}`;
+      }
+    }
     if (quoteBtn) {
       quoteBtn.dataset.id = item.id;
       quoteBtn.dataset.title = item.shortTitle || item.title;

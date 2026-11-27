@@ -4,6 +4,7 @@ import { ALL_LOCALE_CODES, DEFAULT_LOCALE, type SupportedLocale } from '../i18n/
 import { getLocalizedPath } from '../i18n/utils';
 import { getSystemSettings } from '../db/settings.repo';
 import { DEFAULT_SITE_URL } from '../data/defaults';
+import { getProductCanonicalKey } from '../data/products';
 
 export const prerender = false;
 
@@ -48,6 +49,8 @@ export const GET: APIRoute = async ({ url }) => {
       `*[_type in ["page", "product"] && defined(slug.current) && !(_id in path("drafts.**"))]{
         _type,
         "slug": slug.current,
+        amazonAsin,
+        sku,
         _updatedAt
       }`
     );
@@ -66,7 +69,7 @@ export const GET: APIRoute = async ({ url }) => {
 
       if (EXCLUDED_SLUGS.has(raw)) continue;
 
-      const routePath = doc._type === 'product' ? `/products/${raw}` : `/${raw}`;
+      const routePath = doc._type === 'product' ? `/products/${getProductCanonicalKey(doc)}` : `/${raw}`;
       if (!seen.has(routePath)) {
         seen.add(routePath);
         entries.push({ path: routePath, lastmod: doc._updatedAt });

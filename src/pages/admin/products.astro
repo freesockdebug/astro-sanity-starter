@@ -202,8 +202,8 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label class="block font-semibold mb-1">SKU Code *</label>
-                <input type="text" id="p-sku" required placeholder="e.g. MS-200-SILK" class={`${inpCls} font-mono`} />
+                <label class="block font-semibold mb-1">SKU Code * <span id="p-sku-lock-hint" class="hidden text-[10px] font-normal text-amber-700 ml-1">(Locked after creation)</span></label>
+                <input type="text" id="p-sku" required placeholder="e.g. MS-200-SILK" class={`${inpCls} font-mono read-only:bg-zinc-100 read-only:text-zinc-500 read-only:cursor-not-allowed`} />
               </div>
               <div>
                 <label class="block font-semibold mb-1">URL Slug *</label>
@@ -300,10 +300,14 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
                 <span class="font-bold text-xs text-[#1d1d1f] block">Amazon Direct Purchase & Sample</span>
                 <span class="text-[10px] text-[#86868b]">Buyers can purchase single-unit samples on Amazon directly</span>
               </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label class="block font-semibold mb-1">Amazon ASIN</label>
                   <input type="text" id="p-amazon-asin" placeholder="e.g. B0CWXYZ123" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 font-mono text-xs" />
+                </div>
+                <div>
+                  <label class="block font-semibold mb-1">Amazon Rating (0–5)</label>
+                  <input type="number" id="p-amazon-rating" step="0.1" min="0" max="5" placeholder="e.g. 4.8" class="w-full px-3 py-2 rounded-xl bg-white border border-black/10 font-mono text-xs" />
                 </div>
                 <div>
                   <label class="block font-semibold mb-1">Custom Amazon Listing URL (Optional)</label>
@@ -720,7 +724,13 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       const p = currentEditingProduct;
       $txt('drawer-title', prod ? `Edit: ${prod.title?.en || prod.sku}` : 'Create New Product');
       $val('p-id', p._id || '');
-      $val('p-sku', p.sku || '');
+      const skuInput = $id<HTMLInputElement>('p-sku');
+      const isSkuLocked = Boolean(prod && prod._id && p.sku);
+      if (skuInput) {
+        skuInput.value = p.sku || '';
+        skuInput.readOnly = isSkuLocked;
+      }
+      $id('p-sku-lock-hint')?.classList.toggle('hidden', !isSkuLocked);
       $val('p-slug', p.slug?.current || '');
       $val('p-category', p.category?._id || '');
       $chk('p-is-draft', Boolean(p.isDraft));
@@ -730,6 +740,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       $val('p-currency', p.currency || p.pricingTiers?.[0]?.currency || 'USD');
       $val('p-unit', p.pricingTiers?.[0]?.unit || (String(p.moq || '').toLowerCase().includes('pcs') ? 'Pcs' : 'Pairs'));
       $val('p-amazon-asin', p.amazonAsin || '');
+      $val('p-amazon-rating', p.amazonRating !== undefined && p.amazonRating !== null ? String(p.amazonRating) : '');
       $val('p-amazon-url', p.amazonUrl || '');
 
       renderMainImagePreview();
@@ -1062,6 +1073,8 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       p.currency = selectedCurrency;
       p.leadTime = $val('p-leadtime');
       p.amazonAsin = $val('p-amazon-asin') || undefined;
+      const rawRating = parseFloat($val('p-amazon-rating'));
+      p.amazonRating = Number.isFinite(rawRating) && rawRating > 0 && rawRating <= 5 ? rawRating : undefined;
       p.amazonUrl = $val('p-amazon-url') || undefined;
 
       p.pricingTiers = Array.from(document.querySelectorAll('#tier-rows tr')).map((tr) => {

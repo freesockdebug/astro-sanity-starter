@@ -138,3 +138,30 @@ test('i18n routing and SEO canonical normalization strip query params and handle
     'https://example.com/'
   );
 });
+
+test('Product canonical key (ASIN > SKU > Slug), multi-URL resolution, and Amazon rating normalization work cleanly', async () => {
+  const { getProductCanonicalKey, findProductByIdentifier, ProductService } = await import('../src/data/products.js');
+
+  const withAsin = { _id: '1', slug: 'silk-ankle-socks', sku: 'GV-SILK-01', amazonAsin: 'B0CWXYZ123', amazonRating: 4.8 };
+  const withoutAsin = { _id: '2', slug: 'cotton-crew-socks', sku: 'GV-COT-02', amazonAsin: '' };
+  const onlySlug = { _id: '3', slug: 'merino-wool-socks' };
+
+  assert.equal(getProductCanonicalKey(withAsin), 'B0CWXYZ123');
+  assert.equal(getProductCanonicalKey(withoutAsin), 'GV-COT-02');
+  assert.equal(getProductCanonicalKey(onlySlug), 'merino-wool-socks');
+
+  const list = [withAsin, withoutAsin, onlySlug];
+  // Resolves by ASIN, SKU, old Slug, and case-insensitive variants
+  assert.equal(findProductByIdentifier(list, 'B0CWXYZ123')?._id, '1');
+  assert.equal(findProductByIdentifier(list, 'b0cwxyz123')?._id, '1');
+  assert.equal(findProductByIdentifier(list, 'GV-SILK-01')?._id, '1');
+  assert.equal(findProductByIdentifier(list, 'silk-ankle-socks')?._id, '1');
+  assert.equal(findProductByIdentifier(list, 'cotton-crew-socks')?._id, '2');
+  assert.equal(findProductByIdentifier(list, 'GV-COT-02')?._id, '2');
+  assert.equal(findProductByIdentifier(list, 'non-existent'), null);
+
+  const normalized = ProductService.normalize(withAsin);
+  assert.equal(normalized.canonicalKey, 'B0CWXYZ123');
+  assert.equal(normalized.amazonAsin, 'B0CWXYZ123');
+  assert.equal(normalized.amazonRating, 4.8);
+});

@@ -34,8 +34,22 @@ export default defineType({
     }),
     defineField({
       name: 'sku',
-      title: 'SKU / Style Code (款号)',
+      title: 'SKU / Style Code (款号 - 创建后不可修改)',
+      description: '全局唯一款号，创建后不可修改，供订单、询盘等单据长期引用；若商品暂无 ASIN，也将作为默认商品 URL 后缀。',
       type: 'string',
+      readOnly: ({ document }: any) => Boolean(document?._createdAt),
+      validation: (Rule) =>
+        Rule.required().custom(async (value, context) => {
+          const sku = typeof value === 'string' ? value.trim() : '';
+          if (!sku) return 'SKU Code 不能为空';
+          const client = context.getClient({ apiVersion: '2024-01-01' });
+          const rawId = (context.document?._id || '').replace(/^drafts\./, '');
+          const duplicate = await client.fetch(
+            `*[_type == "product" && sku == $sku && !(_id in [$id, $draftId])][0]._id`,
+            { sku, id: rawId, draftId: `drafts.${rawId}` }
+          );
+          return duplicate ? `SKU Code "${sku}" 已被其他商品使用` : true;
+        }),
       group: 'basic',
     }),
     defineField({
@@ -276,8 +290,16 @@ export default defineType({
     defineField({
       name: 'amazonAsin',
       title: 'Amazon ASIN (亚马逊商品 ASIN 码)',
-      description: '例如: B0CWXYZ123。填写后买家点击按钮将直接跳转到亚马逊对应商品页面购买现货样品',
+      description: '例如: B0CWXYZ123。填写后商品主链接将自动使用 /products/{ASIN}，并跳转到亚马逊对应商品页面购买现货样品',
       type: 'string',
+      group: 'actions',
+    }),
+    defineField({
+      name: 'amazonRating',
+      title: 'Amazon Rating (亚马逊评分 0-5)',
+      description: '例如: 4.8。填写后前台商品卡片原 MOQ 位置将展示亚马逊评分（如 ★ 4.8）',
+      type: 'number',
+      validation: (Rule) => Rule.min(0).max(5),
       group: 'actions',
     }),
     defineField({

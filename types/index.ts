@@ -104,6 +104,7 @@ export interface Product {
     paletteTitle?: string | Record<string, string>;
     addToQuoteButtonText?: string | Record<string, string>;
     amazonAsin?: string;
+    amazonRating?: number;
     amazonUrl?: string;
     sampleButtonText?: string | Record<string, string>;
     primaryButtonText?: string | Record<string, string>;

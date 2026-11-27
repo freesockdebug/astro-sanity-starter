@@ -77,6 +77,24 @@ export const POST: APIRoute = defineAdminApi(
       existingDoc = await client.fetch(`*[_id == $id][0]`, { id: doc._id }).catch(() => null);
     }
 
+    if (docType === 'product') {
+      const normalizedSku = typeof doc.sku === 'string' ? doc.sku.trim() : '';
+      if (!normalizedSku) {
+        return jsonNoCache({ error: 'SKU Code is required.' }, 400);
+      }
+      doc.sku = normalizedSku;
+      if (existingDoc?.sku && String(existingDoc.sku).trim() !== normalizedSku) {
+        return jsonNoCache({ error: 'SKU Code cannot be modified after creation.' }, 400);
+      }
+      const duplicateId = await client.fetch(
+        `*[_type == "product" && sku == $sku && _id != $id][0]._id`,
+        { sku: normalizedSku, id: doc._id || '' }
+      ).catch(() => null);
+      if (duplicateId) {
+        return jsonNoCache({ error: `SKU Code "${normalizedSku}" is already in use.` }, 409);
+      }
+    }
+
     // Save or update in Sanity
     const result: any = doc._id ? await client.createOrReplace(doc) : await client.create(doc);
 

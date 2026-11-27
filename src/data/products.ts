@@ -21,6 +21,7 @@ export const PRODUCT_FIELDS = `{
   paletteTitle,
   addToQuoteButtonText,
   amazonAsin,
+  amazonRating,
   amazonUrl,
   sampleButtonText,
   primaryButtonText,
@@ -59,6 +60,8 @@ export const PRODUCT_CARD_FIELDS = `{
   shortTitle,
   "slug": slug.current,
   sku,
+  amazonAsin,
+  amazonRating,
   currency,
   tagline,
   moq,
@@ -85,6 +88,9 @@ export const CATEGORY_FIELDS = `{
 export interface NormalizedProduct {
   id: string;
   slug: string;
+  canonicalKey: string;
+  amazonAsin?: string;
+  amazonRating?: number;
   title: string;
   shortTitle: string;
   tagline: string;
@@ -104,6 +110,40 @@ export interface NormalizedProduct {
   isFeatured?: boolean;
   isNew?: boolean;
   sku: string;
+}
+
+/**
+ * Canonical product URL segment: ASIN (preferred) -> SKU -> Slug.
+ */
+export function getProductCanonicalKey(
+  p: { amazonAsin?: string; sku?: string; slug?: string; _id?: string } | null | undefined
+): string {
+  const asin = typeof p?.amazonAsin === 'string' ? p.amazonAsin.trim() : '';
+  if (asin) return asin;
+  const sku = typeof p?.sku === 'string' ? p.sku.trim() : '';
+  if (sku) return sku;
+  const slug = typeof p?.slug === 'string' ? p.slug.trim() : '';
+  return slug || p?._id || 'item';
+}
+
+/**
+ * Resolves a product from ASIN, SKU, or Slug (supporting WordPress-style multi-URL resolution).
+ */
+export function findProductByIdentifier<
+  T extends { amazonAsin?: string; sku?: string; slug?: string }
+>(products: T[] | null | undefined, identifier: string): T | null {
+  if (!Array.isArray(products) || !identifier) return null;
+  const target = identifier.trim();
+  const targetLower = target.toLowerCase();
+  if (!target) return null;
+
+  for (const field of ['amazonAsin', 'sku', 'slug'] as const) {
+    const exact = products.find((p) => (typeof p?.[field] === 'string' ? p[field]!.trim() === target : false));
+    if (exact) return exact;
+    const ci = products.find((p) => (typeof p?.[field] === 'string' ? p[field]!.trim().toLowerCase() === targetLower : false));
+    if (ci) return ci;
+  }
+  return null;
 }
 
 /**
@@ -245,7 +285,13 @@ const productSlugsCache = createTieredCache<string[], Set<string>>({
   compile: (slugs) => (Array.isArray(slugs) && slugs.length > 0 ? new Set(slugs.filter(Boolean)) : new Set<string>()),
   fetchRaw: async (customEnv) => {
     const list = await productsCache.get(false, customEnv);
-    return Array.isArray(list) ? (list.map((p) => p?.slug).filter(Boolean) as string[]) : [];
+    const keys = new Set<string>();
+    for (const p of list || []) {
+      if (p?.slug) keys.add(p.slug);
+      if (typeof p?.amazonAsin === 'string' && p.amazonAsin.trim()) keys.add(p.amazonAsin.trim());
+      if (typeof p?.sku === 'string' && p.sku.trim()) keys.add(p.sku.trim());
+    }
+    return Array.from(keys);
   },
 });
 
@@ -324,6 +370,14 @@ export class ProductService {
     return Array.isArray(raw) && raw.length > 0 ? raw : null;
   }
 
+  public static isKnownIdentifier(identifier: string, recordHit = false): boolean {
+    if (!identifier) return false;
+    const keys = this.getCachedSlugs(recordHit);
+    if (!keys || keys.length === 0) return true;
+    const lower = identifier.trim().toLowerCase();
+    return keys.some((k) => k === identifier || k.toLowerCase() === lower);
+  }
+
   public static async getSlugs(customEnv?: any): Promise<string[]> {
     await productSlugsCache.get(customEnv);
     return this.getCachedSlugs() || [];
@@ -375,10 +429,17 @@ export class ProductService {
     const price = tierPrice ? tierPrice.amount : fallbackPrice;
 
     const resolvedMoq = resolveProductMoq(sp.pricingTiers, sp.moq);
+    const amazonAsin = typeof sp.amazonAsin === 'string' && sp.amazonAsin.trim() ? sp.amazonAsin.trim() : undefined;
+    const parsedRating = typeof sp.amazonRating === 'number' ? sp.amazonRating : Number(sp.amazonRating);
+    const amazonRating = Number.isFinite(parsedRating) && parsedRating > 0 && parsedRating <= 5 ? parsedRating : undefined;
+    const canonicalKey = getProductCanonicalKey({ amazonAsin, sku: sp.sku, slug, _id: sp._id });
 
     return {
       id: slug,
       slug,
+      canonicalKey,
+      amazonAsin,
+      amazonRating,
       title: sp.title || 'Curated Knit Silhouette',
       shortTitle: cleanShortTitle,
       tagline: sp.tagline || 'Wholesale Ready White-Label Silhouette',
