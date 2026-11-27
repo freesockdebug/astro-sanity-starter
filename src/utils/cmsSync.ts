@@ -1,7 +1,7 @@
 // src/utils/cmsSync.ts
 // Unified CMS Cache Synchronization & Edge Purge Engine
 import { NON_DEFAULT_LOCALES } from '@i18n';
-import { ProductService } from '@data/products';
+import { ProductService, getProductCanonicalKey, findProductByIdentifier } from '@data/products';
 import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
@@ -978,6 +978,19 @@ export function prewarmEdgeRoutes(params: {
  * 2. Cloudflare Worker Edge HTML Cache (`caches.default`)
  * 3. Cloudflare Global CDN Zone Cache
  */
+function collectProductPaths(
+  set: Set<string>,
+  product: { amazonAsin?: string; sku?: string; slug?: string } | null | undefined
+): void {
+  if (!product) return;
+  if (product.slug) set.add(`/products/${product.slug}`);
+  const canonical = getProductCanonicalKey(product);
+  if (canonical && canonical !== 'item') set.add(`/products/${canonical}`);
+  if (typeof product.sku === 'string' && product.sku.trim()) {
+    set.add(`/products/${product.sku.trim()}`);
+  }
+}
+
 export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncResult> {
   const {
     docType,
@@ -1012,16 +1025,18 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
         const addNeighborPaths = (targetSlug: string) => {
           const idx = prevProductList.findIndex((p: any) => p.slug === targetSlug);
           if (idx !== -1 && prevProductList.length > 1) {
-            const prevSlug = prevProductList[(idx - 1 + prevProductList.length) % prevProductList.length]?.slug;
-            const nextSlug = prevProductList[(idx + 1) % prevProductList.length]?.slug;
-            if (prevSlug) collectedPaths.add(`/products/${prevSlug}`);
-            if (nextSlug) collectedPaths.add(`/products/${nextSlug}`);
+            collectProductPaths(collectedPaths, prevProductList[(idx - 1 + prevProductList.length) % prevProductList.length]);
+            collectProductPaths(collectedPaths, prevProductList[(idx + 1) % prevProductList.length]);
           }
         };
 
-        if (slug) collectedPaths.add(`/products/${slug}`);
+        if (slug) {
+          collectedPaths.add(`/products/${slug}`);
+          collectProductPaths(collectedPaths, findProductByIdentifier(prevProductList, slug));
+        }
         if (oldSlug && oldSlug !== slug) {
           collectedPaths.add(`/products/${oldSlug}`);
+          collectProductPaths(collectedPaths, findProductByIdentifier(prevProductList, oldSlug));
           addNeighborPaths(oldSlug);
         }
 
@@ -1083,7 +1098,7 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
         taskDescriptions.push('refreshProductStorySettings()');
         const allProds = await ProductService.getAll(false, cfEnv).catch(() => []);
         for (const p of allProds) {
-          if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
+          collectProductPaths(collectedPaths, p);
         }
         break;
       }
@@ -1138,7 +1153,7 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
           PageService.getSlugs(cfEnv).catch(() => []),
         ]);
         for (const p of allProds) {
-          if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
+          collectProductPaths(collectedPaths, p);
         }
         for (const pgSlug of allPageSlugs) {
           const clean = String(pgSlug || '').replace(/^\/+/, '').replace(/\/+$/, '');
@@ -1221,7 +1236,7 @@ export async function syncCmsMutation(options: CmsSyncOptions): Promise<CmsSyncR
       PageService.getSlugs(cfEnv).catch(() => []),
     ]);
     for (const p of allProds) {
-      if (p?.slug) collectedPaths.add(`/products/${p.slug}`);
+      collectProductPaths(collectedPaths, p);
     }
     for (const pgSlug of allPageSlugs) {
       const clean = String(pgSlug || '').replace(/^\/+/, '').replace(/\/+$/, '');

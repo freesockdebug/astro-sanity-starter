@@ -277,6 +277,16 @@ export interface CatalogCategoryItem {
   count: number;
 }
 
+export function extractProductIdentifiers(list: Product[] | null | undefined): string[] {
+  const keys = new Set<string>();
+  for (const p of list || []) {
+    if (p?.slug) keys.add(p.slug);
+    if (typeof p?.amazonAsin === 'string' && p.amazonAsin.trim()) keys.add(p.amazonAsin.trim());
+    if (typeof p?.sku === 'string' && p.sku.trim()) keys.add(p.sku.trim());
+  }
+  return Array.from(keys);
+}
+
 const productSlugsCache = createTieredCache<string[], Set<string>>({
   name: 'prod:slugs',
   scope: 'products',
@@ -285,13 +295,7 @@ const productSlugsCache = createTieredCache<string[], Set<string>>({
   compile: (slugs) => (Array.isArray(slugs) && slugs.length > 0 ? new Set(slugs.filter(Boolean)) : new Set<string>()),
   fetchRaw: async (customEnv) => {
     const list = await productsCache.get(false, customEnv);
-    const keys = new Set<string>();
-    for (const p of list || []) {
-      if (p?.slug) keys.add(p.slug);
-      if (typeof p?.amazonAsin === 'string' && p.amazonAsin.trim()) keys.add(p.amazonAsin.trim());
-      if (typeof p?.sku === 'string' && p.sku.trim()) keys.add(p.sku.trim());
-    }
-    return Array.from(keys);
+    return extractProductIdentifiers(list);
   },
 });
 
@@ -299,13 +303,12 @@ const productsCache = createCmsCache<Product[]>(
   (forceRefresh) => getSanityClient(forceRefresh).fetch<Product[]>(`*[_type == "product"] | order(_createdAt asc) ${PRODUCT_CARD_FIELDS}`),
   [],
   {
-    kvKey: 'cms:products:all',
+    kvKey: 'cms:products:all:v2',
     scope: 'products',
     purgeAction: 'refresh',
     onUpdate: (list) => {
       if (Array.isArray(list) && list.length > 0) {
-        const slugs = list.map((p) => p?.slug).filter(Boolean) as string[];
-        productSlugsCache.seed(slugs);
+        productSlugsCache.seed(extractProductIdentifiers(list));
       }
     },
   }
@@ -355,7 +358,11 @@ export class ProductService {
 
   public static seedSlug(slug: string, product: Product): void {
     const existing = productSlugsCache.peek();
-    if (existing && slug) existing.add(slug);
+    if (existing) {
+      if (slug) existing.add(slug);
+      if (typeof product?.amazonAsin === 'string' && product.amazonAsin.trim()) existing.add(product.amazonAsin.trim());
+      if (typeof product?.sku === 'string' && product.sku.trim()) existing.add(product.sku.trim());
+    }
     productBySlugCache.seed(slug, product);
   }
 
@@ -374,8 +381,20 @@ export class ProductService {
     if (!identifier) return false;
     const keys = this.getCachedSlugs(recordHit);
     if (!keys || keys.length === 0) return true;
-    const lower = identifier.trim().toLowerCase();
-    return keys.some((k) => k === identifier || k.toLowerCase() === lower);
+    const trimmed = identifier.trim();
+    const lower = trimmed.toLowerCase();
+    if (keys.some((k) => k === trimmed || k.toLowerCase() === lower)) {
+      return true;
+    }
+    // Stale preload self-healing: legacy edge:preload:v1 stored only lowercase slugs without ASIN/SKU.
+    if (
+      !keys.some((k) => /[A-Z]/.test(k)) &&
+      /^[A-Za-z0-9][A-Za-z0-9_-]{3,48}$/.test(trimmed) &&
+      /[A-Z0-9]/.test(trimmed)
+    ) {
+      return true;
+    }
+    return false;
   }
 
   public static async getSlugs(customEnv?: any): Promise<string[]> {

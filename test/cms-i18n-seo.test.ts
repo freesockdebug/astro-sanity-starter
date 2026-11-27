@@ -164,4 +164,25 @@ test('Product canonical key (ASIN > SKU > Slug), multi-URL resolution, and Amazo
   assert.equal(normalized.canonicalKey, 'B0CWXYZ123');
   assert.equal(normalized.amazonAsin, 'B0CWXYZ123');
   assert.equal(normalized.amazonRating, 4.8);
+
+  try {
+    // 1. productsCache.onUpdate must populate productSlugsCache with slug, ASIN, AND SKU
+    ProductService.seed({ products: [withAsin, withoutAsin] as any });
+    assert.equal(ProductService.isKnownIdentifier('B0CWXYZ123'), true);
+    assert.equal(ProductService.isKnownIdentifier('b0cwxyz123'), true);
+    assert.equal(ProductService.isKnownIdentifier('GV-SILK-01'), true);
+    assert.equal(ProductService.isKnownIdentifier('silk-ankle-socks'), true);
+    assert.equal(ProductService.isKnownIdentifier('GV-COT-02'), true);
+    assert.equal(ProductService.isKnownIdentifier('unknown-item'), false);
+
+    // 2. Legacy lowercase-only preload list must still allow ASIN/SKU through to ProductService.getAll()
+    ProductService.invalidateCache();
+    ProductService.seedSlugs(['gwenvenni-polka-dots-jacquard-ankle-socks']);
+    assert.equal(ProductService.isKnownIdentifier('B085L4JHQL'), true);
+    assert.equal(ProductService.isKnownIdentifier('GV-YY105-DOTS'), true);
+    assert.equal(ProductService.isKnownIdentifier('wp-login.php'), false);
+    assert.equal(ProductService.isKnownIdentifier('unknown-slug'), false);
+  } finally {
+    ProductService.invalidateCache();
+  }
 });
