@@ -2,7 +2,15 @@
 // src/pages/products/[slug].astro
 import Layout from '@layouts/Layout.astro';
 import { Breadcrumbs } from '@components/index';
-import { ProductService, resolveProductMoq, getCurrencySymbol, getProductCanonicalKey, findProductByIdentifier } from '@data/products';
+import {
+  ProductService,
+  resolveProductMoq,
+  getCurrencySymbol,
+  getProductCanonicalKey,
+  findProductByIdentifier,
+  formatSizeVariantLabel,
+  resolveVariantDisplayMode,
+} from '@data/products';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { cleanBrandTitle } from '@utils/format';
@@ -64,6 +72,24 @@ currentProduct.colors = currentProduct.colors || [];
 currentProduct.pricingTiers = currentProduct.pricingTiers || [];
 currentProduct.specifications = currentProduct.specifications || [];
 currentProduct.mainImage = currentProduct.mainImage || currentProduct.gallery[0]?.src || DEFAULT_FALLBACK_IMAGE;
+
+const resolvedPaletteTitle = getLocalizedValue(currentProduct.paletteTitle, currentLang, t('pdp.paletteTitle'));
+const rawVariants = currentProduct.colors.map((c: any) => ({
+  rawName: getLocalizedValue(c?.name, currentLang) || '',
+  hex: typeof c?.hex === 'string' ? c.hex.trim() : '',
+}));
+const isSizeVariantMode =
+  resolveVariantDisplayMode({
+    variantDisplayMode: currentProduct.variantDisplayMode,
+    paletteTitle: resolvedPaletteTitle,
+    variants: rawVariants.map((v: { rawName: string; hex: string }) => ({ name: v.rawName, hex: v.hex })),
+  }) === 'size';
+const resolvedVariants = rawVariants.map((v: { rawName: string; hex: string }) => ({
+  rawName: v.rawName,
+  label: (isSizeVariantMode ? formatSizeVariantLabel(v.rawName) : v.rawName) || v.rawName || 'Default',
+  hex: v.hex || '#1c1917',
+}));
+const initialVariantLabel = resolvedVariants[0]?.label || 'Default';
 
 const resolvedMoq = resolveProductMoq(currentProduct.pricingTiers, currentProduct.moq);
 const currencySymbol = getCurrencySymbol(currentProduct.currency);
@@ -548,39 +574,57 @@ const productStructuredData: Record<string, any> = {
                 </p>
               </div>
 
-              <!-- Block C: Loro Piana Double-Ring Circular Yarn Swatches -->
+              <!-- Block C: Variant Sizes / Yarn Swatches -->
               <div class="py-3.5 sm:py-4 lg:py-3.5 xl:py-4.5 space-y-2.5">
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-[10px] font-mono text-stone-400 uppercase tracking-[0.14em] block truncate">
-                    {getLocalizedValue(currentProduct.paletteTitle, currentLang, t('pdp.paletteTitle'))}
+                    {resolvedPaletteTitle}
                   </span>
                   <span id="selected-color-name" class="text-xs font-medium text-[#1c1917] shrink-0">
-                    {getLocalizedValue(currentProduct.colors[0]?.name, currentLang) || "Default"}
+                    {initialVariantLabel}
                   </span>
                 </div>
-                <div class="flex items-center gap-2.5 sm:gap-3 flex-wrap pt-0.5">
-                  {currentProduct.colors.map((c: any, cIdx: number) => {
-                    const colorName = getLocalizedValue(c.name, currentLang);
-                    return (
+                <div class={`flex items-center flex-wrap pt-0.5 ${isSizeVariantMode ? 'gap-2' : 'gap-2.5 sm:gap-3'}`}>
+                  {resolvedVariants.map((v: { rawName: string; label: string; hex: string }, cIdx: number) =>
+                    isSizeVariantMode ? (
                       <button
                         type="button"
-                        title={colorName}
-                        aria-label={colorName}
+                        title={v.rawName || v.label}
+                        aria-label={v.rawName || v.label}
+                        aria-pressed={cIdx === 0 ? 'true' : 'false'}
+                        class={`color-variant-btn px-3 py-1.5 rounded-lg text-xs font-mono font-medium tracking-tight border transition-all cursor-pointer select-none ${
+                          cIdx === 0
+                            ? 'bg-[#1c1917] text-[#fdfcfb] border-[#1c1917] shadow-xs'
+                            : 'bg-white/85 text-[#1c1917] border-stone-200/90 hover:border-stone-400 hover:bg-[#f6f3ee]'
+                        }`}
+                        data-variant-mode="size"
+                        data-color={v.label}
+                        data-hex={v.hex}
+                      >
+                        {v.label}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        title={v.rawName || v.label}
+                        aria-label={v.rawName || v.label}
+                        aria-pressed={cIdx === 0 ? 'true' : 'false'}
                         class={`color-variant-btn w-8 h-8 sm:w-7 sm:h-7 rounded-full transition-all cursor-pointer flex items-center justify-center ${
                           cIdx === 0
                             ? 'ring-1 ring-[#1c1917] ring-offset-2 ring-offset-[#fdfcfb] scale-105'
                             : 'opacity-80 hover:opacity-100 hover:scale-105'
                         }`}
-                        data-color={colorName}
-                        data-hex={c.hex}
+                        data-variant-mode="color"
+                        data-color={v.label}
+                        data-hex={v.hex}
                       >
                         <span
                           class="w-full h-full rounded-full border border-black/15 shadow-[inset_0_1px_2px_rgba(255,255,255,0.35),inset_0_-1px_2px_rgba(0,0,0,0.15)] block"
-                          style={`background-color: ${c.hex}`}
+                          style={`background-color: ${v.hex}`}
                         ></span>
                       </button>
-                    );
-                  })}
+                    )
+                  )}
                 </div>
               </div>
 
@@ -846,14 +890,16 @@ const productStructuredData: Record<string, any> = {
     >
       <div class="flex items-center justify-between gap-3">
         <div class="min-w-0 flex items-center gap-2.5">
-          <span
-            id="mobile-sticky-color-dot"
-            class="w-4 h-4 rounded-full border border-black/15 shrink-0 shadow-inner"
-            style={`background-color: ${currentProduct.colors[0]?.hex || '#1c1917'}`}
-          ></span>
+          {!isSizeVariantMode && (
+            <span
+              id="mobile-sticky-color-dot"
+              class="w-4 h-4 rounded-full border border-black/15 shrink-0 shadow-inner"
+              style={`background-color: ${resolvedVariants[0]?.hex || '#1c1917'}`}
+            ></span>
+          )}
           <div class="min-w-0">
             <span id="mobile-sticky-color-name" class="text-xs font-medium text-[#1c1917] block truncate">
-              {getLocalizedValue(currentProduct.colors[0]?.name, currentLang) || currentProductShortTitle}
+              {resolvedVariants[0]?.label || currentProductShortTitle}
             </span>
             <span class="text-[10px] font-mono text-stone-500 block truncate">
               MOQ {resolvedMoq.formatted}
@@ -1016,26 +1062,42 @@ const productStructuredData: Record<string, any> = {
       import { addToQuote } from '../../stores/quoteCart';
 
       const firstColorBtn = document.querySelector('.color-variant-btn');
-      let selectedVariant = firstColorBtn?.dataset.color || 'Standard';
+      let selectedVariant = firstColorBtn?.getAttribute('data-color') || 'Standard';
       const colorBtns = document.querySelectorAll('.color-variant-btn');
       const selectedColorLabel = document.getElementById('selected-color-name');
       const mobileStickyColorDot = document.getElementById('mobile-sticky-color-dot');
       const mobileStickyColorName = document.getElementById('mobile-sticky-color-name');
 
+      const SIZE_ACTIVE_CLS = ['bg-[#1c1917]', 'text-[#fdfcfb]', 'border-[#1c1917]', 'shadow-xs'];
+      const SIZE_INACTIVE_CLS = ['bg-white/85', 'text-[#1c1917]', 'border-stone-200/90', 'hover:border-stone-400', 'hover:bg-[#f6f3ee]'];
+      const COLOR_ACTIVE_CLS = ['ring-1', 'ring-[#1c1917]', 'ring-offset-2', 'ring-offset-[#fdfcfb]', 'scale-105'];
+
       colorBtns.forEach((btn) => {
         btn.addEventListener('click', () => {
           const col = btn.getAttribute('data-color') || '';
           const hex = btn.getAttribute('data-hex') || '';
+          const isSizeBtn = btn.getAttribute('data-variant-mode') === 'size';
           selectedVariant = col;
           if (selectedColorLabel) selectedColorLabel.textContent = col;
           if (mobileStickyColorName && col) mobileStickyColorName.textContent = col;
-          if (mobileStickyColorDot && hex) mobileStickyColorDot.style.backgroundColor = hex;
+          if (!isSizeBtn && mobileStickyColorDot && hex) mobileStickyColorDot.style.backgroundColor = hex;
           colorBtns.forEach((b) => {
-            b.classList.remove('ring-1', 'ring-[#1c1917]', 'ring-offset-2', 'ring-offset-[#fdfcfb]', 'scale-105');
-            b.classList.add('opacity-80');
+            b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+            if (b.getAttribute('data-variant-mode') === 'size') {
+              b.classList.remove(...SIZE_ACTIVE_CLS);
+              b.classList.add(...SIZE_INACTIVE_CLS);
+            } else {
+              b.classList.remove(...COLOR_ACTIVE_CLS);
+              b.classList.add('opacity-80');
+            }
           });
-          btn.classList.add('ring-1', 'ring-[#1c1917]', 'ring-offset-2', 'ring-offset-[#fdfcfb]', 'scale-105');
-          btn.classList.remove('opacity-80');
+          if (isSizeBtn) {
+            btn.classList.remove(...SIZE_INACTIVE_CLS);
+            btn.classList.add(...SIZE_ACTIVE_CLS);
+          } else {
+            btn.classList.add(...COLOR_ACTIVE_CLS);
+            btn.classList.remove('opacity-80');
+          }
         });
       });
 

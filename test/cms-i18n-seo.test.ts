@@ -186,3 +186,70 @@ test('Product canonical key (ASIN > SKU > Slug), multi-URL resolution, and Amazo
     ProductService.invalidateCache();
   }
 });
+
+test('formatSizeVariantLabel and resolveVariantDisplayMode handle size pills and color swatches', async () => {
+  const { formatSizeVariantLabel, resolveVariantDisplayMode } = await import('../src/data/products.js');
+
+  assert.equal(formatSizeVariantLabel('Size 1-2T'), '1-2T');
+  assert.equal(formatSizeVariantLabel('Size 3-5T'), '3-5T');
+  assert.equal(formatSizeVariantLabel('Size 6-8 Years'), '6-8 Years');
+  assert.equal(formatSizeVariantLabel('Size: 6-12 Months'), '6-12 Months');
+  assert.equal(formatSizeVariantLabel('1-2T'), '1-2T');
+  assert.equal(formatSizeVariantLabel('Size'), 'Size');
+
+  assert.equal(
+    resolveVariantDisplayMode({
+      paletteTitle: 'Available In-Stock Variant Sizes & Packs:',
+      variants: [
+        { name: 'Size 1-2T', hex: '#1d1d1f' },
+        { name: 'Size 3-5T', hex: '#374151' },
+      ],
+    }),
+    'size'
+  );
+
+  assert.equal(
+    resolveVariantDisplayMode({
+      paletteTitle: 'Available In-Stock Variant Sizes & Packs:',
+      variants: [{ name: '5-Pack', hex: '#1d1d1f' }],
+    }),
+    'size'
+  );
+
+  assert.equal(
+    resolveVariantDisplayMode({
+      paletteTitle: 'Available In-Stock Yarn Palette:',
+      variants: [{ name: 'Noir Black' }],
+    }),
+    'size'
+  );
+
+  assert.equal(
+    resolveVariantDisplayMode({
+      paletteTitle: 'Available In-Stock Yarn Palette:',
+      variants: [
+        { name: 'Champagne Nude', hex: '#e7d5c3' },
+        { name: 'Onyx Black', hex: '#111111' },
+      ],
+    }),
+    'color'
+  );
+
+  assert.equal(
+    resolveVariantDisplayMode({
+      variantDisplayMode: 'color',
+      paletteTitle: 'Available In-Stock Variant Sizes & Packs:',
+      variants: [{ name: 'Size 1-2T', hex: '#1d1d1f' }],
+    }),
+    'color'
+  );
+
+  assert.equal(
+    resolveVariantDisplayMode({
+      variantDisplayMode: 'size',
+      paletteTitle: 'Available In-Stock Yarn Palette:',
+      variants: [{ name: 'Champagne Nude', hex: '#e7d5c3' }],
+    }),
+    'size'
+  );
+});

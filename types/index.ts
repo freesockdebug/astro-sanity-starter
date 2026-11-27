@@ -102,6 +102,7 @@ export interface Product {
     galleryHint?: string | Record<string, string>;
     priceNote?: string | Record<string, string>;
     paletteTitle?: string | Record<string, string>;
+    variantDisplayMode?: 'auto' | 'color' | 'size';
     addToQuoteButtonText?: string | Record<string, string>;
     amazonAsin?: string;
     amazonRating?: number;

@@ -217,8 +217,23 @@ export default defineType({
       group: 'wholesale',
     }),
     defineField({
+      name: 'variantDisplayMode',
+      title: 'Variant Display Style (规格展示样式)',
+      description: '默认 Auto 自动根据规格名称和标题判断按「尺码标签」还是「圆形色卡」展示，也可手动锁定展示样式。',
+      type: 'string',
+      initialValue: 'auto',
+      options: {
+        list: [
+          {title: 'Auto (自动识别颜色/尺码)', value: 'auto'},
+          {title: 'Size / Pack Pills (尺码/规格标签)', value: 'size'},
+          {title: 'Color Swatches (圆形色卡)', value: 'color'},
+        ],
+      },
+      group: 'wholesale',
+    }),
+    defineField({
       name: 'colors',
-      title: 'Colorways (现货/支持色卡)',
+      title: 'Colorways / Sizes (现货颜色或尺码规格)',
       type: 'array',
       of: [
         {

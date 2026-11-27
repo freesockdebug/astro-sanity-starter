@@ -19,6 +19,7 @@ export const PRODUCT_FIELDS = `{
   galleryHint,
   priceNote,
   paletteTitle,
+  variantDisplayMode,
   addToQuoteButtonText,
   amazonAsin,
   amazonRating,
@@ -144,6 +145,58 @@ export function findProductByIdentifier<
     if (ci) return ci;
   }
   return null;
+}
+
+export type VariantDisplayMode = 'auto' | 'color' | 'size';
+
+/**
+ * Strips a redundant "Size" prefix from size variant labels (e.g. "Size 1-2T" -> "1-2T").
+ */
+export function formatSizeVariantLabel(rawName?: string): string {
+  const trimmed = typeof rawName === 'string' ? rawName.trim() : '';
+  if (!trimmed) return '';
+  const stripped = trimmed.replace(/^size\s*[:：-]?\s*/i, '').trim();
+  return stripped || trimmed;
+}
+
+/**
+ * Resolves whether product variants should render as size pills or circular color swatches.
+ */
+export function resolveVariantDisplayMode(params: {
+  variantDisplayMode?: string | null;
+  paletteTitle?: string | null;
+  variants?: Array<{ name?: string; hex?: string } | null> | null;
+}): 'color' | 'size' {
+  const explicit = typeof params?.variantDisplayMode === 'string'
+    ? params.variantDisplayMode.trim().toLowerCase()
+    : '';
+  if (explicit === 'size' || explicit === 'color') {
+    return explicit;
+  }
+
+  const variants = Array.isArray(params?.variants) ? params.variants.filter(Boolean) as Array<{ name?: string; hex?: string }> : [];
+  const namedVariants = variants.filter((v) => typeof v?.name === 'string' && v.name.trim().length > 0);
+  if (namedVariants.some((v) => {
+    const name = v.name!.trim();
+    return (
+      /^size\b/i.test(name) ||
+      /^\d+(?:\s*[-–/]\s*\d+)?\s*(?:t|m|y|mo|mos|months?|years?|yrs?)\b/i.test(name) ||
+      /^(?:xxs|xs|s|m|l|xl|xxl|xxxl|one\s*size|free\s*size)$/i.test(name)
+    );
+  })) {
+    return 'size';
+  }
+
+  if (namedVariants.length > 0 && !variants.some((v) => typeof v?.hex === 'string' && v.hex.trim().length > 0)) {
+    return 'size';
+  }
+
+  const title = typeof params?.paletteTitle === 'string' ? params.paletteTitle.toLowerCase() : '';
+  if (/\b(size|sizes|talla|tallas|taille|tailles)\b|größen|groessen|尺码/.test(title)) {
+    return 'size';
+  }
+
+  return 'color';
 }
 
 /**

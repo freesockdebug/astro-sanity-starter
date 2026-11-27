@@ -338,12 +338,19 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
             </div>
 
             <div class="p-3.5 rounded-2xl bg-[#fafafc] border border-black/5 space-y-2.5">
-              <div class="flex items-center justify-between">
+              <div class="flex items-center justify-between gap-2">
                 <div>
-                  <span class="font-bold text-xs text-[#1d1d1f] block">Color Swatches</span>
-                  <span class="text-[10px] text-[#86868b]">Available production colors and hex swatches</span>
+                  <span class="font-bold text-xs text-[#1d1d1f] block">Color Swatches / Sizes</span>
+                  <span class="text-[10px] text-[#86868b]">Supports both colors (e.g. Navy Blue) &amp; sizes (e.g. Size 1-2T)</span>
                 </div>
-                <button type="button" id="btn-add-color" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">＋ Add Color</button>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <select id="p-variant-display-mode" class="px-2 py-1 rounded-lg bg-white border border-black/10 text-[11px] font-medium text-[#1d1d1f] cursor-pointer" title="PDP Variant Display Mode">
+                    <option value="auto">Auto</option>
+                    <option value="size">Size Pills</option>
+                    <option value="color">Color Swatches</option>
+                  </select>
+                  <button type="button" id="btn-add-color" class="px-2.5 py-1 rounded-lg bg-white border border-black/10 hover:border-black text-[11px] font-semibold cursor-pointer shadow-2xs">＋ Add Variant</button>
+                </div>
               </div>
               <div id="color-rows" class="space-y-2"></div>
             </div>
@@ -742,6 +749,7 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       $val('p-amazon-asin', p.amazonAsin || '');
       $val('p-amazon-rating', p.amazonRating !== undefined && p.amazonRating !== null ? String(p.amazonRating) : '');
       $val('p-amazon-url', p.amazonUrl || '');
+      $val('p-variant-display-mode', p.variantDisplayMode || 'auto');
 
       renderMainImagePreview();
       renderGalleryPreview();
@@ -1076,6 +1084,8 @@ const inpCls = 'w-full px-3 py-2 rounded-xl bg-[#f5f5f7] border border-black/10 
       const rawRating = parseFloat($val('p-amazon-rating'));
       p.amazonRating = Number.isFinite(rawRating) && rawRating > 0 && rawRating <= 5 ? rawRating : undefined;
       p.amazonUrl = $val('p-amazon-url') || undefined;
+      const vMode = $val('p-variant-display-mode');
+      p.variantDisplayMode = vMode && vMode !== 'auto' ? vMode : undefined;
 
       p.pricingTiers = Array.from(document.querySelectorAll('#tier-rows tr')).map((tr) => {
         const min = parseInt((tr.querySelector('.t-min') as HTMLInputElement)?.value || '0', 10);
