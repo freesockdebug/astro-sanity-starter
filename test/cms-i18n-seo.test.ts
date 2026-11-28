@@ -253,3 +253,58 @@ test('formatSizeVariantLabel and resolveVariantDisplayMode handle size pills and
     'size'
   );
 });
+
+test('resolveProductDetailRoute redirects localized SKU/slug/case variants to canonical URLs', async () => {
+  const { resolveProductDetailRoute, ProductService } = await import('../src/data/products.js');
+
+  const scallopProd = {
+    _id: 'prod-115w',
+    title: { en: 'White Scallop Crew Socks' },
+    slug: 'gwenvenni-white-scallop-textured-crew-socks',
+    sku: 'GV-YYW115-SCALLOP',
+    amazonAsin: 'B0F4JPQ9SL',
+  } as any;
+
+  try {
+    ProductService.seed({ products: [scallopProd] });
+    ProductService.seedSlug(scallopProd.slug, scallopProd);
+
+    assert.deepEqual(await resolveProductDetailRoute('GV-YYW115-SCALLOP', 'fr'), {
+      kind: 'redirect',
+      location: '/fr/products/B0F4JPQ9SL',
+      status: 301,
+    });
+    assert.deepEqual(
+      await resolveProductDetailRoute('gwenvenni-white-scallop-textured-crew-socks', 'de'),
+      {
+        kind: 'redirect',
+        location: '/de/products/B0F4JPQ9SL',
+        status: 301,
+      }
+    );
+    assert.deepEqual(await resolveProductDetailRoute('b0f4jpq9sl', 'es'), {
+      kind: 'redirect',
+      location: '/es/products/B0F4JPQ9SL',
+      status: 301,
+    });
+    assert.deepEqual(await resolveProductDetailRoute('GV-YYW115-SCALLOP', 'en'), {
+      kind: 'redirect',
+      location: '/products/B0F4JPQ9SL',
+      status: 301,
+    });
+    assert.deepEqual(await resolveProductDetailRoute('unknown-item', 'fr'), {
+      kind: 'redirect',
+      location: '/fr/products',
+      status: 302,
+    });
+
+    const renderRes = await resolveProductDetailRoute('B0F4JPQ9SL', 'fr');
+    assert.equal(renderRes.kind, 'render');
+    if (renderRes.kind === 'render') {
+      assert.equal(renderRes.targetSlug, 'gwenvenni-white-scallop-textured-crew-socks');
+      assert.equal(renderRes.product._id, 'prod-115w');
+    }
+  } finally {
+    ProductService.invalidateCache();
+  }
+});

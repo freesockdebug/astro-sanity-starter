@@ -7,10 +7,11 @@ import {
   resolveProductMoq,
   getCurrencySymbol,
   getProductCanonicalKey,
-  findProductByIdentifier,
+  resolveProductDetailRoute,
   formatSizeVariantLabel,
   resolveVariantDisplayMode,
 } from '@data/products';
+import type { Product } from 'types';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { cleanBrandTitle } from '@utils/format';
@@ -25,44 +26,40 @@ import { SecurityService } from '@utils/security';
 export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
+interface Props {
+  resolvedProduct?: Product;
+  resolvedAllProducts?: Product[];
+  resolvedTargetSlug?: string;
+}
+
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
 const { slug } = Astro.params;
+const { resolvedProduct, resolvedAllProducts, resolvedTargetSlug } = Astro.props;
 
-// Fast L1 identifier guard (slug, ASIN, or SKU), then resolve canonical URL & fetch full product
-if (!slug || !ProductService.isKnownIdentifier(slug, true)) {
-  return Astro.redirect(getLocalizedPath('/products', currentLang));
-}
+let currentProduct: Product;
+let allProducts: Product[];
+let targetSlug: string;
 
-const allProducts = (await ProductService.getAll()) || [];
-const matchedSummary = findProductByIdentifier(allProducts, slug);
-if (allProducts.length > 0 && !matchedSummary) {
-  return Astro.redirect(getLocalizedPath('/products', currentLang));
-}
-
-if (matchedSummary) {
-  const canonicalKey = getProductCanonicalKey(matchedSummary);
-  if (slug !== canonicalKey) {
-    return Astro.redirect(getLocalizedPath(`/products/${canonicalKey}`, currentLang), 301);
+if (resolvedProduct) {
+  currentProduct = resolvedProduct;
+  allProducts = resolvedAllProducts || [];
+  targetSlug = resolvedTargetSlug || resolvedProduct.slug || slug || '';
+} else {
+  const resolved = await resolveProductDetailRoute(slug, currentLang);
+  if (resolved.kind === 'redirect') {
+    return Astro.redirect(resolved.location, resolved.status);
   }
+  currentProduct = resolved.product;
+  allProducts = resolved.allProducts;
+  targetSlug = resolved.targetSlug;
 }
 
-const targetSlug = matchedSummary?.slug || slug;
-const [currentProduct, siteConfig, rfqSettings, productStorySettings] = await Promise.all([
-  ProductService.getBySlug(targetSlug),
+const [siteConfig, rfqSettings, productStorySettings] = await Promise.all([
   SiteConfigService.getConfig(),
   RfqSettingsService.getSettings(),
   ProductService.getProductStorySettings(),
 ]);
-
-if (!currentProduct) {
-  return Astro.redirect(getLocalizedPath('/products', currentLang));
-}
-
-const fullCanonicalKey = getProductCanonicalKey(currentProduct);
-if (slug !== fullCanonicalKey) {
-  return Astro.redirect(getLocalizedPath(`/products/${fullCanonicalKey}`, currentLang), 301);
-}
 
 // Ensure product has fallbacks for arrays and images
 currentProduct.gallery = (currentProduct.gallery && currentProduct.gallery.length > 0)

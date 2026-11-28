@@ -1,7 +1,8 @@
 ---
 // src/pages/[lang]/products/[slug].astro
 import ProductDetailPage from '../../products/[slug].astro';
-import { LANGUAGES } from '@i18n';
+import { LANGUAGES, type SupportedLocale } from '@i18n';
+import { resolveProductDetailRoute } from '@data/products';
 
 export const prerender = false;
 const { lang, slug } = Astro.params;
@@ -14,6 +15,15 @@ if (!lang || lang.startsWith('_') || lang.includes('.') || slug?.includes('.')) 
 if (!(lang in LANGUAGES) || lang === 'en') {
   return Astro.redirect(`/products/${slug || ''}`);
 }
+
+const resolved = await resolveProductDetailRoute(slug, lang as SupportedLocale);
+if (resolved.kind === 'redirect') {
+  return Astro.redirect(resolved.location, resolved.status);
+}
 ---
 
-<ProductDetailPage />
+<ProductDetailPage
+  resolvedProduct={resolved.product}
+  resolvedAllProducts={resolved.allProducts}
+  resolvedTargetSlug={resolved.targetSlug}
+/>

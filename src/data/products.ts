@@ -2,7 +2,7 @@ import { getSanityClient } from '@utils/sanity-client';
 import { SanityImageService } from '@utils/image';
 import { createCmsCache, createCmsKeyedCache, createTieredCache } from '@utils/cache';
 import { DEFAULT_CATALOG } from './defaults';
-import { getLocalizedPath } from '@i18n';
+import { getLocalizedPath, type SupportedLocale } from '@i18n';
 import type { Product } from 'types';
 
 export const PRODUCT_FIELDS = `{
@@ -653,6 +653,49 @@ export class ProductService {
     storySettingsCache.invalidate();
     productBySlugCache.invalidate();
   }
+}
+
+export type ProductRouteResolution =
+  | { kind: 'redirect'; location: string; status: 301 | 302 }
+  | { kind: 'render'; product: Product; allProducts: Product[]; targetSlug: string };
+
+/**
+ * Shared route resolver for `/products/[slug]` and `/[lang]/products/[slug]`.
+ * Must be executed in top-level Astro page routes because child components cannot issue `Astro.redirect`.
+ */
+export async function resolveProductDetailRoute(
+  slug: string | undefined,
+  lang: SupportedLocale
+): Promise<ProductRouteResolution> {
+  if (!slug || !ProductService.isKnownIdentifier(slug, true)) {
+    return { kind: 'redirect', location: getLocalizedPath('/products', lang), status: 302 };
+  }
+
+  const allProducts = (await ProductService.getAll()) || [];
+  const matchedSummary = findProductByIdentifier(allProducts, slug);
+  if (allProducts.length > 0 && !matchedSummary) {
+    return { kind: 'redirect', location: getLocalizedPath('/products', lang), status: 302 };
+  }
+
+  if (matchedSummary) {
+    const canonicalKey = getProductCanonicalKey(matchedSummary);
+    if (slug !== canonicalKey) {
+      return { kind: 'redirect', location: getLocalizedPath(`/products/${canonicalKey}`, lang), status: 301 };
+    }
+  }
+
+  const targetSlug = matchedSummary?.slug || slug;
+  const currentProduct = await ProductService.getBySlug(targetSlug);
+  if (!currentProduct) {
+    return { kind: 'redirect', location: getLocalizedPath('/products', lang), status: 302 };
+  }
+
+  const fullCanonicalKey = getProductCanonicalKey(currentProduct);
+  if (slug !== fullCanonicalKey) {
+    return { kind: 'redirect', location: getLocalizedPath(`/products/${fullCanonicalKey}`, lang), status: 301 };
+  }
+
+  return { kind: 'render', product: currentProduct, allProducts, targetSlug };
 }
 
 // Backward-compatible function exports
