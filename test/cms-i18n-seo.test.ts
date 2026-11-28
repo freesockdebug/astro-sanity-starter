@@ -221,7 +221,7 @@ test('formatSizeVariantLabel and resolveVariantDisplayMode handle size pills and
       paletteTitle: 'Available In-Stock Yarn Palette:',
       variants: [{ name: 'Noir Black' }],
     }),
-    'size'
+    'color'
   );
 
   assert.equal(

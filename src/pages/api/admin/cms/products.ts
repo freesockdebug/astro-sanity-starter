@@ -102,19 +102,11 @@ export const POST: APIRoute = defineAdminApi(
     const oldSlug = existingDoc?.slug?.current || (typeof existingDoc?.slug === 'string' ? existingDoc.slug : '');
     const slugStr = result.slug?.current || (typeof result.slug === 'string' ? result.slug : '');
     const cardFieldsChanged = docType === 'product' ? hasProductCardFieldsChanged(existingDoc, result) : true;
-    const productTargetPaths: string[] = [];
-    if (docType === 'product') {
-      for (const idCandidate of [
-        result?.amazonAsin,
-        existingDoc?.amazonAsin,
-        result?.sku,
-        existingDoc?.sku,
-      ]) {
-        if (typeof idCandidate === 'string' && idCandidate.trim()) {
-          productTargetPaths.push(`/products/${idCandidate.trim()}`);
-        }
-      }
-    }
+    const productTargetPaths = docType === 'product'
+      ? [result?.amazonAsin, existingDoc?.amazonAsin, result?.sku, existingDoc?.sku]
+          .filter((k) => typeof k === 'string' && k.trim())
+          .map((k) => `/products/${k.trim()}`)
+      : [];
     await syncCmsMutation({
       docType,
       slug: slugStr,

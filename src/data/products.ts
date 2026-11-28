@@ -117,14 +117,9 @@ export interface NormalizedProduct {
  * Canonical product URL segment: ASIN (preferred) -> SKU -> Slug.
  */
 export function getProductCanonicalKey(
-  p: { amazonAsin?: string; sku?: string; slug?: string; _id?: string } | null | undefined
+  p: { amazonAsin?: string; sku?: string; slug?: string } | null | undefined
 ): string {
-  const asin = typeof p?.amazonAsin === 'string' ? p.amazonAsin.trim() : '';
-  if (asin) return asin;
-  const sku = typeof p?.sku === 'string' ? p.sku.trim() : '';
-  if (sku) return sku;
-  const slug = typeof p?.slug === 'string' ? p.slug.trim() : '';
-  return slug || p?._id || 'item';
+  return p?.amazonAsin?.trim() || p?.sku?.trim() || p?.slug?.trim() || '';
 }
 
 /**
@@ -133,21 +128,14 @@ export function getProductCanonicalKey(
 export function findProductByIdentifier<
   T extends { amazonAsin?: string; sku?: string; slug?: string }
 >(products: T[] | null | undefined, identifier: string): T | null {
-  if (!Array.isArray(products) || !identifier) return null;
-  const target = identifier.trim();
-  const targetLower = target.toLowerCase();
-  if (!target) return null;
-
+  const target = identifier?.trim().toLowerCase();
+  if (!Array.isArray(products) || !target) return null;
   for (const field of ['amazonAsin', 'sku', 'slug'] as const) {
-    const exact = products.find((p) => (typeof p?.[field] === 'string' ? p[field]!.trim() === target : false));
-    if (exact) return exact;
-    const ci = products.find((p) => (typeof p?.[field] === 'string' ? p[field]!.trim().toLowerCase() === targetLower : false));
-    if (ci) return ci;
+    const hit = products.find((p) => typeof p?.[field] === 'string' && p[field]!.trim().toLowerCase() === target);
+    if (hit) return hit;
   }
   return null;
 }
-
-export type VariantDisplayMode = 'auto' | 'color' | 'size';
 
 /**
  * Strips a redundant "Size" prefix from size variant labels (e.g. "Size 1-2T" -> "1-2T").
@@ -167,36 +155,10 @@ export function resolveVariantDisplayMode(params: {
   paletteTitle?: string | null;
   variants?: Array<{ name?: string; hex?: string } | null> | null;
 }): 'color' | 'size' {
-  const explicit = typeof params?.variantDisplayMode === 'string'
-    ? params.variantDisplayMode.trim().toLowerCase()
-    : '';
-  if (explicit === 'size' || explicit === 'color') {
-    return explicit;
-  }
-
-  const variants = Array.isArray(params?.variants) ? params.variants.filter(Boolean) as Array<{ name?: string; hex?: string }> : [];
-  const namedVariants = variants.filter((v) => typeof v?.name === 'string' && v.name.trim().length > 0);
-  if (namedVariants.some((v) => {
-    const name = v.name!.trim();
-    return (
-      /^size\b/i.test(name) ||
-      /^\d+(?:\s*[-–/]\s*\d+)?\s*(?:t|m|y|mo|mos|months?|years?|yrs?)\b/i.test(name) ||
-      /^(?:xxs|xs|s|m|l|xl|xxl|xxxl|one\s*size|free\s*size)$/i.test(name)
-    );
-  })) {
-    return 'size';
-  }
-
-  if (namedVariants.length > 0 && !variants.some((v) => typeof v?.hex === 'string' && v.hex.trim().length > 0)) {
-    return 'size';
-  }
-
-  const title = typeof params?.paletteTitle === 'string' ? params.paletteTitle.toLowerCase() : '';
-  if (/\b(size|sizes|talla|tallas|taille|tailles)\b|größen|groessen|尺码/.test(title)) {
-    return 'size';
-  }
-
-  return 'color';
+  const mode = params?.variantDisplayMode;
+  if (mode === 'size' || mode === 'color') return mode;
+  if (params?.variants?.some((v) => /^\s*size\b/i.test(v?.name || ''))) return 'size';
+  return /\b(sizes?|tallas?|tailles?)\b|größen|尺码/i.test(params?.paletteTitle || '') ? 'size' : 'color';
 }
 
 /**
@@ -411,11 +373,7 @@ export class ProductService {
 
   public static seedSlug(slug: string, product: Product): void {
     const existing = productSlugsCache.peek();
-    if (existing) {
-      if (slug) existing.add(slug);
-      if (typeof product?.amazonAsin === 'string' && product.amazonAsin.trim()) existing.add(product.amazonAsin.trim());
-      if (typeof product?.sku === 'string' && product.sku.trim()) existing.add(product.sku.trim());
-    }
+    if (existing) extractProductIdentifiers([{ ...product, slug }]).forEach((k) => existing.add(k));
     productBySlugCache.seed(slug, product);
   }
 
@@ -439,7 +397,8 @@ export class ProductService {
     if (keys.some((k) => k === trimmed || k.toLowerCase() === lower)) {
       return true;
     }
-    // Stale preload self-healing: legacy edge:preload:v1 stored only lowercase slugs without ASIN/SKU.
+    // ponytail: one-off shim for legacy edge:preload:v1 (lowercase slugs only, no ASIN/SKU).
+    // Delete this block once every colo has rebuilt its preload envelope with ASIN/SKU keys.
     if (
       !keys.some((k) => /[A-Z]/.test(k)) &&
       /^[A-Za-z0-9][A-Za-z0-9_-]{3,48}$/.test(trimmed) &&
@@ -502,9 +461,8 @@ export class ProductService {
 
     const resolvedMoq = resolveProductMoq(sp.pricingTiers, sp.moq);
     const amazonAsin = typeof sp.amazonAsin === 'string' && sp.amazonAsin.trim() ? sp.amazonAsin.trim() : undefined;
-    const parsedRating = typeof sp.amazonRating === 'number' ? sp.amazonRating : Number(sp.amazonRating);
-    const amazonRating = Number.isFinite(parsedRating) && parsedRating > 0 && parsedRating <= 5 ? parsedRating : undefined;
-    const canonicalKey = getProductCanonicalKey({ amazonAsin, sku: sp.sku, slug, _id: sp._id });
+    const amazonRating = sp.amazonRating > 0 && sp.amazonRating <= 5 ? Number(sp.amazonRating) : undefined;
+    const canonicalKey = getProductCanonicalKey({ amazonAsin, sku: sp.sku, slug });
 
     return {
       id: slug,
@@ -675,13 +633,6 @@ export async function resolveProductDetailRoute(
   const matchedSummary = findProductByIdentifier(allProducts, slug);
   if (allProducts.length > 0 && !matchedSummary) {
     return { kind: 'redirect', location: getLocalizedPath('/products', lang), status: 302 };
-  }
-
-  if (matchedSummary) {
-    const canonicalKey = getProductCanonicalKey(matchedSummary);
-    if (slug !== canonicalKey) {
-      return { kind: 'redirect', location: getLocalizedPath(`/products/${canonicalKey}`, lang), status: 301 };
-    }
   }
 
   const targetSlug = matchedSummary?.slug || slug;

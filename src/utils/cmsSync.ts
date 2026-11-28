@@ -1,7 +1,7 @@
 // src/utils/cmsSync.ts
 // Unified CMS Cache Synchronization & Edge Purge Engine
 import { NON_DEFAULT_LOCALES } from '@i18n';
-import { ProductService, getProductCanonicalKey, findProductByIdentifier } from '@data/products';
+import { ProductService, findProductByIdentifier } from '@data/products';
 import { PageService } from '@data/page';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
@@ -982,12 +982,8 @@ function collectProductPaths(
   set: Set<string>,
   product: { amazonAsin?: string; sku?: string; slug?: string } | null | undefined
 ): void {
-  if (!product) return;
-  if (product.slug) set.add(`/products/${product.slug}`);
-  const canonical = getProductCanonicalKey(product);
-  if (canonical && canonical !== 'item') set.add(`/products/${canonical}`);
-  if (typeof product.sku === 'string' && product.sku.trim()) {
-    set.add(`/products/${product.sku.trim()}`);
+  for (const k of [product?.slug, product?.sku, product?.amazonAsin]) {
+    if (typeof k === 'string' && k.trim()) set.add(`/products/${k.trim()}`);
   }
 }
 

@@ -22,8 +22,4 @@ if (resolved.kind === 'redirect') {
 }
 ---
 
-<ProductDetailPage
-  resolvedProduct={resolved.product}
-  resolvedAllProducts={resolved.allProducts}
-  resolvedTargetSlug={resolved.targetSlug}
-/>
+<ProductDetailPage resolved={resolved} />

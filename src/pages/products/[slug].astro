@@ -11,7 +11,7 @@ import {
   formatSizeVariantLabel,
   resolveVariantDisplayMode,
 } from '@data/products';
-import type { Product } from 'types';
+import type { ProductRouteResolution } from '@data/products';
 import { SiteConfigService } from '@data/siteConfig';
 import { RfqSettingsService } from '@data/rfqSettings';
 import { cleanBrandTitle } from '@utils/format';
@@ -27,33 +27,16 @@ export const prerender = false;
 Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
 
 interface Props {
-  resolvedProduct?: Product;
-  resolvedAllProducts?: Product[];
-  resolvedTargetSlug?: string;
+  resolved?: ProductRouteResolution;
 }
 
 const currentLang = getLangFromUrl(Astro.url);
 const t = useTranslations(currentLang);
-const { slug } = Astro.params;
-const { resolvedProduct, resolvedAllProducts, resolvedTargetSlug } = Astro.props;
-
-let currentProduct: Product;
-let allProducts: Product[];
-let targetSlug: string;
-
-if (resolvedProduct) {
-  currentProduct = resolvedProduct;
-  allProducts = resolvedAllProducts || [];
-  targetSlug = resolvedTargetSlug || resolvedProduct.slug || slug || '';
-} else {
-  const resolved = await resolveProductDetailRoute(slug, currentLang);
-  if (resolved.kind === 'redirect') {
-    return Astro.redirect(resolved.location, resolved.status);
-  }
-  currentProduct = resolved.product;
-  allProducts = resolved.allProducts;
-  targetSlug = resolved.targetSlug;
+const resolved = Astro.props.resolved ?? await resolveProductDetailRoute(Astro.params.slug, currentLang);
+if (resolved.kind === 'redirect') {
+  return Astro.redirect(resolved.location, resolved.status);
 }
+const { product: currentProduct, allProducts, targetSlug } = resolved;
 
 const [siteConfig, rfqSettings, productStorySettings] = await Promise.all([
   SiteConfigService.getConfig(),
@@ -72,18 +55,18 @@ currentProduct.mainImage = currentProduct.mainImage || currentProduct.gallery[0]
 
 const resolvedPaletteTitle = getLocalizedValue(currentProduct.paletteTitle, currentLang, t('pdp.paletteTitle'));
 const rawVariants = currentProduct.colors.map((c: any) => ({
-  rawName: getLocalizedValue(c?.name, currentLang) || '',
+  name: getLocalizedValue(c?.name, currentLang) || '',
   hex: typeof c?.hex === 'string' ? c.hex.trim() : '',
 }));
 const isSizeVariantMode =
   resolveVariantDisplayMode({
     variantDisplayMode: currentProduct.variantDisplayMode,
     paletteTitle: resolvedPaletteTitle,
-    variants: rawVariants.map((v: { rawName: string; hex: string }) => ({ name: v.rawName, hex: v.hex })),
+    variants: rawVariants,
   }) === 'size';
-const resolvedVariants = rawVariants.map((v: { rawName: string; hex: string }) => ({
-  rawName: v.rawName,
-  label: (isSizeVariantMode ? formatSizeVariantLabel(v.rawName) : v.rawName) || v.rawName || 'Default',
+const resolvedVariants = rawVariants.map((v: { name: string; hex: string }) => ({
+  rawName: v.name,
+  label: (isSizeVariantMode ? formatSizeVariantLabel(v.name) : v.name) || 'Default',
   hex: v.hex || '#1c1917',
 }));
 const initialVariantLabel = resolvedVariants[0]?.label || 'Default';
@@ -333,7 +316,7 @@ const productStructuredData: Record<string, any> = {
   '@type': 'Product',
   name: currentProductTitle,
   description: currentProductTagline,
-  sku: currentProduct.sku || slug,
+  sku: currentProduct.sku || targetSlug,
   image: (currentProduct.gallery || [])
     .map((img: any) => img?.src)
     .filter(Boolean),
@@ -589,11 +572,7 @@ const productStructuredData: Record<string, any> = {
                         title={v.rawName || v.label}
                         aria-label={v.rawName || v.label}
                         aria-pressed={cIdx === 0 ? 'true' : 'false'}
-                        class={`color-variant-btn px-3 py-1.5 rounded-lg text-xs font-mono font-medium tracking-tight border transition-all cursor-pointer select-none ${
-                          cIdx === 0
-                            ? 'bg-[#1c1917] text-[#fdfcfb] border-[#1c1917] shadow-xs'
-                            : 'bg-white/85 text-[#1c1917] border-stone-200/90 hover:border-stone-400 hover:bg-[#f6f3ee]'
-                        }`}
+                        class="color-variant-btn px-3 py-1.5 rounded-lg text-xs font-mono font-medium tracking-tight border transition-all cursor-pointer select-none bg-white/85 text-[#1c1917] border-stone-200/90 aria-[pressed=false]:hover:border-stone-400 aria-[pressed=false]:hover:bg-[#f6f3ee] aria-pressed:bg-[#1c1917] aria-pressed:text-[#fdfcfb] aria-pressed:border-[#1c1917] aria-pressed:shadow-xs"
                         data-variant-mode="size"
                         data-color={v.label}
                         data-hex={v.hex}
@@ -606,11 +585,7 @@ const productStructuredData: Record<string, any> = {
                         title={v.rawName || v.label}
                         aria-label={v.rawName || v.label}
                         aria-pressed={cIdx === 0 ? 'true' : 'false'}
-                        class={`color-variant-btn w-8 h-8 sm:w-7 sm:h-7 rounded-full transition-all cursor-pointer flex items-center justify-center ${
-                          cIdx === 0
-                            ? 'ring-1 ring-[#1c1917] ring-offset-2 ring-offset-[#fdfcfb] scale-105'
-                            : 'opacity-80 hover:opacity-100 hover:scale-105'
-                        }`}
+                        class="color-variant-btn w-8 h-8 sm:w-7 sm:h-7 rounded-full transition-all cursor-pointer flex items-center justify-center hover:scale-105 aria-[pressed=false]:opacity-80 aria-[pressed=false]:hover:opacity-100 aria-pressed:ring-1 aria-pressed:ring-[#1c1917] aria-pressed:ring-offset-2 aria-pressed:ring-offset-[#fdfcfb] aria-pressed:scale-105"
                         data-variant-mode="color"
                         data-color={v.label}
                         data-hex={v.hex}
@@ -1065,36 +1040,16 @@ const productStructuredData: Record<string, any> = {
       const mobileStickyColorDot = document.getElementById('mobile-sticky-color-dot');
       const mobileStickyColorName = document.getElementById('mobile-sticky-color-name');
 
-      const SIZE_ACTIVE_CLS = ['bg-[#1c1917]', 'text-[#fdfcfb]', 'border-[#1c1917]', 'shadow-xs'];
-      const SIZE_INACTIVE_CLS = ['bg-white/85', 'text-[#1c1917]', 'border-stone-200/90', 'hover:border-stone-400', 'hover:bg-[#f6f3ee]'];
-      const COLOR_ACTIVE_CLS = ['ring-1', 'ring-[#1c1917]', 'ring-offset-2', 'ring-offset-[#fdfcfb]', 'scale-105'];
-
       colorBtns.forEach((btn) => {
         btn.addEventListener('click', () => {
           const col = btn.getAttribute('data-color') || '';
           const hex = btn.getAttribute('data-hex') || '';
-          const isSizeBtn = btn.getAttribute('data-variant-mode') === 'size';
           selectedVariant = col;
           if (selectedColorLabel) selectedColorLabel.textContent = col;
           if (mobileStickyColorName && col) mobileStickyColorName.textContent = col;
-          if (!isSizeBtn && mobileStickyColorDot && hex) mobileStickyColorDot.style.backgroundColor = hex;
-          colorBtns.forEach((b) => {
-            b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
-            if (b.getAttribute('data-variant-mode') === 'size') {
-              b.classList.remove(...SIZE_ACTIVE_CLS);
-              b.classList.add(...SIZE_INACTIVE_CLS);
-            } else {
-              b.classList.remove(...COLOR_ACTIVE_CLS);
-              b.classList.add('opacity-80');
-            }
-          });
-          if (isSizeBtn) {
-            btn.classList.remove(...SIZE_INACTIVE_CLS);
-            btn.classList.add(...SIZE_ACTIVE_CLS);
-          } else {
-            btn.classList.add(...COLOR_ACTIVE_CLS);
-            btn.classList.remove('opacity-80');
-          }
+          // Dot only exists in color mode, so no mode check needed.
+          if (mobileStickyColorDot && hex) mobileStickyColorDot.style.backgroundColor = hex;
+          colorBtns.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
         });
       });
 

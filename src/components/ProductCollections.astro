@@ -205,7 +205,7 @@ const { isLuxury } = useStorefrontTheme(Astro.locals);
                   {item.amazonRating ? (
                     <span class="text-[10px] sm:text-[11px] font-mono font-medium text-[#1d1d1f] inline-flex items-center gap-0.5" title="Amazon Rating">
                       <span class="text-amber-500" aria-hidden="true">★</span>
-                      <span>{Number(item.amazonRating).toFixed(1)}</span>
+                      <span>{item.amazonRating.toFixed(1)}</span>
                     </span>
                   ) : (
                     <span class="text-[10px] sm:text-[11px] font-mono font-medium text-[#1d1d1f]">MOQ {item.moq}</span>

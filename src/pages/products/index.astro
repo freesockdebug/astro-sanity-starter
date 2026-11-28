@@ -262,7 +262,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
                 {item.amazonRating ? (
                   <span class="text-[9px] text-[#52525b] font-mono mt-0.5 inline-flex items-center gap-0.5" title="Amazon Rating">
                     <span class="text-amber-500" aria-hidden="true">★</span>
-                    <span>{Number(item.amazonRating).toFixed(1)}</span>
+                    <span>{item.amazonRating.toFixed(1)}</span>
                   </span>
                 ) : (
                   <span class="text-[9px] text-[#52525b] font-mono mt-0.5">{t('catalog.moqPrefix')} {item.moq}</span>
@@ -554,7 +554,7 @@ const catalogHeroPreload = firstCardImg && typeof firstCardImg === 'string' && (
     }
     if (moq) {
       if (item.amazonRating) {
-        moq.textContent = `★ ${Number(item.amazonRating).toFixed(1)}`;
+        moq.textContent = `★ ${item.amazonRating.toFixed(1)}`;
       } else {
         moq.textContent = `${cfgMoqPrefix} ${item.moq}`;
       }
